@@ -3,7 +3,7 @@ package utreexo
 import (
 	"math/rand"
 
-	blake2b "github.com/minio/blake2b-simd"
+	"golang.org/x/crypto/blake2b"
 )
 
 type Hash [32]byte

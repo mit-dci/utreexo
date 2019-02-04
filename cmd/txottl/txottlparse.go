@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	blake2b "github.com/minio/blake2b-simd"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"golang.org/x/crypto/blake2b"
 )
 
 type Hash [32]byte
