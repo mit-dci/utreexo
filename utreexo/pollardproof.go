@@ -4,9 +4,8 @@ import (
 	"fmt"
 )
 
-// reconstruct takes a number of leaves and height, and turns a block proof back
-// into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
-// bp.Targets
+// IngestBlockProof populates the Pollard with all needed data to delete the
+// targets in the block proof
 func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 	var empty Hash
 	// TODO so many things to change

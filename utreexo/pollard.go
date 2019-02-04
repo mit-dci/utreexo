@@ -38,12 +38,6 @@ type polNode struct {
 	//	flags byte
 }
 
-// isKnownAunt returns true if neices exist / are known
-// (call before trying auntOp())
-func (n *polNode) isKnownAunt() bool {
-	return n.niece[0] != nil && n.niece[1] != nil
-}
-
 // auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
 func (n *polNode) auntOp() Hash {
 	return Parent(n.niece[0].data, n.niece[1].data)
@@ -54,27 +48,17 @@ func (n *polNode) deadEnd() bool {
 	return n.niece[0] == nil && n.niece[1] == nil
 }
 
+// chop turns a node into a deadEnd
 func (n *polNode) chop() {
 	n.niece[0] = nil
 	n.niece[1] = nil
-}
-
-// turns into another node, while maintaining incoming pointers
-// maybe not used...
-//func (n *polNode) become(t *polNode) {
-//	n.data, n.flags, n.neice = t.data, t.flags, t.neice
-//}
-
-type polPosition struct {
-	node     *polNode
-	position uint64
 }
 
 func (p *Pollard) height() uint8 { return treeHeight(p.numLeaves) }
 
 // TopHashesReverse is ugly and returns the top hashes in reverse order
 // ... which is the order full forest is using until I can refactor that code
-// to go it big to small order
+// to make it big to small order
 func (p *Pollard) TopHashesReverse() []Hash {
 	rHashes := make([]Hash, len(p.tops))
 	for i, n := range p.tops {
@@ -83,24 +67,7 @@ func (p *Pollard) TopHashesReverse() []Hash {
 	return rHashes
 }
 
-// toAtHeight gives you the top at height h, or a nil if there isn't one
-// also remove this top from the p.tops slice!  Only call once per iteration
-func (p *Pollard) popTop(h uint8) *polNode {
-	if (p.numLeaves>>h)&1 == 0 {
-		return nil
-	}
-	var passed int
-	for i := uint8(0); i <= h; i++ {
-		passed += int(p.numLeaves>>i) & 1
-	}
-
-	topPos := len(p.tops) - passed
-	//		fmt.Printf("topPos %d passed %d h %d\n", topPos, passed, h)
-	deTop := p.tops[topPos]
-	p.tops = append(p.tops[:topPos], p.tops[topPos+1:]...)
-	return deTop
-}
-
+// Modify is the main function that deletes then adds elements to the accumulator
 func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 	err := p.rem(dels)
 	if err != nil {
@@ -557,7 +524,7 @@ func (p *Pollard) DescendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 		}
 
 		if n != nil {
-			//			fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
+			// fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
 		}
 
 		proofs[h], sibs[h] = n, sib
