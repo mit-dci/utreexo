@@ -1,2 +1,3 @@
 *.txos
 cmd/txottl/txottl
+cmd/ibdsim/ibdsim
