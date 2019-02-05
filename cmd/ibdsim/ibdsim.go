@@ -127,7 +127,7 @@ func runIBD() error {
 }
 
 // build the bridge node / proofs
-func runTxo() error {
+func buildProofs() error {
 
 	txofile, err := os.OpenFile("ttl.mainnet.txos", os.O_RDONLY, 0600)
 	if err != nil {
