@@ -6,12 +6,15 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
+
+var maxmalloc uint64
 
 func main() {
 	fmt.Printf("hi\n")
@@ -43,11 +46,10 @@ func runIBD() error {
 
 	var height uint32
 	height = 1
-	//	var totalProofNodes int
+
 	var plustime time.Duration
 	starttime := time.Now()
 
-	//	totalRemembers := 0
 	totalTXOAdded := 0
 	totalDels := 0
 
@@ -55,6 +57,9 @@ func runIBD() error {
 	var blockDels []utreexo.Hash
 
 	var p utreexo.Pollard
+
+	p.Minleaves = 1000000
+	p.Lookahead = 100000
 
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
@@ -107,6 +112,9 @@ func runIBD() error {
 				fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 					height, totalTXOAdded, totalDels, p.Stats(),
 					plustime.Seconds(), time.Now().Sub(starttime).Seconds())
+			}
+			if height%1000 == 0 {
+				fmt.Printf(MemStatString())
 			}
 
 			blockAdds = []utreexo.LeafTXO{}
@@ -247,4 +255,20 @@ func buildProofs() error {
 	}
 	return scanner.Err()
 
+}
+
+func MemStatString() string {
+	var s string
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	if m.Alloc > maxmalloc {
+		maxmalloc = m.Alloc
+	}
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	s = fmt.Sprintf("alloc %d MB max %d MB", m.Alloc>>20, maxmalloc>>20)
+	s += fmt.Sprintf("\ttotalAlloc %d MB", m.TotalAlloc>>20)
+	s += fmt.Sprintf("\tsys %d MB", m.Sys>>20)
+	s += fmt.Sprintf("\tnumGC %d\n", m.NumGC)
+	return s
 }
