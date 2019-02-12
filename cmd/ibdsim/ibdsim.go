@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -14,13 +15,22 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+
+
 var maxmalloc uint64
+var genproofs = flag.Bool("genproofs", false, "Generate proofs")
+var ttlfn = flag.String("ttlfn", "ttl.mainnet.txos", "ttl filename")
 
 func main() {
-	fmt.Printf("hi\n")
-
+	flag.Parse()
+	if *genproofs {
+		fmt.Println("Building proofs...")
+		err := buildProofs()
+		if err != nil {
+			panic(err)
+		}
+	}
 	err := runIBD()
-	//	err := runTxo()
 	if err != nil {
 		panic(err)
 	}
@@ -31,7 +41,7 @@ func main() {
 // the deletion data and proofs though, we get from the leveldb
 // which was created by the bridge node.
 func runIBD() error {
-	txofile, err := os.OpenFile("ttl.mainnet.txos", os.O_RDONLY, 0600)
+	txofile, err := os.OpenFile(*ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -137,7 +147,8 @@ func runIBD() error {
 // build the bridge node / proofs
 func buildProofs() error {
 
-	txofile, err := os.OpenFile("ttl.mainnet.txos", os.O_RDONLY, 0600)
+	fmt.Println(*ttlfn)
+	txofile, err := os.OpenFile(*ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
