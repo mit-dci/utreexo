@@ -88,6 +88,10 @@ func (p *Pollard) Stats() string {
 	return s
 }
 
+func (p *Pollard) NumTops() uint8 {
+	return uint8(len(p.tops))
+}
+
 // Add a leaf to a pollard.  Not as simple!
 func (p *Pollard) Add(adds []LeafTXO) error {
 

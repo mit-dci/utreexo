@@ -15,8 +15,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-
-
 var maxmalloc uint64
 var genproofs = flag.Bool("genproofs", false, "Generate proofs")
 var ttlfn = flag.String("ttlfn", "ttl.mainnet.txos", "ttl filename")
@@ -68,8 +66,8 @@ func runIBD() error {
 
 	var p utreexo.Pollard
 
-	p.Minleaves = 1000000
-	p.Lookahead = 100000
+	p.Minleaves = 0
+	p.Lookahead = 0
 
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
@@ -125,6 +123,11 @@ func runIBD() error {
 			}
 			if height%1000 == 0 {
 				fmt.Printf(MemStatString())
+			}
+			if p.NumTops() == 1 {
+				tops := p.TopHashesReverse()
+				fmt.Printf("1 top, %x at block height %d\n%s",
+					tops[0], height, p.Stats())
 			}
 
 			blockAdds = []utreexo.LeafTXO{}
