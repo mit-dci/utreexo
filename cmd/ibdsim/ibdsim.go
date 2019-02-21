@@ -17,6 +17,8 @@ import (
 
 var maxmalloc uint64
 var genproofs = flag.Bool("genproofs", false, "Generate proofs")
+var genhist = flag.Bool("genhist", false, "Generate histogram")
+
 var ttlfn = flag.String("ttlfn", "ttl.mainnet.txos", "ttl filename")
 
 func main() {
@@ -27,6 +29,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+	}
+	if *genhist {
+		err := histogram()
+		if err != nil {
+			panic(err)
+		}
+		return
 	}
 	err := runIBD()
 	if err != nil {
@@ -136,7 +145,6 @@ func runIBD() error {
 		default:
 			panic("unknown string")
 		}
-
 	}
 	err = proofDB.Close()
 	if err != nil {
