@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/mit-dci/utreexo/utreexo"
@@ -24,6 +25,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 }
 
 // run IBD from block proof data
@@ -36,10 +38,18 @@ func runIBD() error {
 		return err
 	}
 
+	defer txofile.Close()
+
 	proofDB, err := leveldb.OpenFile("./proofdb", &opt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
+
+	memfile, err := os.Create("memprof")
+	if err != nil {
+		return err
+	}
+	defer memfile.Close()
 
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
@@ -58,7 +68,7 @@ func runIBD() error {
 
 	var p utreexo.Pollard
 
-	p.Minleaves = 1000000
+	p.Minleaves = 10000
 	p.Lookahead = 100000
 
 	for scanner.Scan() {
@@ -115,6 +125,11 @@ func runIBD() error {
 			}
 			if height%1000 == 0 {
 				fmt.Printf(MemStatString())
+			}
+			if height%250000 == 0 {
+				runtime.GC()
+				pprof.WriteHeapProfile(memfile)
+				return nil
 			}
 
 			blockAdds = []utreexo.LeafTXO{}

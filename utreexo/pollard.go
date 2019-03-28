@@ -104,7 +104,8 @@ func (p *Pollard) Add(adds []LeafTXO) error {
 	for _, add := range adds {
 		var remember bool
 
-		if p.numLeaves < p.Minleaves || add.Duration < p.Lookahead {
+		if p.numLeaves < p.Minleaves ||
+			(add.Duration < p.Lookahead && add.Duration > 0) {
 			remember = true
 			p.rememberEver++
 		}
