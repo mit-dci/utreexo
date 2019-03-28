@@ -62,12 +62,6 @@ func runIBD() error {
 		return err
 	}
 
-	memfile, err := os.Create("memprof")
-	if err != nil {
-		return err
-	}
-	defer memfile.Close()
-
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
 
@@ -85,8 +79,8 @@ func runIBD() error {
 
 	var p utreexo.Pollard
 
-	p.Minleaves = 10000
-	p.Lookahead = 100000
+	p.Minleaves = 100000
+	p.Lookahead = 3000
 
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
@@ -144,12 +138,6 @@ func runIBD() error {
 				fmt.Printf(MemStatString())
 			}
 
-			if height%250000 == 0 {
-				runtime.GC()
-				pprof.WriteHeapProfile(memfile)
-				return nil
-			}
-
 			blockAdds = []utreexo.LeafTXO{}
 			blockDels = []utreexo.Hash{}
 			height++
@@ -157,10 +145,12 @@ func runIBD() error {
 			panic("unknown string")
 		}
 	}
+
 	err = proofDB.Close()
 	if err != nil {
 		return err
 	}
+
 	return scanner.Err()
 
 	return nil
@@ -297,6 +287,15 @@ func MemStatString() string {
 
 	if m.Alloc > maxmalloc {
 		maxmalloc = m.Alloc
+
+		// overwrite profile to get max mem usage
+		// (only measured at 1000 block increments...)
+		memfile, err := os.Create("memprof")
+		if err != nil {
+			panic(err.Error())
+		}
+		pprof.WriteHeapProfile(memfile)
+		memfile.Close()
 	}
 	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
 	s = fmt.Sprintf("alloc %d MB max %d MB", m.Alloc>>20, maxmalloc>>20)
