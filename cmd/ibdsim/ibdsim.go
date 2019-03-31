@@ -79,8 +79,10 @@ func runIBD() error {
 
 	var p utreexo.Pollard
 
-	p.Minleaves = 100000
-	p.Lookahead = 3000
+	p.Minleaves = 1 << 30
+	p.Lookahead = 1000
+
+	fname := fmt.Sprintf("mem%dm%dl", p.Minleaves, p.Lookahead)
 
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
@@ -135,7 +137,7 @@ func runIBD() error {
 					plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 			}
 			if height%1000 == 0 {
-				fmt.Printf(MemStatString())
+				fmt.Printf(MemStatString(fname))
 			}
 
 			blockAdds = []utreexo.LeafTXO{}
@@ -280,7 +282,7 @@ func buildProofs() error {
 
 }
 
-func MemStatString() string {
+func MemStatString(fname string) string {
 	var s string
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -290,7 +292,7 @@ func MemStatString() string {
 
 		// overwrite profile to get max mem usage
 		// (only measured at 1000 block increments...)
-		memfile, err := os.Create("memprof")
+		memfile, err := os.Create(fname)
 		if err != nil {
 			panic(err.Error())
 		}
