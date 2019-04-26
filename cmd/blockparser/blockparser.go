@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
+	"github.com/mit-dci/lit/wire"
 )
 
 /*
@@ -30,24 +31,111 @@ var testNet3GenHash = Hash{
 func main() {
 	fmt.Printf("hi\n")
 
-	err := loadDb()
+	err := parser()
 	if err != nil {
 		panic(err)
 	}
 }
 
-func loadDb() error {
+func parser() error {
 
-	// open database
-	o := new(opt.Options)
-	o.ReadOnly = true
-	lvdb, err := leveldb.OpenFile("./index", o)
+	fileNum := 0
+	fileName := fmt.Sprintf("blk%05d.dat", fileNum)
+
+	fmt.Printf("filename %s\n", fileName)
+
+	blocks, err := readRawBlocksFromFile(fileName)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	defer lvdb.Close()
 
-	//lvdb.Get()
+	err = sortBlocks(blocks)
+	if err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func sortBlocks(blocks []wire.MsgBlock) error {
+
+	tip := blocks[0].BlockHash()
+	tipnum := 0
+
+	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
+
+	for x, b := range blocks {
+		fmt.Printf("read %d, tip %d map %d\n", x, tipnum, len(nextMap))
+		if len(nextMap) > 1000 {
+			fmt.Printf("tip at %d %s\n", tipnum, tip.String())
+			break
+		}
+		// skip first block
+		if x == 0 {
+			tip = b.BlockHash()
+			tipnum++
+			continue
+		}
+
+		if b.Header.PrevBlock != tip { // not in line, add to map
+			nextMap[b.Header.PrevBlock] = b
+			continue
+		}
+
+		// inline, progress tip and deplete map
+		tip = b.BlockHash()
+		tipnum++
+
+		// check for next blocks in map
+		stashedBlock, ok := nextMap[tip]
+		for ok {
+			tip = stashedBlock.BlockHash()
+			tipnum++
+
+			fmt.Printf("%s in map and points to %s\n",
+				stashedBlock.BlockHash().String(), tip.String())
+			delete(nextMap, stashedBlock.Header.PrevBlock)
+
+			stashedBlock, ok = nextMap[tip]
+		}
+	}
+
+	return nil
+}
+
+func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
+	var blocks []wire.MsgBlock
+
+	f, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	fstat, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	loc := int64(0) // presumably we start at offset 0
+
+	for loc != fstat.Size() {
+		_, err = f.Seek(8, 1)
+		if err != nil {
+			return nil, err
+		}
+
+		b := new(wire.MsgBlock)
+		err = b.Deserialize(f)
+		if err != nil {
+			return nil, err
+		}
+
+		blocks = append(blocks, *b)
+		loc, err = f.Seek(0, 1)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return blocks, nil
 }
