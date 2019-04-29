@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -20,97 +19,6 @@ func HashFromString(s string) Hash {
 }
 
 const txoFilename = "mainnet.txos"
-
-/* first pass, just add the deletions to the DB.
-then go another pass, and just check the adds, making new lines
-of their ttls */
-func firstPass() error {
-	txofile, err := os.OpenFile(txoFilename, os.O_RDONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer txofile.Close()
-
-	scanner := bufio.NewScanner(txofile)
-
-	var height uint32
-	height = 1
-	// height starts at 1 because there are no transactions in block 0
-
-	//	var dels sortableDelunit
-	var wg sync.WaitGroup
-
-	// make the channel ... have a buffer? does it matter?
-	batchan := make(chan *leveldb.Batch)
-
-	// open database
-	o := new(opt.Options)
-	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile("./lvdb", o)
-	if err != nil {
-		panic(err)
-	}
-	defer lvdb.Close()
-
-	batch := new(leveldb.Batch)
-	//start db writer worker... actually start a bunch of em
-	// try 1 worker...?
-	for j := 0; j < 16; j++ {
-		go dbWorker(batchan, lvdb, &wg)
-	}
-
-	for scanner.Scan() {
-		switch scanner.Text()[0] {
-		case '-':
-			h := HashFromString(scanner.Text()[1:])
-			batch.Put(h[:], U32tB(height))
-			//			dels = append(dels, delUnit{h, height})
-		case '+':
-			// do nothing
-		case 'h':
-			if height%1000 == 0 {
-				fmt.Printf("have %d deletions at height %d\n", batch.Len(), height)
-			}
-			// save 1M at a time, 32MB
-			if batch.Len() > 1000000 {
-				fmt.Printf("--- sending off %d dels at height %d\n", batch.Len(), height)
-				wg.Add(1)
-				batchan <- batch
-				batch = new(leveldb.Batch)
-				//				dels = dels[:0]
-			}
-			height++
-		default:
-			panic("unknown string")
-		}
-	}
-	// done, but there's stuff left
-	wg.Add(1)
-	fmt.Printf("--- sending off %d dels at height %d\n", batch.Len(), height)
-	batchan <- batch
-	wg.Wait()
-
-	return nil
-}
-
-// dbWorker writes everything to the db.  It's it's own goroutine so it
-// can work at the same time that the reads are happening
-func dbWorker(
-	bChan chan *leveldb.Batch, lvdb *leveldb.DB, wg *sync.WaitGroup) {
-
-	for {
-		b := <-bChan
-
-		fmt.Printf("--- writing batch %d dels\n", b.Len())
-
-		err := lvdb.Write(b, nil)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		fmt.Printf("wrote %d deletions to leveldb\n", b.Len())
-		wg.Done()
-	}
-}
 
 // for parallel txofile building we need to have a buffer
 type txotx struct {
@@ -202,13 +110,13 @@ func lookerUpperWorker(
 }
 
 // read from the DB and tack on TTL values
-func secondPass() error {
+func readTTLdb() error {
 
 	// open database
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
 	o.ReadOnly = true
-	lvdb, err := leveldb.OpenFile("./lvdb", o)
+	lvdb, err := leveldb.OpenFile("./ttldb", o)
 	if err != nil {
 		panic(err)
 	}
@@ -329,24 +237,5 @@ func secondPass() error {
 		}
 
 	}
-	return nil
-}
-
-func runTxo() error {
-
-	//	 skip first pass -- we already have that file
-
-	err := firstPass()
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("start 2nd pass \n")
-
-	//	err := secondPass()
-	//	if err != nil {
-	//		return err
-	//	}
-
 	return nil
 }

@@ -62,14 +62,12 @@ func dbWorker(
 
 	for {
 		b := <-bChan
-
-		fmt.Printf("--- writing batch %d dels\n", b.Len())
-
+		//		fmt.Printf("--- writing batch %d dels\n", b.Len())
 		err := lvdb.Write(b, nil)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
-		fmt.Printf("wrote %d deletions to leveldb\n", b.Len())
+		//		fmt.Printf("wrote %d deletions to leveldb\n", b.Len())
 		wg.Done()
 	}
 }

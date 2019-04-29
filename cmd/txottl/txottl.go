@@ -7,9 +7,8 @@ import (
 )
 
 func main() {
-	fmt.Printf("hi\n")
-
-	err := runTxo()
+	fmt.Printf("txottl\n")
+	err := readTTLdb()
 	if err != nil {
 		panic(err)
 	}
