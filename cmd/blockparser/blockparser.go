@@ -3,14 +3,20 @@ package main
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 /*
 Read bitcoin core's levelDB index folder, and the blk000.dat files with
 the blocks.
+Writes a text txo file, and also creates a levelDB folder with the block
+heights where every txo is consumed.  These files feed in to txottl to
+make a txo text file with the ttl times on each line
 */
 
 var mainnetGenHash = chainhash.Hash{
@@ -46,6 +52,24 @@ func parser() error {
 		return err
 	}
 
+	// open database
+	o := new(opt.Options)
+	o.CompactionTableSizeMultiplier = 8
+	lvdb, err := leveldb.OpenFile("./ttldb", o)
+	if err != nil {
+		panic(err)
+	}
+	defer lvdb.Close()
+	var batchwg sync.WaitGroup
+	// make the channel ... have a buffer? does it matter?
+	batchan := make(chan *leveldb.Batch)
+
+	//start db writer worker... actually start a bunch of em
+	// try 16 workers...?
+	for j := 0; j < 16; j++ {
+		go dbWorker(batchan, lvdb, &batchwg)
+	}
+
 	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
 		fmt.Printf("reading %s\n", fileName)
@@ -61,11 +85,13 @@ func parser() error {
 			return err
 		}
 
-		tip, tipnum, err = sortBlocks(blocks, nextMap, tip, tipnum, outfile)
+		tip, tipnum, err = sortBlocks(
+			blocks, nextMap, tip, tipnum, outfile, batchan, &batchwg)
 		if err != nil {
 			return err
 		}
 	}
+	batchwg.Wait()
 
 	return nil
 }
@@ -84,39 +110,13 @@ func IsUnspendable(o *wire.TxOut) bool {
 	return false
 }
 
-func writeBlock(b wire.MsgBlock, height int, f *os.File) error {
-
-	var s string
-	for blockindex, tx := range b.Transactions {
-		for _, in := range tx.TxIn {
-			if blockindex > 0 { // skip coinbase "spend"
-				s += "-" + in.PreviousOutPoint.String() + "\n"
-			}
-			//			dels = append(dels, in.PreviousOutPoint)
-		}
-
-		// creates all txos up to index indicated
-		s += "+" + wire.OutPoint{tx.TxHash(), uint32(len(tx.TxOut))}.String()
-
-		for i, out := range tx.TxOut {
-			if IsUnspendable(out) {
-				s += "z" + fmt.Sprintf("%d", i)
-			}
-		}
-		s += "\n"
-	}
-	s += fmt.Sprintf("h: %d\n", height)
-
-	_, err := f.WriteString(s)
-
-	return err
-}
-
 func sortBlocks(
 	blocks []wire.MsgBlock,
 	nextMap map[chainhash.Hash]wire.MsgBlock,
 	tip chainhash.Hash, tipnum int,
-	outfile *os.File) (chainhash.Hash, int, error) {
+	outfile *os.File,
+	batchan chan *leveldb.Batch,
+	batchwg *sync.WaitGroup) (chainhash.Hash, int, error) {
 
 	for _, b := range blocks {
 		if len(nextMap) > 10000 {
@@ -132,7 +132,7 @@ func sortBlocks(
 		// inline, progress tip and deplete map
 		tip = b.BlockHash()
 		tipnum++
-		err := writeBlock(b, tipnum, outfile)
+		err := writeBlock(b, tipnum, outfile, batchan, batchwg)
 		if err != nil {
 			return tip, tipnum, err
 		}
@@ -142,7 +142,7 @@ func sortBlocks(
 		for ok {
 			tip = stashedBlock.BlockHash()
 			tipnum++
-			err := writeBlock(stashedBlock, tipnum, outfile)
+			err := writeBlock(stashedBlock, tipnum, outfile, batchan, batchwg)
 			if err != nil {
 				return tip, tipnum, err
 			}

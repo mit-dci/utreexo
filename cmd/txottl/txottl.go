@@ -54,24 +54,3 @@ func BtU32(b []byte) uint32 {
 	binary.Read(buf, binary.BigEndian, &i)
 	return i
 }
-
-// 8 bytes to uint64.  returns ffff. if it doesn't work.
-// take first bytes if it's too long
-func BtU64(b []byte) uint64 {
-	if len(b) > 8 {
-		//		fmt.Printf("Got %x to BtU64 (%d bytes)\n", b, len(b))
-		//		return 0xffffffffffffffff
-		b = b[:8]
-	}
-	var i uint64
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// uint64 to 8 bytes.  Always works.
-func U64tB(i uint64) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
