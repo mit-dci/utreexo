@@ -171,7 +171,15 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 	loc := int64(0) // presumably we start at offset 0
 
 	for loc != fstat.Size() {
-		_, err = f.Seek(8, 1)
+
+		var magicbytes [4]byte
+		f.Read(magicbytes[:])
+		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} {
+			fmt.Printf("got non magic bytes %x, finishing\n")
+			break
+		}
+
+		_, err = f.Seek(4, 1)
 		if err != nil {
 			return nil, err
 		}
