@@ -70,7 +70,7 @@ func parser() error {
 		go dbWorker(batchan, lvdb, &batchwg)
 	}
 
-	for fileNum := 0; ; fileNum++ {
+	for fileNum := 154; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
 		fmt.Printf("reading %s\n", fileName)
 
@@ -169,17 +169,19 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 	}
 
 	loc := int64(0) // presumably we start at offset 0
-
+	blockInFile := 0
+	var prevHdr wire.BlockHeader
 	for loc != fstat.Size() {
 
 		var magicbytes [4]byte
 		f.Read(magicbytes[:])
-		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} {
-			fmt.Printf("got non magic bytes %x, finishing\n")
+		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} && //testnet
+			magicbytes != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} { // mainnet
+			fmt.Printf("got non magic bytes %x, finishing\n", magicbytes)
 			break
 		}
 
-		_, err = f.Seek(4, 1)
+		loc, err = f.Seek(4, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -187,6 +189,8 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 		b := new(wire.MsgBlock)
 		err = b.Deserialize(f)
 		if err != nil {
+			fmt.Printf("prev idx %d hash %s file %s offset %d\n",
+				blockInFile, prevHdr.BlockHash().String(), fileName, loc)
 			return nil, err
 		}
 
@@ -195,6 +199,8 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 		if err != nil {
 			return nil, err
 		}
+		prevHdr = b.Header
+		blockInFile++
 	}
 
 	return blocks, nil

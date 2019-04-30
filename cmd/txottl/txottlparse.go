@@ -18,7 +18,7 @@ func HashFromString(s string) Hash {
 	return blake2b.Sum256([]byte(s))
 }
 
-const txoFilename = "mainnet.txos"
+const txoFilename = "testnet.txos"
 
 // for parallel txofile building we need to have a buffer
 type txotx struct {
