@@ -2,3 +2,4 @@
 cmd/txottl/txottl
 cmd/blockparser/blockparser
 cmd/ibdsim/ibdsim
+cmd/clair/clair
