@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sort"
@@ -20,6 +22,15 @@ every block, remove the beginning of the slice (stuff that has died)
 add (interspersed) the new txos in the block
 chop off the end of the slice (all that exceeds memory capacity)
 that's all.
+
+format of the schedule.clr file: bitmaps of 8 txos per byte.  1s mean remember, 0s mean
+forget.  Not padded or anything.
+
+format of index file: 4 bytes per block.  *Txo* position of block start, in unsigned
+big endian.
+
+So to get from a block height to a txo position, seek to 4*height in the index,
+read 4 bytes, then seek to *that* /8 in the schedule file, and shift around as needed.
 
 */
 
@@ -55,12 +66,13 @@ func SplitAfter(s sortableTxoSlice, h uint32) (top, bottom sortableTxoSlice) {
 }
 
 func main() {
-
-	fmt.Printf("clair - builds clairvoyant caching schedule")
+	fmt.Printf("clair - builds clairvoyant caching schedule\n")
 	err := clairvoy()
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("done\n")
+
 }
 
 func clairvoy() error {
@@ -69,7 +81,28 @@ func clairvoy() error {
 		return err
 	}
 
+	clrfile, err := os.Create("schedule.clr")
+	if err != nil {
+		return err
+	}
+
+	// we should know how many utxos there are before starting this, and allocate
+	// (truncate!? weird) that many bits (/8 for bytes)
+	err = clrfile.Truncate(1000000)
+	if err != nil {
+		return err
+	}
+
+	// the index file will be useful later for ibdsim, if you have a block
+	// height and need to know where in the clair schedule you are.
+	indexFile, err := os.Create("index.clr")
+	if err != nil {
+		return err
+	}
+
 	defer txofile.Close()
+	defer clrfile.Close()
+
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
 
@@ -82,6 +115,10 @@ func clairvoy() error {
 	var utxoCounter uint32
 	var height uint32
 	height = 1
+	_, err = indexFile.WriteAt(U32tB(0), 0) // first 0 bytes because blocks start at 1
+	if err != nil {
+		return err
+	}
 
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
@@ -107,6 +144,7 @@ func clairvoy() error {
 			//				fmt.Printf("%d:%d, ", u.txoIdx, u.end)
 			//			}
 			//			fmt.Printf("\n")
+			txosThisBlock := uint32(len(blockEnds))
 
 			// append & sort
 			clairSlice.MergeSort(blockEnds)
@@ -116,18 +154,28 @@ func clairvoy() error {
 
 			// chop off the end, that's stuff that is forgettable
 			if len(clairSlice) > maxmem {
-				forgets := clairSlice[maxmem:]
+				//				forgets := clairSlice[maxmem:]
 				clairSlice = clairSlice[:maxmem]
-				fmt.Printf("forget ")
-				for _, f := range forgets {
-					fmt.Printf("%d ", f.txoIdx)
-				}
-				fmt.Printf("\n")
+				//				fmt.Printf("forget ")
+				//				for _, f := range forgets {
+				//					fmt.Printf("%d ", f.txoIdx)
+				//				}
+				//				fmt.Printf("\n")
 			}
 
+			// expand index file and schedule file (with lots of 0s)
+			_, err := indexFile.WriteAt(
+				U32tB(utxoCounter-txosThisBlock), int64(height)*4)
+			if err != nil {
+				return err
+			}
+
+			// writing remembers is trickier; check in
 			if len(remembers) > 0 {
+
 				fmt.Printf("h %d remember utxos ", height)
 				for _, r := range remembers {
+					err = assertBitInFile(r.txoIdx, clrfile)
 					fmt.Printf("%d ", r.txoIdx)
 				}
 				fmt.Printf("\n")
@@ -140,11 +188,23 @@ func clairvoy() error {
 
 		default:
 			panic("unknown string")
-
 		}
 	}
 
 	return nil
+}
+
+// basically flips bit n of a big file to 1.
+func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
+	offset := int64(txoIdx / 8)
+	b := make([]byte, 1)
+	_, err := scheduleFile.ReadAt(b, offset)
+	if err != nil {
+		return err
+	}
+	b[0] = b[0] | 1<<(7-(txoIdx%8))
+	_, err = scheduleFile.WriteAt(b, offset)
+	return err
 }
 
 // like the plusline in ibdsim.  Should merge with that.
@@ -213,4 +273,23 @@ func plusLine(s string) ([]uint32, error) {
 	}
 
 	return ends, nil
+}
+
+// uint32 to 4 bytes.  Always works.
+func U32tB(i uint32) []byte {
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, i)
+	return buf.Bytes()
+}
+
+// 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
+func BtU32(b []byte) uint32 {
+	if len(b) != 4 {
+		fmt.Printf("Got %x to BtU32 (%d bytes)\n", b, len(b))
+		return 0xffffffff
+	}
+	var i uint32
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, &i)
+	return i
 }

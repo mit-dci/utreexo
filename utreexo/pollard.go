@@ -106,15 +106,17 @@ func (p *Pollard) Add(adds []LeafTXO) error {
 	// pretty sub-optimal, but we're not doing multi-thread yet
 
 	for _, add := range adds {
-		var remember bool
 
-		if p.numLeaves < p.Minleaves ||
-			(add.Duration < p.Lookahead && add.Duration > 0) {
-			remember = true
+		//		if p.numLeaves < p.Minleaves ||
+		//			(add.Duration < p.Lookahead && add.Duration > 0) {
+		//			remember = true
+		//			p.rememberEver++
+		//		}
+		if add.Remember {
 			p.rememberEver++
 		}
 
-		err := p.addOne(add.Hash, remember)
+		err := p.addOne(add.Hash, add.Remember)
 		if err != nil {
 			return err
 		}

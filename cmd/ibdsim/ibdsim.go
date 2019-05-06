@@ -58,6 +58,12 @@ func runIBD() error {
 
 	defer txofile.Close()
 
+	scheduleFile, err := os.OpenFile("schedule.clr", os.O_RDONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer scheduleFile.Close()
+
 	proofDB, err := leveldb.OpenFile("./proofdb", &opt.Options{ReadOnly: true})
 	if err != nil {
 		return err
@@ -65,6 +71,8 @@ func runIBD() error {
 
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
+
+	var scheduleBuffer []byte
 
 	var height uint32
 	height = 1
@@ -86,6 +94,16 @@ func runIBD() error {
 	fname := fmt.Sprintf("mem%dm%dl", p.Minleaves, p.Lookahead)
 
 	for scanner.Scan() {
+		// keep schedule buffer full, 100KB chunks at a time
+		if len(scheduleBuffer) < 100000 {
+			nextBuf := make([]byte, 100000)
+			_, err = scheduleFile.Read(nextBuf)
+			if err != nil { // will error on EOF, deal w that
+				return err
+			}
+			scheduleBuffer = append(scheduleBuffer, nextBuf...)
+		}
+
 		switch scanner.Text()[0] {
 		case '-':
 			// blarg, still need to read these for the dedupe part
@@ -98,6 +116,15 @@ func runIBD() error {
 			adds, err := plusLine(scanner.Text())
 			if err != nil {
 				return err
+			}
+			// read from the schedule to see if it's memorable
+			for _, a := range adds {
+				a.Remember = 1<<(7-uint8(totalTXOAdded%8))&scheduleBuffer[0] != 0
+				totalTXOAdded++
+				if totalTXOAdded%8 == 0 {
+					// after every 8 reads, pop the first byte off the front
+					scheduleBuffer = scheduleBuffer[1:]
+				}
 			}
 			blockAdds = append(blockAdds, adds...)
 			donetime := time.Now()
@@ -124,7 +151,7 @@ func runIBD() error {
 				return err
 			}
 
-			totalTXOAdded += len(blockAdds)
+			//			totalTXOAdded += len(blockAdds)
 			totalDels += len(bp.Targets)
 
 			err = p.Modify(blockAdds, bp.Targets)

@@ -32,7 +32,7 @@ type Node struct {
 type LeafTXO struct {
 	Hash
 	Duration int32 // utxo lasts this long (0 = forever)
-	//	Remember bool // this leaf will be deleted soon
+	Remember bool  // this leaf will be deleted soon, remember it
 }
 
 // Parent gets you the merkle parent.  So far no committing to height.
