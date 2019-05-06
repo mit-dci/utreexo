@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
@@ -85,37 +86,42 @@ func clairvoy() error {
 		return err
 	}
 
-	// scheduleSlice := make([]byte, 125000000)
+	scheduleSlice := make([]byte, 125000000)
 
-	scheduleFile, err := os.Create("schedule.clr")
-	if err != nil {
-		return err
-	}
+	// scheduleFile, err := os.Create("schedule.clr")
+	// if err != nil {
+	// 	return err
+	// }
 	// we should know how many utxos there are before starting this, and allocate
 	// (truncate!? weird) that many bits (/8 for bytes)
-	err = scheduleFile.Truncate(125000000) // 12.5MB for testnet (guess)
-	if err != nil {
-		return err
-	}
+	// err = scheduleFile.Truncate(125000000) // 12.5MB for testnet (guess)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// the index file will be useful later for ibdsim, if you have a block
 	// height and need to know where in the clair schedule you are.
-	indexFile, err := os.Create("index.clr")
-	if err != nil {
-		return err
-	}
+	// indexFile, err := os.Create("index.clr")
+	// if err != nil {
+	// 	return err
+	// }
 
 	defer txofile.Close()
-	defer scheduleFile.Close()
+	// defer scheduleFile.Close()
 
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
 
 	var sortTime time.Duration
 	startTime := time.Now()
+	if len(os.Args) < 2 {
+		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
+	}
+	maxmem, err := strconv.Atoi(os.Args[1])
+	if err != nil || maxmem == 0 {
+		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
 
-	maxmem := 10000 // 10K
-
+	}
 	var blockEnds sortableTxoSlice
 
 	var clairSlice, remembers sortableTxoSlice
@@ -123,10 +129,10 @@ func clairvoy() error {
 	var utxoCounter uint32
 	var height uint32
 	height = 1
-	_, err = indexFile.WriteAt(U32tB(0), 0) // first 0 bytes because blocks start at 1
-	if err != nil {
-		return err
-	}
+	// _, err = indexFile.WriteAt(U32tB(0), 0) // first 0 bytes because blocks start at 1
+	// if err != nil {
+	// 	return err
+	// }
 
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
@@ -151,24 +157,9 @@ func clairvoy() error {
 
 			blockEnds = append(blockEnds, txEnds...)
 
-			// var cut int
-			// // don't store txos of unknown spend height
-			// for i, be := range blockEnds {
-			// 	if be.end == 1<<24 {
-			// 		cut = i
-			// 		break
-			// 	}
-			// }
-			// blockEnds = blockEnds[:cut]
-
 		case 'h':
 
-			//			fmt.Printf("h %d clairslice ", height)
-			//			for _, u := range clairSlice {
-			//				fmt.Printf("%d:%d, ", u.txoIdx, u.end)
-			//			}
-			//			fmt.Printf("\n")
-			txosThisBlock := uint32(len(blockEnds))
+			// txosThisBlock := uint32(len(blockEnds))
 
 			// append & sort
 			sortStart := time.Now()
@@ -204,26 +195,23 @@ func clairvoy() error {
 			}
 
 			// expand index file and schedule file (with lots of 0s)
-			_, err := indexFile.WriteAt(
-				U32tB(utxoCounter-txosThisBlock), int64(height)*4)
-			if err != nil {
-				return err
-			}
+			// _, err := indexFile.WriteAt(
+			// 	U32tB(utxoCounter-txosThisBlock), int64(height)*4)
+			// if err != nil {
+			// 	return err
+			// }
 
 			// writing remembers is trickier; check in
 			if len(remembers) > 0 {
-
-				// fmt.Printf("h %d set %d bits\n", height, len(remembers))
 				for _, r := range remembers {
-					// assertBitInRam(r.txoIdx, scheduleSlice)
-					err = assertBitInFile(r.txoIdx, scheduleFile)
-					if err != nil {
-						fmt.Printf("assertBitInFile error\n")
-						return err
-					}
-					//					fmt.Printf("%d ", r.txoIdx)
+					assertBitInRam(r.txoIdx, scheduleSlice)
+					// err = assertBitInFile(r.txoIdx, scheduleFile)
+					// if err != nil {
+					// 	fmt.Printf("assertBitInFile error\n")
+					// 	return err
+					// }
 				}
-				//				fmt.Printf("\n")
+
 			}
 
 			height++
@@ -242,21 +230,15 @@ func clairvoy() error {
 				} else {
 					fmt.Printf("\n")
 				}
-
 			}
-			// if height%10000 == 0 {
-			// 	for _, c := range clairSlice {
-			// 		fmt.Printf("%d\t", c.end)
-			// 	}
-			// }
 		default:
 			panic("unknown string")
 		}
 	}
 
-	return nil
-
-	// return ioutil.WriteFile("schedule.clr", scheduleSlice, 0644)
+	// return nil
+	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
+	return ioutil.WriteFile(fileString, scheduleSlice, 0644)
 
 }
 
