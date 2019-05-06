@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 /* idea here:
@@ -62,6 +63,9 @@ func SplitAfter(s sortableTxoSlice, h uint32) (top, bottom sortableTxoSlice) {
 			break
 		}
 	}
+	if top == nil {
+		bottom = s
+	}
 	return
 }
 
@@ -81,14 +85,15 @@ func clairvoy() error {
 		return err
 	}
 
-	clrfile, err := os.Create("schedule.clr")
+	// scheduleSlice := make([]byte, 125000000)
+
+	scheduleFile, err := os.Create("schedule.clr")
 	if err != nil {
 		return err
 	}
-
 	// we should know how many utxos there are before starting this, and allocate
 	// (truncate!? weird) that many bits (/8 for bytes)
-	err = clrfile.Truncate(125000000)
+	err = scheduleFile.Truncate(12500000) // 12.5MB for testnet (guess)
 	if err != nil {
 		return err
 	}
@@ -101,12 +106,15 @@ func clairvoy() error {
 	}
 
 	defer txofile.Close()
-	defer clrfile.Close()
+	defer scheduleFile.Close()
 
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
 
-	maxmem := 1000000
+	var sortTime time.Duration
+	startTime := time.Now()
+
+	maxmem := 1000 // 10K
 
 	var blockEnds sortableTxoSlice
 
@@ -130,14 +138,42 @@ func clairvoy() error {
 			if err != nil {
 				return err
 			}
-			blockEnds = make([]txoEnd, len(endHeights))
+
+			txEnds := make(sortableTxoSlice, len(endHeights))
 			for i, eh := range endHeights {
-				blockEnds[i].txoIdx = utxoCounter
+				txEnds[i].txoIdx = utxoCounter
 				utxoCounter++
-				blockEnds[i].end = height + eh
+				txEnds[i].end = height + eh
+				if txEnds[i].end > 1<<24 {
+					txEnds[i].end = 1 << 24
+				}
 			}
 
+			blockEnds = append(blockEnds, txEnds...)
+			// sort.Sort(blockEnds)
+
+			// var cut int
+			// // don't store txos of unknown spend height
+			// for i, be := range blockEnds {
+			// 	if be.end == 1<<24 {
+			// 		cut = i
+			// 		break
+			// 	}
+			// }
+			// blockEnds = blockEnds[:cut]
+
 		case 'h':
+
+			for i, e := range clairSlice {
+				if e.txoIdx == 354788 {
+					fmt.Printf("h %d 0ce1856 in clairslice position %d end %d\n",
+						height, i, e.end)
+				}
+			}
+
+			if height == 108150 {
+				return nil
+			}
 
 			//			fmt.Printf("h %d clairslice ", height)
 			//			for _, u := range clairSlice {
@@ -147,16 +183,27 @@ func clairvoy() error {
 			txosThisBlock := uint32(len(blockEnds))
 
 			// append & sort
+			sortStart := time.Now()
 			clairSlice.MergeSort(blockEnds)
+			sortTime += time.Now().Sub(sortStart)
+			blockEnds = sortableTxoSlice{}
 
 			// chop off the beginning: that's the stuff that's memorable
+			preLen := len(clairSlice)
 			remembers, clairSlice = SplitAfter(clairSlice, height)
+			postLen := len(clairSlice)
+			if preLen != len(remembers)+postLen {
+				return fmt.Errorf("h %d preLen %d remembers %d postlen %d\n",
+					height, preLen, len(remembers), postLen)
+			}
 
 			// chop off the end, that's stuff that is forgettable
 			if len(clairSlice) > maxmem {
 				//				forgets := clairSlice[maxmem:]
+				// fmt.Printf("\tblock %d forget %d\n",
+				// height, len(clairSlice)-maxmem)
 				clairSlice = clairSlice[:maxmem]
-				//				fmt.Printf("forget ")
+
 				//				for _, f := range forgets {
 				//					fmt.Printf("%d ", f.txoIdx)
 				//				}
@@ -173,25 +220,51 @@ func clairvoy() error {
 			// writing remembers is trickier; check in
 			if len(remembers) > 0 {
 
-				//				fmt.Printf("h %d remember utxos ", height)
+				fmt.Printf("h %d set %d bits\n", height, len(remembers))
 				for _, r := range remembers {
-					err = assertBitInFile(r.txoIdx, clrfile)
+					// assertBitInRam(r.txoIdx, scheduleSlice)
+					err = assertBitInFile(r.txoIdx, scheduleFile)
+					if err != nil {
+						fmt.Printf("assertBitInFile error\n")
+						return err
+					}
 					//					fmt.Printf("%d ", r.txoIdx)
 				}
 				//				fmt.Printf("\n")
 			}
 
-			//			fmt.Printf("h %d len(clairSlice) %d len(blockEnds) %d\n",
-			//				height, len(clairSlice), len(blockEnds))
-
 			height++
+			if height%1000 == 0 {
+				fmt.Printf("all %.2f sort %.2f ",
+					time.Now().Sub(startTime).Seconds(),
+					sortTime.Seconds())
+				fmt.Printf("h %d txo %d clairSlice %d ",
+					height, utxoCounter, len(clairSlice))
+				if len(clairSlice) > 0 {
+					fmt.Printf("first %d:%d last %d:%d\n",
+						clairSlice[0].txoIdx,
+						clairSlice[0].end,
+						clairSlice[len(clairSlice)-1].txoIdx,
+						clairSlice[len(clairSlice)-1].end)
+				} else {
+					fmt.Printf("\n")
+				}
 
+			}
+			if height%10000 == 0 {
+				for _, c := range clairSlice {
+					fmt.Printf("%d\t", c.end)
+				}
+			}
 		default:
 			panic("unknown string")
 		}
 	}
 
 	return nil
+
+	// return ioutil.WriteFile("schedule.clr", scheduleSlice, 0644)
+
 }
 
 // basically flips bit n of a big file to 1.
@@ -205,6 +278,12 @@ func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
 	b[0] = b[0] | 1<<(7-(txoIdx%8))
 	_, err = scheduleFile.WriteAt(b, offset)
 	return err
+}
+
+// flips a bit to 1.  Crashes if you're out of range.
+func assertBitInRam(txoIdx uint32, scheduleSlice []byte) {
+	offset := int64(txoIdx / 8)
+	scheduleSlice[offset] |= 1 << (7 - (txoIdx % 8))
 }
 
 // like the plusline in ibdsim.  Should merge with that.
@@ -227,7 +306,7 @@ func plusLine(s string) ([]uint32, error) {
 		if ttlascii[i] == "s" {
 			//	ttlval[i] = 0
 			// 0 means don't remember it! so 1 million blocks later
-			ttlval[i] = 1 << 20
+			ttlval[i] = 1 << 30
 			continue
 		}
 
