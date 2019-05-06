@@ -76,7 +76,7 @@ func main() {
 }
 
 func clairvoy() error {
-	txofile, err := os.OpenFile("ttl.testnet3.txos", os.O_RDONLY, 0600)
+	txofile, err := os.OpenFile("ttl.mainnet.txos", os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func clairvoy() error {
 
 	// we should know how many utxos there are before starting this, and allocate
 	// (truncate!? weird) that many bits (/8 for bytes)
-	err = clrfile.Truncate(1000000)
+	err = clrfile.Truncate(125000000)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func clairvoy() error {
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
 
-	maxmem := 1000
+	maxmem := 1000000
 
 	var blockEnds sortableTxoSlice
 
@@ -173,12 +173,12 @@ func clairvoy() error {
 			// writing remembers is trickier; check in
 			if len(remembers) > 0 {
 
-				fmt.Printf("h %d remember utxos ", height)
+				//				fmt.Printf("h %d remember utxos ", height)
 				for _, r := range remembers {
 					err = assertBitInFile(r.txoIdx, clrfile)
-					fmt.Printf("%d ", r.txoIdx)
+					//					fmt.Printf("%d ", r.txoIdx)
 				}
-				fmt.Printf("\n")
+				//				fmt.Printf("\n")
 			}
 
 			//			fmt.Printf("h %d len(clairSlice) %d len(blockEnds) %d\n",
