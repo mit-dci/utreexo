@@ -93,7 +93,7 @@ func clairvoy() error {
 	}
 	// we should know how many utxos there are before starting this, and allocate
 	// (truncate!? weird) that many bits (/8 for bytes)
-	err = scheduleFile.Truncate(12500000) // 12.5MB for testnet (guess)
+	err = scheduleFile.Truncate(125000000) // 12.5MB for testnet (guess)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func clairvoy() error {
 	var sortTime time.Duration
 	startTime := time.Now()
 
-	maxmem := 1000 // 10K
+	maxmem := 10000 // 10K
 
 	var blockEnds sortableTxoSlice
 
@@ -150,7 +150,6 @@ func clairvoy() error {
 			}
 
 			blockEnds = append(blockEnds, txEnds...)
-			// sort.Sort(blockEnds)
 
 			// var cut int
 			// // don't store txos of unknown spend height
@@ -164,17 +163,6 @@ func clairvoy() error {
 
 		case 'h':
 
-			for i, e := range clairSlice {
-				if e.txoIdx == 354788 {
-					fmt.Printf("h %d 0ce1856 in clairslice position %d end %d\n",
-						height, i, e.end)
-				}
-			}
-
-			if height == 108150 {
-				return nil
-			}
-
 			//			fmt.Printf("h %d clairslice ", height)
 			//			for _, u := range clairSlice {
 			//				fmt.Printf("%d:%d, ", u.txoIdx, u.end)
@@ -184,8 +172,13 @@ func clairvoy() error {
 
 			// append & sort
 			sortStart := time.Now()
-			clairSlice.MergeSort(blockEnds)
+			// presort the smaller slice
+			sort.Sort(blockEnds)
+			// merge sorted
+			clairSlice = mergeSortedSlices(clairSlice, blockEnds)
 			sortTime += time.Now().Sub(sortStart)
+
+			// clear blockEnds
 			blockEnds = sortableTxoSlice{}
 
 			// chop off the beginning: that's the stuff that's memorable
@@ -220,7 +213,7 @@ func clairvoy() error {
 			// writing remembers is trickier; check in
 			if len(remembers) > 0 {
 
-				fmt.Printf("h %d set %d bits\n", height, len(remembers))
+				// fmt.Printf("h %d set %d bits\n", height, len(remembers))
 				for _, r := range remembers {
 					// assertBitInRam(r.txoIdx, scheduleSlice)
 					err = assertBitInFile(r.txoIdx, scheduleFile)
@@ -251,11 +244,11 @@ func clairvoy() error {
 				}
 
 			}
-			if height%10000 == 0 {
-				for _, c := range clairSlice {
-					fmt.Printf("%d\t", c.end)
-				}
-			}
+			// if height%10000 == 0 {
+			// 	for _, c := range clairSlice {
+			// 		fmt.Printf("%d\t", c.end)
+			// 	}
+			// }
 		default:
 			panic("unknown string")
 		}
@@ -352,6 +345,48 @@ func plusLine(s string) ([]uint32, error) {
 	}
 
 	return ends, nil
+}
+
+// This is copied from utreexo utils, and in this cases there will be no
+// duplicates, so that part is removed.  Uses sortableTxoSlices.
+
+// mergeSortedSlices takes two slices (of uint64s; though this seems
+// genericizable in that it's just < and > operators) and merges them into
+// a signle sorted slice, discarding duplicates.
+// (eg [1, 5, 8, 9], [2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6, 8, 9]
+func mergeSortedSlices(a sortableTxoSlice, b sortableTxoSlice) (c sortableTxoSlice) {
+	maxa := len(a)
+	maxb := len(b)
+
+	// make it the right size (no dupes)
+	c = make(sortableTxoSlice, maxa+maxb)
+
+	idxa, idxb := 0, 0
+	for j := 0; j < len(c); j++ {
+		// if we're out of a or b, just use the remainder of the other one
+		if idxa >= maxa {
+			// a is done, copy remainder of b
+			j += copy(c[j:], b[idxb:])
+			c = c[:j] // truncate empty section of c
+			break
+		}
+		if idxb >= maxb {
+			// b is done, copy remainder of a
+			j += copy(c[j:], a[idxa:])
+			c = c[:j] // truncate empty section of c
+			break
+		}
+
+		obja, objb := a[idxa], b[idxb]
+		if obja.end < objb.end { // a is less so append that
+			c[j] = obja
+			idxa++
+		} else { // b is less so append that
+			c[j] = objb
+			idxb++
+		}
+	}
+	return
 }
 
 // uint32 to 4 bytes.  Always works.
