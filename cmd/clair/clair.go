@@ -144,18 +144,15 @@ func clairvoy() error {
 			if err != nil {
 				return err
 			}
-
-			txEnds := make(sortableTxoSlice, len(endHeights))
-			for i, eh := range endHeights {
-				txEnds[i].txoIdx = utxoCounter
-				utxoCounter++
-				txEnds[i].end = height + eh
-				if txEnds[i].end > 1<<24 {
-					txEnds[i].end = 1 << 24
+			for _, eh := range endHeights {
+				if eh != 0 {
+					var nxo txoEnd
+					nxo.txoIdx = utxoCounter
+					utxoCounter++
+					nxo.end = height + eh
+					blockEnds = append(blockEnds, nxo)
 				}
 			}
-
-			blockEnds = append(blockEnds, txEnds...)
 
 		case 'h':
 
