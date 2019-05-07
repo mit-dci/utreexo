@@ -21,6 +21,7 @@ var genproofs = flag.Bool("genproofs", false, "Generate proofs")
 var genhist = flag.Bool("genhist", false, "Generate histogram")
 
 var ttlfn = flag.String("ttlfn", "ttl.mainnet.txos", "ttl filename")
+var schedFileName = flag.String("s", "schedule1pos.clr", "schedule file to use")
 
 func main() {
 	flag.Parse()
@@ -58,7 +59,7 @@ func runIBD() error {
 
 	defer txofile.Close()
 
-	scheduleFile, err := os.OpenFile("schedule.clr", os.O_RDONLY, 0600)
+	scheduleFile, err := os.OpenFile(*schedFileName, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -88,10 +89,10 @@ func runIBD() error {
 
 	var p utreexo.Pollard
 
-	p.Minleaves = 1 << 30
-	p.Lookahead = 1000
+	//	p.Minleaves = 1 << 30
+	//	p.Lookahead = 1000
 
-	fname := fmt.Sprintf("mem%dm%dl", p.Minleaves, p.Lookahead)
+	fname := fmt.Sprintf("mem%s", *schedFileName)
 
 	for scanner.Scan() {
 		// keep schedule buffer full, 100KB chunks at a time
@@ -118,8 +119,11 @@ func runIBD() error {
 				return err
 			}
 			// read from the schedule to see if it's memorable
-			for _, a := range adds {
-				a.Remember = 1<<(7-uint8(totalTXOAdded%8))&scheduleBuffer[0] != 0
+			for i, _ := range adds {
+				adds[i].Remember = scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
+				if adds[i].Remember {
+					fmt.Printf("remember %d\n", totalTXOAdded)
+				}
 				totalTXOAdded++
 				if totalTXOAdded%8 == 0 {
 					// after every 8 reads, pop the first byte off the front
@@ -151,7 +155,7 @@ func runIBD() error {
 				return err
 			}
 
-			//			totalTXOAdded += len(blockAdds)
+			// totalTXOAdded += len(blockAdds)
 			totalDels += len(bp.Targets)
 
 			err = p.Modify(blockAdds, bp.Targets)

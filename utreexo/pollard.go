@@ -24,8 +24,8 @@ type Pollard struct {
 	// proof but don't need to stay around after.
 	forget []uint64
 
-	Lookahead int32  // remember leafs below this TTL
-	Minleaves uint64 // remember everything below this leaf count
+	//	Lookahead int32  // remember leafs below this TTL
+	//	Minleaves uint64 // remember everything below this leaf count
 
 	// rememberLeaf refers to the 1-tree.  If de-treed, is it worth remembering?
 	rememberLeaf bool
@@ -105,18 +105,18 @@ func (p *Pollard) Add(adds []LeafTXO) error {
 	// this does everything 1 at a time, with hashing also mixed in, so that's
 	// pretty sub-optimal, but we're not doing multi-thread yet
 
-	for _, add := range adds {
+	for _, a := range adds {
 
 		//		if p.numLeaves < p.Minleaves ||
 		//			(add.Duration < p.Lookahead && add.Duration > 0) {
 		//			remember = true
 		//			p.rememberEver++
 		//		}
-		if add.Remember {
+		if a.Remember {
 			p.rememberEver++
 		}
 
-		err := p.addOne(add.Hash, add.Remember)
+		err := p.addOne(a.Hash, a.Remember)
 		if err != nil {
 			return err
 		}
