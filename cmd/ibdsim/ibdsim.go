@@ -119,22 +119,31 @@ func runIBD() error {
 				return err
 			}
 			// read from the schedule to see if it's memorable
-			for i, _ := range adds {
-				adds[i].Remember = scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
+			for _, a := range adds {
+				if a.Duration == 0 {
+					continue
+				}
+				a.Remember =
+					scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
+
 				totalTXOAdded++
 				if totalTXOAdded%8 == 0 {
 					// after every 8 reads, pop the first byte off the front
 					scheduleBuffer = scheduleBuffer[1:]
 				}
+				blockAdds = append(blockAdds, a)
 			}
-			blockAdds = append(blockAdds, adds...)
+
 			donetime := time.Now()
 			plustime += donetime.Sub(plusstart)
 
 		case 'h':
 			// dedupe, though in this case we don't care about dels,
 			// just don't want to add stuff that shouldn't be there
-			utreexo.DedupeHashSlices(&blockAdds, &blockDels)
+			// utreexo.DedupeHashSlices(&blockAdds, &blockDels)
+
+			// no longer need dedupe as 0-duration is filtered out before
+			// right after plusLine
 
 			// read a block proof from the db
 			bpBytes, err := proofDB.Get(utreexo.U32tB(height), nil)

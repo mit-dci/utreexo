@@ -29,6 +29,11 @@ type Pollard struct {
 
 	// rememberLeaf refers to the 1-tree.  If de-treed, is it worth remembering?
 	rememberLeaf bool
+
+	// the memorabilityNode isn't actually a node; it's a flag that a leaf is
+	// memorable; if the leaf has a pointer to this it's memorable; if it doesn't
+	// it's forgettable and exists only as proof for its adjacent node.
+	memorabilityNode polNode
 }
 
 // PolNode is a tree in the pollard forest
@@ -152,6 +157,10 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// make the new leaf & populate it with the actual data you're trying to add
 	n := new(polNode)
 	n.data = add
+	if remember {
+		// flag this leaf as memorable via it's left pointer
+		n.niece[0] = &p.memorabilityNode
+	}
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
 	// loop until we find a zero; destroy tops until you make one
