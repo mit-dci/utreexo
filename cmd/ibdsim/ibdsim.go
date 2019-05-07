@@ -121,9 +121,6 @@ func runIBD() error {
 			// read from the schedule to see if it's memorable
 			for i, _ := range adds {
 				adds[i].Remember = scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
-				if adds[i].Remember {
-					fmt.Printf("remember %d\n", totalTXOAdded)
-				}
 				totalTXOAdded++
 				if totalTXOAdded%8 == 0 {
 					// after every 8 reads, pop the first byte off the front
