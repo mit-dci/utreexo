@@ -42,7 +42,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 					return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]\n",
 						h, node.data[:4], pos, lr)
 				}
-				// fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
+				fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
 				p.overWire++
 			}
 
@@ -60,7 +60,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 				return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]\n",
 					h, node.data[:4], pos, lr)
 			}
-			// fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
+			fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
 			p.overWire++
 
 			// forget what we just put in. (Don't forget if not populating

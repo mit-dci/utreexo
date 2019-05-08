@@ -155,7 +155,9 @@ func runIBD() error {
 			if err != nil {
 				return err
 			}
-
+			if len(bp.Targets) > 0 {
+				fmt.Printf("block proof for block %d targets: %v\n", height, bp.Targets)
+			}
 			err = p.IngestBlockProof(bp)
 			if err != nil {
 				return err
