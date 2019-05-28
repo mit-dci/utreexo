@@ -87,6 +87,16 @@ const bridgeVerbose = false
 // of the forest
 var empty [32]byte
 
+func (f *Forest) Remove(dels []uint64) error {
+
+	err := f.removeInternal(dels)
+	if err != nil {
+		return err
+	}
+	return f.reHash()
+
+}
+
 // Deletion and addition are ~completely separate operations in the forest,
 // so lets break em into different methods.
 
@@ -95,8 +105,8 @@ var empty [32]byte
 // Remove deletes nodes from the forest.  This is the hard part :)
 // note that in the Forest method, we don't actually use the proofs,
 // just the position being deleted
-func (f *Forest) Remove(dels []uint64) error {
 
+func (f *Forest) removeInternal(dels []uint64) error {
 	starttime := time.Now()
 	if len(dels) == 0 {
 		return nil
@@ -585,6 +595,15 @@ func (f *Forest) writeSubtree(stash rootStash, dest uint64) error {
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) Add(adds []LeafTXO) error {
+	err := f.addInternal(adds)
+	if err != nil {
+		return err
+	}
+	return f.reHash()
+}
+
+// Add adds leaves to the forest.  This is the easy part.
+func (f *Forest) addInternal(adds []LeafTXO) error {
 
 	// add adds on the bottom right
 	for _, add := range adds {
@@ -630,11 +649,11 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 			delposs[i] = pos
 		}*/
 
-	err := f.Remove(dels)
+	err := f.removeInternal(dels)
 	if err != nil {
 		return err
 	}
-	err = f.Add(adds)
+	err = f.addInternal(adds)
 	if err != nil {
 		return err
 	}
