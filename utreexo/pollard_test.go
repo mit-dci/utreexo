@@ -32,7 +32,7 @@ func pollardRandomRemember(blocks int32) error {
 
 	var p Pollard
 
-	p.Minleaves = 0
+	// p.Minleaves = 0
 
 	sn := NewSimChain()
 	sn.durationMask = 0x07

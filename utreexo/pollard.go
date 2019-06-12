@@ -33,6 +33,7 @@ type Pollard struct {
 	// the memorabilityNode isn't actually a node; it's a flag that a leaf is
 	// memorable; if the leaf has a pointer to this it's memorable; if it doesn't
 	// it's forgettable and exists only as proof for its adjacent node.
+	// leaves won't count as "deadEnds" if they point to this
 	memorabilityNode polNode
 }
 
@@ -234,6 +235,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		return err
 	}
 
+	// TODO make dirtyMap into a slice
 	nextDirtyMap := make(map[uint64]bool) // whatever use a map for now.
 	// can use some kind of queues or something later.
 
@@ -471,6 +473,7 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 	return parPos, nil
 }
 
+// the Hash & trim function called by rem().  Not currently called on leaves
 func (p *Pollard) reHashOne(pos uint64) error {
 
 	pr, sib, err := p.DescendToPos(pos)
