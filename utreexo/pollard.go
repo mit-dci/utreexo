@@ -37,7 +37,7 @@ type Pollard struct {
 	memorabilityNode polNode
 }
 
-// PolNode is a tree in the pollard forest
+// PolNode is a node in the pollard forest
 type polNode struct {
 	data  Hash
 	niece [2]*polNode
@@ -235,8 +235,11 @@ func (p *Pollard) rem(dels []uint64) error {
 		return err
 	}
 
-	// TODO make dirtyMap into a slice
+	// TODO how about instead of a map or even a slice of uint64s, you just
+	// have a slice of pointers?  And you need to run AuntOp on these pointers
+	// if you aren't doing it already from something else.
 	nextDirtyMap := make(map[uint64]bool) // whatever use a map for now.
+
 	// can use some kind of queues or something later.
 
 	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
