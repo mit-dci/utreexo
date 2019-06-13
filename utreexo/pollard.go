@@ -50,7 +50,12 @@ func (n *polNode) auntOp() Hash {
 }
 
 // deadEnd returns true if both neices are nill
+// could also return true if n itself is nil! (maybe a bad idea?)
 func (n *polNode) deadEnd() bool {
+	// if n == nil {
+	// 	fmt.Printf("nil deadend\n")
+	// 	return true
+	// }
 	return n.niece[0] == nil && n.niece[1] == nil
 }
 
@@ -58,6 +63,16 @@ func (n *polNode) deadEnd() bool {
 func (n *polNode) chop() {
 	n.niece[0] = nil
 	n.niece[1] = nil
+}
+
+// prune prunes deadend childred
+func (n *polNode) prune() {
+	if n.niece[0].deadEnd() {
+		n.niece[0] = nil
+	}
+	if n.niece[1].deadEnd() {
+		n.niece[1] = nil
+	}
 }
 
 func (p *Pollard) height() uint8 { return treeHeight(p.numLeaves) }
@@ -174,22 +189,8 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		n = &polNode{data: nHash, niece: [2]*polNode{leftTop, n}} // new
 		p.hashesEver++
 
-		// at height 0, remembering is determined by flags
-		if h == 0 {
-			if !remember {
-				n.niece[1] = nil
-			}
-			if n.niece[0].deadEnd() {
-				n.niece[0] = nil
-			}
-		} else { // higher up, it's determined by populated nieces
-			if n.niece[0].deadEnd() {
-				n.niece[0] = nil
-			}
-			if n.niece[1].deadEnd() {
-				n.niece[1] = nil
-			}
-		}
+		n.prune()
+
 	}
 
 	// the new tops are all the 1 bits above where we got to, and nothing below where
