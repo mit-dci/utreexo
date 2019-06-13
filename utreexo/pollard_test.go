@@ -7,7 +7,7 @@ import (
 )
 
 func TestRandPollard(t *testing.T) {
-	rand.Seed(122)
+	rand.Seed(1232)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -19,7 +19,7 @@ func TestRandPollard(t *testing.T) {
 	//	}
 
 	//	for z := 0; z < 100; z++ {
-	err := pollardRandomRemember(159)
+	err := pollardRandomRemember(1259)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func pollardRandomRemember(blocks int32) error {
 	sn := NewSimChain()
 	sn.durationMask = 0x07
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0xf3)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x77)
 
 		fmt.Printf("\t\t\tblock %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
@@ -78,9 +78,9 @@ func pollardRandomRemember(blocks int32) error {
 		//		}
 		//		fmt.Printf("postadd %s", f2.ToString())
 		//		fmt.Printf("forgetslice %v\n", p.forget)
-		if p.rememberLeaf {
-			//			return fmt.Errorf("nobody should be memorable")
-		}
+		// if p.rememberLeaf {
+		//			return fmt.Errorf("nobody should be memorable")
+		// }
 		// check that tops are the same
 
 		fullTops := f.GetTops()

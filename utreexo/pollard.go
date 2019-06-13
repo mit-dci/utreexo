@@ -28,7 +28,7 @@ type Pollard struct {
 	//	Minleaves uint64 // remember everything below this leaf count
 
 	// rememberLeaf refers to the 1-tree.  If de-treed, is it worth remembering?
-	rememberLeaf bool
+	// rememberLeaf bool
 
 	// the memorabilityNode isn't actually a node; it's a flag that a leaf is
 	// memorable; if the leaf has a pointer to this it's memorable; if it doesn't
@@ -179,7 +179,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 			if !remember {
 				n.niece[1] = nil
 			}
-			if !p.rememberLeaf {
+			if n.niece[0].deadEnd() {
 				n.niece[0] = nil
 			}
 		} else { // higher up, it's determined by populated nieces
@@ -190,10 +190,6 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 				n.niece[1] = nil
 			}
 		}
-	}
-
-	if h == 0 {
-		p.rememberLeaf = remember
 	}
 
 	// the new tops are all the 1 bits above where we got to, and nothing below where
@@ -315,12 +311,12 @@ func (p *Pollard) rem(dels []uint64) error {
 							p.forget[0], stash[0].from)
 					}
 					// set forgettable leaf and pop (clear) forget slice
-					p.rememberLeaf = false
+					// p.rememberLeaf = false
 					p.forget = []uint64{}
 				} else if stash[0].from < stash[0].to {
 					// if a stash is moving left, that means it already was a stash
 					// and thus memorability shouldn't be changed
-					p.rememberLeaf = true
+					// p.rememberLeaf = true
 				}
 			}
 
@@ -406,8 +402,8 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 	// it was a top, has no nieces, and wasn't a memorable 0-top
 	// (pretty sure this is exclusive of the prior condition but whatever)
 	if sibfrom[0] == prfrom[0] && // it's a top
-		sibfrom[0].deadEnd() && // it has no nieces
-		!(m.from < p.numLeaves && p.rememberLeaf) { // it's not a memorable 0top
+		sibfrom[0].deadEnd() { // && // it has no nieces
+		// !(m.from < p.numLeaves && p.rememberLeaf) { // it's not a memorable 0top
 		evapTgt = true
 	}
 

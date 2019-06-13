@@ -75,7 +75,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 
 		// TODO do you need this at all?  If the Verify part already happend, maybe no
 		// at bottom, populate target if needed
-		// if we don't need this and take it out, will need to chance the forget
+		// if we don't need this and take it out, will need to change the forget
 		// pop above
 		if node.niece[lr^1] == nil {
 			node.niece[lr^1] = new(polNode)
