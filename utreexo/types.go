@@ -31,8 +31,7 @@ type Node struct {
 // LeadTXO 's have a hash and a expiry date (block when that utxo gets used)
 type LeafTXO struct {
 	Hash
-	Duration int32 // utxo lasts this long (0 = forever)
-	Remember bool  // this leaf will be deleted soon, remember it
+	Remember bool // this leaf will be deleted soon, remember it
 }
 
 // Parent gets you the merkle parent.  So far no committing to height.
@@ -73,6 +72,7 @@ type SimChain struct {
 	blockHeight  int32
 	leafCounter  uint64
 	durationMask uint32
+	lookahead    int32
 }
 
 func NewSimChain() *SimChain {
@@ -102,8 +102,6 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		// which makes a leaf last forever, and the forest will expand
 		// over time.
 
-		adds[j].Duration = duration
-
 		// the first utxo addded lives forever.
 		// (prevents leaves from goign to 0 which is buggy)
 
@@ -111,7 +109,11 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		//			adds[j].Duration = 0
 		//		}
 
-		if adds[j].Duration != 0 {
+		if duration != 0 && duration < s.lookahead {
+			adds[j].Remember = true
+		}
+
+		if duration != 0 {
 			s.ttlMap[b+duration] = append(s.ttlMap[b+duration], adds[j].Hash)
 		}
 

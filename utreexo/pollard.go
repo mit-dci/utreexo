@@ -19,11 +19,6 @@ type Pollard struct {
 
 	hashesEver, rememberEver, overWire uint64
 
-	// the forget slice is all the leaves to forget.  It gets populated when you
-	// ingest a block proof and only refers to leaves which will are part of the
-	// proof but don't need to stay around after.
-	forget []uint64
-
 	//	Lookahead int32  // remember leafs below this TTL
 	//	Minleaves uint64 // remember everything below this leaf count
 }
@@ -298,24 +293,6 @@ func (p *Pollard) rem(dels []uint64) error {
 				sibs[0].chop()
 			}
 
-			// if stashing to height 0, it may be forgettable,
-			// which we need to track (& pop the forget slice) (which should
-			// be len 1)
-			// if len(p.forget) > 1 {
-			// 	return fmt.Errorf("more than 1 forget at stash phase")
-			// }
-			if h == 0 && len(p.forget) == 1 {
-				// the remaining forget should be the from position.
-				// If not, something's wrong
-				if p.forget[0] != stash[0].from {
-					return fmt.Errorf("last forget is %d but stash from %d",
-						p.forget[0], stash[0].from)
-				}
-				// set forgettable leaf and pop (clear) forget slice
-				// p.rememberLeaf = false
-				p.forget = []uint64{}
-			}
-
 			nexTops[nexTopIdx] = sibs[0]
 			stash = stash[1:]
 		}
@@ -438,16 +415,11 @@ func (p *Pollard) reHashOne(pos uint64) error {
 		pr[1].niece[pos&1] = sib[0]
 		//		return fmt.Errorf("sib[0] nil")
 	}
+	p.hashesEver++
 	sib[0].data = pr[0].auntOp()
 	//	fmt.Printf("rehash %04x\n", sib[0].data[:4])
-	p.hashesEver++
-	// check for dead ends to be cut.  (reHashOne only occurs on upper levels)
-	if pr[0].niece[0].deadEnd() {
-		pr[0].niece[0] = nil
-	}
-	if pr[0].niece[1].deadEnd() {
-		pr[0].niece[1] = nil
-	}
+	pr[0].prune()
+
 	return nil
 }
 

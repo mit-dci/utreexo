@@ -63,14 +63,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 			// fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
 			p.overWire++
 
-			// forget what we just put in. (Don't forget if not populating
-			p.forget = append(p.forget, target^1)
-			// fmt.Printf("add %d to forget\n", target^1)
-		}
-
-		// if we already have target at end of forget slice, remove it
-		if len(p.forget) > 0 && p.forget[len(p.forget)-1] == target {
-			p.forget = p.forget[:len(p.forget)-1]
+			// forget what we just put in; there are no neices so it'll get trimmed
 		}
 
 		// TODO do you need this at all?  If the Verify part already happend, maybe no
