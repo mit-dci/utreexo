@@ -28,13 +28,14 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 		bits = ^bits                                 // flip bits for proof descent
 		pos := upMany(target, branchLen, p.height()) // this works but...
 		// we should have a way to get the top positions from just p.tops
+
 		// fmt.Printf("ingest adding target %d to top %04x h %d brlen %d bits %04b\n",
 		// target, node.data[:4], h, branchLen, bits&((2<<h)-1))
 
 		lr := (bits >> h) & 1
 		pos = (child(pos, p.height())) | lr
-		// descend until we hit the bottom or a nil neice
-		for h > 0 {
+		// descend until we hit the bottom, populating as we go
+		for {
 			if node.niece[lr] == nil {
 				node.niece[lr] = new(polNode)
 				node.niece[lr].data = proofMap[pos]
@@ -46,30 +47,20 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 				p.overWire++
 			}
 
-			node = node.niece[lr]
+			if h == 0 {
+				break
+			}
 			h--
+			node = node.niece[lr]
 			lr = (bits >> h) & 1
 			pos = (child(pos, p.height()) ^ 2) | lr
-		}
-		// the bottom is a little bit different as you need to forget stuff
-		// put in bottom sibling if needed
-		if node.niece[lr] == nil {
-			node.niece[lr] = new(polNode)
-			node.niece[lr].data = proofMap[pos]
-			if node.niece[lr].data == empty {
-				return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]\n",
-					h, node.data[:4], pos, lr)
-			}
-			// fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
-			p.overWire++
-
-			// forget what we just put in; there are no neices so it'll get trimmed
 		}
 
 		// TODO do you need this at all?  If the Verify part already happend, maybe no
 		// at bottom, populate target if needed
 		// if we don't need this and take it out, will need to change the forget
 		// pop above
+
 		if node.niece[lr^1] == nil {
 			node.niece[lr^1] = new(polNode)
 			node.niece[lr^1].data = proofMap[pos^1]
@@ -77,9 +68,8 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 				return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]\n",
 					h, node.data[:4], pos, lr^1)
 			}
-			// p.overWire++ // doesn't count...?
+			// p.overWire++ // doesn't count...? got it for free?
 		}
-
 	}
 	return nil
 }
