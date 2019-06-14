@@ -301,25 +301,19 @@ func (p *Pollard) rem(dels []uint64) error {
 			// if stashing to height 0, it may be forgettable,
 			// which we need to track (& pop the forget slice) (which should
 			// be len 1)
-			if len(p.forget) > 1 {
-				return fmt.Errorf("more than 1 forget at stash phase")
-			}
-			if h == 0 {
-				if len(p.forget) == 1 {
-					// the remaining forget should be the from position.
-					// If not, something's wrong
-					if p.forget[0] != stash[0].from {
-						return fmt.Errorf("last forget is %d but stash from %d",
-							p.forget[0], stash[0].from)
-					}
-					// set forgettable leaf and pop (clear) forget slice
-					// p.rememberLeaf = false
-					p.forget = []uint64{}
-				} else if stash[0].from < stash[0].to {
-					// if a stash is moving left, that means it already was a stash
-					// and thus memorability shouldn't be changed
-					// p.rememberLeaf = true
+			// if len(p.forget) > 1 {
+			// 	return fmt.Errorf("more than 1 forget at stash phase")
+			// }
+			if h == 0 && len(p.forget) == 1 {
+				// the remaining forget should be the from position.
+				// If not, something's wrong
+				if p.forget[0] != stash[0].from {
+					return fmt.Errorf("last forget is %d but stash from %d",
+						p.forget[0], stash[0].from)
 				}
+				// set forgettable leaf and pop (clear) forget slice
+				// p.rememberLeaf = false
+				p.forget = []uint64{}
 			}
 
 			nexTops[nexTopIdx] = sibs[0]
@@ -377,38 +371,6 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 	tgtLR := m.to & 1
 	//	fmt.Printf("movenode prfrom %d prto %d\n", len(prfrom), len(prto))
 
-	// more generally -- ANYTHING that is a deadEnd should be deleted
-	// forget slice should only persist between ingest and rem;
-	// rem can handle deletions / forgetting, as it basically already does.
-
-	// evap is if the move target (m.to) should evaporate after moving
-	// evapSib is if the target's sibling (m.to^1) should evaporate after the move
-	var evapTgt, evapSib bool
-
-	// sibling needs to be forgotten if:
-	// it's at the front of the forget slice (in which case pop)
-	if len(p.forget) > 0 && m.to^1 == p.forget[0] {
-		evapSib = true
-		p.forget = p.forget[1:]
-		// pop, important to do this before the evapTgt check
-	}
-
-	// target needs to be forgotten if:
-	// the source (m.from) is the top of the forget slice, in which case pop
-	if len(p.forget) > 0 && m.from == p.forget[0] {
-		evapTgt = true
-		p.forget = p.forget[1:]
-	}
-
-	// target should also be forgotten if:
-	// it was a top, has no nieces, and wasn't a memorable 0-top
-	// (pretty sure this is exclusive of the prior condition but whatever)
-	if sibfrom[0] == prfrom[0] && // it's a top
-		sibfrom[0].deadEnd() { // && // it has no nieces
-		// !(m.from < p.numLeaves && p.rememberLeaf) { // it's not a memorable 0top
-		evapTgt = true
-	}
-
 	// create & link sibto if it doesn't exist.
 	// don't need to for prto as it must already exist... (I think?)
 	if sibto[0] == nil {
@@ -447,21 +409,9 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 		//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
 		// after auntopping, delete nodes.
 		if m.to < p.numLeaves {
-			// at height 0, we can cut the pointers to tgt and sib based on the earlier bools
-			if evapTgt {
-				prto[1].niece[tgtLR] = nil
-			}
-			if evapSib {
-				prto[1].niece[tgtLR^1] = nil
-			}
+			prto[1].leafPrune()
 		} else {
-			//   on upper heights, a node has no nieces, it can be cut.
-			if sibto[0].deadEnd() {
-				prto[1].niece[tgtLR] = nil
-			}
-			if prto[0].deadEnd() {
-				prto[1].niece[tgtLR^1] = nil
-			}
+			prto[1].prune()
 		}
 	}
 
