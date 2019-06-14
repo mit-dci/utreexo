@@ -10,7 +10,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 	var empty Hash
 	// TODO so many things to change
 	ok, proofMap := VerifyBlockProof(
-		bp, p.TopHashesReverse(), p.numLeaves, p.height())
+		bp, p.topHashesReverse(), p.numLeaves, p.height())
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
 	}

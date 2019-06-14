@@ -85,7 +85,7 @@ func pollardRandomRemember(blocks int32) error {
 		// check that tops are the same
 
 		fullTops := f.GetTops()
-		polTops := p.TopHashesReverse()
+		polTops := p.topHashesReverse()
 
 		// check that tops match
 		if len(fullTops) != len(polTops) {
@@ -142,7 +142,7 @@ func fixedPollard(leaves int32) error {
 
 	var p Pollard
 
-	err = p.Add(adds)
+	err = p.add(adds)
 	if err != nil {
 		return err
 	}

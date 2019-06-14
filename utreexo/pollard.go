@@ -76,7 +76,7 @@ func (p *Pollard) height() uint8 { return treeHeight(p.numLeaves) }
 // TopHashesReverse is ugly and returns the top hashes in reverse order
 // ... which is the order full forest is using until I can refactor that code
 // to make it big to small order
-func (p *Pollard) TopHashesReverse() []Hash {
+func (p *Pollard) topHashesReverse() []Hash {
 	rHashes := make([]Hash, len(p.tops))
 	for i, n := range p.tops {
 		rHashes[len(rHashes)-(1+i)] = n.data
@@ -91,7 +91,7 @@ func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 		return err
 	}
 
-	err = p.Add(adds)
+	err = p.add(adds)
 	if err != nil {
 		return err
 	}
@@ -105,12 +105,8 @@ func (p *Pollard) Stats() string {
 	return s
 }
 
-func (p *Pollard) NumTops() uint8 {
-	return uint8(len(p.tops))
-}
-
 // Add a leaf to a pollard.  Not as simple!
-func (p *Pollard) Add(adds []LeafTXO) error {
+func (p *Pollard) add(adds []LeafTXO) error {
 
 	// General algo goes:
 	// 1 make a new node & assign data (no neices; at bottom)
@@ -276,7 +272,7 @@ func (p *Pollard) rem(dels []uint64) error {
 			detectHeight(stash[0].to, ph) == h {
 			// populate top; stashes always become tops
 			//			fmt.Printf("stash %d -> %d\n", rawStash[0].from, rawStash[0].to)
-			pr, sibs, err := p.DescendToPos(stash[0].from)
+			pr, sibs, err := p.descendToPos(stash[0].from)
 			if err != nil {
 				return fmt.Errorf("rem stash %s", err.Error())
 			}
@@ -335,12 +331,12 @@ func (p *Pollard) rem(dels []uint64) error {
 // Also it hashes new parents so the hashes & pointers are consistent.
 func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 
-	prfrom, sibfrom, err := p.DescendToPos(m.from)
+	prfrom, sibfrom, err := p.descendToPos(m.from)
 	if err != nil {
 		return 0, fmt.Errorf("from %s", err.Error())
 	}
 
-	prto, sibto, err := p.DescendToPos(m.to)
+	prto, sibto, err := p.descendToPos(m.to)
 	if err != nil {
 		return 0, fmt.Errorf("to %s", err.Error())
 	}
@@ -404,7 +400,7 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 // the Hash & trim function called by rem().  Not currently called on leaves
 func (p *Pollard) reHashOne(pos uint64) error {
 
-	pr, sib, err := p.DescendToPos(pos)
+	pr, sib, err := p.descendToPos(pos)
 	if err != nil {
 		return err
 	}
@@ -425,7 +421,7 @@ func (p *Pollard) reHashOne(pos uint64) error {
 
 // DescendToPos returns the path to the target node, as well as the sibling
 // path.  Retruns paths in bottom-to-top order (backwards)
-func (p *Pollard) DescendToPos(pos uint64) ([]*polNode, []*polNode, error) {
+func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// interate to descend.  It's like the leafnum, xored with ...1111110
 	// so flip every bit except the last one.
 	// example: I want leaf 12.  That's 1100.  xor to get 0010.
@@ -476,34 +472,6 @@ func (p *Pollard) DescendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	return proofs, sibs, nil
 }
 
-func (p *Pollard) ToStringTops() string {
-	s := "tops: "
-
-	for i, t := range p.tops {
-		s += fmt.Sprintf("%d:%04x ", i, t.data[:4])
-	}
-	s += fmt.Sprintf("\n")
-	return s
-}
-
-func (p *Pollard) ToStringLeaves() string {
-	var s string
-	// fmt.Printf("h %d nl %d tops %d\n", p.height(), p.numLeaves, len(p.tops))
-	for i := uint64(0); i < p.numLeaves; i++ {
-		_, sibs, err := p.DescendToPos(i)
-		if err != nil {
-			fmt.Printf("leaf %d %s\n", i, err.Error())
-			continue
-			//			panic(err.Error())
-			//			return err.Error()
-		}
-		if sibs[0] != nil {
-			s += fmt.Sprintf("%d: %04x (path %d)\n", i, sibs[0].data[:4], len(sibs))
-		}
-	}
-	return s
-}
-
 // toFull takes a pollard and converts to a forest.
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
@@ -516,7 +484,7 @@ func (p *Pollard) toFull() (*Forest, error) {
 	//	for topIdx, top := range p.tops {
 	//	}
 	for i := uint64(0); i < (2<<ff.height)-1; i++ {
-		_, sib, err := p.DescendToPos(i)
+		_, sib, err := p.descendToPos(i)
 		if err != nil {
 			//	fmt.Printf("can't get pos %d: %s\n", i, err.Error())
 			continue
