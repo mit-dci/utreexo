@@ -26,22 +26,12 @@ type Pollard struct {
 
 	//	Lookahead int32  // remember leafs below this TTL
 	//	Minleaves uint64 // remember everything below this leaf count
-
-	// rememberLeaf refers to the 1-tree.  If de-treed, is it worth remembering?
-	// rememberLeaf bool
-
-	// the memorabilityNode isn't actually a node; it's a flag that a leaf is
-	// memorable; if the leaf has a pointer to this it's memorable; if it doesn't
-	// it's forgettable and exists only as proof for its adjacent node.
-	// leaves won't count as "deadEnds" if they point to this
-	memorabilityNode polNode
 }
 
 // PolNode is a node in the pollard forest
 type polNode struct {
 	data  Hash
 	niece [2]*polNode
-	//	flags byte
 }
 
 // auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
@@ -65,13 +55,24 @@ func (n *polNode) chop() {
 	n.niece[1] = nil
 }
 
-// prune prunes deadend childred
+// prune prunes deadend children.
+// don't prune at the bottom; use leaf prune instead at height 1
 func (n *polNode) prune() {
 	if n.niece[0].deadEnd() {
 		n.niece[0] = nil
 	}
 	if n.niece[1].deadEnd() {
 		n.niece[1] = nil
+	}
+}
+
+// leafPrune is the prune method for leaves.  You don't want to chop off a leaf
+// just because it's not memorable; it might be there because its sibling is
+// memorable.  Call this at height 1 (not 0)
+func (n *polNode) leafPrune() {
+	if n.niece[0] != nil && n.niece[1] != nil &&
+		n.niece[0].deadEnd() && n.niece[1].deadEnd() {
+		n.chop()
 	}
 }
 
@@ -175,7 +176,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	n.data = add
 	if remember {
 		// flag this leaf as memorable via it's left pointer
-		n.niece[0] = &p.memorabilityNode
+		n.niece[0] = n // points to itself (mind blown)
 	}
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
@@ -215,7 +216,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		return nil // that was quick
 	}
 
-	ph := p.height()
+	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 	overlap := p.numLeaves & nextNumLeaves
 

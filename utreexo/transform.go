@@ -29,9 +29,12 @@ func removeTransform(
 	nextTopPoss, _ := getTopsReverse(numLeaves-uint64(len(dels)), fHeight)
 
 	// m is the main list of moves
-	var m []move
+	var m, stash []move
 	// stash is a list of nodes to move later.  They end up as tops.
-	var stash []uint64
+	// stash := make([]move, len(nextTopPoss))
+	// for i, _ := range stash {
+	// 	stash[i].to = nextTopPoss[i]
+	// }
 
 	var up1DelSlice []uint64 // the next ds, one row up (in construction)
 
@@ -119,7 +122,8 @@ func removeTransform(
 
 		if haveDel && !rootPresent {
 			// stash sibling
-			stash = append(stash, delPos^1)
+			stash = append(stash, move{from: delPos ^ 1, to: nextTopPoss[0]})
+			nextTopPoss = nextTopPoss[1:]
 			// mark parent for deletion. this happens even if the node
 			// being promoted to root doesn't move
 			up1DelSlice = append(up1DelSlice, up1(delPos, fHeight))
@@ -127,7 +131,8 @@ func removeTransform(
 
 		if !haveDel && rootPresent {
 			//  stash existing root (it will collapse left later)
-			stash = append(stash, rootPos)
+			stash = append(stash, move{from: rootPos, to: nextTopPoss[0]})
+			nextTopPoss = nextTopPoss[1:]
 		}
 
 		// done with one row, set ds to the next slice (promote)
@@ -139,21 +144,7 @@ func removeTransform(
 			"finished deletion climb but %d deletion left %v", len(dels), dels)
 	}
 
-	var stashMove []move
-
-	// move subtrees from the stash to where they should go
-	// stashes should line up exactly with nextTopPoss
-	for _, s := range stash {
-		// this optimization doesn't work; you still have to stash
-		// even if it ends up in the same place...
-		if true || s != nextTopPoss[0] {
-			// don't bother if the stash "moves" to the same place
-			stashMove = append(stashMove, move{from: s, to: nextTopPoss[0]})
-		}
-		nextTopPoss = nextTopPoss[1:]
-	}
-
-	return stashMove, m, nil
+	return stash, m, nil
 }
 
 /*
