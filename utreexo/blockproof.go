@@ -98,6 +98,8 @@ func FromBytesBlockProof(b []byte) (BlockProof, error) {
 
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // tops to verify -- just hash up to any populated node!  Saves a ton of CPU!
+// but then that makes it a method on pollard, not a standalone function
+// anymore.  But block proofs should even *contain* nodes above known nodes...
 
 // VerifyBlockProof takes a block proof and reconstructs / verifies it.
 // takes a blockproof to verify, and the known correct tops to check against.

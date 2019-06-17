@@ -2,88 +2,6 @@ package utreexo
 
 import "fmt"
 
-// Pollard is the sparse representation of the utreexo forest, using
-// binary tree pointers instead of a hash map.
-
-// I generally avoid recursion as much as I can, using regular for loops and
-// ranges instead.  That might start looking pretty contrived here, but
-// I'm still going to try it.
-
-type Pollard struct {
-	numLeaves uint64 // number of leaves in the pollard forest
-
-	tops []*polNode // slice of the tree tops, which are polNodes.
-	// tops are in big to small order
-	// BUT THEY'RE WEIRD!  The left / right children are actual children,
-	// not neices as they are in every lower level.
-
-	hashesEver, rememberEver, overWire uint64
-
-	//	Lookahead int32  // remember leafs below this TTL
-	//	Minleaves uint64 // remember everything below this leaf count
-}
-
-// PolNode is a node in the pollard forest
-type polNode struct {
-	data  Hash
-	niece [2]*polNode
-}
-
-// auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
-func (n *polNode) auntOp() Hash {
-	return Parent(n.niece[0].data, n.niece[1].data)
-}
-
-// deadEnd returns true if both neices are nill
-// could also return true if n itself is nil! (maybe a bad idea?)
-func (n *polNode) deadEnd() bool {
-	// if n == nil {
-	// 	fmt.Printf("nil deadend\n")
-	// 	return true
-	// }
-	return n.niece[0] == nil && n.niece[1] == nil
-}
-
-// chop turns a node into a deadEnd
-func (n *polNode) chop() {
-	n.niece[0] = nil
-	n.niece[1] = nil
-}
-
-// prune prunes deadend children.
-// don't prune at the bottom; use leaf prune instead at height 1
-func (n *polNode) prune() {
-	if n.niece[0].deadEnd() {
-		n.niece[0] = nil
-	}
-	if n.niece[1].deadEnd() {
-		n.niece[1] = nil
-	}
-}
-
-// leafPrune is the prune method for leaves.  You don't want to chop off a leaf
-// just because it's not memorable; it might be there because its sibling is
-// memorable.  Call this at height 1 (not 0)
-func (n *polNode) leafPrune() {
-	if n.niece[0] != nil && n.niece[1] != nil &&
-		n.niece[0].deadEnd() && n.niece[1].deadEnd() {
-		n.chop()
-	}
-}
-
-func (p *Pollard) height() uint8 { return treeHeight(p.numLeaves) }
-
-// TopHashesReverse is ugly and returns the top hashes in reverse order
-// ... which is the order full forest is using until I can refactor that code
-// to make it big to small order
-func (p *Pollard) topHashesReverse() []Hash {
-	rHashes := make([]Hash, len(p.tops))
-	for i, n := range p.tops {
-		rHashes[len(rHashes)-(1+i)] = n.data
-	}
-	return rHashes
-}
-
 // Modify is the main function that deletes then adds elements to the accumulator
 func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 	err := p.rem(dels)
@@ -224,10 +142,10 @@ func (p *Pollard) rem(dels []uint64) error {
 		return err
 	}
 
-	// TODO how about instead of a map or even a slice of uint64s, you just
-	// have a slice of pointers?  And you need to run AuntOp on these pointers
-	// if you aren't doing it already from something else.
-	nextDirtyMap := make(map[uint64]bool) // whatever use a map for now.
+	// TODO first, try making it into a map of pointers.
+	// Then if that works, slice of pointers.  Or maybe somehow get rid of
+	// the whole thing..?
+	nextDirtyMap := make(map[*polPair]bool) // whatever use a map for now.
 
 	// can use some kind of queues or something later.
 
@@ -240,7 +158,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		// fmt.Printf("pol rem row %d\n", h)
 		//		}
 		curDirtyMap := nextDirtyMap
-		nextDirtyMap = make(map[uint64]bool)
+		nextDirtyMap = make(map[*polPair]bool)
 
 		// copy the top over directly if there's a bit overlap
 		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
@@ -260,10 +178,14 @@ func (p *Pollard) rem(dels []uint64) error {
 			if err != nil {
 				return err
 			}
-			// the dirt returned by moveNode is always a parent so can never be 0
-			if dirt != 0 && inForest(dirt, p.numLeaves) {
+			if dirt != nil {
 				nextDirtyMap[dirt] = true
 			}
+
+			// the dirt returned by moveNode is always a parent so can never be 0
+			// if dirt != 0 && inForest(dirt, p.numLeaves) {
+			// nextDirtyMap[dirt] = true
+			// }
 			moves = moves[1:]
 		}
 
@@ -329,16 +251,16 @@ func (p *Pollard) rem(dels []uint64) error {
 // swap moves a node from one place to another.  Note that it leaves the
 // node in the "from" place to be dealt with some other way.
 // Also it hashes new parents so the hashes & pointers are consistent.
-func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
+func (p *Pollard) moveNode(m move, cdm map[*polPair]bool) (*polPair, error) {
 
 	prfrom, sibfrom, err := p.descendToPos(m.from)
 	if err != nil {
-		return 0, fmt.Errorf("from %s", err.Error())
+		return nil, fmt.Errorf("from %s", err.Error())
 	}
 
 	prto, sibto, err := p.descendToPos(m.to)
 	if err != nil {
-		return 0, fmt.Errorf("to %s", err.Error())
+		return nil, fmt.Errorf("to %s", err.Error())
 	}
 
 	tgtLR := m.to & 1
@@ -388,29 +310,35 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 		}
 	}
 
-	ph := p.height()
+	// ph := p.height()
 	//  just hashed to's parent, so delete that from cdm
-	delete(cdm, up1(m.from, ph))
-	delete(cdm, up1(m.to, ph))
-	parPos := upMany(m.to, 2, ph)
+	delete(cdm, sibfrom[1])
+	delete(cdm, sibto[1])
+	// parPos := upMany(m.to, 2, ph)
 
-	return parPos, nil
+	return sibto[2], nil
 }
 
 // the Hash & trim function called by rem().  Not currently called on leaves
-func (p *Pollard) reHashOne(pos uint64) error {
+func (p *Pollard) reHashOne(pair polPair) error {
 
-	pr, sib, err := p.descendToPos(pos)
-	if err != nil {
-		return err
-	}
 	//	fmt.Printf("reHashOne %d pr %d sib %d pr[0] %v\n",
 	//		pos, len(pr), len(sib), pr[0].niece)
+
+	// if pair.sib == nil{
+
+	// }
+
 	if sib[0] == nil {
 		sib[0] = new(polNode)
 		pr[1].niece[pos&1] = sib[0]
 		//		return fmt.Errorf("sib[0] nil")
 	}
+
+	if !pr[0].auntable() {
+		return fmt.Errorf("position %d not hashable: %v", pos, pr[0].niece)
+	}
+
 	p.hashesEver++
 	sib[0].data = pr[0].auntOp()
 	//	fmt.Printf("rehash %04x\n", sib[0].data[:4])
