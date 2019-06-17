@@ -174,13 +174,15 @@ func (p *Pollard) rem(dels []uint64) error {
 				return fmt.Errorf("no tops...")
 			}
 			//			fmt.Printf("mv %d -> %d\n", rawMoves[0].from, rawMoves[0].to)
-			dirt, err := p.moveNode(moves[0], *curDirty)
+			err := p.moveNode(moves[0])
 			if err != nil {
 				return err
 			}
+			dirt := upMany(moves[0].to, 2, ph)
+			lnxd := len(nextDirty)
 			// the dirt returned by moveNode is always a parent so can never be 0
-			if dirt != 0 && inForest(dirt, p.numLeaves) &&
-				nextDirty[len(nextDirty)-1] != dirt {
+			if inForest(dirt, p.numLeaves) &&
+				(lnxd == 0 || nextDirty[lnxd-1] != dirt) {
 				nextDirty = append(nextDirty, dirt)
 			}
 			moves = moves[1:]
@@ -214,20 +216,24 @@ func (p *Pollard) rem(dels []uint64) error {
 
 		// if we're not at the top, and there's curDirtyMap left, hash
 		if h < ph-1 {
-			for pos, _ := range curDirtyMap {
+			fmt.Printf("non leaf dirty %v\n", curDirty)
+			for _, pos := range curDirty {
 				err := p.reHashOne(pos)
 				if err != nil {
 					return fmt.Errorf("rem rehash %s", err.Error())
 				}
 
 				parPos := up1(pos, ph)
-				if inForest(parPos, p.numLeaves) {
-					//  fmt.Printf("adding dirt %d\n", parPos)
-					nextDirtyMap[parPos] = true
-				} else {
-					//	 fmt.Printf("couldn't add dirt %d\n", parPos)
+				lnxd := len(nextDirty)
+				// add parent to end of dirty slice if it's not already there
+				if inForest(parPos, p.numLeaves) &&
+					(lnxd == 0 || nextDirty[lnxd-1] != parPos) {
+					nextDirty = append(nextDirty, parPos)
 				}
+				//  fmt.Printf("adding dirt %d\n", parPos)
+
 			}
+
 		}
 
 		// if there's a 1 in the nextNum, decrement top number
@@ -248,16 +254,16 @@ func (p *Pollard) rem(dels []uint64) error {
 // swap moves a node from one place to another.  Note that it leaves the
 // node in the "from" place to be dealt with some other way.
 // Also it hashes new parents so the hashes & pointers are consistent.
-func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
+func (p *Pollard) moveNode(m move) error {
 
 	prfrom, sibfrom, err := p.descendToPos(m.from)
 	if err != nil {
-		return 0, fmt.Errorf("from %s", err.Error())
+		return fmt.Errorf("from %s", err.Error())
 	}
 
 	prto, sibto, err := p.descendToPos(m.to)
 	if err != nil {
-		return 0, fmt.Errorf("to %s", err.Error())
+		return fmt.Errorf("to %s", err.Error())
 	}
 
 	// build out full branch to target if it's not populated
@@ -306,13 +312,7 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 		}
 	}
 
-	ph := p.height()
-	//  just hashed to's parent, so delete that from cdm
-	delete(cdm, up1(m.from, ph))
-	delete(cdm, up1(m.to, ph))
-	parPos := upMany(m.to, 2, ph)
-
-	return parPos, nil
+	return nil
 }
 
 // the Hash & trim function called by rem().  Not currently called on leaves
@@ -321,6 +321,10 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	pr, sib, err := p.descendToPos(pos)
 	if err != nil {
 		return err
+	}
+
+	if !pr[0].auntable() {
+		return fmt.Errorf("pos %d unauntable %v", pos, pr[0].niece)
 	}
 	//	fmt.Printf("reHashOne %d pr %d sib %d pr[0] %v\n",
 	//		pos, len(pr), len(sib), pr[0].niece)
