@@ -217,8 +217,8 @@ func (p *Pollard) rem(dels []uint64) error {
 
 		// if we're not at the top, and there's curDirtyMap left, hash
 		if h < ph-1 {
-			for pos, _ := range curDirtyMap {
-				err := p.reHashOne(pos)
+			for pair, _ := range curDirtyMap {
+				err := p.reHashOne(pair)
 				if err != nil {
 					return fmt.Errorf("rem rehash %s", err.Error())
 				}
@@ -265,9 +265,8 @@ func (p *Pollard) moveNode(m move, cdm map[*polPair]bool) (*polPair, error) {
 
 	//	fmt.Printf("movenode prfrom %d prto %d\n", len(prfrom), len(prto))
 
-	// create & link all sibs if they don't exist
-	// I think this is always needed?  Never redundant?
-
+	// build out full branch to target if it's not populated
+	// I think this efficient / never creates usless nodes but not sure..?
 	for i, _ := range sibto {
 		tgtLR := (m.to >> i) & 1
 		if sibto[i] == nil {
@@ -275,16 +274,6 @@ func (p *Pollard) moveNode(m move, cdm map[*polPair]bool) (*polPair, error) {
 		}
 		if len(prto) > i && prto[i+1] != nil {
 			prto[i+1].niece[tgtLR] = sibto[i]
-		}
-	}
-
-	// create & link sibto if it doesn't exist.
-	// don't need to for prto as it must already exist... (I think?)
-	if sibto[0] == nil {
-		sibto[0] = new(polNode)
-		//		fmt.Printf("mv make dest node at %d\n", to)
-		if prto[1] != nil {
-			prto[1].niece[tgtLR] = sibto[0]
 		}
 	}
 
@@ -298,7 +287,7 @@ func (p *Pollard) moveNode(m move, cdm map[*polPair]bool) (*polPair, error) {
 	if prfrom[0] != nil {
 		prto[0].niece = prfrom[0].niece
 	} else {
-		prto[0].chop() // need this
+		prto[0].chop() // need this, otherwise pointers / hashes inconsistent
 	}
 
 	// now hash (if there's something above) (Which there always will be...?)
@@ -328,7 +317,7 @@ func (p *Pollard) moveNode(m move, cdm map[*polPair]bool) (*polPair, error) {
 	delete(cdm, sibto[1])
 	// parPos := upMany(m.to, 2, ph)
 
-	return sibto[2], nil
+	return polPair{sibto[1], prto[1]}, nil
 }
 
 // the Hash & trim function called by rem().  Not currently called on leaves
