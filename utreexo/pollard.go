@@ -263,8 +263,20 @@ func (p *Pollard) moveNode(m move, cdm map[*polPair]bool) (*polPair, error) {
 		return nil, fmt.Errorf("to %s", err.Error())
 	}
 
-	tgtLR := m.to & 1
 	//	fmt.Printf("movenode prfrom %d prto %d\n", len(prfrom), len(prto))
+
+	// create & link all sibs if they don't exist
+	// I think this is always needed?  Never redundant?
+
+	for i, _ := range sibto {
+		tgtLR := (m.to >> i) & 1
+		if sibto[i] == nil {
+			sibto[i] = new(polNode)
+		}
+		if len(prto) > i && prto[i+1] != nil {
+			prto[i+1].niece[tgtLR] = sibto[i]
+		}
+	}
 
 	// create & link sibto if it doesn't exist.
 	// don't need to for prto as it must already exist... (I think?)
