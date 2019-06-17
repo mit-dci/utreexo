@@ -145,7 +145,7 @@ func (p *Pollard) rem(dels []uint64) error {
 	// TODO how about instead of a map or even a slice of uint64s, you just
 	// have a slice of pointers?  And you need to run AuntOp on these pointers
 	// if you aren't doing it already from something else.
-	nextDirtyMap := make(map[uint64]bool) // whatever use a map for now.
+	var nextDirty []uint64
 
 	// can use some kind of queues or something later.
 
@@ -157,8 +157,8 @@ func (p *Pollard) rem(dels []uint64) error {
 		//		if verbose {
 		// fmt.Printf("pol rem row %d\n", h)
 		//		}
-		curDirtyMap := nextDirtyMap
-		nextDirtyMap = make(map[uint64]bool)
+		curDirty := nextDirty
+		nextDirty = []uint64{}
 
 		// copy the top over directly if there's a bit overlap
 		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
@@ -174,13 +174,14 @@ func (p *Pollard) rem(dels []uint64) error {
 				return fmt.Errorf("no tops...")
 			}
 			//			fmt.Printf("mv %d -> %d\n", rawMoves[0].from, rawMoves[0].to)
-			dirt, err := p.moveNode(moves[0], curDirtyMap)
+			dirt, err := p.moveNode(moves[0], *curDirty)
 			if err != nil {
 				return err
 			}
 			// the dirt returned by moveNode is always a parent so can never be 0
-			if dirt != 0 && inForest(dirt, p.numLeaves) {
-				nextDirtyMap[dirt] = true
+			if dirt != 0 && inForest(dirt, p.numLeaves) &&
+				nextDirty[len(nextDirty)-1] != dirt {
+				nextDirty = append(nextDirty, dirt)
 			}
 			moves = moves[1:]
 		}
