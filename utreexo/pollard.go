@@ -145,8 +145,8 @@ func (p *Pollard) rem(dels []uint64) error {
 	// TODO how about instead of a map or even a slice of uint64s, you just
 	// have a slice of pointers?  And you need to run AuntOp on these pointers
 	// if you aren't doing it already from something else.
-	var nextDirty []uint64
-
+	var moveDirt []uint64
+	var hashDirt []uint64
 	// can use some kind of queues or something later.
 
 	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
@@ -177,12 +177,12 @@ func (p *Pollard) rem(dels []uint64) error {
 				return err
 			}
 			dirt := up1(moves[0].to, ph)
-			lnxd := len(nextDirty)
+			lmvd := len(moveDirt)
 			// the dirt returned by moveNode is always a parent so can never be 0
 			if inForest(dirt, p.numLeaves) &&
-				(lnxd == 0 || nextDirty[lnxd-1] != dirt) {
-				fmt.Printf("h %d mv %d to nextDirty \n", h, dirt)
-				nextDirty = append(nextDirty, dirt)
+				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
+				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
+				moveDirt = append(moveDirt, dirt)
 			}
 			moves = moves[1:]
 		}
@@ -213,25 +213,24 @@ func (p *Pollard) rem(dels []uint64) error {
 			stash = stash[1:]
 		}
 
-		curDirty := nextDirty
-		nextDirty = []uint64{}
-
+		curDirt := mergeSortedSlices(moveDirt, hashDirt)
+		moveDirt, hashDirt = []uint64{}, []uint64{}
 		// if we're not at the top, and there's curDirty left, hash
 		if h < ph-1 {
-			fmt.Printf("h %d curdirty %v\n", h, curDirty)
-			for _, pos := range curDirty {
+			fmt.Printf("h %d curDirt %v\n", h, curDirt)
+			for _, pos := range curDirt {
 				err := p.reHashOne(pos)
 				if err != nil {
 					return fmt.Errorf("rem rehash %s", err.Error())
 				}
 
 				parPos := up1(pos, ph)
-				lnxd := len(nextDirty)
+				lhd := len(hashDirt)
 				// add parent to end of dirty slice if it's not already there
 				if inForest(parPos, p.numLeaves) &&
-					(lnxd == 0 || nextDirty[lnxd-1] != parPos) {
-					fmt.Printf("h %d hash %d to nextDirty \n", h, parPos)
-					nextDirty = append(nextDirty, parPos)
+					(lhd == 0 || hashDirt[lhd-1] != parPos) {
+					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
+					hashDirt = append(hashDirt, parPos)
 				}
 				//  fmt.Printf("adding dirt %d\n", parPos)
 			}
