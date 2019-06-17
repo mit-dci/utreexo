@@ -157,8 +157,6 @@ func (p *Pollard) rem(dels []uint64) error {
 		//		if verbose {
 		// fmt.Printf("pol rem row %d\n", h)
 		//		}
-		curDirty := nextDirty
-		nextDirty = []uint64{}
 
 		// copy the top over directly if there's a bit overlap
 		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
@@ -173,16 +171,17 @@ func (p *Pollard) rem(dels []uint64) error {
 			if len(p.tops) == 0 || p.tops[0] == nil {
 				return fmt.Errorf("no tops...")
 			}
-			//			fmt.Printf("mv %d -> %d\n", rawMoves[0].from, rawMoves[0].to)
+			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
 			err := p.moveNode(moves[0])
 			if err != nil {
 				return err
 			}
-			dirt := upMany(moves[0].to, 2, ph)
+			dirt := up1(moves[0].to, ph)
 			lnxd := len(nextDirty)
 			// the dirt returned by moveNode is always a parent so can never be 0
 			if inForest(dirt, p.numLeaves) &&
 				(lnxd == 0 || nextDirty[lnxd-1] != dirt) {
+				fmt.Printf("h %d mv %d to nextDirty \n", h, dirt)
 				nextDirty = append(nextDirty, dirt)
 			}
 			moves = moves[1:]
@@ -192,7 +191,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		for len(stash) > 0 &&
 			detectHeight(stash[0].to, ph) == h {
 			// populate top; stashes always become tops
-			//			fmt.Printf("stash %d -> %d\n", rawStash[0].from, rawStash[0].to)
+			// fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
 			pr, sibs, err := p.descendToPos(stash[0].from)
 			if err != nil {
 				return fmt.Errorf("rem stash %s", err.Error())
@@ -214,9 +213,12 @@ func (p *Pollard) rem(dels []uint64) error {
 			stash = stash[1:]
 		}
 
-		// if we're not at the top, and there's curDirtyMap left, hash
+		curDirty := nextDirty
+		nextDirty = []uint64{}
+
+		// if we're not at the top, and there's curDirty left, hash
 		if h < ph-1 {
-			fmt.Printf("non leaf dirty %v\n", curDirty)
+			fmt.Printf("h %d curdirty %v\n", h, curDirty)
 			for _, pos := range curDirty {
 				err := p.reHashOne(pos)
 				if err != nil {
@@ -228,12 +230,11 @@ func (p *Pollard) rem(dels []uint64) error {
 				// add parent to end of dirty slice if it's not already there
 				if inForest(parPos, p.numLeaves) &&
 					(lnxd == 0 || nextDirty[lnxd-1] != parPos) {
+					fmt.Printf("h %d hash %d to nextDirty \n", h, parPos)
 					nextDirty = append(nextDirty, parPos)
 				}
 				//  fmt.Printf("adding dirt %d\n", parPos)
-
 			}
-
 		}
 
 		// if there's a 1 in the nextNum, decrement top number
@@ -292,25 +293,26 @@ func (p *Pollard) moveNode(m move) error {
 	}
 
 	// now hash (if there's something above) (Which there always will be...?)
-	if len(prto) > 1 { // true unless moving to a top? in which case just return?
-		if sibto[1] == nil { // create & link if it doesn't exist
-			// fmt.Printf("mv make parent node at %d\n", up1(to, p.height()))
-			sibto[1] = new(polNode)
-			if prto[2] != nil {
-				prto[2].niece[(m.to>>1)&1] = sibto[1]
+	/*
+		if len(prto) > 1 { // true unless moving to a top? in which case just return?
+			if sibto[1] == nil { // create & link if it doesn't exist
+				// fmt.Printf("mv make parent node at %d\n", up1(to, p.height()))
+				sibto[1] = new(polNode)
+				if prto[2] != nil {
+					prto[2].niece[(m.to>>1)&1] = sibto[1]
+				}
 			}
-		}
-		p.hashesEver++
-		sibto[1].data = prto[1].auntOp()
-		//		fmt.Printf("compute %04x at %d evap tgt %v sib %v\n",
-		//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
-		// after auntopping, delete nodes.
-		if m.to < p.numLeaves {
-			prto[1].leafPrune()
-		} else {
-			prto[1].prune()
-		}
-	}
+			p.hashesEver++
+			sibto[1].data = prto[1].auntOp()
+			//		fmt.Printf("compute %04x at %d evap tgt %v sib %v\n",
+			//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
+			// after auntopping, delete nodes.
+			if m.to < p.numLeaves {
+				prto[1].leafPrune()
+			} else {
+				prto[1].prune()
+			}
+		}*/
 
 	return nil
 }
@@ -324,7 +326,8 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	}
 
 	if !pr[0].auntable() {
-		return fmt.Errorf("pos %d unauntable %v", pos, pr[0].niece)
+		// return nil
+		return fmt.Errorf("pos %d unauntable %x %v", pos, pr[0].data, pr[0].niece)
 	}
 	//	fmt.Printf("reHashOne %d pr %d sib %d pr[0] %v\n",
 	//		pos, len(pr), len(sib), pr[0].niece)
