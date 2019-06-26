@@ -9,8 +9,7 @@ import (
 func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 	var empty Hash
 	// TODO so many things to change
-	ok, proofMap := VerifyBlockProof(
-		bp, p.topHashesReverse(), p.numLeaves, p.height())
+	ok, proofMap := p.VerifyBlockProof(bp)
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
 	}
@@ -72,4 +71,212 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 		}
 	}
 	return nil
+}
+
+// VerifyBlockProof takes a block proof and reconstructs / verifies it.
+// takes a blockproof to verify, and the known correct tops to check against.
+// also takes the number of leaves and forest height (those are redundant
+// if we don't do weird stuff with overly-high forests, which we might)
+// it returns a bool of whether the proof worked, and a map of the sparse
+// forest in the blockproof
+func (p *Pollard) VerifyBlockProof(
+	bp BlockProof) (bool, map[uint64]Hash) {
+
+	// if nothing to prove, it worked
+	if len(bp.Targets) == 0 {
+		return true, nil
+	}
+
+	height := p.height()
+	tops := p.topHashesReverse()
+	proofmap, err := bp.Reconstruct(p.numLeaves, height)
+	if err != nil {
+		fmt.Printf("VerifyBlockProof Reconstruct ERROR %s\n", err.Error())
+		return false, proofmap
+	}
+
+	knownHashes, err := p.matchKnownData(proofmap, bp)
+	if err != nil {
+		fmt.Printf("VerifyBlockProof matchKnownData ERROR %s\n", err.Error())
+		return false, proofmap
+	}
+	for k, v := range knownHashes {
+		proofmap[k] = v
+	}
+
+	//	fmt.Printf("Reconstruct complete\n")
+	topposs, topheights := getTopsReverse(p.numLeaves, height)
+
+	// partial forest is built, go through and hash everything to make sure
+	// you get the right tops
+
+	tagRow := bp.Targets
+	nextRow := []uint64{}
+	sortUint64s(tagRow) // probably don't need to sort
+
+	// TODO it's ugly that I keep treating the 0-row as a special case,
+	// and has led to a number of bugs.  It *is* special in a way, in that
+	// the bottom row is the only thing you actually prove and add/delete,
+	// but it'd be nice if it could all be treated uniformly.
+
+	// if proofmap has a 0-root, check it
+	if verbose {
+		fmt.Printf("tagrow len %d\n", len(tagRow))
+	}
+
+	var left, right uint64
+	// iterate through height
+
+	for h := uint8(0); h < height; h++ {
+		// iterate through tagged positions in this row
+
+		for len(tagRow) > 0 {
+			// see if the next tag is a sibling and we get both
+			if len(tagRow) > 1 && tagRow[0]|1 == tagRow[1] {
+				left = tagRow[0]
+				right = tagRow[1]
+				tagRow = tagRow[2:]
+			} else { // if not only use one tagged position
+				right = tagRow[0] | 1
+				left = right ^ 1
+				tagRow = tagRow[1:]
+			}
+
+			// check for tops
+			if verbose {
+				fmt.Printf("left %d toppos %d\n", left, topposs[0])
+			}
+			if left == topposs[0] {
+				if verbose {
+					fmt.Printf("one left in tagrow; should be top\n")
+				}
+				computedRoot, ok := proofmap[left]
+				if !ok {
+					fmt.Printf("ERR no proofmap for root at %d\n", left)
+					return false, nil
+				}
+				if computedRoot != tops[0] {
+					fmt.Printf("height %d top, pos %d expect %04x got %04x\n",
+						h, left, tops[0][:4], computedRoot[:4])
+					return false, nil
+				}
+				// otherwise OK and pop of the top
+				tops = tops[1:]
+				topposs = topposs[1:]
+				topheights = topheights[1:]
+				break
+			}
+			parpos := up1(left, height)
+			if verbose {
+				fmt.Printf("%d %04x %d %04x -> %d\n",
+					left, proofmap[left], right, proofmap[right], parpos)
+			}
+			_, ok := proofmap[parpos]
+			if !ok {
+				// this will crash if either is 0000
+				parhash := Parent(proofmap[left], proofmap[right])
+				p.hashesEver++
+				p.proofHashesEver++
+				proofmap[parpos] = parhash
+			}
+			nextRow = append(nextRow, parpos)
+
+		}
+
+		tagRow = nextRow
+		nextRow = []uint64{}
+		// if done with row and there's a top left on this row, remove it
+		if len(topheights) > 0 && topheights[0] == h {
+			// bit ugly to do these all separately eh
+			tops = tops[1:]
+			topposs = topposs[1:]
+			topheights = topheights[1:]
+		}
+	}
+
+	return true, proofmap
+}
+
+// matchKnownData will run through all positions in the block
+// proof, and follow them up. As soon as a hash is found that
+// matches data in the pollard, we use the pollard from there
+// onwards to fill a proofmap. Thus, this both checks if the
+// proof amounts to something we already know (somewhere down
+// the tree), and saves re-hashing things we already know.
+func (p *Pollard) matchKnownData(
+	rec map[uint64]Hash,
+	bp BlockProof) (map[uint64]Hash, error) {
+	proofmap := map[uint64]Hash{}
+
+	height := p.height()
+	fmt.Printf("Targets: %v\n", bp.Targets)
+	fmt.Printf("Num leaves: %d\n", p.numLeaves)
+	for k, v := range rec {
+		fmt.Printf("rec[%d] = %x\n", k, v)
+	}
+
+	tops, _ := getTopsReverse(p.numLeaves, height)
+	fmt.Printf("Tree tops: %v\n", tops)
+
+	var left, right uint64
+
+	for _, t := range bp.Targets {
+
+		fmt.Printf("Processing %d\n", t)
+		// Fetch whatever is in the pollard on the path to
+		// this leaf
+		nodes, _, _ := p.descendToPos(t)
+
+		for i, n := range nodes {
+			if n != nil {
+				fmt.Printf("nodes[%d] = %x\n", i, n.data)
+			} else {
+				fmt.Printf("nodes[%d] = nil\n", i)
+			}
+		}
+
+		subH := detectSubTreeHeight(t, p.numLeaves, height)
+		fmt.Printf("Subtree height for [%d] is [%d]\n", left, subH)
+		pos := up1(t, height)
+		fmt.Printf("We are at [%d]\n", pos)
+		right = t | 1
+		left = right ^ 1
+		leftHash, rightHash := rec[left], rec[right]
+
+		found := false
+		for h := uint8(1); h <= subH; h++ {
+			if !found || nodes[h] == nil {
+				hash := Parent(leftHash, rightHash)
+				fmt.Printf("Parent(%x,%x) -> %x\n", leftHash, rightHash, hash)
+				p.hashesEver++
+				p.proofHashesEver++
+				if nodes[h] != nil {
+					if nodes[h].data == hash {
+						fmt.Printf("Found matching hash in nodes[%d]\n", h)
+						found = true
+					}
+				}
+				proofmap[pos] = hash
+			} else {
+				fmt.Printf("Using cached data after intersecting with pollard for %d\n", pos)
+				proofmap[pos] = nodes[h].data
+			}
+
+			if !found {
+				if pos&1 == 0 {
+					fmt.Printf("Left pos (calculated): [%d] - Right pos (from proof): [%d]\n", pos, pos^1)
+					leftHash = proofmap[pos]
+					rightHash = rec[pos^1]
+				} else {
+					fmt.Printf("Left pos (from proof): [%d] - Right pos (calculated): [%d]\n", pos^1, pos)
+					rightHash = proofmap[pos]
+					leftHash = rec[pos^1]
+				}
+			}
+			pos = up1(pos, height)
+			fmt.Printf("We are at [%d]\n", pos)
+		}
+	}
+
+	return proofmap, nil
 }

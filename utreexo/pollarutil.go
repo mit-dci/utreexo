@@ -15,7 +15,7 @@ type Pollard struct {
 	// BUT THEY'RE WEIRD!  The left / right children are actual children,
 	// not neices as they are in every lower level.
 
-	hashesEver, rememberEver, overWire uint64
+	proofHashesEver, hashesEver, rememberEver, overWire uint64
 
 	//	Lookahead int32  // remember leafs below this TTL
 	//	Minleaves uint64 // remember everything below this leaf count

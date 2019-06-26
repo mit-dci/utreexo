@@ -18,8 +18,8 @@ func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 }
 
 func (p *Pollard) Stats() string {
-	s := fmt.Sprintf("pol nl %d tops %d he %d re %d ow %d \n",
-		p.numLeaves, len(p.tops), p.hashesEver, p.rememberEver, p.overWire)
+	s := fmt.Sprintf("pol nl %d tops %d phe %d he %d re %d ow %d \n",
+		p.numLeaves, len(p.tops), p.proofHashesEver, p.hashesEver, p.rememberEver, p.overWire)
 	return s
 }
 
