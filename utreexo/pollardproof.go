@@ -211,12 +211,17 @@ func (p *Pollard) matchKnownData(
 	height := p.height()
 	fmt.Printf("Targets: %v\n", bp.Targets)
 	fmt.Printf("Num leaves: %d\n", p.numLeaves)
-	for k, v := range rec {
-		fmt.Printf("rec[%d] = %x\n", k, v)
+	for pos, hash := range rec {
+		fmt.Printf("rec[%d] = %x\n", pos, hash[:4])
 	}
 
 	tops, _ := getTopsReverse(p.numLeaves, height)
-	fmt.Printf("Tree tops: %v\n", tops)
+	fmt.Printf("Tree top positions: %v, hashes: ", tops)
+	tophashes := p.topHashesReverse()
+	for _, th := range tophashes {
+		fmt.Printf("%x ", th[:4])
+	}
+	fmt.Printf("\n")
 
 	var left, right uint64
 
@@ -229,7 +234,7 @@ func (p *Pollard) matchKnownData(
 
 		for i, n := range nodes {
 			if n != nil {
-				fmt.Printf("nodes[%d] = %x\n", i, n.data)
+				fmt.Printf("nodes[%d] = %x\n", i, n.data[:4])
 			} else {
 				fmt.Printf("nodes[%d] = nil\n", i)
 			}
@@ -238,16 +243,17 @@ func (p *Pollard) matchKnownData(
 		subH := detectSubTreeHeight(t, p.numLeaves, height)
 		fmt.Printf("Subtree height for [%d] is [%d]\n", left, subH)
 		pos := up1(t, height)
-		fmt.Printf("We are at [%d]\n", pos)
+		fmt.Printf("We are at position [%d]\n", pos)
 		right = t | 1
 		left = right ^ 1
 		leftHash, rightHash := rec[left], rec[right]
 
 		found := false
-		for h := uint8(1); h <= subH; h++ {
+		for h := uint8(1); h < subH; h++ { // < or <=?  I think <
 			if !found || nodes[h] == nil {
+				fmt.Printf("pos %d: Parent(%x, %x) -> ", pos, leftHash[:4], rightHash[:4])
 				hash := Parent(leftHash, rightHash)
-				fmt.Printf("Parent(%x,%x) -> %x\n", leftHash, rightHash, hash)
+				fmt.Printf("%x\n", hash[:4])
 				p.hashesEver++
 				p.proofHashesEver++
 				if nodes[h] != nil {
