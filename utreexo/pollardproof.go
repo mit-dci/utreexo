@@ -4,6 +4,11 @@ import (
 	"fmt"
 )
 
+func (p *Pollard) RequestBlockProof([]uint64) ([]uint64, error) {
+
+	return nil, nil
+}
+
 // IngestBlockProof populates the Pollard with all needed data to delete the
 // targets in the block proof
 func (p *Pollard) IngestBlockProof(bp BlockProof) error {

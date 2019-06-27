@@ -1,3 +1,51 @@
+sending and receiving block proofs
+
+There's a bunch of way this can be done.
+
+"client" means utreexo node doing IBD
+"server" means archive node with all the proofs and blocks
+
+
+3 basic categories
+
+-----
+P Easiest!  Send the full block proof every time.  Sure, but huge.
+
+Q Send no proof, but send indexes for all inputs.  Let the client node figure out what it doesn't have, and request what it needs.  Then the server sends what's requested, the client's happy, and proceeds to the next block.
+
+R Send exactly what the client needs.  The server needs to keep track of what the client has, what it needs, and send the right thing for each block.
+-----
+
+I think Q seems the way to go for now.  P is basically already written as there's nothing to write.  But P uses way too much bandwidth, and throws away all the improvements.
+
+R seems hard; maybe can't work on it's own.  Q and R can be mixed; there can be a server which anticipates what the client needs, and sends that, but it might send too much or too little.  If it sends too much that's no big deal, just ignore it.  If it doesn't send enough then you'll need the code from R to request what was left out.  It seems that the R method will get out of sync easily; if the client shuts down or restarts, their memory can be wiped and they'll have to start populating their forest again.  Also if a client downloads from multiple servers at the same time (which is something you really want to support) then R seems to not stay in sync without some other messaging.
+
+The downside of Q is the extra round trip.  So latency.  But does latency really matter?  This is IBD; you can pipeline things.  Except you can't really pipeline this huh, because you don't know what you'll need for the blocks 5 blocks forward.  Pipelining / parallel validation is cool but it actually uses more data, but can really speed things up.
+
+So don't worry too much about the round trip; it adds some time but oh well.  There's 2 ways I can think of for Q:
+
+Give a list of target indexes, and return a list of indexes.  Simplest, but the problem is... what if only 1 thing is spent, and you don't have a proof for it, but you have a proof for something right near it.  Then you get back a whole branch when you only needed a hash or two.
+
+Give a list of target indexes, then return a list of indexes and heights.  So for each, give me the proof of this up to h high.  That can get a bit redundant, in that some of the heigts are obvious; if I need a proof for both 2 and 3, whatever the proof height I need for 2 is, the height for 3 will be 0.  But... it's a byte.  1 byte per requested utxo is no big deal, at worst a couple KB per block of upload from the client to the server.
+
+
+-----
+UNrelated (?) idea: have the bridge / archive nodes give utreexo roots stuck to every block.  They send the "this is the roots it should result in" message as well.  Scary?, but lets you do arbitrarily parralel validation.
+
+For example, block 7 comes with:
+block itself
+roots from block 6
+proofs for block 7
+end result roots for block 7.
+
+Then... you can download any block, verify the whole thing in isolation and mark it as "consistent" -- you don't know if it's right, but you know that *if* the roots from 6 are right then the roots for 7 are right.  Then you can just do arbitrary IBD all over the place.
+
+
+
+
+-----
+
+
 ok so the paper's out, but actually, there's lots of modifications to do here before it can be ported over to be used
 
 - forest / pollard
