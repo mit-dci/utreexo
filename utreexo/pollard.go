@@ -18,8 +18,8 @@ func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 }
 
 func (p *Pollard) Stats() string {
-	s := fmt.Sprintf("pol nl %d tops %d phe %d he %d re %d ow %d \n",
-		p.numLeaves, len(p.tops), p.proofHashesEver, p.hashesEver, p.rememberEver, p.overWire)
+	s := fmt.Sprintf("pol nl %d tops %d prhe %d phe %d he %d re %d ow %d \n",
+		p.numLeaves, len(p.tops), p.proofResolveHashesEver, p.proofHashesEver, p.hashesEver, p.rememberEver, p.overWire)
 	return s
 }
 
@@ -374,7 +374,7 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 		n = n.niece[lr]
 
 		if n == nil && h != 0 {
-			return nil, nil, fmt.Errorf(
+			return proofs, sibs, fmt.Errorf(
 				"descend pos %d nil neice at height %d", pos, h)
 		}
 

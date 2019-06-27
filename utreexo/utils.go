@@ -395,3 +395,45 @@ func U64tB(i uint64) []byte {
 	binary.Write(&buf, binary.BigEndian, i)
 	return buf.Bytes()
 }
+
+// ResolveNode will try to get a node at a given pos from a known set of nodes/leaves
+// if not present, it will descend to calculate it from known data further down.
+// should optimize this to return all the hashes it calculated so the caller can add it
+// to its cache/knownData
+func ResolveNode(knownData map[uint64]Hash, pos uint64, forestHeight uint8) (Hash, map[uint64]Hash, error) {
+	calculatedHashes := map[uint64]Hash{}
+	// First check if the node is in here
+	n, ok := knownData[pos]
+	if ok {
+		return n, calculatedHashes, nil
+	}
+
+	// If not, check if we're at a leaf. If so, we can't fix this.
+	if detectHeight(pos, forestHeight) == 0 {
+		return Hash{}, calculatedHashes, fmt.Errorf("Could not find leaf %d", pos)
+	}
+
+	// Otherwise, find if the children are known and hash them
+	leftPos := child(pos, forestHeight)
+	rightPos := leftPos ^ 1
+
+	left, leftHashes, err := ResolveNode(knownData, leftPos, forestHeight)
+	for pos, hash := range leftHashes {
+		calculatedHashes[pos] = hash
+	}
+
+	if err != nil {
+		return Hash{}, calculatedHashes, err
+	}
+
+	right, rightHashes, err := ResolveNode(knownData, rightPos, forestHeight)
+	for pos, hash := range rightHashes {
+		calculatedHashes[pos] = hash
+	}
+
+	if err != nil {
+		return Hash{}, calculatedHashes, err
+	}
+	calculatedHashes[pos] = Parent(left, right)
+	return calculatedHashes[pos], calculatedHashes, nil
+}
