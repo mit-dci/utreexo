@@ -28,6 +28,16 @@ Give a list of target indexes, and return a list of indexes.  Simplest, but the 
 
 Give a list of target indexes, then return a list of indexes and heights.  So for each, give me the proof of this up to h high.  That can get a bit redundant, in that some of the heigts are obvious; if I need a proof for both 2 and 3, whatever the proof height I need for 2 is, the height for 3 will be 0.  But... it's a byte.  1 byte per requested utxo is no big deal, at worst a couple KB per block of upload from the client to the server.
 
+Ways to repot a subset -- there are several!
+
+Given a []uint32 with len 100, you want to send a subset back.  The sender still has the slice.
+
+Easy: just send the subset, as a slice.  This is inefficient, especially if it's a slice of, say, hashes.
+Or: send a slice of positions (ints)  Should be smaller; the ints you send back only need as many bits as the set is large.
+Or: send a slice of the gaps between positions in your subset.  Could be smaller?  Especially if there's clustering?
+Or: send a bitmap.  1 bit for every element of the set.
+
+I think when the subset's around half of the initial set, the bitmap is probably the best you can do.  If it's all uniform and random.  If the subset is either really sparse or really dense, then sending the subset (or inverse) is more efficient.  What's the crossover point..?  I dunno!  There have got to be papers about this.  It seems like a thing in computer science.
 
 -----
 UNrelated (?) idea: have the bridge / archive nodes give utreexo roots stuck to every block.  They send the "this is the roots it should result in" message as well.  Scary?, but lets you do arbitrarily parralel validation.
@@ -39,9 +49,6 @@ proofs for block 7
 end result roots for block 7.
 
 Then... you can download any block, verify the whole thing in isolation and mark it as "consistent" -- you don't know if it's right, but you know that *if* the roots from 6 are right then the roots for 7 are right.  Then you can just do arbitrary IBD all over the place.
-
-
-
 
 -----
 
