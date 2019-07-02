@@ -38,7 +38,7 @@ func pollardRandomRemember(blocks int32) error {
 	sn.durationMask = 0x0f
 	sn.lookahead = 4
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x77)
 
 		fmt.Printf("\t\t\tblock %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())

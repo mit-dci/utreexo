@@ -100,13 +100,10 @@ func (p *Pollard) VerifyBlockProof(
 		return false, proofmap
 	}
 
-	knownHashes, err := p.matchKnownData(proofmap, bp)
+	proofmap, err = p.matchKnownData(proofmap, bp)
 	if err != nil {
 		fmt.Printf("VerifyBlockProof matchKnownData ERROR %s\n", err.Error())
 		return false, proofmap
-	}
-	for k, v := range knownHashes {
-		proofmap[k] = v
 	}
 
 	//	fmt.Printf("Reconstruct complete\n")
@@ -211,10 +208,10 @@ func (p *Pollard) VerifyBlockProof(
 func (p *Pollard) matchKnownData(
 	rec map[uint64]Hash,
 	bp BlockProof) (map[uint64]Hash, error) {
-	proofmap := map[uint64]Hash{}
+	proofmap := rec
 
 	height := p.height()
-	fmt.Printf("Targets: %v\n", bp.Targets)
+	/*fmt.Printf("Targets: %v\n", bp.Targets)
 	fmt.Printf("Num leaves: %d\n", p.numLeaves)
 	for pos, hash := range rec {
 		fmt.Printf("rec[%d] = %x\n", pos, hash[:4])
@@ -227,65 +224,101 @@ func (p *Pollard) matchKnownData(
 		fmt.Printf("%x ", th[:4])
 	}
 	fmt.Printf("\n")
-
+	*/
 	var left, right uint64
 
 	for _, t := range bp.Targets {
 
-		fmt.Printf("Processing %d\n", t)
+		//fmt.Printf("Processing %d\n", t)
 		// Fetch whatever is in the pollard on the path to
 		// this leaf
-		nodes, _, _ := p.descendToPos(t)
-
-		for i, n := range nodes {
-			if n != nil {
-				fmt.Printf("nodes[%d] = %x\n", i, n.data[:4])
-			} else {
-				fmt.Printf("nodes[%d] = nil\n", i)
+		_, sibs, err := p.descendToPos(t)
+		/*
+			if err != nil {
+				fmt.Printf("Error descendToPos: %s\n", err)
 			}
-		}
+
+			for i, s := range sibs {
+				if s != nil {
+					fmt.Printf("sibs[%d] = %x\n", i, s.data[:4])
+				} else {
+					fmt.Printf("sibs[%d] = nil\n", i)
+				}
+			}*/
 
 		subH := detectSubTreeHeight(t, p.numLeaves, height)
-		fmt.Printf("Subtree height for [%d] is [%d]\n", left, subH)
+		//fmt.Printf("Subtree height for [%d] is [%d]\n", left, subH)
 		pos := up1(t, height)
-		fmt.Printf("We are at position [%d]\n", pos)
+		//fmt.Printf("We are at position [%d]\n", pos)
 		right = t | 1
 		left = right ^ 1
 		leftHash, rightHash := rec[left], rec[right]
 
 		found := false
-		for h := uint8(1); h < subH; h++ { // < or <=?  I think <
-			if !found || nodes[h] == nil {
-				fmt.Printf("pos %d: Parent(%x, %x) -> ", pos, leftHash[:4], rightHash[:4])
-				hash := Parent(leftHash, rightHash)
-				fmt.Printf("%x\n", hash[:4])
-				p.hashesEver++
-				p.proofHashesEver++
-				if nodes[h] != nil {
-					if nodes[h].data == hash {
-						fmt.Printf("Found matching hash in nodes[%d]\n", h)
-						found = true
+		for h := uint8(1); h <= subH; h++ { // < or <=?  I think <
+			_, ok := proofmap[pos]
+			if !ok {
+				if !found || sibs[h] == nil {
+					//fmt.Printf("pos %d: Parent(%x, %x) -> ", pos, leftHash[:4], rightHash[:4])
+					hash := Parent(leftHash, rightHash)
+					//fmt.Printf("%x\n", hash[:4])
+					p.hashesEver++
+					p.proofHashesEver++
+					if sibs[h] != nil {
+						if sibs[h].data == hash {
+							//fmt.Printf("Found matching hash in nodes[%d]\n", h)
+							found = true
+						}
 					}
+					proofmap[pos] = hash
+				} else {
+					//fmt.Printf("Using cached data after intersecting with pollard for %d\n", pos)
+					proofmap[pos] = sibs[h].data
 				}
-				proofmap[pos] = hash
-			} else {
-				fmt.Printf("Using cached data after intersecting with pollard for %d\n", pos)
-				proofmap[pos] = nodes[h].data
+			}
+			if h == subH {
+				break
 			}
 
-			if !found {
+			if !found || sibs[h+1] == nil {
+				hashes := map[uint64]Hash{}
+				ok := false
 				if pos&1 == 0 {
-					fmt.Printf("Left pos (calculated): [%d] - Right pos (from proof): [%d]\n", pos, pos^1)
+					//fmt.Printf("Left pos (calculated): [%d] - Right pos (from proof): [%d]\n", pos, pos^1)
+					rightHash, ok = proofmap[pos^1]
+					if !ok {
+						rightHash, hashes, err = ResolveNode(proofmap, pos^1, height)
+						for p, h := range hashes {
+							proofmap[p] = h
+						}
+						if err != nil {
+							return nil, err
+						}
+						p.hashesEver += uint64(len(hashes))
+						p.proofHashesEver += uint64(len(hashes))
+						p.proofResolveHashesEver += uint64(len(hashes))
+					}
 					leftHash = proofmap[pos]
-					rightHash = rec[pos^1]
 				} else {
-					fmt.Printf("Left pos (from proof): [%d] - Right pos (calculated): [%d]\n", pos^1, pos)
+					//fmt.Printf("Left pos (from proof): [%d] - Right pos (calculated): [%d]\n", pos^1, pos)
+					leftHash, ok = proofmap[pos^1]
+					if !ok {
+						leftHash, hashes, err = ResolveNode(proofmap, pos^1, height)
+						for p, h := range hashes {
+							proofmap[p] = h
+						}
+						if err != nil {
+							return nil, err
+						}
+						p.hashesEver += uint64(len(hashes))
+						p.proofHashesEver += uint64(len(hashes))
+						p.proofResolveHashesEver += uint64(len(hashes))
+					}
 					rightHash = proofmap[pos]
-					leftHash = rec[pos^1]
 				}
 			}
 			pos = up1(pos, height)
-			fmt.Printf("We are at [%d]\n", pos)
+			//fmt.Printf("We are at [%d]\n", pos)
 		}
 	}
 
