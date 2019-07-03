@@ -59,11 +59,11 @@ func runIBD() error {
 
 	defer txofile.Close()
 
-	scheduleFile, err := os.OpenFile(*schedFileName, os.O_RDONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer scheduleFile.Close()
+	// scheduleFile, err := os.OpenFile(*schedFileName, os.O_RDONLY, 0600)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer scheduleFile.Close()
 
 	proofDB, err := leveldb.OpenFile("./proofdb", &opt.Options{ReadOnly: true})
 	if err != nil {
@@ -90,12 +90,14 @@ func runIBD() error {
 	var p utreexo.Pollard
 
 	//	p.Minleaves = 1 << 30
-	//	p.Lookahead = 1000
+	// p.Lookahead = 1000
+	lookahead := int32(1000) // keep txos that last less than this many blocks
 
 	fname := fmt.Sprintf("mem%s", *schedFileName)
 
 	for scanner.Scan() {
 		// keep schedule buffer full, 100KB chunks at a time
+		/* for clair schedule file
 		if len(scheduleBuffer) < 100000 {
 			nextBuf := make([]byte, 100000)
 			_, err = scheduleFile.Read(nextBuf)
@@ -103,7 +105,7 @@ func runIBD() error {
 				return err
 			}
 			scheduleBuffer = append(scheduleBuffer, nextBuf...)
-		}
+		}*/
 
 		switch scanner.Text()[0] {
 		case '-':
@@ -120,11 +122,12 @@ func runIBD() error {
 			}
 			// read from the schedule to see if it's memorable
 			for _, a := range adds {
+
 				if a.Duration == 0 {
 					continue
 				}
-				a.Remember =
-					scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
+				a.Remember = a.Duration < lookahead
+				// scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
 
 				totalTXOAdded++
 				if totalTXOAdded%8 == 0 {

@@ -31,6 +31,7 @@ type Node struct {
 // LeadTXO 's have a hash and a expiry date (block when that utxo gets used)
 type LeafTXO struct {
 	Hash
+	Duration int32
 	Remember bool // this leaf will be deleted soon, remember it
 }
 
