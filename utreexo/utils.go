@@ -103,19 +103,46 @@ func detectHeight(position uint64, forestHeight uint8) uint8 {
 }
 
 // detectOffset takes a node position and number of leaves in forest, and
-// returns: which subtree a node is in, the bitfield to get from the top to node,
-// and the height from node to tree top (length of that bitfield).
-func detectOffset(position uint64, numLeaves uint64) (uint8, uint64, uint8) {
+// returns: which subtree a node is in, the L/R bitfield to descend to the node,
+// and the height from node to its tree top (which is the bitfield length).
+func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// TODO replace ?
 	// similarities to detectSubTreeHeight() with more features
 	// maybe replace detectSubTreeHeight with this
+
+	// th = tree height
 	th := treeHeight(numLeaves)
+	// nh = target node height
 	nh := detectHeight(position, th) // there's probably a fancier way with bits...
 
 	var biggerTrees uint8
 
 	// add trees until you would exceed position of node
-	// TODO write some description of this bitshift stuff.  Bit of a mess.
+
+	// This is a bit of an ugly predicate.  The goal is to detect if we've
+	// gone past the node we're looking for by inspecting progressively shorter
+	// trees; once we have, the loop is over.
+
+	// The predicate breaks down into 3 main terms:
+	// A: pos << nh
+	// B: mask
+	// C: 1<<th & numleaves (treeSize)
+	// The predicate is then if (A&B >= C)
+	// A is position up shifted by the height of the node we're targeting.
+	// B is the "mask" we use in other functions; a bunch of 0s at the MSB side
+	// and then a bunch of 1s on the LSB side, such that we can use bitwise AND
+	// to discard high bits.  Together, A&B is shifting position up by nh bits,
+	// and then discarding (zeroing out) the high bits.  This is the same as in
+	// childMany.  C checks for whether a tree exists at the current tree
+	// height.  If there is no tree at th, C is 0.  If there is a tree, it will
+	// return a power of 2: the base size of that tree.
+	// The C term actually is used 3 times here, which is ugly; it's redefined
+	// right on the next line.
+	// In total, what this loop does is to take a node position, and
+	// see if it's in the next largest tree.  If not, then subtract everything
+	// covered by that tree from the position, and proceed to the next tree,
+	// skipping trees that don't exist.
+
 	for ; (position<<nh)&((2<<th)-1) >= (1<<th)&numLeaves; th-- {
 		treeSize := (1 << th) & numLeaves
 		if treeSize != 0 {
@@ -123,7 +150,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint64, uint8) {
 			biggerTrees++
 		}
 	}
-	return biggerTrees, position, th - nh
+	return biggerTrees, th - nh, position
 }
 
 // child gives you the left child (LSB will be 0)

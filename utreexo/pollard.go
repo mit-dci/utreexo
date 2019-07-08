@@ -355,7 +355,7 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	}
 
 	// first find which tree we're in
-	tNum, bits, branchLen := detectOffset(pos, p.numLeaves)
+	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
 	//	fmt.Printf("DO pos %d top %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
 	n := p.tops[tNum]
 	if n == nil || branchLen > 64 {

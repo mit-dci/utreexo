@@ -18,7 +18,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 	// go through each target and populate pollard
 	for _, target := range bp.Targets {
 
-		tNum, bits, branchLen := detectOffset(target, p.numLeaves)
+		tNum, branchLen, bits := detectOffset(target, p.numLeaves)
 		if branchLen == 0 {
 			// if there's no branch (1-tree) nothing to prove
 			continue
