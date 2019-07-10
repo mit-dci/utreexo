@@ -47,6 +47,8 @@ type Forest struct {
 	// only odd nodes should ever get dirty
 	dirtyMap map[uint64]bool
 
+	currentUndo []undo
+
 	// -------------------- following are just for testing / benchmarking
 	// how many hashes this forest has computed
 	HistoricHashes uint64
@@ -117,7 +119,9 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 		return nil, nil
 	}
 
-	var undos []undo
+	// clear out undo slice; will be written to in this function
+	f.currentUndo = []undo{}
+
 	numDeletions := uint64(len(dels))
 	if numDeletions > f.numLeaves {
 		return nil, fmt.Errorf(
@@ -176,8 +180,10 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 	//		fmt.Printf(" h:%d %d\t", detectHeight(t, f.height), t)
 	// for which heights do we have a top
 
-	// TODO
-	// what happens if you delete everything? do we care?
+	// what happens if you delete everything? do we care?  probably not
+
+	// TODO need to call transform for forest.Modify.  Seriously it's the same
+	// code twice.
 
 	//	fmt.Printf("Have %d deletions:\n", len(ds))
 
@@ -365,13 +371,12 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 	donetime := time.Now()
 	f.TimeRem += donetime.Sub(starttime)
 
-	return undos, nil
+	return f.currentUndo, nil
 }
 
 type rootStash struct {
-	vals    []Hash
-	dirts   []int // I know, I know, it's ugly but it's for slice indexes...
-	forgets []int // yuck
+	vals  []Hash
+	dirts []int // I know, I know, it's ugly but it's for slice indexes...
 }
 
 // root phase is the most involved of the deletion phases.  broken out into its own
@@ -463,7 +468,7 @@ func (f *Forest) rootPhase(haveDel, haveRoot bool,
 	// stash the hashes in down to up order, and also stash the dirty bits
 	// in any order (slice of uint64s)
 
-	//	fmt.Printf("moved position %d to h %d root stash\n", stashPos, h)
+	//	fmt.Printf("moved position %d to h %d rooat stash\n", stashPos, h)
 	return upDel, stash, nil
 }
 
@@ -498,19 +503,22 @@ func (f *Forest) moveSubtree(from, to uint64) error {
 		if f.forest[m.from] == empty {
 			return fmt.Errorf("move from %d but empty", from)
 		}
-		f.forest[m.to] = f.forest[m.from]
 
 		if j < (1 << toHeight) { // we're on the bottom row
-			f.positionMap[f.forest[m.to].Mini()] = m.to
+			f.positionMap[f.forest[m.from].Mini()] = m.to
 			//			fmt.Printf("wrote posmap pos %d\n", to)
+			// store undo data if this is a leaf
+			var u undo
+			u.Hash = f.forest[m.to]
+			u.move = move{from: m.to, to: m.from}
+			f.currentUndo = append(f.currentUndo, u)
 		}
-		// also move position map for items on bottom row
-		//		if detectHeight(from, f.height) == 0 {
-		//			f.positionMap[f.forestMap[tos[j]]] = tos[j]
-		//		}
 
+		// do the actual move
+		f.forest[m.to] = f.forest[m.from]
+
+		// clear out the place it moved from
 		f.forest[m.from] = empty
-		//		delete(f.forestMap, from)
 
 		if f.dirtyMap[m.from] {
 			f.dirtyMap[m.to] = true
