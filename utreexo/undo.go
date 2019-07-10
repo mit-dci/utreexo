@@ -8,12 +8,12 @@ although actually it can make sense for non-bridge nodes to undo as well...
 
 //
 type undo struct {
-	move
-	Hash
+	move // move the hash at from to position to
+	Hash // replace the hash at from with this
 }
 
 type blockUndo struct {
-	adds  uint32
+	adds  uint32 // how many adds; chop this much off from the right
 	undos []undo
 }
 

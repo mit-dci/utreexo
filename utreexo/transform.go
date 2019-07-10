@@ -147,6 +147,9 @@ func removeTransform(
 	return stash, m, nil
 }
 
+// TODO optimization: if children move, parents don't need to move.
+// (But siblings might)
+
 /*
 Ok here's the other thing about the transform.  In many cases, you know what
 to move where, but it's pointless to move it.  Actually, it's pointless
