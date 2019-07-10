@@ -87,14 +87,19 @@ const bridgeVerbose = false
 // of the forest
 var empty [32]byte
 
-func (f *Forest) Remove(dels []uint64) error {
+func (f *Forest) Remove(dels []uint64) ([]undo, error) {
 
-	err := f.removeInternal(dels)
+	undos, err := f.removeInternal(dels)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return f.reHash()
 
+	err = f.reHash()
+	if err != nil {
+		return nil, err
+	}
+
+	return undos, nil
 }
 
 // Deletion and addition are ~completely separate operations in the forest,
@@ -106,14 +111,16 @@ func (f *Forest) Remove(dels []uint64) error {
 // note that in the Forest method, we don't actually use the proofs,
 // just the position being deleted
 
-func (f *Forest) removeInternal(dels []uint64) error {
+func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 	starttime := time.Now()
 	if len(dels) == 0 {
-		return nil
+		return nil, nil
 	}
+
+	var undos []undo
 	numDeletions := uint64(len(dels))
 	if numDeletions > f.numLeaves {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%d deletions but forest has %d leaves",
 			len(dels), f.numLeaves)
 	}
@@ -129,7 +136,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 	// check that all dels are there & mark for deletion
 	for _, dpos := range dels {
 		if dpos > f.numLeaves {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 		//		ds = append(ds, dpos)
@@ -252,7 +259,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 				err := f.moveSubtree(dels[0]^1, dels[0]) // swap siblings first
 				// TODO do I need to pass dirtymap there? I think so, but not sure
 				if err != nil {
-					return err
+					return nil, err
 				}
 				// set destinationg to newly vacated right sibling
 				dels[0] = dels[0] ^ 1
@@ -260,7 +267,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 
 			err := f.moveSubtree(dels[1]^1, dels[0])
 			if err != nil {
-				return err
+				return nil, err
 			}
 			// set dirty bit for destination
 			f.dirtyMap[dels[0]] = true
@@ -286,7 +293,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 		// no deletion, no root: nothing to do
 
 		if len(dels) > 1 {
-			return fmt.Errorf("%d deletions in root phase\n", len(dels))
+			return nil, fmt.Errorf("%d deletions in root phase\n", len(dels))
 		}
 
 		// check if a root is present on this floor
@@ -309,7 +316,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 		upDel, subStash, err := f.rootPhase(
 			haveDel, rootPresent, delPos, rootPos, h)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if upDel != 0 {
@@ -333,7 +340,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 		up1DelSlice = []uint64{}
 	}
 	if len(dels) != 0 {
-		return fmt.Errorf("finished deletion climb but %d deletion left", len(dels))
+		return nil, fmt.Errorf("finished deletion climb but %d deletion left", len(dels))
 	}
 
 	// move subtrees from the stash to where they should go
@@ -343,7 +350,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 
 		err := f.writeSubtree(stash, destPos)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		//		if height == 0 {
@@ -358,7 +365,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 	donetime := time.Now()
 	f.TimeRem += donetime.Sub(starttime)
 
-	return nil
+	return undos, nil
 }
 
 type rootStash struct {
@@ -625,7 +632,10 @@ func (f *Forest) addInternal(adds []LeafTXO) error {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
+func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*blockUndo, error) {
+
+	bu := new(blockUndo)
+	bu.adds = uint32(len(adds))
 
 	delta := len(adds) - len(dels) // watch 32/64 bit
 	// remap to expand the forest if needed
@@ -634,7 +644,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 		//			1<<f.height, (1<<f.height)+uint64(len(adds)))
 		err := f.reMap(f.height + 1)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -649,16 +659,23 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 			delposs[i] = pos
 		}*/
 
-	err := f.removeInternal(dels)
+	undos, err := f.removeInternal(dels)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = f.addInternal(adds)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return f.reHash()
+	err = f.reHash()
+	if err != nil {
+		return nil, err
+	}
+
+	bu.undos = undos
+
+	return bu, nil
 }
 
 // reHash recomputes all hashes above the first floor.
