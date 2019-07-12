@@ -20,7 +20,7 @@ when deletions occur.
 // to get to a direct from/to mapping on the whole tree level, you will need
 // to process the movePos
 func removeTransform(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, error) {
+	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move) {
 
 	// note that RemoveTransform is still way sub-optimal in that I'm sure
 	// you can do this directly without the n*log(n) subtree moving...
@@ -140,11 +140,12 @@ func removeTransform(
 		up1DelSlice = []uint64{}
 	}
 	if len(dels) != 0 {
-		return nil, nil, fmt.Errorf(
-			"finished deletion climb but %d deletion left %v", len(dels), dels)
+		fmt.Printf("finished deletion climb but %d deletion left %v",
+			len(dels), dels)
+		return nil, nil
 	}
 
-	return stash, m, nil
+	return stash, m
 }
 
 // TODO optimization: if children move, parents don't need to move.
@@ -172,10 +173,7 @@ func semiExpandTransform(
 // can't be more than 1 stash move per height)
 func expandedTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, error) {
-	rawStash, rawMoves, err := removeTransform(dels, numLeaves, fHeight)
-	if err != nil {
-		return nil, nil, err
-	}
+	rawStash, rawMoves := removeTransform(dels, numLeaves, fHeight)
 
 	var expandedStash, expandedMoves []move
 	// for each node in the stash prefix, get the whole subtree

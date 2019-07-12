@@ -148,8 +148,8 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 
 		// clear all entries from positionMap as they won't be needed any more
 		// quick & easy; doesn't affcet the tree
-		f.positionMap[f.forest[dpos].Mini()] = dpos
-		//		f.delPosition()
+		delete(f.positionMap, f.forest[dpos].Mini())
+
 	}
 
 	// get tree tops.  these are dealt with differently...
@@ -215,6 +215,7 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 	// per row:
 	// sort / delete / extract / swap / root / promote
 	for h := uint8(0); h <= f.height; h++ {
+
 		//		fmt.Printf("deleting at height %d of %d, %d deletions:\n",
 		//			h, f.height, len(ds))
 		// *** skip.  if there are no deletions at this height, we're done
