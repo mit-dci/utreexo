@@ -138,10 +138,7 @@ func (p *Pollard) rem(dels []uint64) error {
 	oldTopIdx := len(p.tops) - 1
 	nexTopIdx := len(nexTops) - 1
 
-	stash, moves, err := removeTransform(dels, p.numLeaves, ph)
-	if err != nil {
-		return err
-	}
+	stash, moves := removeTransform(dels, p.numLeaves, ph)
 
 	// TODO how about instead of a map or even a slice of uint64s, you just
 	// have a slice of pointers?  And you need to run AuntOp on these pointers
