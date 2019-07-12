@@ -145,8 +145,8 @@ func (p *Pollard) rem(dels []uint64) error {
 	// TODO how about instead of a map or even a slice of uint64s, you just
 	// have a slice of pointers?  And you need to run AuntOp on these pointers
 	// if you aren't doing it already from something else.
-	nextDirtyMap := make(map[uint64]bool) // whatever use a map for now.
-
+	var moveDirt []uint64
+	var hashDirt []uint64
 	// can use some kind of queues or something later.
 
 	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
@@ -157,8 +157,6 @@ func (p *Pollard) rem(dels []uint64) error {
 		//		if verbose {
 		// fmt.Printf("pol rem row %d\n", h)
 		//		}
-		curDirtyMap := nextDirtyMap
-		nextDirtyMap = make(map[uint64]bool)
 
 		// copy the top over directly if there's a bit overlap
 		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
@@ -173,14 +171,18 @@ func (p *Pollard) rem(dels []uint64) error {
 			if len(p.tops) == 0 || p.tops[0] == nil {
 				return fmt.Errorf("no tops...")
 			}
-			//			fmt.Printf("mv %d -> %d\n", rawMoves[0].from, rawMoves[0].to)
-			dirt, err := p.moveNode(moves[0], curDirtyMap)
+			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
+			err := p.moveNode(moves[0])
 			if err != nil {
 				return err
 			}
+			dirt := up1(moves[0].to, ph)
+			lmvd := len(moveDirt)
 			// the dirt returned by moveNode is always a parent so can never be 0
-			if dirt != 0 && inForest(dirt, p.numLeaves) {
-				nextDirtyMap[dirt] = true
+			if inForest(dirt, p.numLeaves) &&
+				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
+				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
+				moveDirt = append(moveDirt, dirt)
 			}
 			moves = moves[1:]
 		}
@@ -189,7 +191,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		for len(stash) > 0 &&
 			detectHeight(stash[0].to, ph) == h {
 			// populate top; stashes always become tops
-			//			fmt.Printf("stash %d -> %d\n", rawStash[0].from, rawStash[0].to)
+			// fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
 			pr, sibs, err := p.descendToPos(stash[0].from)
 			if err != nil {
 				return fmt.Errorf("rem stash %s", err.Error())
@@ -211,21 +213,26 @@ func (p *Pollard) rem(dels []uint64) error {
 			stash = stash[1:]
 		}
 
-		// if we're not at the top, and there's curDirtyMap left, hash
+		curDirt := mergeSortedSlices(moveDirt, hashDirt)
+		moveDirt, hashDirt = []uint64{}, []uint64{}
+		// if we're not at the top, and there's curDirty left, hash
 		if h < ph-1 {
-			for pos, _ := range curDirtyMap {
+			fmt.Printf("h %d curDirt %v\n", h, curDirt)
+			for _, pos := range curDirt {
 				err := p.reHashOne(pos)
 				if err != nil {
 					return fmt.Errorf("rem rehash %s", err.Error())
 				}
 
 				parPos := up1(pos, ph)
-				if inForest(parPos, p.numLeaves) {
-					//  fmt.Printf("adding dirt %d\n", parPos)
-					nextDirtyMap[parPos] = true
-				} else {
-					//	 fmt.Printf("couldn't add dirt %d\n", parPos)
+				lhd := len(hashDirt)
+				// add parent to end of dirty slice if it's not already there
+				if inForest(parPos, p.numLeaves) &&
+					(lhd == 0 || hashDirt[lhd-1] != parPos) {
+					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
+					hashDirt = append(hashDirt, parPos)
 				}
+				//  fmt.Printf("adding dirt %d\n", parPos)
 			}
 		}
 
@@ -247,16 +254,16 @@ func (p *Pollard) rem(dels []uint64) error {
 // swap moves a node from one place to another.  Note that it leaves the
 // node in the "from" place to be dealt with some other way.
 // Also it hashes new parents so the hashes & pointers are consistent.
-func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
+func (p *Pollard) moveNode(m move) error {
 
 	prfrom, sibfrom, err := p.descendToPos(m.from)
 	if err != nil {
-		return 0, fmt.Errorf("from %s", err.Error())
+		return fmt.Errorf("from %s", err.Error())
 	}
 
 	prto, sibto, err := p.descendToPos(m.to)
 	if err != nil {
-		return 0, fmt.Errorf("to %s", err.Error())
+		return fmt.Errorf("to %s", err.Error())
 	}
 
 	// build out full branch to target if it's not populated
@@ -285,33 +292,28 @@ func (p *Pollard) moveNode(m move, cdm map[uint64]bool) (uint64, error) {
 	}
 
 	// now hash (if there's something above) (Which there always will be...?)
-	if len(prto) > 1 { // true unless moving to a top? in which case just return?
-		if sibto[1] == nil { // create & link if it doesn't exist
-			// fmt.Printf("mv make parent node at %d\n", up1(to, p.height()))
-			sibto[1] = new(polNode)
-			if prto[2] != nil {
-				prto[2].niece[(m.to>>1)&1] = sibto[1]
+	/*
+		if len(prto) > 1 { // true unless moving to a top? in which case just return?
+			if sibto[1] == nil { // create & link if it doesn't exist
+				// fmt.Printf("mv make parent node at %d\n", up1(to, p.height()))
+				sibto[1] = new(polNode)
+				if prto[2] != nil {
+					prto[2].niece[(m.to>>1)&1] = sibto[1]
+				}
 			}
-		}
-		p.hashesEver++
-		sibto[1].data = prto[1].auntOp()
-		//		fmt.Printf("compute %04x at %d evap tgt %v sib %v\n",
-		//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
-		// after auntopping, delete nodes.
-		if m.to < p.numLeaves {
-			prto[1].leafPrune()
-		} else {
-			prto[1].prune()
-		}
-	}
+			p.hashesEver++
+			sibto[1].data = prto[1].auntOp()
+			//		fmt.Printf("compute %04x at %d evap tgt %v sib %v\n",
+			//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
+			// after auntopping, delete nodes.
+			if m.to < p.numLeaves {
+				prto[1].leafPrune()
+			} else {
+				prto[1].prune()
+			}
+		}*/
 
-	ph := p.height()
-	//  just hashed to's parent, so delete that from cdm
-	delete(cdm, up1(m.from, ph))
-	delete(cdm, up1(m.to, ph))
-	parPos := upMany(m.to, 2, ph)
-
-	return parPos, nil
+	return nil
 }
 
 // the Hash & trim function called by rem().  Not currently called on leaves
@@ -320,6 +322,11 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	pr, sib, err := p.descendToPos(pos)
 	if err != nil {
 		return err
+	}
+
+	if !pr[0].auntable() {
+		// return nil
+		return fmt.Errorf("pos %d unauntable %x %v", pos, pr[0].data, pr[0].niece)
 	}
 	//	fmt.Printf("reHashOne %d pr %d sib %d pr[0] %v\n",
 	//		pos, len(pr), len(sib), pr[0].niece)

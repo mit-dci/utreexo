@@ -32,6 +32,11 @@ func (n *polNode) auntOp() Hash {
 	return Parent(n.niece[0].data, n.niece[1].data)
 }
 
+// auntOp tells you if you can call auntOp on a node
+func (n *polNode) auntable() bool {
+	return n.niece[0] != nil && n.niece[1] != nil
+}
+
 // deadEnd returns true if both neices are nill
 // could also return true if n itself is nil! (maybe a bad idea?)
 func (n *polNode) deadEnd() bool {
