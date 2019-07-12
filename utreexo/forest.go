@@ -104,6 +104,12 @@ func (f *Forest) Remove(dels []uint64) ([]undo, error) {
 	return undos, nil
 }
 
+// rewriting the remove func here then can delete the old one.
+// the old one is just too messy.
+func (f *Forest) removev2(dels []uint64) ([]undo, error) {
+	return nil, nil
+}
+
 // Deletion and addition are ~completely separate operations in the forest,
 // so lets break em into different methods.
 

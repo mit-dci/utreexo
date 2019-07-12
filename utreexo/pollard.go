@@ -128,7 +128,6 @@ func (p *Pollard) rem(dels []uint64) error {
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 	overlap := p.numLeaves & nextNumLeaves
-
 	// remove tops and add empty tops based just on popcount
 	nexTops := make([]*polNode, PopCount(nextNumLeaves))
 	// keeping track of these separately is annoying.  I'm sure there's a
@@ -138,23 +137,14 @@ func (p *Pollard) rem(dels []uint64) error {
 	nexTopIdx := len(nexTops) - 1
 
 	stash, moves := removeTransform(dels, p.numLeaves, ph)
-
-	// TODO how about instead of a map or even a slice of uint64s, you just
-	// have a slice of pointers?  And you need to run AuntOp on these pointers
-	// if you aren't doing it already from something else.
+	// TODO how about instead of a slice of uint64s, you just
+	// have a slice of pointers?  Then less descent.
 	var moveDirt []uint64
 	var hashDirt []uint64
-	// can use some kind of queues or something later.
 
 	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
 	//		ph, p.numLeaves, len(dels), nextNumLeaves, len(rawStash), len(rawMoves))
-
 	for h := uint8(0); h < ph; h++ {
-
-		//		if verbose {
-		// fmt.Printf("pol rem row %d\n", h)
-		//		}
-
 		// copy the top over directly if there's a bit overlap
 		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
 		if (1<<h)&overlap != 0 {
@@ -220,7 +210,6 @@ func (p *Pollard) rem(dels []uint64) error {
 				if err != nil {
 					return fmt.Errorf("rem rehash %s", err.Error())
 				}
-
 				parPos := up1(pos, ph)
 				lhd := len(hashDirt)
 				// add parent to end of dirty slice if it's not already there
@@ -229,10 +218,8 @@ func (p *Pollard) rem(dels []uint64) error {
 					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
 					hashDirt = append(hashDirt, parPos)
 				}
-				//  fmt.Printf("adding dirt %d\n", parPos)
 			}
 		}
-
 		// if there's a 1 in the nextNum, decrement top number
 		if (1<<h)&nextNumLeaves != 0 {
 			nexTopIdx--
@@ -241,10 +228,8 @@ func (p *Pollard) rem(dels []uint64) error {
 			oldTopIdx--
 		}
 	}
-
 	p.numLeaves = nextNumLeaves
 	p.tops = nexTops
-
 	return nil
 }
 
