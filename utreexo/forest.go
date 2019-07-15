@@ -107,6 +107,68 @@ func (f *Forest) Remove(dels []uint64) ([]undo, error) {
 // rewriting the remove func here then can delete the old one.
 // the old one is just too messy.
 func (f *Forest) removev2(dels []uint64) ([]undo, error) {
+
+	if uint64(len(dels)) > f.numLeaves {
+		return nil, fmt.Errorf("%d deletions but forest has %d leaves",
+			len(dels), f.numLeaves)
+	}
+
+	f.currentUndo = []undo{}
+
+	var moveDirt []uint64
+	var hashDirt []uint64
+
+	stash, moves := removeTransform(dels, f.numLeaves, f.height)
+
+	for h := uint8(0); h < f.height; h++ {
+		// go through moves for this height
+		for len(moves) > 0 && detectHeight(moves[0].to, f.height) == h {
+			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
+			err := f.moveSubtree(moves[0])
+			if err != nil {
+				return nil, err
+			}
+
+			dirt := up1(moves[0].to, f.height)
+			lmvd := len(moveDirt)
+			// the dirt returned by moveNode is always a parent so can never be 0
+			if inForest(dirt, f.numLeaves) &&
+				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
+				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
+				moveDirt = append(moveDirt, dirt)
+			}
+			moves = moves[1:]
+		}
+
+		// then the stash on this height.  (There can be only 1)
+		for len(stash) > 0 && detectHeight(stash[0].to, f.height) == h {
+			// argh I dunno
+		}
+
+		// hash dirt for this height
+		curDirt := mergeSortedSlices(moveDirt, hashDirt)
+		moveDirt, hashDirt = []uint64{}, []uint64{}
+		// if we're not at the top, and there's curDirty left, hash
+		if h < f.height-1 {
+			fmt.Printf("h %d curDirt %v\n", h, curDirt)
+			for _, pos := range curDirt {
+
+				lpos := child(pos, f.height)
+				f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
+				f.HistoricHashes++
+
+				parPos := up1(pos, f.height)
+				lhd := len(hashDirt)
+				// add parent to end of dirty slice if it's not already there
+				if inForest(parPos, f.numLeaves) &&
+					(lhd == 0 || hashDirt[lhd-1] != parPos) {
+					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
+					hashDirt = append(hashDirt, parPos)
+				}
+			}
+		}
+	}
+
 	return nil, nil
 }
 
@@ -269,7 +331,7 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 		for len(dels) > 1 {
 
 			if sibSwap && dels[0]&1 == 0 { // if destination is even (left)
-				err := f.moveSubtree(dels[0]^1, dels[0]) // swap siblings first
+				err := f.moveSubtree(move{dels[0] ^ 1, dels[0]}) // swap siblings first
 				// TODO do I need to pass dirtymap there? I think so, but not sure
 				if err != nil {
 					return nil, err
@@ -278,7 +340,7 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 				dels[0] = dels[0] ^ 1
 			}
 
-			err := f.moveSubtree(dels[1]^1, dels[0])
+			err := f.moveSubtree(move{dels[1] ^ 1, dels[0]})
 			if err != nil {
 				return nil, err
 			}
@@ -417,7 +479,7 @@ func (f *Forest) rootPhase(haveDel, haveRoot bool,
 		//		fmt.Printf("move root from %d to %d (derooting)\n", rootPos, delPos)
 
 		if sibSwap && delPos&1 == 0 { // if destination is even (left)
-			err := f.moveSubtree(delPos^1, delPos) // swap siblings first
+			err := f.moveSubtree(move{delPos ^ 1, delPos}) // swap siblings first
 			if err != nil {
 				return 0, stash, err
 			}
@@ -425,7 +487,7 @@ func (f *Forest) rootPhase(haveDel, haveRoot bool,
 			delPos = delPos ^ 1 // |1 should also work
 		}
 
-		err := f.moveSubtree(rootPos, delPos)
+		err := f.moveSubtree(move{rootPos, delPos})
 		if err != nil {
 			return 0, stash, err
 		}
@@ -495,44 +557,44 @@ Definitely can be improved / optimized.
 // moveSubtree moves a node, and all its children, from one place to another,
 // and deletes everything at the prior location
 // This is like get and write subtree but moving directly instead of stashing
-func (f *Forest) moveSubtree(from, to uint64) error {
+func (f *Forest) moveSubtree(m move) error {
 	starttime := time.Now()
-	fromHeight := detectHeight(from, f.height)
-	toHeight := detectHeight(to, f.height)
+	fromHeight := detectHeight(m.from, f.height)
+	toHeight := detectHeight(m.to, f.height)
 	if fromHeight != toHeight {
 		return fmt.Errorf("moveSubtree: mismatch heights from %d to %d",
 			fromHeight, toHeight)
 	}
 
-	ms := subTreePositions(from, to, f.height)
-	for j, m := range ms {
+	ms := subTreePositions(m.from, m.to, f.height)
+	for j, mv := range ms {
 
-		if f.forest[m.from] == empty {
-			return fmt.Errorf("move from %d but empty", from)
+		if f.forest[mv.from] == empty {
+			return fmt.Errorf("move from %d but empty", mv.from)
 		}
 
 		if j < (1 << toHeight) { // we're on the bottom row
-			f.positionMap[f.forest[m.from].Mini()] = m.to
+			f.positionMap[f.forest[mv.from].Mini()] = m.to
 			//			fmt.Printf("wrote posmap pos %d\n", to)
 			// store undo data if this is a leaf
 			var u undo
-			u.Hash = f.forest[m.to]
-			u.move = move{from: m.to, to: m.from}
+			u.Hash = f.forest[mv.to]
+			u.move = move{from: mv.to, to: mv.from}
 			f.currentUndo = append(f.currentUndo, u)
 		}
 
 		// do the actual move
-		f.forest[m.to] = f.forest[m.from]
+		f.forest[mv.to] = f.forest[mv.from]
 
 		// clear out the place it moved from
-		f.forest[m.from] = empty
+		f.forest[mv.from] = empty
 
-		if f.dirtyMap[m.from] {
-			f.dirtyMap[m.to] = true
+		if f.dirtyMap[mv.from] {
+			f.dirtyMap[mv.to] = true
 			if bridgeVerbose {
 				fmt.Printf("movesubtree set pos %d to dirty, unset %d\n", m.to, m.from)
 			}
-			delete(f.dirtyMap, m.from)
+			delete(f.dirtyMap, mv.from)
 		}
 
 	}
