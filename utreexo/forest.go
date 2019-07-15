@@ -118,7 +118,9 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 	var moveDirt []uint64
 	var hashDirt []uint64
 
-	stash, moves := removeTransform(dels, f.numLeaves, f.height)
+	stashes, moves := removeTransform(dels, f.numLeaves, f.height)
+
+	var stashSlice []tStash
 
 	for h := uint8(0); h < f.height; h++ {
 		// go through moves for this height
@@ -141,8 +143,12 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 		}
 
 		// then the stash on this height.  (There can be only 1)
-		for len(stash) > 0 && detectHeight(stash[0].to, f.height) == h {
-			// argh I dunno
+		for len(stashes) > 0 && detectHeight(stashes[0].to, f.height) == h {
+			stash, err := f.getSubTree(stashes[0].from, true)
+			if err != nil {
+				return nil, err
+			}
+			stashSlice = append(stashSlice, stash.toTStash(stashes[0].to))
 		}
 
 		// hash dirt for this height
@@ -169,13 +175,18 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 		}
 	}
 
+	// move subtrees from the stash to where they should go
+	for _, tstash := range stashSlice {
+		err := f.writeSubtree(rootStash{vals: tstash.vals}, tstash.dest)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return nil, nil
 }
 
 // Deletion and addition are ~completely separate operations in the forest,
 // so lets break em into different methods.
-
-// TODO use removeTransform here so we know we're doing the same thing
 
 // Remove deletes nodes from the forest.  This is the hard part :)
 // note that in the Forest method, we don't actually use the proofs,
@@ -446,6 +457,16 @@ func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
 type rootStash struct {
 	vals  []Hash
 	dirts []int // I know, I know, it's ugly but it's for slice indexes...
+}
+
+func (r *rootStash) toTStash(to uint64) tStash {
+	return tStash{vals: r.vals, dest: to}
+}
+
+// tStash is a stash used with removeTransform
+type tStash struct {
+	vals []Hash
+	dest uint64
 }
 
 // root phase is the most involved of the deletion phases.  broken out into its own
