@@ -115,7 +115,6 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 }
 
 // TODO for rem:
-// turn the dirtymap into a slice. I think it's always ordered so easy
 // get rid of dirtymap and rehash entirely?  Not sure if we can
 // if not then make it so only rehash hashes, and movenode doesn't.  same with
 // pruning?  seems that rehash and movenode do a lot of the same things.
