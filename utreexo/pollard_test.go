@@ -7,7 +7,7 @@ import (
 )
 
 func TestRandPollard(t *testing.T) {
-	rand.Seed(1)
+	rand.Seed(4)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -35,12 +35,12 @@ func pollardRandomRemember(blocks int32) error {
 	// p.Minleaves = 0
 
 	sn := NewSimChain()
-	sn.durationMask = 0x0f
+	sn.durationMask = 0x07
 	sn.lookahead = 4
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x07)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 
-		fmt.Printf("\t\t\tblock %d del %d add %d - %s\n",
+		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
 
 		// get proof for these deletions (with respect to prev block)
