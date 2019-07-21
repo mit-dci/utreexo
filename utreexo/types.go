@@ -95,7 +95,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		adds[j].Hash[2] = uint8(s.leafCounter >> 16)
 		adds[j].Hash[3] = uint8(s.leafCounter >> 24)
 		adds[j].Hash[4] = uint8(s.leafCounter >> 32)
-		adds[j].Hash[10] = 0xff
+		adds[j].Hash[5] = 0xff
 
 		duration := int32(rand.Uint32() & s.durationMask)
 		// with "+1", the duration is 1 to 256, so the forest never gets

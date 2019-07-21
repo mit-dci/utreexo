@@ -3,7 +3,6 @@ package utreexo
 /* we need to be able to undo blocks!  for bridge nodes at least.
 compact nodes can just keep old roots.
 although actually it can make sense for non-bridge nodes to undo as well...
-
 */
 
 //

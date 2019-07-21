@@ -14,7 +14,7 @@ import (
 // note that in the Forest method, we don't actually use the proofs,
 // just the position being deleted
 
-func (f *Forest) removeInternal(dels []uint64) ([]undo, error) {
+func (f *Forest) xremoveInternal(dels []uint64) ([]undo, error) {
 	starttime := time.Now()
 	if len(dels) == 0 {
 		return nil, nil
@@ -367,4 +367,142 @@ func (f *Forest) rootPhase(haveDel, haveRoot bool,
 
 	//	fmt.Printf("moved position %d to h %d rooat stash\n", stashPos, h)
 	return upDel, stash, nil
+}
+
+// Add adds leaves to the forest.  This is the easy part.
+func (f *Forest) xaddInternal(adds []LeafTXO) error {
+
+	// add adds on the bottom right
+	for _, add := range adds {
+		fmt.Printf("forest add %x %d\t", add.Hash[:4], f.numLeaves)
+		f.forest[f.numLeaves] = add.Hash
+		f.positionMap[add.Mini()] = f.numLeaves
+		f.dirtyMap[f.numLeaves] = true
+		if bridgeVerbose {
+			fmt.Printf("add set %d to dirty\n", f.numLeaves)
+		}
+		f.numLeaves++
+	}
+	return nil
+}
+
+// reHash recomputes all hashes above the first floor.
+// now mapless (other than dirtymap) and looks parallelizable
+func (f *Forest) reHash() error {
+	// a little ugly but nothing to do in this case
+	if f.height == 0 {
+		return nil
+	}
+	if bridgeVerbose {
+		s := f.ToString()
+		fmt.Printf("\t\t\t====== tree rehash complete:\n")
+		fmt.Printf(s)
+	}
+	starttime := time.Now()
+	// check for tree tops
+	tops, topheights := getTopsReverse(f.numLeaves, f.height)
+
+	if bridgeVerbose {
+		fmt.Printf("tops: %v\n", tops)
+		fmt.Printf("rehash %d dirty: ", len(f.dirtyMap))
+		for p, _ := range f.dirtyMap {
+			fmt.Printf(" %d", p)
+		}
+		fmt.Printf("\n")
+	}
+
+	i := 0
+	// less ugly!  turn the dirty map into a slice, sort it, and then
+	// chop it up into rows
+	// For more fancyness, use multiple goroutines for the hash part
+	dirtySlice := make([]uint64, len(f.dirtyMap))
+	for pos, _ := range f.dirtyMap {
+		dirtySlice[i] = pos
+		i++
+	}
+	sortUint64s(dirtySlice)
+
+	dirty2d := make([][]uint64, f.height)
+	h := uint8(0)
+	dirtyRemaining := 0
+	for _, pos := range dirtySlice {
+		dHeight := detectHeight(pos, f.height)
+		// increase height if needed
+		for h < dHeight {
+			h++
+		}
+		if bridgeVerbose {
+			fmt.Printf("h %d\n", h)
+		}
+		dirty2d[h] = append(dirty2d[h], pos)
+		dirtyRemaining++
+	}
+
+	// this is basically the same as VerifyBlockProof.  Could maybe split
+	// it to a separate function to reduce redundant code..?
+	// nah but pretty different beacuse the dirtyMap has stuff that appears
+	// halfway up...
+
+	var currentRow, nextRow []uint64
+
+	// floor by floor
+	for h = uint8(0); h < f.height; h++ {
+		if bridgeVerbose {
+			fmt.Printf("dirty %v\ncurrentRow %v\n", dirty2d[h], currentRow)
+		}
+		// merge nextRow and the dirtySlice.  They're both sorted so this
+		// should be quick.  Seems like a CS class kindof algo but who knows.
+		// Should be O(n) anyway.
+
+		currentRow = mergeSortedSlices(currentRow, dirty2d[h])
+		dirtyRemaining -= len(dirty2d[h])
+		if dirtyRemaining == 0 && len(currentRow) == 0 {
+			// done hashing early
+			break
+		}
+
+		for i, pos := range currentRow {
+			// skip if next is sibling
+			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
+				continue
+			}
+			// also skip if this is a top
+			if pos == tops[0] {
+				continue
+			}
+
+			right := pos | 1
+			left := right ^ 1
+			parpos := up1(left, f.height)
+			leftHash := f.forest[left]
+			rightHash := f.forest[right]
+			if bridgeVerbose {
+				fmt.Printf("bridge hash %d %04x, %d %04x -> %d\n",
+					left, leftHash[:4], right, rightHash[:4], parpos)
+			}
+			par := Parent(leftHash, rightHash)
+			f.HistoricHashes++
+
+			f.forest[parpos] = par
+			nextRow = append(nextRow, parpos)
+		}
+		if topheights[0] == h {
+			tops = tops[1:]
+			topheights = topheights[1:]
+		}
+		currentRow = nextRow
+		nextRow = []uint64{}
+	}
+
+	// all clean
+	f.dirtyMap = make(map[uint64]bool)
+
+	donetime := time.Now()
+	f.TimeInHash += donetime.Sub(starttime)
+	if bridgeVerbose {
+		s := f.ToString()
+		fmt.Printf("\t\t\t====== tree rehash complete:\n")
+		fmt.Printf(s)
+	}
+	return nil
 }
