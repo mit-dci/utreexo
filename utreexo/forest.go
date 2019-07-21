@@ -157,13 +157,15 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 		}
 
 		// then the stash on this height.  (There can be only 1)
-		for len(stashes) > 0 && detectHeight(stashes[0].to, f.height) == h {
-			fmt.Printf("stash %d -> %d\n", stashes[0].from, stashes[0].to)
-			stash, err := f.getSubTree(stashes[0].from, true)
-			if err != nil {
-				return nil, fmt.Errorf("stash h %d %s", h, err)
+		if len(stashes) > 0 && detectHeight(stashes[0].to, f.height) == h {
+			if stashes[0].from != stashes[0].to {
+				fmt.Printf("stash %d -> %d\n", stashes[0].from, stashes[0].to)
+				stash, err := f.getSubTree(stashes[0].from, true)
+				if err != nil {
+					return nil, fmt.Errorf("stash h %d %s", h, err)
+				}
+				stashSlice = append(stashSlice, stash.toTStash(stashes[0].to))
 			}
-			stashSlice = append(stashSlice, stash.toTStash(stashes[0].to))
 			stashes = stashes[1:]
 		}
 
@@ -176,6 +178,9 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 			for _, pos := range curDirt {
 
 				lpos := child(pos, f.height)
+				fmt.Printf("%d %x, %d %x\n",
+					lpos, f.forest[lpos][:4], lpos^1, f.forest[lpos^1][:4])
+
 				f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
 				f.HistoricHashes++
 
@@ -243,13 +248,13 @@ func (f *Forest) moveSubtree(m move) error {
 	}
 
 	ms := subTreePositions(m.from, m.to, f.height)
-	for j, mv := range ms {
+	for _, mv := range ms {
 
 		if f.forest[mv.from] == empty {
 			return fmt.Errorf("move from %d but empty", mv.from)
 		}
 
-		if j < (1 << toHeight) { // we're on the bottom row
+		if mv.from < f.numLeaves { // we're on the bottom row
 			f.positionMap[f.forest[mv.from].Mini()] = m.to
 			//			fmt.Printf("wrote posmap pos %d\n", to)
 			// store undo data if this is a leaf
@@ -265,14 +270,6 @@ func (f *Forest) moveSubtree(m move) error {
 
 		// clear out the place it moved from
 		f.forest[mv.from] = empty
-
-		if f.dirtyMap[mv.from] {
-			f.dirtyMap[mv.to] = true
-			if bridgeVerbose {
-				fmt.Printf("movesubtree set pos %d to dirty, unset %d\n", m.to, m.from)
-			}
-			delete(f.dirtyMap, mv.from)
-		}
 
 	}
 
@@ -302,18 +299,6 @@ func (f *Forest) getSubTree(src uint64, del bool) (rootStash, error) {
 	// read from map and build slice in down to up order
 	for i, m := range ms {
 		stash.vals[i] = f.forest[m.from]
-		// node that the dirty positions are appended IN ORDER.
-		// we can use that and don't have to sort through when we're
-		// re-writing the dirtiness back
-		if f.dirtyMap[m.from] {
-			stash.dirts = append(stash.dirts, i)
-			if del {
-				delete(f.dirtyMap, m.from)
-				if bridgeVerbose {
-					fmt.Printf("getSubTree unset %d dirty\n", m.from)
-				}
-			}
-		}
 
 		if del {
 			f.forest[m.from] = empty
@@ -340,19 +325,11 @@ func (f *Forest) writeSubtree(stash rootStash, dest uint64) error {
 	for i, m := range ms {
 		f.forest[m.to] = stash.vals[i]
 
-		if i < (1 << subheight) { // we're on the bottom row
+		if m.from < f.numLeaves { // we're on the bottom row
 			f.positionMap[stash.vals[i].Mini()] = m.to
 			//			f.positionMap[stash.vals[i].Mini()] = to
 			//			fmt.Printf("wrote posmap pos %d\n", to)
 		}
-		if len(stash.dirts) > 0 && stash.dirts[0] == i {
-			f.dirtyMap[m.to] = true
-			stash.dirts = stash.dirts[1:]
-			if bridgeVerbose {
-				fmt.Printf("writesubtree set pos %d to dirty\n", m.to)
-			}
-		}
-
 	}
 	return nil
 }
@@ -376,11 +353,11 @@ func (f *Forest) addv2(adds []LeafTXO) {
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
 			// grab, pop, swap, hash, new
 			top := f.forest[tops[h]] // grab
-			fmt.Printf("grabbed %x from %d\n", top[:12], tops[h])
+			//			fmt.Printf("grabbed %x from %d\n", top[:12], tops[h])
 			n = Parent(top, n)       // hash
 			pos = up1(pos, f.height) // rise
 			f.forest[pos] = n        // write
-			fmt.Printf("wrote %x to %d\n", n[:4], pos)
+			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
 		}
 		f.numLeaves++
 	}
