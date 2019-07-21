@@ -157,8 +157,11 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 
 		// should never happen
 		if pos > f.numLeaves {
+			for m, p := range f.positionMap {
+				fmt.Printf("pos %d %x\t", p, m[:4])
+			}
 			return bp, fmt.Errorf(
-				"prove: got leaf position %d but only %d leaves exist",
+				"ProveBlock: got leaf position %d but only %d leaves exist",
 				pos, f.numLeaves)
 		}
 		bp.Targets[i] = pos
