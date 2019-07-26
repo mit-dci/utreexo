@@ -205,6 +205,27 @@ func inForest(pos, numLeaves uint64) bool {
 	return pos < numLeaves
 }
 
+func inForestHeight(pos, numLeaves uint64, height uint8) bool {
+	if pos < numLeaves {
+		return true
+	}
+
+	if numLeaves < 1<<height {
+		fmt.Printf("too high\n")
+	}
+
+	h := treeHeight(numLeaves)
+	marker := uint64(1 << h)
+	mask := (marker << 1) - 1
+	if pos >= mask {
+		return false
+	}
+	for pos&marker != 0 {
+		pos = ((pos << 1) & mask) | 1
+	}
+	return pos < numLeaves
+}
+
 // given n leaves, how deep is the tree?
 // iterate shifting left until greater than n
 func treeHeight(n uint64) uint8 {

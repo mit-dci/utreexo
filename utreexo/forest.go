@@ -99,11 +99,6 @@ func (f *Forest) Remove(dels []uint64) ([]undo, error) {
 		return nil, err
 	}
 
-	err = f.reHash()
-	if err != nil {
-		return nil, err
-	}
-
 	return undos, nil
 }
 
@@ -147,11 +142,14 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 
 			dirt := up1(moves[0].to, f.height)
 			lmvd := len(moveDirt)
+			fmt.Printf("dirt %d, lmvd %d\n", dirt, lmvd)
+
 			// the dirt returned by moveNode is always a parent so can never be 0
-			if inForest(dirt, f.numLeaves) &&
+			if inForestHeight(dirt, f.numLeaves, f.height) &&
 				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
 				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
 				moveDirt = append(moveDirt, dirt)
+				fmt.Printf("appended dirt %d\n", dirt)
 			}
 			moves = moves[1:]
 		}
@@ -187,7 +185,7 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 				parPos := up1(pos, f.height)
 				lhd := len(hashDirt)
 				// add parent to end of dirty slice if it's not already there
-				if inForest(parPos, f.numLeaves) &&
+				if inForestHeight(parPos, f.numLeaves, f.height) &&
 					(lhd == 0 || hashDirt[lhd-1] != parPos) {
 					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
 					hashDirt = append(hashDirt, parPos)
@@ -239,6 +237,7 @@ Definitely can be improved / optimized.
 // and deletes everything at the prior location
 // This is like get and write subtree but moving directly instead of stashing
 func (f *Forest) moveSubtree(m move) error {
+	fmt.Printf("movesubtree %d -> %d\n", m.from, m.to)
 	starttime := time.Now()
 	fromHeight := detectHeight(m.from, f.height)
 	toHeight := detectHeight(m.to, f.height)
@@ -248,28 +247,29 @@ func (f *Forest) moveSubtree(m move) error {
 	}
 
 	ms := subTreePositions(m.from, m.to, f.height)
-	for _, mv := range ms {
+	for _, submove := range ms {
 
-		if f.forest[mv.from] == empty {
-			return fmt.Errorf("move from %d but empty", mv.from)
+		if f.forest[submove.from] == empty {
+			return fmt.Errorf("move from %d but empty", submove.from)
 		}
 
-		if mv.from < f.numLeaves { // we're on the bottom row
-			f.positionMap[f.forest[mv.from].Mini()] = m.to
-			//			fmt.Printf("wrote posmap pos %d\n", to)
+		if submove.from < f.numLeaves { // we're on the bottom row
+			f.positionMap[f.forest[submove.from].Mini()] = submove.to
+			fmt.Printf("map %x @ %d\n", f.forest[submove.from][:4], submove.to)
 			// store undo data if this is a leaf
 			var u undo
-			u.Hash = f.forest[mv.to]
-			u.move = move{from: mv.to, to: mv.from}
+			u.Hash = f.forest[submove.to]
+			u.move = move{from: submove.to, to: submove.from}
 			f.currentUndo = append(f.currentUndo, u)
 		}
 
 		// do the actual move
-		fmt.Printf("mvsubtree write %x pos %d\n", f.forest[mv.from][:4], mv.to)
-		f.forest[mv.to] = f.forest[mv.from]
+		fmt.Printf("mvsubtree write %x pos %d\n",
+			f.forest[submove.from][:4], submove.to)
+		f.forest[submove.to] = f.forest[submove.from]
 
 		// clear out the place it moved from
-		f.forest[mv.from] = empty
+		f.forest[submove.from] = empty
 
 	}
 
@@ -328,7 +328,7 @@ func (f *Forest) writeSubtree(stash rootStash, dest uint64) error {
 		if m.from < f.numLeaves { // we're on the bottom row
 			f.positionMap[stash.vals[i].Mini()] = m.to
 			//			f.positionMap[stash.vals[i].Mini()] = to
-			//			fmt.Printf("wrote posmap pos %d\n", to)
+			fmt.Printf("wrote posmap pos %d\n", m.to)
 		}
 	}
 	return nil
@@ -385,7 +385,6 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*blockUndo, error) {
 		}
 	}
 
-	fmt.Printf("pre remove %s\n", f.ToString())
 	undos, err := f.removev2(dels)
 	if err != nil {
 		return nil, err
@@ -394,6 +393,13 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*blockUndo, error) {
 	f.addv2(adds)
 
 	bu.undos = undos
+
+	fmt.Printf("done modifying block, added %d\n", len(adds))
+	fmt.Printf("post add %s\n", f.ToString())
+	for m, p := range f.positionMap {
+		fmt.Printf("%x @%d\t", m[:4], p)
+	}
+	fmt.Printf("\n")
 
 	return bu, nil
 }
