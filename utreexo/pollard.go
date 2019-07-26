@@ -318,7 +318,8 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	}
 	p.hashesEver++
 	sib[0].data = pr[0].auntOp()
-	//	fmt.Printf("rehash %04x\n", sib[0].data[:4])
+	//	fmt.Printf("rehashone %x, %x -> %04x\n",
+	//		pr[0].niece[0].data[:4], pr[0].niece[1].data[:4], sib[0].data[:4])
 	pr[0].prune()
 
 	return nil

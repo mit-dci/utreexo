@@ -7,7 +7,7 @@ import (
 )
 
 func TestRandPollard(t *testing.T) {
-	rand.Seed(4)
+	rand.Seed(2222)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -54,11 +54,11 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		f2, err := p.toFull()
-		if err != nil {
-			return err
-		}
-		fmt.Printf("postingest %s", f2.ToString())
+		//		f2, err := p.toFull()
+		//		if err != nil {
+		//			return err
+		//		}
+		//		fmt.Printf("postingest %s", f2.ToString())
 		// fmt.Printf("forgetslice %v leaf %v\n", p.forget, p.rememberLeaf)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
@@ -73,11 +73,11 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		// f2, err := p.toFull()
-		// if err != nil {
-		// 	return err
-		// }
-		// fmt.Printf("postadd %s", f2.ToString())
+		f2, err := p.toFull()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("pol postadd %s", f2.ToString())
 		//		fmt.Printf("forgetslice %v\n", p.forget)
 		// if p.rememberLeaf {
 		//			return fmt.Errorf("nobody should be memorable")
