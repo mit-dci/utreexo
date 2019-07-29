@@ -122,6 +122,8 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 		delete(f.positionMap, f.forest[dpos].Mini())
 	}
 
+	postTops, postTopHeights := getTopsReverse(f.numLeaves-uint64(len(dels)), f.height)
+
 	f.currentUndo = []undo{}
 
 	var moveDirt []uint64
@@ -144,13 +146,17 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 			lmvd := len(moveDirt)
 			fmt.Printf("dirt %d, lmvd %d\n", dirt, lmvd)
 
-			// the dirt returned by moveNode is always a parent so can never be 0
-			if inForestHeight(dirt, f.numLeaves, f.height) &&
+			// the dirt returned by moveSubtree is always a parent so can never be 0
+			if moves[0].to != postTops[0] &&
+				//	if inForestHeight(dirt, f.numLeaves, f.height) &&
 				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
 				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
 				moveDirt = append(moveDirt, dirt)
 				fmt.Printf("appended dirt %d\n", dirt)
+			} else {
+				fmt.Printf("mv skip dirt at %d\n", dirt)
 			}
+
 			moves = moves[1:]
 		}
 
@@ -170,7 +176,7 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 		// hash dirt for this height
 		curDirt := mergeSortedSlices(moveDirt, hashDirt)
 		moveDirt, hashDirt = []uint64{}, []uint64{}
-		// if we're not at the top, and there's curDirty left, hash
+		// if we're not at the top, and there's curDirt remaining, hash
 		if h < f.height-1 {
 			fmt.Printf("h %d curDirt %v\n", h, curDirt)
 			for _, pos := range curDirt {
@@ -185,12 +191,20 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 				parPos := up1(pos, f.height)
 				lhd := len(hashDirt)
 				// add parent to end of dirty slice if it's not already there
-				if inForestHeight(parPos, f.numLeaves, f.height) &&
+				if pos != postTops[0] &&
+					//	if inForestHeight(parPos, f.numLeaves, f.height) &&
 					(lhd == 0 || hashDirt[lhd-1] != parPos) {
 					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
 					hashDirt = append(hashDirt, parPos)
+				} else {
+					fmt.Printf("hash skip dirt from %d\n", pos)
 				}
 			}
+		}
+
+		if len(postTopHeights) > 0 && postTopHeights[0] == h { // pop when done with height
+			postTopHeights = postTopHeights[1:]
+			postTops = postTops[1:]
 		}
 	}
 
@@ -442,10 +456,6 @@ func (f *Forest) reMap(destHeight uint8) error {
 			if ok {
 				f.forest[pos+x] = src
 			}
-			// not 100% sure this is needed.  Maybe for dirty up higher
-			if f.dirtyMap[(pos>>1)+x] {
-				f.dirtyMap[pos+x] = true
-			}
 		}
 		pos += reach
 		reach >>= 1
@@ -457,15 +467,9 @@ func (f *Forest) reMap(destHeight uint8) error {
 		// here you may actually need / want to delete?  but numleaves
 		// should still ensure that you're not reading over the edge...
 		f.forest[x] = empty
-		delete(f.dirtyMap, x)
 	}
 
 	f.height = destHeight
-
-	//	fmt.Printf("forest slice len %d\n", len(f.forest))
-	//	s := f.ToString()
-	//	fmt.Printf(s)
-
 	return nil
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 func TestRandPollard(t *testing.T) {
-	rand.Seed(2222)
+	rand.Seed(531)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -36,7 +36,7 @@ func pollardRandomRemember(blocks int32) error {
 
 	sn := NewSimChain()
 	sn.durationMask = 0x07
-	sn.lookahead = 4
+	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
 		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 

@@ -184,6 +184,10 @@ func cousin(position uint64) uint64 {
 	return position ^ 2
 }
 
+// TODO both inForest and inForestHeight can probably be done better a different way.
+// We're only checking that something is *above* the forest, as these only get called
+// when hashes occur.  Maybe could do isAbove or something & it's simpler...
+
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves
 // (same as childmany)
@@ -191,27 +195,6 @@ func inForest(pos, numLeaves uint64) bool {
 	// quick yes:
 	if pos < numLeaves {
 		return true
-	}
-
-	h := treeHeight(numLeaves)
-	marker := uint64(1 << h)
-	mask := (marker << 1) - 1
-	if pos >= mask {
-		return false
-	}
-	for pos&marker != 0 {
-		pos = ((pos << 1) & mask) | 1
-	}
-	return pos < numLeaves
-}
-
-func inForestHeight(pos, numLeaves uint64, height uint8) bool {
-	if pos < numLeaves {
-		return true
-	}
-
-	if numLeaves < 1<<height {
-		fmt.Printf("too high\n")
 	}
 
 	h := treeHeight(numLeaves)
