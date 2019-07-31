@@ -184,9 +184,9 @@ func cousin(position uint64) uint64 {
 	return position ^ 2
 }
 
-// TODO both inForest and inForestHeight can probably be done better a different way.
-// We're only checking that something is *above* the forest, as these only get called
-// when hashes occur.  Maybe could do isAbove or something & it's simpler...
+// TODO  inForest can probably be done better a different way.
+// do we really need this at all?  Only used for too-high detection
+// for setting dirt.
 
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves

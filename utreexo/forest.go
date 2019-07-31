@@ -122,8 +122,6 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 		delete(f.positionMap, f.forest[dpos].Mini())
 	}
 
-	postTops, postTopHeights := getTopsReverse(f.numLeaves-uint64(len(dels)), f.height)
-
 	f.currentUndo = []undo{}
 
 	var moveDirt []uint64
@@ -134,6 +132,7 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 	var stashSlice []tStash
 
 	for h := uint8(0); h < f.height; h++ {
+
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, f.height) == h {
 			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
@@ -147,9 +146,7 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 			fmt.Printf("dirt %d, lmvd %d\n", dirt, lmvd)
 
 			// the dirt returned by moveSubtree is always a parent so can never be 0
-			if moves[0].to != postTops[0] &&
-				//	if inForestHeight(dirt, f.numLeaves, f.height) &&
-				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
+			if lmvd == 0 || moveDirt[lmvd-1] != dirt {
 				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
 				moveDirt = append(moveDirt, dirt)
 				fmt.Printf("appended dirt %d\n", dirt)
@@ -184,28 +181,24 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 				lpos := child(pos, f.height)
 				fmt.Printf("%d %x, %d %x\n",
 					lpos, f.forest[lpos][:4], lpos^1, f.forest[lpos^1][:4])
-
-				f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
-				f.HistoricHashes++
-
-				parPos := up1(pos, f.height)
-				lhd := len(hashDirt)
-				// add parent to end of dirty slice if it's not already there
-				if pos != postTops[0] &&
-					//	if inForestHeight(parPos, f.numLeaves, f.height) &&
-					(lhd == 0 || hashDirt[lhd-1] != parPos) {
-					fmt.Printf("for h %d hash %d to hashDirt \n", h, parPos)
-					hashDirt = append(hashDirt, parPos)
+				if f.forest[lpos] == empty || f.forest[lpos^1] == empty {
+					f.forest[pos] = empty
+					fmt.Printf("clear pos %d due to empty child\n", pos)
 				} else {
-					fmt.Printf("for hash skip dirt from %d\n", pos)
+					f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
+					f.HistoricHashes++
+					parPos := up1(pos, f.height)
+					lhd := len(hashDirt)
+					// add parent to end of dirty slice if it's not already there
+					if lhd == 0 || hashDirt[lhd-1] != parPos {
+						fmt.Printf("for h %d pos %d hash %d to hashDirt \n",
+							h, pos, parPos)
+						hashDirt = append(hashDirt, parPos)
+					}
 				}
 			}
 		}
 
-		if len(postTopHeights) > 0 && postTopHeights[0] == h { // pop when done with height
-			postTopHeights = postTopHeights[1:]
-			postTops = postTops[1:]
-		}
 	}
 
 	// move subtrees from the stash to where they should go
