@@ -185,8 +185,7 @@ func cousin(position uint64) uint64 {
 }
 
 // TODO  inForest can probably be done better a different way.
-// do we really need this at all?  Only used for too-high detection
-// for setting dirt.
+// do we really need this at all?  only used for error detection in descendToPos
 
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves
