@@ -77,6 +77,7 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
+
 		fmt.Printf("pol postadd %s", f2.ToString())
 		//		fmt.Printf("forgetslice %v\n", p.forget)
 		// if p.rememberLeaf {

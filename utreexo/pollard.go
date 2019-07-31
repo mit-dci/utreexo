@@ -120,6 +120,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 // rem deletes stuff from the pollard.  The hard part.
 func (p *Pollard) rem(dels []uint64) error {
+
 	if len(dels) == 0 {
 		return nil // that was quick
 	}
@@ -134,6 +135,9 @@ func (p *Pollard) rem(dels []uint64) error {
 	// take any cpu time or ram though.
 	oldTopIdx := len(p.tops) - 1
 	nexTopIdx := len(nexTops) - 1
+
+	//	postTops, postTopHeights :=
+	//		getTopsReverse(nextNumLeaves, treeHeight(nextNumLeaves))
 
 	stash, moves := removeTransform(dels, p.numLeaves, ph)
 	// TODO how about instead of a slice of uint64s, you just
@@ -152,6 +156,11 @@ func (p *Pollard) rem(dels []uint64) error {
 			nexTops[nexTopIdx] = p.tops[oldTopIdx]
 		}
 
+		//		if len(postTopHeights) > 0 && postTopHeights[0] == h { // pop when done with height
+		//			postTopHeights = postTopHeights[1:]
+		//			postTops = postTops[1:]
+		//		}
+
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, ph) == h {
 			if len(p.tops) == 0 || p.tops[0] == nil {
@@ -164,11 +173,12 @@ func (p *Pollard) rem(dels []uint64) error {
 			}
 			dirt := up1(moves[0].to, ph)
 			lmvd := len(moveDirt)
-			// the dirt returned by moveNode is always a parent so can never be 0
-			if inForest(dirt, p.numLeaves) &&
-				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
+			// the dirt returned by moveNode is always a parent
+			if lmvd == 0 || moveDirt[lmvd-1] != dirt {
 				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
 				moveDirt = append(moveDirt, dirt)
+			} else {
+				fmt.Printf("pol skip %d  \n", dirt)
 			}
 			moves = moves[1:]
 		}
@@ -205,6 +215,8 @@ func (p *Pollard) rem(dels []uint64) error {
 		if h < ph-1 {
 			fmt.Printf("h %d curDirt %v\n", h, curDirt)
 			for _, pos := range curDirt {
+				//				if
+
 				err := p.reHashOne(pos)
 				if err != nil {
 					return fmt.Errorf("rem rehash %s", err.Error())
@@ -217,7 +229,8 @@ func (p *Pollard) rem(dels []uint64) error {
 					fmt.Printf("pol h %d hash %d to hashDirt \n", h, parPos)
 					hashDirt = append(hashDirt, parPos)
 				} else {
-					fmt.Printf("pol skip %d\n", parPos)
+					fmt.Printf("pol skip %d infor %v\n",
+						parPos, inForest(parPos, p.numLeaves))
 				}
 			}
 		}
@@ -228,6 +241,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		if (1<<h)&p.numLeaves != 0 {
 			oldTopIdx--
 		}
+
 	}
 	p.numLeaves = nextNumLeaves
 	p.tops = nexTops
@@ -273,29 +287,6 @@ func (p *Pollard) moveNode(m move) error {
 	} else {
 		prto[0].chop() // need this
 	}
-
-	// now hash (if there's something above) (Which there always will be...?)
-	/*
-		if len(prto) > 1 { // true unless moving to a top? in which case just return?
-			if sibto[1] == nil { // create & link if it doesn't exist
-				// fmt.Printf("mv make parent node at %d\n", up1(to, p.height()))
-				sibto[1] = new(polNode)
-				if prto[2] != nil {
-					prto[2].niece[(m.to>>1)&1] = sibto[1]
-				}
-			}
-			p.hashesEver++
-			sibto[1].data = prto[1].auntOp()
-			//		fmt.Printf("compute %04x at %d evap tgt %v sib %v\n",
-			//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
-			// after auntopping, delete nodes.
-			if m.to < p.numLeaves {
-				prto[1].leafPrune()
-			} else {
-				prto[1].prune()
-			}
-		}*/
-
 	return nil
 }
 
@@ -339,11 +330,8 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
 	// need to figure out offsets for smaller trees.
 
-	//	nh := detectHeight(pos, p.height())
-
 	if !inForest(pos, p.numLeaves) {
-		//	if (nh == 0 && pos >= p.numLeaves) || pos >= (p.numLeaves*2)-1 {
-		// need better check for "there isn't a node there"
+		//	if pos >= (p.numLeaves*2)-1 {
 		return nil, nil,
 			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)
 	}
@@ -387,10 +375,14 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
 func (p *Pollard) toFull() (*Forest, error) {
+
 	ff := NewForest()
 	ff.height = p.height()
 	ff.numLeaves = p.numLeaves
 	ff.forest = make([]Hash, 2<<ff.height)
+	if p.numLeaves == 0 {
+		return ff, nil
+	}
 
 	//	for topIdx, top := range p.tops {
 	//	}
