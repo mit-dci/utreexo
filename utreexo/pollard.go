@@ -137,14 +137,16 @@ func (p *Pollard) rem(dels []uint64) error {
 	oldTopIdx := len(p.tops) - 1
 	nexTopIdx := len(nexTops) - 1
 
-	//	postTops, postTopHeights :=
-	//		getTopsReverse(nextNumLeaves, treeHeight(nextNumLeaves))
-
 	stash, moves := removeTransform(dels, p.numLeaves, ph)
+
+	fmt.Printf("stash %v\n", stash)
 	// TODO how about instead of a slice of uint64s, you just
 	// have a slice of pointers?  Then less descent.
 	var moveDirt []uint64
 	var hashDirt []uint64
+
+	tops, topHeights := getTopsReverse(p.numLeaves, ph)
+	var curRowTop uint64
 
 	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
 	//		ph, p.numLeaves, len(dels), nextNumLeaves, len(rawStash), len(rawMoves))
@@ -157,11 +159,36 @@ func (p *Pollard) rem(dels []uint64) error {
 			nexTops[nexTopIdx] = p.tops[oldTopIdx]
 		}
 
-		//		if len(postTopHeights) > 0 && postTopHeights[0] == h { // pop when done with height
-		//			postTopHeights = postTopHeights[1:]
-		//			postTops = postTops[1:]
-		//		}
+		if topHeights[0] == h {
+			curRowTop = tops[0]
+			topHeights = topHeights[1:]
+			tops = tops[1:]
+		} else {
+			curRowTop = 0
+		}
 
+		// hash first
+		curDirt := mergeSortedSlices(moveDirt, hashDirt)
+		moveDirt, hashDirt = []uint64{}, []uint64{}
+		// if there's curDirt, hash
+		fmt.Printf("h %d curDirt %v\n", h, curDirt)
+		for _, pos := range curDirt {
+			err := p.reHashOne(pos)
+			if err != nil {
+				return fmt.Errorf("rem rehash %s", err.Error())
+			}
+			parPos := up1(pos, ph)
+			lhd := len(hashDirt)
+			// add dirt unless:
+			// this node is a current top, or already in the dirt slice
+			if pos != curRowTop &&
+				(lhd == 0 || hashDirt[lhd-1] != parPos) {
+				fmt.Printf("pol h %d hash %d to hashDirt \n", h, parPos)
+				hashDirt = append(hashDirt, parPos)
+			}
+		}
+
+		fmt.Printf("this row top %d\n", curRowTop)
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, ph) == h {
 			if len(p.tops) == 0 || p.tops[0] == nil {
@@ -188,7 +215,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		for len(stash) > 0 &&
 			detectHeight(stash[0].to, ph) == h {
 			// populate top; stashes always become tops
-			// fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
+			fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
 			pr, sibs, err := p.descendToPos(stash[0].from)
 			if err != nil {
 				return fmt.Errorf("rem stash %s", err.Error())
@@ -210,31 +237,6 @@ func (p *Pollard) rem(dels []uint64) error {
 			stash = stash[1:]
 		}
 
-		curDirt := mergeSortedSlices(moveDirt, hashDirt)
-		moveDirt, hashDirt = []uint64{}, []uint64{}
-		// if we're not at the top, and there's curDirty left, hash
-		if h < ph-1 {
-			fmt.Printf("h %d curDirt %v\n", h, curDirt)
-			for _, pos := range curDirt {
-				//				if
-
-				err := p.reHashOne(pos)
-				if err != nil {
-					return fmt.Errorf("rem rehash %s", err.Error())
-				}
-				parPos := up1(pos, ph)
-				lhd := len(hashDirt)
-				// add parent to end of dirty slice if it's not already there
-				if inForest(parPos, p.numLeaves) &&
-					(lhd == 0 || hashDirt[lhd-1] != parPos) {
-					fmt.Printf("pol h %d hash %d to hashDirt \n", h, parPos)
-					hashDirt = append(hashDirt, parPos)
-				} else {
-					fmt.Printf("pol skip %d infor %v\n",
-						parPos, inForest(parPos, p.numLeaves))
-				}
-			}
-		}
 		// if there's a 1 in the nextNum, decrement top number
 		if (1<<h)&nextNumLeaves != 0 {
 			nexTopIdx--
