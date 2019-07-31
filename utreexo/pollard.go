@@ -215,8 +215,10 @@ func (p *Pollard) rem(dels []uint64) error {
 				// add parent to end of dirty slice if it's not already there
 				if inForest(parPos, p.numLeaves) &&
 					(lhd == 0 || hashDirt[lhd-1] != parPos) {
-					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
+					fmt.Printf("pol h %d hash %d to hashDirt \n", h, parPos)
 					hashDirt = append(hashDirt, parPos)
+				} else {
+					fmt.Printf("pol skip %d\n", parPos)
 				}
 			}
 		}
@@ -314,13 +316,16 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	//		pos, len(pr), len(sib), pr[0].niece)
 	if sib[0] == nil {
 		sib[0] = new(polNode)
+		if len(pr) < 2 || pr[1] == nil {
+			return fmt.Errorf("rehashone sib[0] nil pr[1] nil")
+		}
 		pr[1].niece[pos&1] = sib[0]
 		//		return fmt.Errorf("sib[0] nil")
 	}
 	p.hashesEver++
 	sib[0].data = pr[0].auntOp()
-	//	fmt.Printf("rehashone %x, %x -> %04x\n",
-	//		pr[0].niece[0].data[:4], pr[0].niece[1].data[:4], sib[0].data[:4])
+	fmt.Printf("rehashone %x, %x -> %04x\n",
+		pr[0].niece[0].data[:4], pr[0].niece[1].data[:4], sib[0].data[:4])
 	pr[0].prune()
 
 	return nil

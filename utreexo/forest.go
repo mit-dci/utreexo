@@ -194,10 +194,10 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 				if pos != postTops[0] &&
 					//	if inForestHeight(parPos, f.numLeaves, f.height) &&
 					(lhd == 0 || hashDirt[lhd-1] != parPos) {
-					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
+					fmt.Printf("for h %d hash %d to hashDirt \n", h, parPos)
 					hashDirt = append(hashDirt, parPos)
 				} else {
-					fmt.Printf("hash skip dirt from %d\n", pos)
+					fmt.Printf("for hash skip dirt from %d\n", pos)
 				}
 			}
 		}
