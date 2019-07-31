@@ -120,7 +120,7 @@ func fixedPollard(leaves int32) error {
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
-	for j, _ := range adds {
+	for j := range adds {
 		adds[j].Hash[1] = uint8(leafCounter)
 		adds[j].Hash[2] = uint8(leafCounter >> 8)
 		adds[j].Hash[3] = uint8(leafCounter >> 16)

@@ -40,7 +40,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 				node.niece[lr] = new(polNode)
 				node.niece[lr].data = proofMap[pos]
 				if node.niece[lr].data == empty {
-					return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]\n",
+					return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]",
 						h, node.data[:4], pos, lr)
 				}
 				// fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
@@ -65,7 +65,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 			node.niece[lr^1] = new(polNode)
 			node.niece[lr^1].data = proofMap[pos^1]
 			if node.niece[lr^1].data == empty {
-				return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]\n",
+				return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]",
 					h, node.data[:4], pos, lr^1)
 			}
 			// p.overWire++ // doesn't count...? got it for free?

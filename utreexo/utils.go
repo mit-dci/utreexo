@@ -42,7 +42,7 @@ func DedupeHashSlices(as *[]LeafTXO, bs *[]Hash) {
 	*bs = bnew
 }
 
-// Popcount returns the number of 1 bits in a uint64
+// PopCount returns the number of 1 bits in a uint64
 func PopCount(i uint64) uint8 {
 	var count uint8
 	for j := 0; j < 64; j++ {
@@ -335,7 +335,7 @@ func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 	return
 }
 
-// ToString prints out the whole thing.  Only viable for small forests
+// BinString prints out the whole thing.  Only viable for small forests
 func BinString(leaves uint64) string {
 	fh := treeHeight(leaves)
 
@@ -385,7 +385,7 @@ func BinString(leaves uint64) string {
 	return s
 }
 
-// 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
+// BtU32 : 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
 func BtU32(b []byte) uint32 {
 	if len(b) != 4 {
 		fmt.Printf("Got %x to BtU32 (%d bytes)\n", b, len(b))
@@ -397,14 +397,14 @@ func BtU32(b []byte) uint32 {
 	return i
 }
 
-// uint32 to 4 bytes.  Always works.
+// U32tB : uint32 to 4 bytes.  Always works.
 func U32tB(i uint32) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, i)
 	return buf.Bytes()
 }
 
-// 8 bytes to uint64.  returns ffff. if it doesn't work.
+// BtU64 : 8 bytes to uint64.  returns ffff. if it doesn't work.
 func BtU64(b []byte) uint64 {
 	if len(b) != 8 {
 		fmt.Printf("Got %x to BtU64 (%d bytes)\n", b, len(b))
@@ -416,7 +416,7 @@ func BtU64(b []byte) uint64 {
 	return i
 }
 
-// uint64 to 8 bytes.  Always works.
+// U64tB : uint64 to 8 bytes.  Always works.
 func U64tB(i uint64) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, i)

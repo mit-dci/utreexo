@@ -7,6 +7,7 @@ package utreexo
 // ranges instead.  That might start looking pretty contrived here, but
 // I'm still going to try it.
 
+// Pollard :
 type Pollard struct {
 	numLeaves uint64 // number of leaves in the pollard forest
 

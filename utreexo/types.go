@@ -6,15 +6,19 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
+// Hash :
 type Hash [32]byte
 
+// Mini :
 func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])
 	return
 }
 
+// MiniHash :
 type MiniHash [12]byte
 
+// HashFromString :
 func HashFromString(s string) Hash {
 	return blake2b.Sum256([]byte(s))
 }
@@ -23,12 +27,13 @@ type move struct {
 	from, to uint64
 }
 
+// Node :
 type Node struct {
 	Pos uint64
 	Val Hash
 }
 
-// LeadTXO 's have a hash and a expiry date (block when that utxo gets used)
+// LeafTXO 's have a hash and a expiry date (block when that utxo gets used)
 type LeafTXO struct {
 	Hash
 	Duration int32
@@ -58,7 +63,7 @@ func xParent(l, r Hash) Hash {
 		panic("got a right empty here. ")
 	}
 
-	for i, _ := range l {
+	for i := range l {
 		x[i] = l[i] ^ r[i]
 	}
 	// just xor, it's faster and works the same if just testing
@@ -76,6 +81,7 @@ type SimChain struct {
 	lookahead    int32
 }
 
+// NewSimChain :
 func NewSimChain() *SimChain {
 	var s SimChain
 	s.ttlMap = make(map[int32][]Hash)
@@ -83,13 +89,14 @@ func NewSimChain() *SimChain {
 	return &s
 }
 
+// NextBlock :
 func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 	b := s.blockHeight
 	// they're all forgettable
 	adds := make([]LeafTXO, numAdds)
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
-	for j, _ := range adds {
+	for j := range adds {
 		adds[j].Hash[0] = uint8(s.leafCounter)
 		adds[j].Hash[1] = uint8(s.leafCounter >> 8)
 		adds[j].Hash[2] = uint8(s.leafCounter >> 16)

@@ -17,6 +17,7 @@ addressing.  It also might work well for on-disk serialization.
 There might be a better / optimal way to do this but it seems OK for now.
 */
 
+// Forest :
 type Forest struct {
 	numLeaves uint64 // number of leaves in the forest (bottom row)
 	// the full tree doesn't store the top roots as it has everything.  Can be
@@ -66,6 +67,7 @@ type Forest struct {
 	TimeInVerify time.Duration
 }
 
+// NewForest :
 func NewForest() *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
@@ -87,6 +89,7 @@ const bridgeVerbose = false
 // of the forest
 var empty [32]byte
 
+// Remove :
 func (f *Forest) Remove(dels []uint64) error {
 
 	err := f.removeInternal(dels)
@@ -286,7 +289,7 @@ func (f *Forest) removeInternal(dels []uint64) error {
 		// no deletion, no root: nothing to do
 
 		if len(dels) > 1 {
-			return fmt.Errorf("%d deletions in root phase\n", len(dels))
+			return fmt.Errorf("%d deletions in root phase", len(dels))
 		}
 
 		// check if a root is present on this floor
@@ -680,7 +683,7 @@ func (f *Forest) reHash() error {
 	if bridgeVerbose {
 		fmt.Printf("tops: %v\n", tops)
 		fmt.Printf("rehash %d dirty: ", len(f.dirtyMap))
-		for p, _ := range f.dirtyMap {
+		for p := range f.dirtyMap {
 			fmt.Printf(" %d", p)
 		}
 		fmt.Printf("\n")
@@ -691,7 +694,7 @@ func (f *Forest) reHash() error {
 	// chop it up into rows
 	// For more fancyness, use multiple goroutines for the hash part
 	dirtySlice := make([]uint64, len(f.dirtyMap))
-	for pos, _ := range f.dirtyMap {
+	for pos := range f.dirtyMap {
 		dirtySlice[i] = pos
 		i++
 	}
@@ -865,13 +868,14 @@ func (f *Forest) GetTops() []Hash {
 	topposs, _ := getTopsReverse(f.numLeaves, f.height)
 	tops := make([]Hash, len(topposs))
 
-	for i, _ := range tops {
+	for i := range tops {
 		tops[i] = f.forest[topposs[i]]
 	}
 
 	return tops
 }
 
+// Stats :
 func (f *Forest) Stats() string {
 
 	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
