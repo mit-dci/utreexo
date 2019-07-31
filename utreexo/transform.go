@@ -108,6 +108,7 @@ func removeTransform(
 			delPos = dels[0]
 			haveDel = true
 		}
+		fmt.Printf("haveDel %v rootpresent %v\n", haveDel, rootPresent)
 
 		if haveDel && rootPresent {
 			// deroot, move to sibling

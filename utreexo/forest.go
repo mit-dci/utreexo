@@ -121,36 +121,52 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 
 	f.currentUndo = []undo{}
 
-	var moveDirt []uint64
-	var hashDirt []uint64
-
+	var moveDirt, hashDirt []uint64
 	stashes, moves := removeTransform(dels, f.numLeaves, f.height)
 
 	var stashSlice []tStash
 
 	for h := uint8(0); h < f.height; h++ {
+		// hash first for this height
+		curDirt := mergeSortedSlices(moveDirt, hashDirt)
+		moveDirt, hashDirt = []uint64{}, []uint64{}
+		// if we're not at the top, and there's curDirt remaining, hash
+		fmt.Printf("h %d curDirt %v\n", h, curDirt)
+		for _, pos := range curDirt {
+			lpos := child(pos, f.height)
+			// fmt.Printf("%d %x, %d %x\n",
+			// lpos, f.forest[lpos][:4], lpos^1, f.forest[lpos^1][:4])
+			if f.forest[lpos] == empty || f.forest[lpos^1] == empty {
+				f.forest[pos] = empty
+				fmt.Printf("clear pos %d due to empty child\n", pos)
+			} else {
+				f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
+				f.HistoricHashes++
+				parPos := up1(pos, f.height)
+				lhd := len(hashDirt)
+				// add parent to end of dirty slice if it's not already there
+				if lhd == 0 || hashDirt[lhd-1] != parPos {
+					fmt.Printf("for h %d pos %d hash %d to hashDirt \n",
+						h, pos, parPos)
+					hashDirt = append(hashDirt, parPos)
+				}
+			}
+		}
 
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, f.height) == h {
-			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
+			// fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
 			err := f.moveSubtree(moves[0])
 			if err != nil {
 				return nil, err
 			}
-
 			dirt := up1(moves[0].to, f.height)
 			lmvd := len(moveDirt)
-			fmt.Printf("dirt %d, lmvd %d\n", dirt, lmvd)
-
 			// the dirt returned by moveSubtree is always a parent so can never be 0
 			if lmvd == 0 || moveDirt[lmvd-1] != dirt {
-				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
+				// fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
 				moveDirt = append(moveDirt, dirt)
-				fmt.Printf("appended dirt %d\n", dirt)
-			} else {
-				fmt.Printf("mv skip dirt at %d\n", dirt)
 			}
-
 			moves = moves[1:]
 		}
 
@@ -165,35 +181,6 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 				stashSlice = append(stashSlice, stash.toTStash(stashes[0].to))
 			}
 			stashes = stashes[1:]
-		}
-
-		// hash dirt for this height
-		curDirt := mergeSortedSlices(moveDirt, hashDirt)
-		moveDirt, hashDirt = []uint64{}, []uint64{}
-		// if we're not at the top, and there's curDirt remaining, hash
-		if h < f.height-1 {
-			fmt.Printf("h %d curDirt %v\n", h, curDirt)
-			for _, pos := range curDirt {
-
-				lpos := child(pos, f.height)
-				fmt.Printf("%d %x, %d %x\n",
-					lpos, f.forest[lpos][:4], lpos^1, f.forest[lpos^1][:4])
-				if f.forest[lpos] == empty || f.forest[lpos^1] == empty {
-					f.forest[pos] = empty
-					fmt.Printf("clear pos %d due to empty child\n", pos)
-				} else {
-					f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
-					f.HistoricHashes++
-					parPos := up1(pos, f.height)
-					lhd := len(hashDirt)
-					// add parent to end of dirty slice if it's not already there
-					if lhd == 0 || hashDirt[lhd-1] != parPos {
-						fmt.Printf("for h %d pos %d hash %d to hashDirt \n",
-							h, pos, parPos)
-						hashDirt = append(hashDirt, parPos)
-					}
-				}
-			}
 		}
 
 	}
