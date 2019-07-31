@@ -158,12 +158,20 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, f.height) == h {
+			cmove := moves[0]
+			if h == 0 {
+				// add to undo list
+				umove := move{from: cmove.to, to: cmove.from}
+				f.currentUndo = append(f.currentUndo,
+					undo{Hash: f.forest[umove.to], move: umove})
+			}
+
 			// fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
-			err := f.moveSubtree(moves[0])
+			err := f.moveSubtree(cmove)
 			if err != nil {
 				return nil, err
 			}
-			dirt := up1(moves[0].to, f.height)
+			dirt := up1(cmove.to, f.height)
 			lmvd := len(moveDirt)
 			// the dirt returned by moveSubtree is always a parent so can never be 0
 			if lmvd == 0 || moveDirt[lmvd-1] != dirt {
