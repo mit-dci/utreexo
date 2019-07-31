@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
+// Proof :
 type Proof struct {
 	Position uint64 // where at the bottom of the tree it sits
 	Payload  Hash   // hash of the thing itself (what's getting proved)
 	Siblings []Hash // slice of siblings up to a root
 }
 
+// Prove :
 func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	starttime := time.Now()
 
@@ -41,7 +43,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	//	fmt.Printf("nl %d proof for %d len %d\n", f.numLeaves, pos, len(pr.Siblings))
 	//	fmt.Printf("\tprove pos %d %x:\n", pos, pr.Payload[:4])
 	// go up and populate the siblings
-	for h, _ := range pr.Siblings {
+	for h := range pr.Siblings {
 
 		pr.Siblings[h] = f.forest[pos^1]
 		if pr.Siblings[h] == empty {
@@ -60,6 +62,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	return pr, nil
 }
 
+// ProveMany :
 func (f *Forest) ProveMany(hs []Hash) ([]Proof, error) {
 	var err error
 	proofs := make([]Proof, len(hs))
@@ -210,7 +213,6 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 
 				// TODO seems that this never happens and can be removed
 				panic("this never happens...?")
-				break
 			}
 			if selfThere {
 				// self position already there; remove as children are known
@@ -251,6 +253,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	return bp, nil
 }
 
+// VerifyBlockProof :
 func (f *Forest) VerifyBlockProof(bp BlockProof) bool {
 	ok, _ := VerifyBlockProof(bp, f.GetTops(), f.numLeaves, f.height)
 	return ok

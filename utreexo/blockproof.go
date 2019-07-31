@@ -6,6 +6,7 @@ import (
 	"fmt"
 )
 
+// BlockProof :
 type BlockProof struct {
 	Targets []uint64
 	Proof   []Hash
@@ -77,7 +78,7 @@ func FromBytesBlockProof(b []byte) (BlockProof, error) {
 		return bp, err
 	}
 	bp.Targets = make([]uint64, numTargets)
-	for i, _ := range bp.Targets {
+	for i := range bp.Targets {
 		err := binary.Read(buf, binary.BigEndian, &bp.Targets[i])
 		if err != nil {
 			return bp, err
@@ -90,7 +91,7 @@ func FromBytesBlockProof(b []byte) (BlockProof, error) {
 	}
 	bp.Proof = make([]Hash, remaining/32)
 
-	for i, _ := range bp.Proof {
+	for i := range bp.Proof {
 		copy(bp.Proof[i][:], buf.Next(32))
 	}
 	return bp, nil
@@ -208,7 +209,7 @@ func VerifyBlockProof(
 	return true, proofmap
 }
 
-// reconstruct takes a number of leaves and height, and turns a block proof back
+// Reconstruct takes a number of leaves and height, and turns a block proof back
 // into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
 // bp.Targets
 func (bp *BlockProof) Reconstruct(
@@ -254,7 +255,7 @@ func (bp *BlockProof) Reconstruct(
 
 		// there should be 2 proofs left then
 		if len(bp.Proof) < 2 {
-			return nil, fmt.Errorf("only 1 proof left but need 2 for %d\n",
+			return nil, fmt.Errorf("only 1 proof left but need 2 for %d",
 				targets[0])
 		}
 

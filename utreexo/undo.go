@@ -17,7 +17,7 @@ type blockUndo struct {
 	undos []undo
 }
 
-// GetTops returns all the tops of the trees
+// Undo :
 func (f *Forest) Undo(bu blockUndo) error {
 
 	return nil

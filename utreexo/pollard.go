@@ -17,6 +17,7 @@ func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 	return nil
 }
 
+// Stats :
 func (p *Pollard) Stats() string {
 	s := fmt.Sprintf("pol nl %d tops %d he %d re %d ow %d \n",
 		p.numLeaves, len(p.tops), p.hashesEver, p.rememberEver, p.overWire)
@@ -169,7 +170,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, ph) == h {
 			if len(p.tops) == 0 || p.tops[0] == nil {
-				return fmt.Errorf("no tops...")
+				return fmt.Errorf("no tops")
 			}
 			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
 			err := p.moveNode(moves[0])
@@ -268,7 +269,7 @@ func (p *Pollard) moveNode(m move) error {
 
 	// build out full branch to target if it's not populated
 	// I think this efficient / never creates usless nodes but not sure..?
-	for i, _ := range sibto {
+	for i := range sibto {
 		tgtLR := (m.to >> uint8(i)) & 1
 		if sibto[i] == nil {
 			sibto[i] = new(polNode)

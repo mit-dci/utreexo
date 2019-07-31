@@ -14,7 +14,7 @@ func Test2Fwd1Back(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 
-		for j, _ := range adds {
+		for j := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0
 			adds[j].Hash[1] = uint8(absidx)
 			adds[j].Hash[3] = 0xaa
@@ -90,7 +90,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	f := NewForest()
 	adds := make([]LeafTXO, nAdds)
 
-	for j, _ := range adds {
+	for j := range adds {
 		adds[j].Hash[0] = uint8(j>>8) | 0xa0
 		adds[j].Hash[1] = uint8(j)
 		adds[j].Hash[3] = 0xaa
