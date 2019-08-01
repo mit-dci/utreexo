@@ -1,0 +1,13 @@
+language: go
+
+go:
+  - 1.x
+
+install:
+  - go get -u golang.org/x/lint/golint
+  - go get -u golang.org/x/crypto/blake2b
+
+script:
+  - test -z "`gofmt -l .`"
+  - test -z "`golint ./utreexo/...`"
+  - go test -v ./utreexo/...
