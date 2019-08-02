@@ -44,14 +44,15 @@ func DedupeHashSlices(as *[]LeafTXO, bs *[]Hash) {
 
 // PopCount returns the number of 1 bits in a uint64
 func PopCount(i uint64) uint8 {
-	var count uint8
-	for j := 0; j < 64; j++ {
-		if i&1 == 1 {
-			count++
-		}
-		i >>= 1
-	}
-	return count
+	// https://en.wikipedia.org/wiki/Hamming_weight
+	// put count of each 2 bits into those 2 bits
+	i -= (i >> 1) & 0x5555555555555555
+	// put count of each 4 bits into those 4 bits
+	i = (i & 0x3333333333333333) + ((i >> 2) & 0x3333333333333333)
+	// put count of each 8 bits into those 8 bits
+	i = (i + (i >> 4)) & 0x0f0f0f0f0f0f0f0f
+	// returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24) + ...
+	return uint8((i * 0x0101010101010101) >> 56)
 }
 
 // ExtractTwins takes a slice of ints and extracts the adjacent ints
