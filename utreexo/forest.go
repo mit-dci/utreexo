@@ -48,8 +48,6 @@ type Forest struct {
 	// only odd nodes should ever get dirty
 	dirtyMap map[uint64]bool
 
-	currentUndo []undo
-
 	// -------------------- following are just for testing / benchmarking
 	// how many hashes this forest has computed
 	HistoricHashes uint64
@@ -92,37 +90,35 @@ const bridgeVerbose = true
 var empty [32]byte
 
 // Remove :
-func (f *Forest) Remove(dels []uint64) ([]undo, error) {
+func (f *Forest) Remove(dels []uint64) error {
 
-	undos, err := f.removev2(dels)
+	err := f.removev2(dels)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return undos, nil
+	return nil
 }
 
 // rewriting the remove func here then can delete the old one.
 // the old one is just too messy.
-func (f *Forest) removev2(dels []uint64) ([]undo, error) {
+func (f *Forest) removev2(dels []uint64) error {
 
 	if uint64(len(dels)) > f.numLeaves {
-		return nil, fmt.Errorf("%d deletions but forest has %d leaves",
+		return fmt.Errorf("%d deletions but forest has %d leaves",
 			len(dels), f.numLeaves)
 	}
 
 	// check that all dels are there & mark for deletion
 	for _, dpos := range dels {
 		if dpos > f.numLeaves {
-			return nil, fmt.Errorf(
+			return fmt.Errorf(
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 		// clear all entries from positionMap as they won't be needed any more
 		fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
 		delete(f.positionMap, f.forest[dpos].Mini())
 	}
-
-	f.currentUndo = []undo{}
 
 	var moveDirt, hashDirt []uint64
 	stashes, moves, _ := transformLeafUndo(dels, f.numLeaves, f.height)
@@ -161,15 +157,15 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 			cmove := moves[0]
 			if h == 0 {
 				// add to undo list
-				umove := move{from: cmove.to, to: cmove.from}
-				f.currentUndo = append(f.currentUndo,
-					undo{Hash: f.forest[umove.to], move: umove})
+				// umove := move{from: cmove.to, to: cmove.from}
+				// f.currentUndo = append(f.currentUndo,
+				// undo{Hash: f.forest[umove.to], move: umove})
 			}
 
 			// fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
 			err := f.moveSubtree(cmove)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			dirt := up1(cmove.to, f.height)
 			lmvd := len(moveDirt)
@@ -187,7 +183,7 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 				fmt.Printf("stash %d -> %d\n", stashes[0].from, stashes[0].to)
 				stash, err := f.getSubTree(stashes[0].from, true)
 				if err != nil {
-					return nil, fmt.Errorf("stash h %d %s", h, err)
+					return fmt.Errorf("stash h %d %s", h, err)
 				}
 				stashSlice = append(stashSlice, stash.toTStash(stashes[0].to))
 			}
@@ -199,11 +195,11 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 	for _, tstash := range stashSlice {
 		err := f.writeSubtree(rootStash{vals: tstash.vals}, tstash.dest)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	f.numLeaves -= uint64(len(dels))
-	return nil, nil
+	return nil
 }
 
 type rootStash struct {
@@ -258,10 +254,10 @@ func (f *Forest) moveSubtree(m move) error {
 			f.positionMap[f.forest[submove.from].Mini()] = submove.to
 			fmt.Printf("map %x @ %d\n", f.forest[submove.from][:4], submove.to)
 			// store undo data if this is a leaf
-			var u undo
-			u.Hash = f.forest[submove.to]
-			u.move = move{from: submove.to, to: submove.from}
-			f.currentUndo = append(f.currentUndo, u)
+			// var u undo
+			// u.Hash = f.forest[submove.to]
+			// u.move = move{from: submove.to, to: submove.from}
+			// f.currentUndo = append(f.currentUndo, u)
 		}
 
 		// do the actual move
@@ -386,7 +382,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*blockUndo, error) {
 		}
 	}
 
-	_, err := f.removev2(dels)
+	err := f.removev2(dels)
 	if err != nil {
 		return nil, err
 	}
