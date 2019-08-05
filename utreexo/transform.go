@@ -163,9 +163,27 @@ So the move slice can be trimmed of moves of parents.
 notes in forestnotes.txt
 */
 
-func semiExpandTransform(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, error) {
-	return nil, nil, nil
+func transformLeafUndo(
+	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, []move) {
+
+	rStashes, rMoves := removeTransform(dels, numLeaves, fHeight)
+
+	var floor []move
+
+	for _, m := range rMoves {
+		if m.from < numLeaves {
+			floor = append(floor, m)
+		}
+	}
+	for _, s := range rStashes {
+		if s.from < numLeaves {
+			floor = append(floor, s)
+		}
+	}
+
+	fmt.Printf("floor: %v\n", floor)
+
+	return rStashes, rMoves, floor
 }
 
 // ExpandTransform calls removeTransform with the same args, and expands its output.

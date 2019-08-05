@@ -11,9 +11,11 @@ type undo struct {
 	Hash // replace the hash at from with this
 }
 
+// blockUndo is all the data needed to undo a block: number of adds,
+// and all the hashes that got deleted.
 type blockUndo struct {
-	adds  uint32 // how many adds; chop this much off from the right
-	undos []undo
+	adds          uint32 // how many adds; chop this much off from the right
+	deletedHashes []Hash // hashes that were overwritten or deleted
 }
 
 // Undo :

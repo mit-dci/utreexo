@@ -125,7 +125,7 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 	f.currentUndo = []undo{}
 
 	var moveDirt, hashDirt []uint64
-	stashes, moves := removeTransform(dels, f.numLeaves, f.height)
+	stashes, moves, _ := transformLeafUndo(dels, f.numLeaves, f.height)
 
 	var stashSlice []tStash
 
@@ -193,7 +193,6 @@ func (f *Forest) removev2(dels []uint64) ([]undo, error) {
 			}
 			stashes = stashes[1:]
 		}
-
 	}
 
 	// move subtrees from the stash to where they should go
@@ -387,14 +386,12 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*blockUndo, error) {
 		}
 	}
 
-	undos, err := f.removev2(dels)
+	_, err := f.removev2(dels)
 	if err != nil {
 		return nil, err
 	}
 
 	f.addv2(adds)
-
-	bu.undos = undos
 
 	fmt.Printf("done modifying block, added %d\n", len(adds))
 	fmt.Printf("post add %s\n", f.ToString())
