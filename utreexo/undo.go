@@ -7,14 +7,30 @@ although actually it can make sense for non-bridge nodes to undo as well...
 
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
-type blockUndo struct {
+type undoBlock struct {
 	adds      uint32 // how many adds; chop this much off from the right
 	positions []uint64
 	hashes    []Hash // hashes that were overwritten or deleted
 }
 
 // Undo :
-func (f *Forest) Undo(bu blockUndo) error {
+func (f *Forest) Undo(ub undoBlock) error {
 
 	return nil
+}
+
+// BuildUndoData makes an undoBlock from the same data that you'd had to Modify
+func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
+	ub := new(undoBlock)
+	ub.adds = uint32(len(adds))
+
+	ub.positions = dels
+
+	ub.hashes = make([]Hash, len(dels))
+
+	for i, pos := range ub.positions {
+		ub.hashes[i] = f.forest[pos]
+	}
+
+	return ub
 }

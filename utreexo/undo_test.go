@@ -30,7 +30,7 @@ func TestUndo(t *testing.T) {
 func undofixed() error {
 	f := NewForest()
 
-	bu := new(blockUndo)
+	bu := new(undoBlock)
 
 	// p.Minleaves = 0
 

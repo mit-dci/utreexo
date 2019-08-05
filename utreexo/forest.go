@@ -366,9 +366,9 @@ func (f *Forest) addv2(adds []LeafTXO) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*blockUndo, error) {
+func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 
-	bu := new(blockUndo)
+	bu := new(undoBlock)
 	bu.adds = uint32(len(adds))
 
 	delta := uint64(len(adds) - len(dels)) // watch 32/64 bit
