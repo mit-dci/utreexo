@@ -1,5 +1,7 @@
 package utreexo
 
+import "fmt"
+
 /* we need to be able to undo blocks!  for bridge nodes at least.
 compact nodes can just keep old roots.
 although actually it can make sense for non-bridge nodes to undo as well...
@@ -13,8 +15,19 @@ type undoBlock struct {
 	hashes    []Hash // hashes that were overwritten or deleted
 }
 
-// Undo :
+// Undo : undoes one block with the undoBlock
 func (f *Forest) Undo(ub undoBlock) error {
+
+	// first cut off everything added.
+	prevNumLeaves := f.numLeaves - uint64(ub.adds) + uint64(len(ub.positions))
+
+	// run the transform to figure out where things came from
+
+	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
+
+	fmt.Printf("stash %v\n", stash)
+	fmt.Printf("moves %v\n", moves)
+	fmt.Printf("leaf moves %v\n", leaf)
 
 	return nil
 }
