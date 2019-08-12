@@ -165,7 +165,7 @@ notes in forestnotes.txt
 
 func transformLeafUndo(
 	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, []move) {
-
+	fmt.Printf("(undo) call remTr %d %d %d\n", dels, numLeaves, fHeight)
 	rStashes, rMoves := removeTransform(dels, numLeaves, fHeight)
 
 	var floor []move

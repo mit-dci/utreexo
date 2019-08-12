@@ -30,8 +30,6 @@ func TestUndo(t *testing.T) {
 func undoAddDel() error {
 	f := NewForest()
 
-	bu := new(undoBlock)
-
 	// p.Minleaves = 0
 
 	sc := NewSimChain()
@@ -45,7 +43,7 @@ func undoAddDel() error {
 		return err
 	}
 
-	_, err = f.Modify(adds, bp.Targets)
+	err = f.Modify(adds, bp.Targets)
 	if err != nil {
 		return err
 	}
@@ -61,12 +59,18 @@ func undoAddDel() error {
 		return err
 	}
 
-	bu, err = f.Modify(adds, bp.Targets)
+	// before modifying, build undo data.
+	// Should this happen automatically with forest.Modify..?
+	ub := f.BuildUndoData(adds, bp.Targets)
+
+	fmt.Printf(ub.ToString())
+
+	err = f.Modify(adds, bp.Targets)
 	if err != nil {
 		return err
 	}
 
-	err = f.Undo(*bu)
+	err = f.Undo(*ub)
 	if err != nil {
 		return err
 	}
@@ -89,7 +93,7 @@ func undoAddDel() error {
 func undoAddOnly() error {
 	f := NewForest()
 
-	bu := new(undoBlock)
+	ub := new(undoBlock)
 
 	// p.Minleaves = 0
 
@@ -102,7 +106,7 @@ func undoAddOnly() error {
 		return err
 	}
 
-	_, err = f.Modify(adds, bp.Targets)
+	err = f.Modify(adds, bp.Targets)
 	if err != nil {
 		return err
 	}
@@ -116,12 +120,12 @@ func undoAddOnly() error {
 		return err
 	}
 
-	bu, err = f.Modify(adds, bp.Targets)
+	err = f.Modify(adds, bp.Targets)
 	if err != nil {
 		return err
 	}
 
-	err = f.Undo(*bu)
+	err = f.Undo(*ub)
 	if err != nil {
 		return err
 	}

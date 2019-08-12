@@ -62,7 +62,7 @@ func pollardRandomRemember(blocks int32) error {
 		// fmt.Printf("forgetslice %v leaf %v\n", p.forget, p.rememberLeaf)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
-		_, err = f.Modify(adds, bp.Targets)
+		err = f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
 		}
@@ -135,7 +135,7 @@ func fixedPollard(leaves int32) error {
 	}
 
 	// apply adds and deletes to the bridge node (could do this whenever)
-	_, err := f.Modify(adds, nil)
+	err := f.Modify(adds, nil)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func fixedPollard(leaves int32) error {
 		return err
 	}
 
-	_, err = f.Modify(nil, dels)
+	err = f.Modify(nil, dels)
 	if err != nil {
 		return err
 	}

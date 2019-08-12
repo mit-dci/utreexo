@@ -121,7 +121,9 @@ func (f *Forest) removev2(dels []uint64) error {
 	}
 
 	var moveDirt, hashDirt []uint64
-	stashes, moves, _ := transformLeafUndo(dels, f.numLeaves, f.height)
+
+	fmt.Printf("frst call remTr %d %d %d\n", dels, f.numLeaves, f.height)
+	stashes, moves := removeTransform(dels, f.numLeaves, f.height)
 
 	var stashSlice []tStash
 
@@ -366,10 +368,7 @@ func (f *Forest) addv2(adds []LeafTXO) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
-
-	bu := new(undoBlock)
-	bu.adds = uint32(len(adds))
+func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 
 	delta := uint64(len(adds) - len(dels)) // watch 32/64 bit
 	// remap to expand the forest if needed
@@ -378,13 +377,13 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 			1<<f.height, f.numLeaves+delta)
 		err := f.reMap(f.height + 1)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	err := f.removev2(dels)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	f.addv2(adds)
@@ -396,7 +395,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	}
 	fmt.Printf("\n")
 
-	return bu, nil
+	return nil
 }
 
 // reMap changes the height of the forest

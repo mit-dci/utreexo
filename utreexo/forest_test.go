@@ -29,7 +29,7 @@ func Test2Fwd1Back(t *testing.T) {
 		fmt.Printf("\t\t\t########### block %d ##########\n\n", i)
 
 		// add 2
-		_, err := f.Modify(adds, nil)
+		err := f.Modify(adds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,7 +97,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	}
 
 	// add x
-	_, err := f.Modify(adds, nil)
+	err := f.Modify(adds, nil)
 	if err != nil {
 		return err
 	}

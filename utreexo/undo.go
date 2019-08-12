@@ -10,20 +10,32 @@ although actually it can make sense for non-bridge nodes to undo as well...
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
 type undoBlock struct {
-	adds      uint32 // how many adds; chop this much off from the right
-	positions []uint64
-	hashes    []Hash // hashes that were overwritten or deleted
+	adds      uint32   // number of adds in thie block
+	positions []uint64 // position of all deletions this block
+	hashes    []Hash   // hashes that were overwritten or deleted
+}
+
+func (u *undoBlock) ToString() string {
+	s := fmt.Sprintf("undo block %d adds\t", u.adds)
+	s += fmt.Sprintf("%d dels:\t", len(u.positions))
+	if len(u.positions) != len(u.hashes) {
+		s += "error"
+		return s
+	}
+	for i, _ := range u.positions {
+		s += fmt.Sprintf("%d %x,\t", u.positions[i], u.hashes[i][:4])
+	}
+	s += "\n"
+	return s
 }
 
 // Undo : undoes one block with the undoBlock
 func (f *Forest) Undo(ub undoBlock) error {
 
-	// first cut off everything added.
-	prevNumLeaves := f.numLeaves - uint64(ub.adds) + uint64(len(ub.positions))
+	// how many leaves were there at the last block?
+	prevNumLeaves := f.numLeaves + uint64(len(ub.positions)) - uint64(ub.adds)
 
 	// run the transform to figure out where things came from
-	fmt.Printf("undo transform %d rems %d prevleaves %d height\n",
-		len(ub.positions), prevNumLeaves, f.height)
 
 	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
 
@@ -41,7 +53,6 @@ func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
 	ub.adds = uint32(len(adds))
 
 	ub.positions = dels
-
 	ub.hashes = make([]Hash, len(dels))
 
 	for i, pos := range ub.positions {
