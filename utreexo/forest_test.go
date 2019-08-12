@@ -12,7 +12,7 @@ func Test2Fwd1Back(t *testing.T) {
 	var absidx uint32
 	adds := make([]LeafTXO, 2)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 
 		for j := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0
@@ -70,7 +70,7 @@ func Test2Fwd1Back(t *testing.T) {
 // Add and delete variable numbers, repeat.
 // deletions are all on the left side and contiguous.
 func TestAddxDelyLeftFullBlockProof(t *testing.T) {
-	for x := 0; x < 100; x++ {
+	for x := 0; x < 10; x++ {
 		for y := 0; y < x; y++ {
 			err := AddDelFullBlockProof(x, y)
 			if err != nil {

@@ -19,7 +19,7 @@ func TestRandPollard(t *testing.T) {
 	//	}
 
 	//	for z := 0; z < 100; z++ {
-	err := pollardRandomRemember(29)
+	err := pollardRandomRemember(9)
 	if err != nil {
 		t.Fatal(err)
 	}

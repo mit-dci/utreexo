@@ -32,9 +32,9 @@ func (u *undoBlock) ToString() string {
 // Undo : undoes one block with the undoBlock
 func (f *Forest) Undo(ub undoBlock) error {
 
+	prevAdds := uint64(ub.adds)
 	// how many leaves were there at the last block?
-	prevNumLeaves := f.numLeaves + uint64(len(ub.positions)) - uint64(ub.adds)
-
+	prevNumLeaves := f.numLeaves + uint64(len(ub.positions)) - prevAdds
 	// run the transform to figure out where things came from
 
 	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
@@ -43,6 +43,14 @@ func (f *Forest) Undo(ub undoBlock) error {
 	fmt.Printf("stash %v\n", stash)
 	fmt.Printf("moves %v\n", moves)
 	fmt.Printf("leaf moves %v\n", leaf)
+
+	// first undo the leaves added in the last block
+	f.numLeaves -= prevAdds
+	// clear out the hashes themselves (maybe don't need to but seems safer)
+	// leaves dangling parents, but other things do that still...
+	for pos := f.numLeaves; pos < f.numLeaves+prevAdds; pos++ {
+		f.forest[pos] = empty
+	}
 
 	return nil
 }
