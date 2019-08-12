@@ -22,9 +22,12 @@ func (f *Forest) Undo(ub undoBlock) error {
 	prevNumLeaves := f.numLeaves - uint64(ub.adds) + uint64(len(ub.positions))
 
 	// run the transform to figure out where things came from
+	fmt.Printf("undo transform %d rems %d prevleaves %d height\n",
+		len(ub.positions), prevNumLeaves, f.height)
 
 	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
 
+	fmt.Printf("\t\t### UNDO DATA\n")
 	fmt.Printf("stash %v\n", stash)
 	fmt.Printf("moves %v\n", moves)
 	fmt.Printf("leaf moves %v\n", leaf)

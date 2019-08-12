@@ -7,7 +7,7 @@ import (
 )
 
 func TestUndo(t *testing.T) {
-	rand.Seed(9)
+	rand.Seed(6)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -19,7 +19,7 @@ func TestUndo(t *testing.T) {
 	//	}
 
 	//	for z := 0; z < 100; z++ {
-	err := undofixed()
+	err := undoAddDel()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestUndo(t *testing.T) {
 
 }
 
-func undofixed() error {
+func undoAddDel() error {
 	f := NewForest()
 
 	bu := new(undoBlock)
@@ -35,7 +35,66 @@ func undofixed() error {
 	// p.Minleaves = 0
 
 	sc := NewSimChain()
+	sc.durationMask = 0x03
+	adds, delHashes := sc.NextBlock(7)
+	fmt.Printf("\t\tblock %d del %d add %d - %s\n",
+		sc.blockHeight, len(delHashes), len(adds), f.Stats())
 
+	bp, err := f.ProveBlock(delHashes)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Modify(adds, bp.Targets)
+	if err != nil {
+		return err
+	}
+
+	firstTops := f.GetTops()
+
+	adds, delHashes = sc.NextBlock(0)
+	fmt.Printf("\t\tblock %d del %d add %d - %s\n",
+		sc.blockHeight, len(delHashes), len(adds), f.Stats())
+
+	bp, err = f.ProveBlock(delHashes)
+	if err != nil {
+		return err
+	}
+
+	bu, err = f.Modify(adds, bp.Targets)
+	if err != nil {
+		return err
+	}
+
+	err = f.Undo(*bu)
+	if err != nil {
+		return err
+	}
+
+	lastTops := f.GetTops()
+
+	fmt.Printf("tops: ")
+	for i, lt := range lastTops {
+		fmt.Printf("f %04x n %04x ", lt[:4], firstTops[i][:4])
+		// if lt != firstTops[i] {
+		// return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
+		// sc.blockHeight, i, lt, firstTops[i])
+		// }
+	}
+	fmt.Printf("\n")
+
+	return nil
+}
+
+func undoAddOnly() error {
+	f := NewForest()
+
+	bu := new(undoBlock)
+
+	// p.Minleaves = 0
+
+	sc := NewSimChain()
+	sc.durationMask = 0
 	adds, delhashes := sc.NextBlock(5)
 
 	bp, err := f.ProveBlock(delhashes)
@@ -69,6 +128,15 @@ func undofixed() error {
 
 	lastTops := f.GetTops()
 
-	fmt.Printf("firstTops %v\nlastTops %v\n", firstTops, lastTops)
+	fmt.Printf("tops: ")
+	for i, lt := range lastTops {
+		fmt.Printf("f %04x n %04x ", lt[:4], firstTops[i][:4])
+		// if lt != firstTops[i] {
+		// return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
+		// sc.blockHeight, i, lt, firstTops[i])
+		// }
+	}
+	fmt.Printf("\n")
+
 	return nil
 }
