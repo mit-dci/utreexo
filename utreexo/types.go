@@ -85,12 +85,13 @@ type SimChain struct {
 func NewSimChain() *SimChain {
 	var s SimChain
 	s.ttlMap = make(map[int32][]Hash)
-	s.blockHeight = 1
+	s.blockHeight = -1
 	return &s
 }
 
 // NextBlock :
 func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
+	s.blockHeight++
 	b := s.blockHeight
 	// they're all forgettable
 	adds := make([]LeafTXO, numAdds)
@@ -132,6 +133,5 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 	delHashes := s.ttlMap[b]
 	delete(s.ttlMap, b)
 
-	s.blockHeight++
 	return adds, delHashes
 }

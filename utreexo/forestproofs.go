@@ -167,6 +167,9 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 		bp.Targets[i] = pos
 	}
 	// targets need to be sorted because the proof hashes are sorted
+	// NOTE that this is a big deal -- we lose in-block positional information
+	// because of this sorting.  Does that hurt locality or performance?  My
+	// guess is no, but that's untested.
 	sortUint64s(bp.Targets)
 
 	// TODO feels like you could do all this with just slices and no maps...

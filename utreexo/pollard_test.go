@@ -54,6 +54,7 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
+
 		//		f2, err := p.toFull()
 		//		if err != nil {
 		//			return err

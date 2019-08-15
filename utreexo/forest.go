@@ -360,7 +360,6 @@ func (f *Forest) addv2(adds []LeafTXO) {
 		}
 		f.numLeaves++
 	}
-
 	return
 }
 
@@ -494,7 +493,6 @@ func (f *Forest) Stats() string {
 func (f *Forest) ToString() string {
 
 	fh := f.height
-	var empty Hash
 	// tree height should be 6 or less
 	if fh > 6 {
 		return "forest too big to print "

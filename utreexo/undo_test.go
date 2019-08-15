@@ -7,16 +7,16 @@ import (
 )
 
 func TestUndoFixed(t *testing.T) {
-	rand.Seed(6)
-	err := undoAddOnly()
+	rand.Seed(99)
+	//	err := undoAddOnly()
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+
+	err := undoAddDel()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// err := undoAddDel()
-	// if err != nil {
-	// t.Fatal(err)
-	// }
 }
 
 func TestUndoRandom(t *testing.T) {

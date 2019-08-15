@@ -1,6 +1,8 @@
 package utreexo
 
-import "fmt"
+import (
+	"fmt"
+)
 
 /* we need to be able to undo blocks!  for bridge nodes at least.
 compact nodes can just keep old roots.
@@ -37,13 +39,6 @@ func (f *Forest) Undo(ub undoBlock) error {
 	prevNumLeaves := f.numLeaves + uint64(len(ub.positions)) - prevAdds
 	// run the transform to figure out where things came from
 
-	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
-
-	fmt.Printf("\t\t### UNDO DATA\n")
-	fmt.Printf("stash %v\n", stash)
-	fmt.Printf("moves %v\n", moves)
-	fmt.Printf("leaf moves %v\n", leaf)
-
 	// first undo the leaves added in the last block
 	f.numLeaves -= prevAdds
 	// clear out the hashes themselves (maybe don't need to but seems safer)
@@ -52,6 +47,31 @@ func (f *Forest) Undo(ub undoBlock) error {
 		f.forest[pos] = empty
 	}
 
+	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
+
+	fmt.Printf("\t\t### UNDO DATA\n")
+	fmt.Printf("stash %v\n", stash)
+	fmt.Printf("moves %v\n", moves)
+	fmt.Printf("leaf moves %v\n", leaf)
+
+	dirt := make([]uint64, len(moves)*2)
+
+	// move things backwards
+	for i, m := range moves {
+		f.forest[m.from] = f.forest[m.to]
+		f.forest[m.to] = ub.hashes[i]
+		dirt[i*2] = m.from
+		dirt[(i*2)+1] = m.to
+	}
+
+	// rehash above all tos/froms
+	sortUint64s(dirt)
+	fmt.Printf("rehash dirt: %v\n", dirt)
+	err := f.reHash(dirt)
+	if err != nil {
+		return nil
+	}
+	fmt.Printf("post undo %s\n", f.ToString())
 	return nil
 }
 
@@ -60,12 +80,92 @@ func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
 	ub := new(undoBlock)
 	ub.adds = uint32(len(adds))
 
-	ub.positions = dels
+	ub.positions = dels // the deletion positions, in sorted order
 	ub.hashes = make([]Hash, len(dels))
 
+	// populate all the hashes from the forest
 	for i, pos := range ub.positions {
 		ub.hashes[i] = f.forest[pos]
 	}
 
 	return ub
+}
+
+func (f *Forest) reHash(dirt []uint64) error {
+
+	tops, topheights := getTopsReverse(f.numLeaves, f.height)
+
+	dirty2d := make([][]uint64, f.height)
+	h := uint8(0)
+	dirtyRemaining := 0
+	for _, pos := range dirt {
+		dHeight := detectHeight(pos, f.height)
+		// increase height if needed
+		for h < dHeight {
+			h++
+		}
+		if bridgeVerbose {
+			fmt.Printf("h %d\n", h)
+		}
+		dirty2d[h] = append(dirty2d[h], pos)
+		dirtyRemaining++
+	}
+
+	// this is basically the same as VerifyBlockProof.  Could maybe split
+	// it to a separate function to reduce redundant code..?
+	// nah but pretty different beacuse the dirtyMap has stuff that appears
+	// halfway up...
+
+	var currentRow, nextRow []uint64
+
+	// floor by floor
+	for h = uint8(0); h < f.height; h++ {
+		if bridgeVerbose {
+			fmt.Printf("dirty %v\ncurrentRow %v\n", dirty2d[h], currentRow)
+		}
+		// merge nextRow and the dirtySlice.  They're both sorted so this
+		// should be quick.  Seems like a CS class kindof algo but who knows.
+		// Should be O(n) anyway.
+
+		currentRow = mergeSortedSlices(currentRow, dirty2d[h])
+		dirtyRemaining -= len(dirty2d[h])
+		if dirtyRemaining == 0 && len(currentRow) == 0 {
+			// done hashing early
+			break
+		}
+
+		for i, pos := range currentRow {
+			// skip if next is sibling
+			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
+				continue
+			}
+			// also skip if this is a top
+			if pos == tops[0] {
+				continue
+			}
+
+			right := pos | 1
+			left := right ^ 1
+			parpos := up1(left, f.height)
+
+			//				fmt.Printf("bridge hash %d %04x, %d %04x -> %d\n",
+			//					left, leftHash[:4], right, rightHash[:4], parpos)
+			if f.forest[left] == empty || f.forest[right] == empty {
+				f.forest[parpos] = empty
+			} else {
+				par := Parent(f.forest[left], f.forest[right])
+				f.HistoricHashes++
+				f.forest[parpos] = par
+			}
+			nextRow = append(nextRow, parpos)
+		}
+		if topheights[0] == h {
+			tops = tops[1:]
+			topheights = topheights[1:]
+		}
+		currentRow = nextRow
+		nextRow = []uint64{}
+	}
+
+	return nil
 }
