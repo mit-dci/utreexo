@@ -7,7 +7,7 @@ import (
 )
 
 func TestUndoFixed(t *testing.T) {
-	rand.Seed(99)
+	rand.Seed(4)
 	//	err := undoAddOnly()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -21,13 +21,13 @@ func TestUndoFixed(t *testing.T) {
 
 func TestUndoRandom(t *testing.T) {
 	rand.Seed(6)
-	err := undoOneRandom(5)
+	err := undoOnceRandom(5)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func undoOneRandom(blocks int32) error {
+func undoOnceRandom(blocks int32) error {
 	f := NewForest()
 
 	sc := NewSimChain()
@@ -86,7 +86,10 @@ func undoAddDel() error {
 		return err
 	}
 
-	firstTops := f.GetTops()
+	preTops := f.GetTops()
+	for i, h := range preTops {
+		fmt.Printf("pretop %d %x\n", i, h)
+	}
 
 	adds, delHashes = sc.NextBlock(0)
 	fmt.Printf("\t\tblock %d del %d add %d - %s\n",
@@ -106,21 +109,27 @@ func undoAddDel() error {
 	if err != nil {
 		return err
 	}
+	intermediateTops := f.GetTops()
+	for i, h := range intermediateTops {
+		fmt.Printf("intermediateTops %d %x\n", i, h)
+	}
 
 	err = f.Undo(*ub)
 	if err != nil {
 		return err
 	}
 
-	lastTops := f.GetTops()
-
+	postTops := f.GetTops()
+	for i, h := range postTops {
+		fmt.Printf("posttop %d %x\n", i, h)
+	}
 	fmt.Printf("tops: ")
-	for i, lt := range lastTops {
-		fmt.Printf("f %04x n %04x ", lt[:4], firstTops[i][:4])
-		// if lt != firstTops[i] {
-		// return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
-		// sc.blockHeight, i, lt, firstTops[i])
-		// }
+	for i, _ := range preTops {
+		fmt.Printf("pre %04x post %04x ", preTops[i][:4], postTops[i][:4])
+		if postTops[i] != preTops[i] {
+			return fmt.Errorf("block %d top %d mismatch, pre %x post %x",
+				sc.blockHeight, i, preTops[i][:4], postTops[i][:4])
+		}
 	}
 	fmt.Printf("\n")
 
@@ -132,7 +141,7 @@ func undoAddOnly() error {
 
 	sc := NewSimChain()
 	sc.durationMask = 0
-	adds, delhashes := sc.NextBlock(5)
+	adds, delhashes := sc.NextBlock(6)
 
 	bp, err := f.ProveBlock(delhashes)
 	if err != nil {
@@ -144,9 +153,9 @@ func undoAddOnly() error {
 		return err
 	}
 
-	firstTops := f.GetTops()
+	preTops := f.GetTops()
 
-	adds, delhashes = sc.NextBlock(2)
+	adds, delhashes = sc.NextBlock(0)
 
 	bp, err = f.ProveBlock(delhashes)
 	if err != nil {
@@ -166,17 +175,18 @@ func undoAddOnly() error {
 	}
 	fmt.Printf("post undo %s", f.ToString())
 
-	lastTops := f.GetTops()
+	postTops := f.GetTops()
 
 	// should be back to where it started
 	fmt.Printf("tops: ")
-	for i, lt := range lastTops {
-		fmt.Printf("f %04x n %04x ", lt[:4], firstTops[i][:4])
-		if lt != firstTops[i] {
-			return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
-				sc.blockHeight, i, lt, firstTops[i])
+	for i, _ := range preTops {
+		fmt.Printf("pre %04x post %04x ", preTops[i][:4], postTops[i][:4])
+		if postTops[i] != postTops[i] {
+			return fmt.Errorf("block %d top %d mismatch, pre %x post %x",
+				sc.blockHeight, i, preTops[i][:4], postTops[i][:4])
 		}
 	}
+
 	fmt.Printf("\n")
 
 	return nil

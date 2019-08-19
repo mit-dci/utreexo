@@ -23,7 +23,8 @@ func HashFromString(s string) Hash {
 	return blake2b.Sum256([]byte(s))
 }
 
-type move struct {
+// an arror describes the movement of a node from one position to another
+type arrow struct {
 	from, to uint64
 }
 

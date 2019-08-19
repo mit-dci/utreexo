@@ -254,14 +254,14 @@ func (p *Pollard) rem(dels []uint64) error {
 // swap moves a node from one place to another.  Note that it leaves the
 // node in the "from" place to be dealt with some other way.
 // Also it hashes new parents so the hashes & pointers are consistent.
-func (p *Pollard) moveNode(m move) error {
+func (p *Pollard) moveNode(a arrow) error {
 
-	prfrom, sibfrom, err := p.descendToPos(m.from)
+	prfrom, sibfrom, err := p.descendToPos(a.from)
 	if err != nil {
 		return fmt.Errorf("from %s", err.Error())
 	}
 
-	prto, sibto, err := p.descendToPos(m.to)
+	prto, sibto, err := p.descendToPos(a.to)
 	if err != nil {
 		return fmt.Errorf("to %s", err.Error())
 	}
@@ -269,7 +269,7 @@ func (p *Pollard) moveNode(m move) error {
 	// build out full branch to target if it's not populated
 	// I think this efficient / never creates usless nodes but not sure..?
 	for i := range sibto {
-		tgtLR := (m.to >> uint8(i)) & 1
+		tgtLR := (a.to >> uint8(i)) & 1
 		if sibto[i] == nil {
 			sibto[i] = new(polNode)
 		}

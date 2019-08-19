@@ -244,7 +244,7 @@ func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights [
 // can also be used with the "to" return discarded to just enumerate a subtree
 // swap tells whether to activate the sibling swap to try to preserve order
 func subTreePositions(
-	subroot uint64, moveTo uint64, forestHeight uint8) (m []move) {
+	subroot uint64, moveTo uint64, forestHeight uint8) (as []arrow) {
 
 	subHeight := detectHeight(subroot, forestHeight)
 	//	fmt.Printf("node %d height %d\n", subroot, subHeight)
@@ -263,13 +263,14 @@ func subTreePositions(
 			// loop left to right
 			f := leftmost + i
 			t := uint64(int64(f) + rowDelta)
-			m = append(m, move{from: f, to: t})
+			as = append(as, arrow{from: f, to: t})
 		}
 	}
 
 	return
 }
 
+// TODO: unused? useless?
 // subTreeLeafRange gives the range of leaves under a node
 func subTreeLeafRange(
 	subroot uint64, forestHeight uint8) (uint64, uint64) {
@@ -279,6 +280,23 @@ func subTreeLeafRange(
 	run := uint64(1 << h)
 
 	return left, run
+}
+
+// to leaves takes a arrow and returns a slice of arrows that are all the
+// leaf arrows below it
+func (a *arrow) toLeaves(forestHeight uint8) []arrow {
+
+	h := detectHeight(a.from, forestHeight)
+	run := uint64(1 << h)
+	fromStart := childMany(a.from, h, forestHeight)
+	toStart := childMany(a.to, h, forestHeight)
+
+	leaves := make([]arrow, run)
+	for i := uint64(0); i < run; i++ {
+		leaves[i] = arrow{from: fromStart + i, to: toStart + i}
+	}
+
+	return leaves
 }
 
 // it'd be cool if you just had .sort() methods on slices of builtin types...
@@ -291,7 +309,7 @@ func sortNodeSlice(s []Node) {
 }
 
 // sortMoves sorts them by from, not to
-func sortMoves(s []move) {
+func sortMoves(s []arrow) {
 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
 }
 

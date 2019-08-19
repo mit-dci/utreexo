@@ -20,7 +20,7 @@ when deletions occur.
 // to get to a direct from/to mapping on the whole tree level, you will need
 // to process the movePos
 func removeTransform(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move) {
+	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow) {
 
 	// note that RemoveTransform is still way sub-optimal in that I'm sure
 	// you can do this directly without the n*log(n) subtree moving...
@@ -28,8 +28,8 @@ func removeTransform(
 	topPoss, _ := getTopsReverse(numLeaves, fHeight)
 	nextTopPoss, _ := getTopsReverse(numLeaves-uint64(len(dels)), fHeight)
 
-	// m is the main list of moves
-	var m, stash []move
+	// m is the main list of arrows
+	var a, stash []arrow
 	// stash is a list of nodes to move later.  They end up as tops.
 	// stash := make([]move, len(nextTopPoss))
 	// for i, _ := range stash {
@@ -70,13 +70,13 @@ func removeTransform(
 		for len(dels) > 1 {
 
 			if sibSwap && dels[0]&1 == 0 { // if destination is even (left)
-				m = append(m, move{from: dels[0] ^ 1, to: dels[0]})
+				a = append(a, arrow{from: dels[0] ^ 1, to: dels[0]})
 				// fmt.Printf("swap %d -> %d\n", m[len(m)-1].from, m[len(m)-1].to)
 				// set destination to newly vacated right sibling
 				dels[0] = dels[0] ^ 1
 			}
 
-			m = append(m, move{from: dels[1] ^ 1, to: dels[0]})
+			a = append(a, arrow{from: dels[1] ^ 1, to: dels[0]})
 			// fmt.Printf("swap %d -> %d\n", m[len(m)-1].from, m[len(m)-1].to)
 
 			// deletion promotes to next row
@@ -113,17 +113,17 @@ func removeTransform(
 		if haveDel && rootPresent {
 			// deroot, move to sibling
 			if sibSwap && delPos&1 == 0 { // if destination is even (left)
-				m = append(m, move{from: delPos ^ 1, to: delPos})
+				a = append(a, arrow{from: delPos ^ 1, to: delPos})
 				// set destinationg to newly vacated right sibling
 				delPos = delPos ^ 1 // |1 should also work
 			}
 
-			m = append(m, move{from: rootPos, to: delPos})
+			a = append(a, arrow{from: rootPos, to: delPos})
 		}
 
 		if haveDel && !rootPresent {
 			// stash sibling
-			stash = append(stash, move{from: delPos ^ 1, to: nextTopPoss[0]})
+			stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
 			nextTopPoss = nextTopPoss[1:]
 			// mark parent for deletion. this happens even if the node
 			// being promoted to root doesn't move
@@ -132,7 +132,7 @@ func removeTransform(
 
 		if !haveDel && rootPresent {
 			//  stash existing root (it will collapse left later)
-			stash = append(stash, move{from: rootPos, to: nextTopPoss[0]})
+			stash = append(stash, arrow{from: rootPos, to: nextTopPoss[0]})
 			nextTopPoss = nextTopPoss[1:]
 		}
 
@@ -146,7 +146,7 @@ func removeTransform(
 		return nil, nil
 	}
 
-	return stash, m
+	return stash, a
 }
 
 // TODO optimization: if children move, parents don't need to move.
@@ -164,20 +164,26 @@ notes in forestnotes.txt
 */
 
 func transformLeafUndo(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, []move) {
+	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow, []arrow) {
 	fmt.Printf("(undo) call remTr %d %d %d\n", dels, numLeaves, fHeight)
 	rStashes, rMoves := removeTransform(dels, numLeaves, fHeight)
 
-	var floor []move
+	var floor []arrow
 
 	for _, m := range rMoves {
 		if m.from < numLeaves {
 			floor = append(floor, m)
+		} else {
+			// expand to leaves
+			floor = append(floor, m.toLeaves(fHeight)...)
 		}
 	}
 	for _, s := range rStashes {
 		if s.from < numLeaves {
 			floor = append(floor, s)
+		} else {
+			// expand to leaves
+			floor = append(floor, s.toLeaves(fHeight)...)
 		}
 	}
 
@@ -191,10 +197,10 @@ func transformLeafUndo(
 // heights 0 and 1.  The stash cutoff can now be large (with removeTransform there
 // can't be more than 1 stash move per height)
 func expandedTransform(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]move, []move, error) {
+	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow, error) {
 	rawStash, rawMoves := removeTransform(dels, numLeaves, fHeight)
 
-	var expandedStash, expandedMoves []move
+	var expandedStash, expandedMoves []arrow
 	// for each node in the stash prefix, get the whole subtree
 	for _, stashPos := range rawStash {
 		moves := subTreePositions(stashPos.from, stashPos.to, fHeight)
@@ -236,10 +242,10 @@ func expandedTransform(
 	}
 
 	// replace expandedMoves with the reduced moveMap.  Then sort it.
-	skipMoves := make([]move, len(moveMap))
+	skipMoves := make([]arrow, len(moveMap))
 	i := 0
 	for f, t := range moveMap {
-		skipMoves[i] = move{from: f, to: t}
+		skipMoves[i] = arrow{from: f, to: t}
 		i++
 	}
 

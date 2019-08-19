@@ -18,7 +18,7 @@ type undoBlock struct {
 }
 
 func (u *undoBlock) ToString() string {
-	s := fmt.Sprintf("undo block %d adds\t", u.adds)
+	s := fmt.Sprintf("- uuuu undo block %d adds\t", u.adds)
 	s += fmt.Sprintf("%d dels:\t", len(u.positions))
 	if len(u.positions) != len(u.hashes) {
 		s += "error"
@@ -54,14 +54,14 @@ func (f *Forest) Undo(ub undoBlock) error {
 	fmt.Printf("moves %v\n", moves)
 	fmt.Printf("leaf moves %v\n", leaf)
 
-	dirt := make([]uint64, len(moves)*2)
+	dirt := make([]uint64, len(leaf)*2)
 
 	// move things backwards
-	for i, m := range moves {
-		f.forest[m.from] = f.forest[m.to]
-		f.forest[m.to] = ub.hashes[i]
-		dirt[i*2] = m.from
-		dirt[(i*2)+1] = m.to
+	for i, a := range leaf {
+		f.forest[a.from] = f.forest[a.to]
+		f.forest[a.to] = ub.hashes[i]
+		dirt[i*2] = a.from
+		dirt[(i*2)+1] = a.to
 	}
 
 	// rehash above all tos/froms
@@ -71,6 +71,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 	if err != nil {
 		return nil
 	}
+	f.numLeaves = prevNumLeaves
 	fmt.Printf("post undo %s\n", f.ToString())
 	return nil
 }

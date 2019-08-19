@@ -235,17 +235,17 @@ Definitely can be improved / optimized.
 // moveSubtree moves a node, and all its children, from one place to another,
 // and deletes everything at the prior location
 // This is like get and write subtree but moving directly instead of stashing
-func (f *Forest) moveSubtree(m move) error {
-	fmt.Printf("movesubtree %d -> %d\n", m.from, m.to)
+func (f *Forest) moveSubtree(a arrow) error {
+	fmt.Printf("movesubtree %d -> %d\n", a.from, a.to)
 	starttime := time.Now()
-	fromHeight := detectHeight(m.from, f.height)
-	toHeight := detectHeight(m.to, f.height)
+	fromHeight := detectHeight(a.from, f.height)
+	toHeight := detectHeight(a.to, f.height)
 	if fromHeight != toHeight {
 		return fmt.Errorf("moveSubtree: mismatch heights from %d to %d",
 			fromHeight, toHeight)
 	}
 
-	ms := subTreePositions(m.from, m.to, f.height)
+	ms := subTreePositions(a.from, a.to, f.height)
 	for _, submove := range ms {
 
 		if f.forest[submove.from] == empty {
