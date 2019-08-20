@@ -153,14 +153,39 @@ func removeTransform(
 // (But siblings might)
 
 /*
-Ok here's the other thing about the transform.  In many cases, you know what
-to move where, but it's pointless to move it.  Actually, it's pointless
-to move *any* node where any of the children have moved!  Which...
-seems obvious and might speed it up / simplify it.
+removeTransform seems OK for pollard.  There might be ways to simplify but it's not
+too bad.  For forest, however, removeTransform is a mess, requiring tons of code
+afterwards, like get/write/moveSubTree.  But wee don't need those!
+Here's what to build for a expanded / leaf / undo / forest transform.
+Instead of moves & stashes at all rows, we only need to operate on the bottom row,
+and the two types are moves and swaps.  Moves have a to and a from, where the element
+at position from gets written to position to, and the element at position from is
+deleted (it's no longer inside the numLeaves range).  Swaps are also 2 positions,
+but there's no deletion, just a, b = b, a.
+This is nicer because: 1) only operate on the bottom row; everything about gets
+hashed into existence anyway.  2) only 1 element worth of extra memory is used.
 
-So the move slice can be trimmed of moves of parents.
+... this might not make sense though because dirty bits are not as simple as things
+that have moved.  If you move a big subtree by just moving all the leaves, and mark
+all the leaves as dirty, they're still next to each other and don't need rehashing.
 
-notes in forestnotes.txt
+Also, moves have to be in order, as you may get 8->4 followed by 12->8.
+
+Other idea: there's only one type, and whether it is move or swap is determined by
+whether the source (from) is less than numLeaves.  Basically it's a swap, unless it
+would be swapping with something from beyond the end of the leaves, then don't bother
+copying anything outside of that.
+
+This is ugly though as in the 8->4, 12->8 example, sure you can swap 8,4 and then
+swap 12,8, where 4 ends up at 12 which is outside the forest.  But you swapped once
+when you didn't have to.
+
+... another way to do it?  Run through the list of deleted elements, and overwrite
+all of them with what gets written there.  You know those can't be swaps as the "to"
+is deleted.  Everything else then can be determined if it's a move or swap based on
+the source being within the forest or not.  Then the encoding is:
+([]int64, []arrow) where the first is a slice of sources, the destinations being the
+deletions, and the []arrow gives the swaps / moves.
 */
 
 func transformLeafUndo(
