@@ -180,12 +180,40 @@ This is ugly though as in the 8->4, 12->8 example, sure you can swap 8,4 and the
 swap 12,8, where 4 ends up at 12 which is outside the forest.  But you swapped once
 when you didn't have to.
 
-... another way to do it?  Run through the list of deleted elements, and overwrite
-all of them with what gets written there.  You know those can't be swaps as the "to"
-is deleted.  Everything else then can be determined if it's a move or swap based on
-the source being within the forest or not.  Then the encoding is:
-([]int64, []arrow) where the first is a slice of sources, the destinations being the
-deletions, and the []arrow gives the swaps / moves.
+... I think having everything being swaps can work an is relatively clean.
+It can be of the format [a, b, h] where a and b are positions, and h is the
+height, or a run of 2**h.  So [8, 0, 1] means swap 8<->0 and 9<->1.
+... equivalent can just be [a, b] and a & b are *at* height h.  Same thing.
+
+With swaps, you can take the moves and stashes and go top down and it should work.
+I... *think* this means you don't have to distinguish between moves and stashes.
+Also it means there's ~no memory overhead, as you never need more than 1 extra
+element kept in ram (the one that's being swapped: a-> ram, b->a, ram->b )
+
+Here's an example.  We have a full tree with 16 elements, 0...15.  0, 2 are
+deleted.  removeTransform will give us (and stashes / moves don't matter), in
+order:
+
+3->0, 16->22, 25->26, 29->28
+
+(We'll take actually the reverse order, top to bottom)
+We want output:
+[8, 0, 3], [12, 8, 2], [15, 2, 0]
+also can be written:
+[28, 29], [26, 27], [2, 15].
+
+... write a transform function for that eh?
+
+h:3 29->28
+h:2 25->26
+h:1 16->22
+h:0 3->0
+
+where'd h:1 16->22 go?  Yeah 16 ended up at 22 because of the two swaps above it...
+so it turned into 22<->22 which can be omitted.
+
+This should be useful for undo and forest remove as well.
+
 */
 
 func transformLeafUndo(
