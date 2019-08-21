@@ -100,7 +100,7 @@ func (p *Pollard) store(w io.Writer) error {
 	// TODO: Need to lock update
 	// Write the number of leaves.
 	num := make([]byte, 8)
-	binary.LittleEndian.PutUint64(num, p.numLeaves)
+	binary.BigEndian.PutUint64(num, p.numLeaves)
 	w.Write(num)
 	// Write the hash values.
 	_, hs := getTopsReverse(p.numLeaves, p.height())
@@ -144,7 +144,7 @@ func restore(r io.Reader) (*Pollard, error) {
 	if err != nil {
 		return nil, err
 	}
-	numLeaves := binary.LittleEndian.Uint64(num)
+	numLeaves := binary.BigEndian.Uint64(num)
 	// Restore a Pollard.
 	p := &Pollard{}
 	for i := uint64(0); i < numLeaves; i++ {
