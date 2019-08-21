@@ -1,10 +1,9 @@
 package utreexo
 
 import (
-	"bufio"
 	"encoding/binary"
 	"fmt"
-	"os"
+	"io"
 	"reflect"
 )
 
@@ -97,20 +96,12 @@ func (p *Pollard) topHashesReverse() []Hash {
 }
 
 // store : Store Pollard to the file.
-func (p *Pollard) store(path string) error {
+func (p *Pollard) store(w io.Writer) error {
 	// TODO: Need to lock update
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	bufSize := 10240 // 10MB
-	w := bufio.NewWriterSize(file, bufSize)
 	// Write the number of leaves.
 	num := make([]byte, 8)
 	binary.LittleEndian.PutUint64(num, p.numLeaves)
 	w.Write(num)
-	w.Flush()
 	// Write the hash values.
 	_, hs := getTopsReverse(p.numLeaves, p.height())
 	for i, top := range p.tops {
@@ -127,6 +118,12 @@ func (p *Pollard) store(path string) error {
 			node := top
 			for k := uint8(1); k < h; k++ {
 				node = node.niece[(j>>(h-k-1))&1]
+				if node == nil {
+					return fmt.Errorf("only full pollard")
+				}
+			}
+			if node.niece[0] == nil || node.niece[1] == nil {
+				return fmt.Errorf("only full pollard")
 			}
 			w.Write(node.niece[0].data[:])
 			w.Write(node.niece[1].data[:])
@@ -136,38 +133,23 @@ func (p *Pollard) store(path string) error {
 	for _, top := range p.tops {
 		w.Write(top.data[:])
 	}
-	w.Flush() // Error handling necessary?
 	return nil
 }
 
 // restore : Restore from the file to Pollard.
-func restore(path string) (*Pollard, error) {
-	file, err := os.OpenFile(path, os.O_RDONLY, 0644)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+func restore(r io.Reader) (*Pollard, error) {
 	// Restore the number of leaves.
 	num := make([]byte, 8)
-	_, err = file.Read(num)
+	_, err := r.Read(num)
 	if err != nil {
 		return nil, err
 	}
 	numLeaves := binary.LittleEndian.Uint64(num)
-	// Check file size.
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-	pc := PopCount(numLeaves)
-	if info.Size() != 8+int64(numLeaves)*32+int64(pc)*32 {
-		return nil, fmt.Errorf("illegal file size")
-	}
 	// Restore a Pollard.
 	p := &Pollard{}
 	for i := uint64(0); i < numLeaves; i++ {
 		h := Hash{}
-		_, err := file.Read(h[:])
+		_, err := r.Read(h[:])
 		if err != nil {
 			return nil, err
 		}
@@ -175,9 +157,10 @@ func restore(path string) (*Pollard, error) {
 	}
 	// Get tops from the file.
 	tops := []Hash{}
+	pc := PopCount(numLeaves)
 	for i := uint8(0); i < pc; i++ {
 		top := Hash{}
-		_, err = file.Read(top[:])
+		_, err = r.Read(top[:])
 		if err != nil {
 			return nil, err
 		}

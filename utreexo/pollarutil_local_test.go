@@ -23,13 +23,25 @@ func TestStoreAndRestore(t *testing.T) {
 	p.Modify([]LeafTXO{}, dels)
 	path := "./tmp.dat"
 	os.Remove(path)
-	err := p.store(path)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	err = p.store(file)
+	file.Close()
 	if err != nil {
 		t.Errorf("%+v", err)
 		return
 	}
 	t.Logf("%+v", p)
-	p, err = restore(path)
+	file, err = os.OpenFile(path, os.O_RDONLY, 0644)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	p, err = restore(file)
+	file.Close()
 	if err != nil {
 		t.Errorf("%+v", err)
 		return
