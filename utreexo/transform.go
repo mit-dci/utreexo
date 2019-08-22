@@ -216,6 +216,46 @@ This should be useful for undo and forest remove as well.
 
 */
 
+// topDown changes the output from removeTransform into a top-down swap list
+func topDown(as []arrow) []arrow {
+	// reverse the arrow list, now it should be top to bottom
+
+	// go through every entry.  Except skip the ones on the bottom row.
+	for i := 0; i < len(as); i++ {
+		// modify everything underneath (not ones on the same row)
+		// (but those will fail the isDescendant checks
+		for j := i; j < len(as); j++ {
+			// srcA, srcB := isDescendant(as[j].from, as[i].from, as[i].to)
+		}
+
+	}
+
+	// pseudocode
+	return nil
+}
+
+// given positions p , a, and b, return 2 bools: underA, underB
+// (is p  is in a subtree beneath A)
+func isDescendant(p, a, b uint64, h uint8) (bool, bool) {
+
+	ph := detectHeight(p, h)
+	abh := detectHeight(a, h)
+
+	// there are really quick bitwise ways to check, if you know the heights of
+	// p vs a&b.
+
+	// we want to match h - abh bits of p and a.  Shifted by abh-ph.  I think.
+
+	matchRange := h - abh
+
+	p = p << (abh - ph)
+
+	underA := (a<<(64-matchRange))>>64&p != 0
+	// something like that...
+
+	return underA, false
+}
+
 func transformLeafUndo(
 	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow, []arrow) {
 	fmt.Printf("(undo) call remTr %d %d %d\n", dels, numLeaves, fHeight)
