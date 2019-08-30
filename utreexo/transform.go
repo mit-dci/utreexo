@@ -219,6 +219,7 @@ This should be useful for undo and forest remove as well.
 // topDown changes the output from removeTransform into a top-down swap list
 func topDown(as []arrow) []arrow {
 	// reverse the arrow list, now it should be top to bottom
+	reverseArrowSlice(as)
 
 	// go through every entry.  Except skip the ones on the bottom row.
 	for i := 0; i < len(as); i++ {
@@ -232,6 +233,14 @@ func topDown(as []arrow) []arrow {
 
 	// pseudocode
 	return nil
+}
+
+// reverseArrowSlice does what it says.  Maybe can get rid of if we return
+// the slice top-down instead of bottom-up
+func reverseArrowSlice(as []arrow) {
+	for i, j := 0, len(as)-1; i < j; i, j = i+1, j-1 {
+		as[i], as[j] = as[j], as[i]
+	}
 }
 
 // given positions p , a, and b, return 2 bools: underA, underB
@@ -250,6 +259,7 @@ func isDescendant(p, a, b uint64, h uint8) (bool, bool) {
 }
 
 // there's a clever way to do this that's faster.  But I guess it doesn't matter
+// (note that this isn't it; this doesn't work)
 func isDescendantClever(p, a, b uint64, h uint8) (bool, bool) {
 	fmt.Printf("p %b a %b b %b\n", p, a, b)
 	ph := detectHeight(p, h)
@@ -308,7 +318,7 @@ func transformLeafUndo(
 // If something at height 2 moves, ExpandTransform will add moves for subnodes at
 // heights 0 and 1.  The stash cutoff can now be large (with removeTransform there
 // can't be more than 1 stash move per height)
-func expandedTransform(
+func xxexpandedTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow, error) {
 	rawStash, rawMoves := removeTransform(dels, numLeaves, fHeight)
 

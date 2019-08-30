@@ -1,6 +1,16 @@
 package utreexo
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func TestTopDown(t *testing.T) {
+
+	mv, stash := removeTransform([]uint64{3, 4, 5, 6}, 16, 4)
+	fmt.Printf("mv %v, stash %v\n", mv, stash)
+
+}
 
 func TestIsDescendant(t *testing.T) {
 	/*
