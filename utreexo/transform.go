@@ -237,7 +237,21 @@ func topDown(as []arrow) []arrow {
 // given positions p , a, and b, return 2 bools: underA, underB
 // (is p  is in a subtree beneath A)
 func isDescendant(p, a, b uint64, h uint8) (bool, bool) {
+	ph := detectHeight(p, h)
+	abh := detectHeight(a, h)
 
+	hdiff := abh - ph
+	if hdiff == 0 || hdiff > 64 {
+		return false, false
+	}
+
+	pup := upMany(p, hdiff, h)
+	return pup == a, pup == b
+}
+
+// there's a clever way to do this that's faster.  But I guess it doesn't matter
+func isDescendantClever(p, a, b uint64, h uint8) (bool, bool) {
+	fmt.Printf("p %b a %b b %b\n", p, a, b)
 	ph := detectHeight(p, h)
 	abh := detectHeight(a, h)
 
@@ -245,15 +259,20 @@ func isDescendant(p, a, b uint64, h uint8) (bool, bool) {
 	// p vs a&b.
 
 	// we want to match h - abh bits of p and a.  Shifted by abh-ph.  I think.
-
 	matchRange := h - abh
+	shift := 64 - matchRange
 
 	p = p << (abh - ph)
+	fmt.Printf("modp %b ph %d abh %d range %d\n", p, ph, abh, matchRange)
 
-	underA := (a<<(64-matchRange))>>64&p != 0
+	maskedA := ((a << (shift)) >> shift) << matchRange
+	maskedB := ((b << (shift)) >> shift) << matchRange
+	fmt.Printf("maskedA %b maskedB %b\n", maskedA, maskedB)
+	underA := maskedA&p == 0
 	// something like that...
+	underB := maskedB&p == 0
 
-	return underA, false
+	return underA, underB
 }
 
 func transformLeafUndo(
