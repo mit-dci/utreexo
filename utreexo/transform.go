@@ -217,7 +217,7 @@ This should be useful for undo and forest remove as well.
 */
 
 // topDown changes the output from removeTransform into a top-down swap list
-func topDown(as []arrow) []arrow {
+func topDown(as []arrow, h uint8) []arrow {
 	// reverse the arrow list, now it should be top to bottom
 	reverseArrowSlice(as)
 
@@ -226,7 +226,22 @@ func topDown(as []arrow) []arrow {
 		// modify everything underneath (not ones on the same row)
 		// (but those will fail the isDescendant checks
 		for j := i; j < len(as); j++ {
-			// srcA, srcB := isDescendant(as[j].from, as[i].from, as[i].to)
+			// swap from if under either; swap to if under same as from
+			fromA, fromB, displacement :=
+				isDescendant(as[j].from, as[i].from, as[i].to, h)
+			if fromA || fromB {
+				// from is under either A or B; check if to is
+				toA, toB, _ := isDescendant(as[j].to, as[i].from, as[i].from, h)
+				if toA == fromA && toB == fromB {
+					// swap both
+					// TODO something like this
+					as[j].to += displacement
+				} else {
+					// swap only from
+					as[j].from += displacement
+				}
+			}
+
 		}
 
 	}
@@ -244,18 +259,28 @@ func reverseArrowSlice(as []arrow) {
 }
 
 // given positions p , a, and b, return 2 bools: underA, underB
-// (is p  is in a subtree beneath A)
-func isDescendant(p, a, b uint64, h uint8) (bool, bool) {
+// (is p is in a subtree beneath A or B)
+// also returns the absolute distance an element at P's height would need to
+// move to go from under A to B or vice versa.
+// TODO you can do the abdist thing with XORs instead of +/- which is cooler and
+// maybe get that working later.
+func isDescendant(p, a, b uint64, h uint8) (bool, bool, uint64) {
 	ph := detectHeight(p, h)
 	abh := detectHeight(a, h)
 
 	hdiff := abh - ph
 	if hdiff == 0 || hdiff > 64 {
-		return false, false
+		return false, false, 0
 	}
 
+	abdist := a - b
+	if b > a {
+		abdist = b - a
+	}
+	abdist <<= hdiff
+
 	pup := upMany(p, hdiff, h)
-	return pup == a, pup == b
+	return pup == a, pup == b, abdist
 }
 
 // there's a clever way to do this that's faster.  But I guess it doesn't matter
