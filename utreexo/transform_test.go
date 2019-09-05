@@ -7,9 +7,11 @@ import (
 
 func TestTopDown(t *testing.T) {
 
-	mv, stash := removeTransform([]uint64{3, 4, 5, 6}, 16, 4)
+	mv, stash := removeTransform([]uint64{0, 2}, 16, 4)
 	fmt.Printf("mv %v, stash %v\n", mv, stash)
-
+	arrows := mergeAndReverseArrows(mv, stash)
+	td := topDown(arrows, 4)
+	fmt.Printf("td %v\n", td)
 }
 
 func TestIsDescendant(t *testing.T) {

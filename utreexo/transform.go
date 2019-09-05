@@ -216,38 +216,57 @@ This should be useful for undo and forest remove as well.
 
 */
 
-// topDown changes the output from removeTransform into a top-down swap list
-func topDown(as []arrow, h uint8) []arrow {
+// topDown changes the output from removeTransform into a top-down swap list.
+// give it a slice of arrows and a forest height
+func topDown(arrows []arrow, fh uint8) []arrow {
 	// reverse the arrow list, now it should be top to bottom
-	reverseArrowSlice(as)
-
+	reverseArrowSlice(arrows)
 	// go through every entry.  Except skip the ones on the bottom row.
-	for i := 0; i < len(as); i++ {
+	for top := 0; top < len(arrows); top++ {
+		// mask is the xor difference between the from and to positions.
+		// shift mask up by the height delta to get the xor mask to move
+		// leaves around
+		topMask := arrows[top].from ^ arrows[top].to
+		topHeight := detectHeight(arrows[top].from, fh)
 		// modify everything underneath (not ones on the same row)
 		// (but those will fail the isDescendant checks
-		for j := i; j < len(as); j++ {
+		for sub := top + 1; sub < len(arrows); sub++ {
+			// redoing these a lot since they only change when height does.
+			// maybe get a slice of arrows that encodes the arrow heights?
+			subHeight := detectHeight(arrows[sub].from, fh)
+			subMask := topMask << (topHeight - subHeight)
 			// swap from if under either; swap to if under same as from
-			fromA, fromB, displacement :=
-				isDescendant(as[j].from, as[i].from, as[i].to, h)
+			fromA, fromB := isDescendant(
+				arrows[sub].from, arrows[top].from, arrows[top].to, fh)
 			if fromA || fromB {
 				// from is under either A or B; check if to is
-				toA, toB, _ := isDescendant(as[j].to, as[i].from, as[i].from, h)
+				toA, toB := isDescendant(
+					arrows[sub].to, arrows[top].from, arrows[top].to, fh)
+				fmt.Printf("top %d->%d sub %d->%d\tfA %v fB %v toA %v toB %v ",
+					arrows[top].from, arrows[top].to,
+					arrows[sub].from, arrows[sub].to,
+					fromA, fromB, toA, toB)
+
 				if toA == fromA && toB == fromB {
-					// swap both
-					// TODO something like this
-					as[j].to += displacement
-				} else {
-					// swap only from
-					as[j].from += displacement
+					// swap to
+					arrows[sub].to ^= subMask
 				}
+				// swap from
+				arrows[sub].from ^= subMask
+
+				fmt.Printf("became %d->%d\n", arrows[sub].from, arrows[sub].to)
 			}
-
 		}
-
 	}
+	return arrows
+}
 
-	// pseudocode
-	return nil
+// mergeAndReverseArrows is ugly and does what it says but we should change
+// transform itself to not need this
+func mergeAndReverseArrows(a, b []arrow) []arrow {
+	c := append(a, b...)
+	sortMoves(c)
+	return c
 }
 
 // reverseArrowSlice does what it says.  Maybe can get rid of if we return
@@ -264,23 +283,17 @@ func reverseArrowSlice(as []arrow) {
 // move to go from under A to B or vice versa.
 // TODO you can do the abdist thing with XORs instead of +/- which is cooler and
 // maybe get that working later.
-func isDescendant(p, a, b uint64, h uint8) (bool, bool, uint64) {
+func isDescendant(p, a, b uint64, h uint8) (bool, bool) {
 	ph := detectHeight(p, h)
 	abh := detectHeight(a, h)
 
 	hdiff := abh - ph
 	if hdiff == 0 || hdiff > 64 {
-		return false, false, 0
+		return false, false
 	}
-
-	abdist := a - b
-	if b > a {
-		abdist = b - a
-	}
-	abdist <<= hdiff
 
 	pup := upMany(p, hdiff, h)
-	return pup == a, pup == b, abdist
+	return pup == a, pup == b
 }
 
 // there's a clever way to do this that's faster.  But I guess it doesn't matter
