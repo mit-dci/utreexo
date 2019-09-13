@@ -258,6 +258,19 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 			}
 		}
 	}
+	// remove redundant arrows after evertyhing else is done
+
+	for i := 0; i < len(arrows); i++ {
+
+		if arrows[i].from == arrows[i].to {
+			if i == len(arrows) {
+				arrows = arrows[:i]
+			} else {
+				arrows = append(arrows[:i], arrows[i+1:]...)
+			}
+			i--
+		}
+	}
 	return arrows
 }
 

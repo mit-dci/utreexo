@@ -7,7 +7,7 @@ import (
 
 func TestTopDown(t *testing.T) {
 
-	mv, stash := removeTransform([]uint64{0, 2}, 16, 4)
+	mv, stash := removeTransform([]uint64{1}, 16, 4)
 	fmt.Printf("mv %v, stash %v\n", mv, stash)
 	arrows := mergeAndReverseArrows(mv, stash)
 	td := topDown(arrows, 4)
