@@ -7,11 +7,33 @@ import (
 
 func TestTopDown(t *testing.T) {
 
-	mv, stash := removeTransform([]uint64{1}, 16, 4)
-	fmt.Printf("mv %v, stash %v\n", mv, stash)
-	arrows := mergeAndReverseArrows(mv, stash)
-	td := topDown(arrows, 4)
-	fmt.Printf("td %v\n", td)
+	// mv, stash := removeTransform([]uint64{1}, 16, 4)
+	// fmt.Printf("mv %v, stash %v\n", mv, stash)
+	// arrows := mergeAndReverseArrows(mv, stash)
+	// td := topDown(arrows, 4)
+	// fmt.Printf("td %v\n", td)
+
+	fup := NewForest()   // bottom up modified forest
+	fdown := NewForest() // top down modified forest
+	// ideally they are the same
+
+	adds := make([]LeafTXO, 16)
+	for j := range adds {
+		adds[j].Hash[0] = uint8(j) | 0xa0
+	}
+
+	fup.Modify(adds, nil)
+	fdown.Modify(adds, nil)
+
+	//initial state
+	fmt.Printf(fup.ToString())
+
+	dels := []uint64{2, 3}
+
+	fup.removev2(dels)
+
+	fdown.removev3(dels)
+
 }
 
 func TestIsDescendant(t *testing.T) {

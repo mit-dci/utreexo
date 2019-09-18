@@ -290,6 +290,16 @@ func reverseArrowSlice(as []arrow) {
 	}
 }
 
+// topDownTransform is the removeTransform flipped to topDown by topDown()
+func topDownTransform(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
+	a, b := removeTransform(dels, numLeaves, fHeight)
+	return topDown(mergeAndReverseArrows(a, b), fHeight)
+}
+
+// fmt.Printf("mv %v, stash %v\n", mv, stash)
+// arrows := mergeAndReverseArrows(mv, stash)
+// td := topDown(arrows, 4)
+
 // given positions p , a, and b, return 2 bools: underA, underB
 // (is p is in a subtree beneath A or B)
 // also returns the absolute distance an element at P's height would need to
