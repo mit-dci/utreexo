@@ -52,12 +52,14 @@ func (f *Forest) Undo(ub undoBlock) error {
 	fmt.Printf("\t\t### UNDO DATA\n")
 	fmt.Printf("stash %v\n", stash)
 	fmt.Printf("moves %v\n", moves)
-	fmt.Printf("leaf moves %v\n", leaf)
+	fmt.Printf("leaf moves %d %v\n", len(leaf), leaf)
+	fmt.Printf("ub hashes %d\n", len(ub.hashes))
 
 	dirt := make([]uint64, len(leaf)*2)
 
 	// move things backwards
 	for i, a := range leaf {
+		fmt.Printf("i %d a %d->%d\n", i, a.from, a.to)
 		f.forest[a.from] = f.forest[a.to]
 		f.forest[a.to] = ub.hashes[i]
 		dirt[i*2] = a.from
