@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/chainsafe/utreexo/utreexo"
 )
 
 type TxoTTL struct {

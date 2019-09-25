@@ -35,13 +35,13 @@ $ bitcoin-cli stop
 * get utreexo code
 
 ```
-$ go get github.com/mit-dci/utreexo
+$ go get github.com/chainsafe/utreexo
 ```
 
 * build blockparser and run it in the bitcoin blocks folder to build a giant text file of all transactions
 
 ```
-$ cd ~/go/src/github.com/mit-dci/utreexo/cmd/blockparser
+$ cd ~/go/src/github.com/chainsafe/utreexo/cmd/blockparser
 $ go build
 $ cp blockparser ~/.bitcoin/testnet3/blocks
 $ cd ~/.bitcoin/testnet3/blocks
@@ -52,7 +52,7 @@ $ ./blockparser
 * Now there's testnet.txos, which is all the txs, and ttldb, which is the lifetimes of all utxos.  Use txottl to combine them into a single text file with txo lifetimes.
 
 ```
-$ cd ~/go/src/github.com/mit-dci/utreexo/cmd/txottl
+$ cd ~/go/src/github.com/chainsafe/utreexo/cmd/txottl
 $ go build
 $ cp txottl ~/.bitcoin/testnet3/blocks
 $ cd ~/.bitcoin/testnet3/blocks
@@ -63,7 +63,7 @@ $ ./txottl
 * Now there's a ttl.testnet.txos file, which has everything we need.  At this point you can delete everything else (ttldb, testnet.txos, heck the whole blocks folder if you want).  Now you can run ibdsim to test utreexo sync performance.
 
 ```
-$ cd ~/go/src/github.com/mit-dci/utreexo/cmd/ibdsim
+$ cd ~/go/src/github.com/chainsafe/utreexo/cmd/ibdsim
 $ go build
 $ cp ibdsim ~/.bitcoin/testnet3/blocks
 $ cd ~/.bitcoin/testnet3/blocks

@@ -2,7 +2,7 @@ package main
 
 import (
 	log "github.com/ChainSafe/log15"
-	"github.com/mit-dci/utreexo/config"
+	"github.com/chainsafe/utreexo/config"
 	"github.com/urfave/cli"
 )
 
