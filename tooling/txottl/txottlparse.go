@@ -109,13 +109,13 @@ func lookerUpperWorker(
 }
 
 // read from the DB and tack on TTL values
-func readTTLdb() error {
+func readTTLdb(config *config.Config) error {
 
 	// open database
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
 	o.ReadOnly = true
-	lvdb, err := leveldb.OpenFile("./ttldb", o)
+	lvdb, err := leveldb.OpenFile(config.LevelDBPath, o)
 	if err != nil {
 		panic(err)
 	}

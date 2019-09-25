@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/chainsafe/utreexo/config"
 )
 
-func main() {
+func Start(config *config.Config) {
 	fmt.Printf("txottl\n")
-	err := readTTLdb()
+	err := readTTLdb(config)
 	if err != nil {
 		panic(err)
 	}

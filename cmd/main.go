@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/chainsafe/utreexo/tooling/blockparser"
+	"github.com/chainsafe/utreexo/tooling/txottl"
 	"os"
 
 	log "github.com/ChainSafe/log15"
@@ -42,9 +43,10 @@ func utreexo(ctx *cli.Context) {
 	config := makeConfig(ctx)
 	MakeDir()
 
-	node := makeNode(config)
-
+	// Parse bitcoin state
 	blockparser.Start(config)
+	txottl.Start()
 
+	node := makeNode(config)
 	node.Start()
 }
