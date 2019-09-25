@@ -36,6 +36,6 @@ func main() {
 // utreexo is the main entrypoint into the utreexo system
 func utreexo(ctx *cli.Context) error {
 	log.Info("Starting Utreexo...")
-	//log.Info(ctx.da)
+	makeNode(ctx)
 	return nil
 }

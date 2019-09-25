@@ -7,6 +7,15 @@ import (
 	"runtime"
 )
 
+type Config struct {
+	dataDir string
+}
+
+// Default config export
+var DefaultConfig = &Config {
+	dataDir: DefaultDataDir(),
+}
+
 // DefaultDataDir is the default data directory to use for the databases and other
 // persistence requirements.
 func DefaultDataDir() string {
