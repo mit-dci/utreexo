@@ -2,7 +2,7 @@ package config
 
 const (
 	RootDbPath = "./utreexo-db/"
-	TxoFilename = RootDbPath + "testnet.txos"
-	LevelDBPath = RootDbPath + "/ttldb"
-	MainnetTxo = RootDbPath + "ttl.mainnet.txos"
+	txoFilename = RootDbPath + "testnet.txos"
+	levelDBPath = RootDbPath + "/ttldb"
+	mainnetTxo = RootDbPath + "ttl.mainnet.txos"
 )

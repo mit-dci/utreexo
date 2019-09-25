@@ -49,7 +49,7 @@ func parser(config *defaults.Config) error {
 	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
 	tip := testNet3GenHash
 
-	outfile, err := os.Create(defaults.TxoFilename)
+	outfile, err := os.Create(config.TxoFilename)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func parser(config *defaults.Config) error {
 	// open database
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile(defaults.LevelDBPath, o)
+	lvdb, err := leveldb.OpenFile(config.LevelDBPath, o)
 	if err != nil {
 		return err
 	}
@@ -74,11 +74,11 @@ func parser(config *defaults.Config) error {
 
 	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
-		fmt.Printf("reading %s\n", fileName)
+		log.Info("Reading", fileName)
 
 		_, err := os.Stat(fileName)
 		if os.IsNotExist(err) {
-			fmt.Printf("%s doesn't exist; done reading\n", fileName)
+			log.Warn(fileName + " doesn't exist; done reading")
 			break
 		}
 

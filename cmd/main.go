@@ -11,7 +11,7 @@ import (
 var (
 	app       = cli.NewApp()
 	coreFlags = []cli.Flag{
-		DataDirFlag,
+		ChainDbDirFlag,
 	}
 )
 
@@ -38,7 +38,10 @@ func main() {
 func utreexo(ctx *cli.Context) {
 	log.Info("Starting Utreexo...")
 
+	// Necessary setup
 	config := makeConfig(ctx)
+	MakeDir()
+
 	node := makeNode(config)
 
 	blockparser.Start(config)

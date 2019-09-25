@@ -7,5 +7,9 @@ import (
 type Node struct {}
 
 func (n *Node) Start() {
-	log.Info("Starting Node...")
+	log.Info("Starting node...")
+}
+
+func (n *Node) Stop() {
+	log.Info("Stopping node...")
 }

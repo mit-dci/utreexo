@@ -4,7 +4,12 @@ import (
 	"github.com/chainsafe/utreexo/config"
 	"github.com/chainsafe/utreexo/node"
 	"github.com/urfave/cli"
+	"os"
 )
+
+func MakeDir() {
+	os.Mkdir(config.RootDbPath, os.ModePerm)
+}
 
 func makeNode(cfg *config.Config) *node.Node {
 	node := &node.Node{}
@@ -13,14 +18,17 @@ func makeNode(cfg *config.Config) *node.Node {
 
 func makeConfig(ctx *cli.Context) *config.Config {
 	return &config.Config{
-		DataDir: getDatabaseDir(ctx),
+		ChainDir: override(ctx.GlobalString(ChainDbDirFlag.Name), config.DefaultConfig.ChainDir),
+		TxoFilename: override("", config.DefaultConfig.TxoFilename),
+		LevelDBPath: override("", config.DefaultConfig.LevelDBPath),
+		MainnetTxo: override("", config.DefaultConfig.MainnetTxo),
 	}
 }
 
-func getDatabaseDir(ctx *cli.Context) string {
-	if file := ctx.GlobalString(DataDirFlag.Name); file != "" {
-		return file
+func override(a string, b string) string {
+	if a != "" {
+		return a
 	} else {
-		return config.DefaultDataDir()
+		return b
 	}
 }
