@@ -1,8 +1,9 @@
-package main
+package txottl
 
 import (
 	"bufio"
 	"fmt"
+	"github.com/chainsafe/utreexo/config"
 	"os"
 	"strconv"
 	"strings"
@@ -17,8 +18,6 @@ type Hash [32]byte
 func HashFromString(s string) Hash {
 	return blake2b.Sum256([]byte(s))
 }
-
-const txoFilename = "testnet.txos"
 
 // for parallel txofile building we need to have a buffer
 type txotx struct {
@@ -122,12 +121,12 @@ func readTTLdb() error {
 	}
 	defer lvdb.Close()
 
-	txofile, err := os.OpenFile(txoFilename, os.O_RDONLY, 0600)
+	txofile, err := os.OpenFile(config.TxoFilename, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
 	defer txofile.Close()
-	ttlfile, err := os.OpenFile("ttl."+txoFilename, os.O_RDWR|os.O_CREATE, 0600)
+	ttlfile, err := os.OpenFile("ttl."+config.TxoFilename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}

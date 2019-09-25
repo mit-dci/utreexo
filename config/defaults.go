@@ -8,12 +8,12 @@ import (
 )
 
 type Config struct {
-	dataDir string
+	DataDir string
 }
 
 // Default config export
 var DefaultConfig = &Config {
-	dataDir: DefaultDataDir(),
+	DataDir: DefaultDataDir(),
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other

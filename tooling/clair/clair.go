@@ -1,10 +1,11 @@
-package main
+package clair
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/chainsafe/utreexo/config"
 	"io/ioutil"
 	"os"
 	"sort"
@@ -81,7 +82,7 @@ func main() {
 }
 
 func clairvoy() error {
-	txofile, err := os.OpenFile("ttl.mainnet.txos", os.O_RDONLY, 0600)
+	txofile, err := os.OpenFile(config.MainnetTxo, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}

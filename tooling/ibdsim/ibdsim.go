@@ -1,6 +1,6 @@
 /* test the utreexo forest */
 
-package main
+package ibdsim
 
 import (
 	"bufio"

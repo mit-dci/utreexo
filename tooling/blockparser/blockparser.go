@@ -1,10 +1,12 @@
-package main
+package blockparser
 
 import (
 	"fmt"
+	defaults "github.com/chainsafe/utreexo/config"
 	"os"
 	"sync"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -33,21 +35,21 @@ var testNet3GenHash = chainhash.Hash{
 	0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
 }
 
-func main() {
-	fmt.Printf("hi\n")
+func Start(config *defaults.Config) {
+	log.Info("Starting block parsing...")
 
-	err := parser()
+	err := parser(config)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func parser() error {
+func parser(config *defaults.Config) error {
 	tipnum := 0
 	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
 	tip := testNet3GenHash
 
-	outfile, err := os.Create("testnet.txos")
+	outfile, err := os.Create(defaults.TxoFilename)
 	if err != nil {
 		return err
 	}
@@ -55,9 +57,9 @@ func parser() error {
 	// open database
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile("./ttldb", o)
+	lvdb, err := leveldb.OpenFile(defaults.LevelDBPath, o)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer lvdb.Close()
 	var batchwg sync.WaitGroup

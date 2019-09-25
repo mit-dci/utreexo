@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/chainsafe/utreexo/tooling/blockparser"
 	"os"
 
 	log "github.com/ChainSafe/log15"
@@ -34,8 +35,13 @@ func main() {
 }
 
 // utreexo is the main entrypoint into the utreexo system
-func utreexo(ctx *cli.Context) error {
+func utreexo(ctx *cli.Context) {
 	log.Info("Starting Utreexo...")
-	makeNode(ctx)
-	return nil
+
+	config := makeConfig(ctx)
+	node := makeNode(config)
+
+	blockparser.Start(config)
+
+	node.Start()
 }
