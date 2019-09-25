@@ -1,4 +1,4 @@
-package utils
+package main
 
 import (
 	"github.com/mit-dci/utreexo/config"

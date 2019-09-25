@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/mit-dci/utreexo/cmd/utils"
 	"os"
 
 	log "github.com/ChainSafe/log15"
@@ -11,7 +10,7 @@ import (
 var (
 	app       = cli.NewApp()
 	coreFlags = []cli.Flag{
-		utils.DataDirFlag,
+		DataDirFlag,
 	}
 )
 
