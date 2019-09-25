@@ -62,8 +62,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 		fmt.Printf("i %d a %d->%d\n", i, a.from, a.to)
 		f.forest[a.from] = f.forest[a.to]
 		f.forest[a.to] = ub.hashes[i]
-		dirt[i*2] = a.from
-		dirt[(i*2)+1] = a.to
+		dirt[i*2] = up1(a.from, f.height)
+		dirt[(i*2)+1] = up1(a.to, f.height)
 	}
 
 	// rehash above all tos/froms
@@ -97,7 +97,7 @@ func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
 func (f *Forest) reHash(dirt []uint64) error {
 
 	tops, topheights := getTopsReverse(f.numLeaves, f.height)
-
+	fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
 	dirty2d := make([][]uint64, f.height)
 	h := uint8(0)
 	dirtyRemaining := 0
@@ -107,9 +107,9 @@ func (f *Forest) reHash(dirt []uint64) error {
 		for h < dHeight {
 			h++
 		}
-		if bridgeVerbose {
-			fmt.Printf("h %d\n", h)
-		}
+		// if bridgeVerbose {
+		fmt.Printf("h %d\n", h)
+		// }
 		dirty2d[h] = append(dirty2d[h], pos)
 		dirtyRemaining++
 	}

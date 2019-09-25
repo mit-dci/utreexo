@@ -7,12 +7,12 @@ import (
 )
 
 func TestUndoFixed(t *testing.T) {
-	rand.Seed(4)
+	rand.Seed(2)
 	//	err := undoAddOnly()
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
-	// fmt.Printf(BinString(16))
+	fmt.Printf(BinString(16))
 	err := undoAddDel()
 	if err != nil {
 		t.Fatal(err)
