@@ -7,7 +7,7 @@ import (
 )
 
 func TestUndoFixed(t *testing.T) {
-	rand.Seed(2)
+	rand.Seed(6)
 	//	err := undoAddOnly()
 	//	if err != nil {
 	//		t.Fatal(err)

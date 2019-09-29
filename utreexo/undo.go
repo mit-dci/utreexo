@@ -14,7 +14,7 @@ although actually it can make sense for non-bridge nodes to undo as well...
 type undoBlock struct {
 	adds      uint32   // number of adds in thie block
 	positions []uint64 // position of all deletions this block
-	hashes    []Hash   // hashes that were overwritten or deleted
+	hashes    []Hash   // hashes that were deleted
 }
 
 func (u *undoBlock) ToString() string {
@@ -35,9 +35,11 @@ func (u *undoBlock) ToString() string {
 func (f *Forest) Undo(ub undoBlock) error {
 
 	prevAdds := uint64(ub.adds)
+	prevDels := uint64(len(ub.hashes))
 	// how many leaves were there at the last block?
-	prevNumLeaves := f.numLeaves + uint64(len(ub.positions)) - prevAdds
+	prevNumLeaves := f.numLeaves + prevDels - prevAdds
 	// run the transform to figure out where things came from
+	leafMoves := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
 
 	// first undo the leaves added in the last block
 	f.numLeaves -= prevAdds
@@ -47,23 +49,47 @@ func (f *Forest) Undo(ub undoBlock) error {
 		f.forest[pos] = empty
 	}
 
-	stash, moves, leaf := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
+	// map & then sort.  Is there a mapless way that's not O(n)?
+	gapMap := make(map[uint64]bool)
+	for pos := f.numLeaves; pos < f.numLeaves+prevDels; pos++ {
+		fmt.Printf("add gap %d\t", pos)
+		gapMap[pos] = true
+	}
+	fmt.Printf("\n")
 
 	fmt.Printf("\t\t### UNDO DATA\n")
-	fmt.Printf("stash %v\n", stash)
-	fmt.Printf("moves %v\n", moves)
-	fmt.Printf("leaf moves %d %v\n", len(leaf), leaf)
+	fmt.Printf("fnl %d leaf moves %d %v\n", f.numLeaves, len(leafMoves), leafMoves)
 	fmt.Printf("ub hashes %d\n", len(ub.hashes))
 
-	dirt := make([]uint64, len(leaf)*2)
+	dirt := make([]uint64, len(leafMoves))
 
-	// move things backwards
-	for i, a := range leaf {
-		fmt.Printf("i %d a %d->%d\n", i, a.from, a.to)
-		f.forest[a.from] = f.forest[a.to]
-		f.forest[a.to] = ub.hashes[i]
-		dirt[i*2] = up1(a.from, f.height)
-		dirt[(i*2)+1] = up1(a.to, f.height)
+	// go through arrows in reverse order
+	reverseArrowSlice(leafMoves)
+	for i, a := range leafMoves {
+		// if moving to a gap, swap gap
+		if gapMap[a.from] {
+			delete(gapMap, a.from)
+			gapMap[a.to] = true
+		}
+		f.forest[a.from], f.forest[a.to] = f.forest[a.to], f.forest[a.from]
+		// f.forest[a.from] = f.forest[a.to]
+		dirt[i] = a.from
+	}
+
+	// need a sorted list of gaps to put the hashes in
+	gaps := make([]uint64, len(ub.hashes))
+	i := 0
+	for p := range gapMap {
+		gaps[i] = p
+		i++
+	}
+	sortUint64s(gaps)
+
+	// insert hashes
+	for i, h := range ub.hashes {
+		f.forest[gaps[i]] = h
+		fmt.Printf("wrote hash %x to %d\n", h[:4], gaps[i])
+		dirt = append(dirt, gaps[i])
 	}
 
 	// rehash above all tos/froms
@@ -94,6 +120,11 @@ func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
 	return ub
 }
 
+// reHash hashes new data in the forest based on dirty positions.
+// right now it seems "dirty" means the node itself moved, not that the
+// parent has changed children.
+// TODO: switch the meaning of "dirt" to mean parents with changed children;
+// this will probably make it a lot simpler.
 func (f *Forest) reHash(dirt []uint64) error {
 
 	tops, topheights := getTopsReverse(f.numLeaves, f.height)

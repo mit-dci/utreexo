@@ -346,33 +346,39 @@ func isDescendantClever(p, a, b uint64, h uint8) (bool, bool) {
 	return underA, underB
 }
 
+// transformLeafUndo gives all the leaf movements.
 func transformLeafUndo(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow, []arrow) {
-	fmt.Printf("(undo) call remTr %d %d %d\n", dels, numLeaves, fHeight)
+	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
+	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
 	rStashes, rMoves := removeTransform(dels, numLeaves, fHeight)
 
+	moveStashMerged := append(rStashes, rMoves...)
+
+	fmt.Printf("msm %v\n", moveStashMerged)
 	var floor []arrow
 
-	for _, m := range rMoves {
-		if m.from < numLeaves {
-			floor = append(floor, m)
-		} else {
-			// expand to leaves
-			floor = append(floor, m.toLeaves(fHeight)...)
+	// swapMap := make(map[uint64]bool)
+
+	for _, a := range moveStashMerged {
+		if a.from == a.to {
+			continue
+			// TODO: why do these even exist?  get rid of them from
+			// removeTransform output?
 		}
-	}
-	for _, s := range rStashes {
-		if s.from < numLeaves {
-			floor = append(floor, s)
-		} else {
-			// expand to leaves
-			floor = append(floor, s.toLeaves(fHeight)...)
+		leaves := a.toLeaves(fHeight)
+
+		for _, l := range leaves {
+			fmt.Printf("%d -> %d\t", l.from, l.to)
+			// if !swapMap[l.from] {
+			floor = append(floor, l)
+			// swapMap[l.to] = true
+			// }
 		}
 	}
 
 	fmt.Printf("floor: %v\n", floor)
 
-	return rStashes, rMoves, floor
+	return floor
 }
 
 // ExpandTransform calls removeTransform with the same args, and expands its output.
