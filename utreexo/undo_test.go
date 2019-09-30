@@ -13,7 +13,24 @@ func TestUndoFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	// fmt.Printf(BinString(16))
-	err := undoAddDelOnce(5, 3)
+	// for i := uint32(0); i < 8; i++ {
+	// 	for j := uint32(0); j < i; j++ {
+	// 		fmt.Printf("###### ##### ##### test add %d del %d\n", i, j)
+	// 		err := undoAddDelOnce(i, j)
+	// 		if err != nil {
+	// 			t.Fatal(err)
+	// 		}
+	// 	}
+	// }
+
+	// needs in-order
+	err := undoAddDelOnce(7, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// needs reverse order
+	// err = undoAddDelOnce(4, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

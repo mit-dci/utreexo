@@ -221,6 +221,7 @@ This should be useful for undo and forest remove as well.
 func topDown(arrows []arrow, fh uint8) []arrow {
 	// reverse the arrow list, now it should be top to bottom
 	reverseArrowSlice(arrows)
+	fmt.Printf("topDown on %v\n", arrows)
 	// go through every entry.  Except skip the ones on the bottom row.
 	for top := 0; top < len(arrows); top++ {
 		// mask is the xor difference between the from and to positions.
@@ -350,18 +351,19 @@ func isDescendantClever(p, a, b uint64, h uint8) (bool, bool) {
 func transformLeafUndo(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
-	moveStashMerged := topDownTransform(dels, numLeaves, fHeight)
+	td := topDownTransform(dels, numLeaves, fHeight)
 
 	// moveStashMerged := append(rStashes, rMoves...)
 
-	fmt.Printf("msm %v\n", moveStashMerged)
+	fmt.Printf("td output %v\n", td)
 	var floor []arrow
 
 	// swapMap := make(map[uint64]bool)
 	fmt.Printf("raw: ")
-	for _, a := range moveStashMerged {
+	for _, a := range td {
 		fmt.Printf("%d -> %d\t", a.from, a.to)
 		if a.from == a.to {
+			fmt.Printf("omitting %d -> %d\n", a.to, a.to)
 			continue
 			// TODO: why do these even exist?  get rid of them from
 			// removeTransform output?

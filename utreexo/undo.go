@@ -41,8 +41,6 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// run the transform to figure out where things came from
 	leafMoves := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
 
-	// lm2 := topDownTransform(ub.positions, prevNumLeaves, f.height)
-	// fmt.Printf("lm2: %v\n", lm2)
 	// first undo the leaves added in the last block
 	f.numLeaves -= prevAdds
 	// clear out the hashes themselves (maybe don't need to but seems safer)
@@ -66,6 +64,11 @@ func (f *Forest) Undo(ub undoBlock) error {
 	dirt := make([]uint64, len(leafMoves))
 
 	// go through arrows in reverse order
+	// TODO -- here is the problem.  Most things work in either order.
+	// Some cases only work reversed, or only in the order transformLeafUndo()
+	// returns.  So transformLeafUndo() needs to change to return a slice of
+	// arrows in the right order such that it always works.
+	// reverse seems correct though?  In that we're reversing the transform...
 	reverseArrowSlice(leafMoves)
 	for i, a := range leafMoves {
 		// if moving to a gap, swap gap
@@ -74,6 +77,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 			gapMap[a.to] = true
 		}
 		// swap
+		fmt.Printf("swaped %d, %d\n", a.to, a.from)
 		f.forest[a.from], f.forest[a.to] = f.forest[a.to], f.forest[a.from]
 		// f.forest[a.from] = f.forest[a.to]
 		dirt[i] = a.from
