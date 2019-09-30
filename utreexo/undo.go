@@ -93,13 +93,14 @@ func (f *Forest) Undo(ub undoBlock) error {
 	}
 
 	// rehash above all tos/froms
+	f.numLeaves = prevNumLeaves // change numLeaves before rehashing
 	sortUint64s(dirt)
 	fmt.Printf("rehash dirt: %v\n", dirt)
 	err := f.reHash(dirt)
 	if err != nil {
 		return err
 	}
-	f.numLeaves = prevNumLeaves
+
 	fmt.Printf("post undo %s\n", f.ToString())
 	return nil
 }
@@ -126,13 +127,16 @@ func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
 // TODO: switch the meaning of "dirt" to mean parents with changed children;
 // this will probably make it a lot simpler.
 func (f *Forest) reHash(dirt []uint64) error {
-
 	tops, topheights := getTopsReverse(f.numLeaves, f.height)
 	fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
+
 	dirty2d := make([][]uint64, f.height)
 	h := uint8(0)
 	dirtyRemaining := 0
 	for _, pos := range dirt {
+		if pos > f.numLeaves {
+			return fmt.Errorf("Dirt %d exceeds numleaves %d", pos, f.numLeaves)
+		}
 		dHeight := detectHeight(pos, f.height)
 		// increase height if needed
 		for h < dHeight {
@@ -157,6 +161,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 		if bridgeVerbose {
 			fmt.Printf("dirty %v\ncurrentRow %v\n", dirty2d[h], currentRow)
 		}
+
 		// merge nextRow and the dirtySlice.  They're both sorted so this
 		// should be quick.  Seems like a CS class kindof algo but who knows.
 		// Should be O(n) anyway.
@@ -196,10 +201,6 @@ func (f *Forest) reHash(dirt []uint64) error {
 		if topheights[0] == h {
 			tops = tops[1:]
 			topheights = topheights[1:]
-			// why does this happen... it shouldn't
-			if len(tops) == 0 {
-				return fmt.Errorf("Ran out of tops")
-			}
 		}
 		currentRow = nextRow
 		nextRow = []uint64{}
