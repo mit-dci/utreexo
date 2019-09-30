@@ -40,8 +40,9 @@ func (f *Forest) Undo(ub undoBlock) error {
 	prevNumLeaves := f.numLeaves + prevDels - prevAdds
 	// run the transform to figure out where things came from
 	leafMoves := transformLeafUndo(ub.positions, prevNumLeaves, f.height)
-	lm2 := topDownTransform(ub.positions, prevNumLeaves, f.height)
-	fmt.Printf("lm2: %v\n", lm2)
+
+	// lm2 := topDownTransform(ub.positions, prevNumLeaves, f.height)
+	// fmt.Printf("lm2: %v\n", lm2)
 	// first undo the leaves added in the last block
 	f.numLeaves -= prevAdds
 	// clear out the hashes themselves (maybe don't need to but seems safer)
@@ -72,6 +73,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 			delete(gapMap, a.from)
 			gapMap[a.to] = true
 		}
+		// swap
 		f.forest[a.from], f.forest[a.to] = f.forest[a.to], f.forest[a.from]
 		// f.forest[a.from] = f.forest[a.to]
 		dirt[i] = a.from

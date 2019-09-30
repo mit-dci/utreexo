@@ -13,7 +13,7 @@ func TestUndoFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	// fmt.Printf(BinString(16))
-	err := undoAddDelOnce(4, 1)
+	err := undoAddDelOnce(5, 3)
 	if err != nil {
 		t.Fatal(err)
 	}

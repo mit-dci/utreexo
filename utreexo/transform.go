@@ -350,9 +350,9 @@ func isDescendantClever(p, a, b uint64, h uint8) (bool, bool) {
 func transformLeafUndo(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
-	rStashes, rMoves := removeTransform(dels, numLeaves, fHeight)
+	moveStashMerged := topDownTransform(dels, numLeaves, fHeight)
 
-	moveStashMerged := append(rStashes, rMoves...)
+	// moveStashMerged := append(rStashes, rMoves...)
 
 	fmt.Printf("msm %v\n", moveStashMerged)
 	var floor []arrow
