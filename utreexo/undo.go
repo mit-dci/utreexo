@@ -97,7 +97,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 	fmt.Printf("rehash dirt: %v\n", dirt)
 	err := f.reHash(dirt)
 	if err != nil {
-		return nil
+		return err
 	}
 	f.numLeaves = prevNumLeaves
 	fmt.Printf("post undo %s\n", f.ToString())
@@ -196,6 +196,10 @@ func (f *Forest) reHash(dirt []uint64) error {
 		if topheights[0] == h {
 			tops = tops[1:]
 			topheights = topheights[1:]
+			// why does this happen... it shouldn't
+			if len(tops) == 0 {
+				return fmt.Errorf("Ran out of tops")
+			}
 		}
 		currentRow = nextRow
 		nextRow = []uint64{}

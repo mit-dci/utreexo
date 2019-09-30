@@ -409,7 +409,7 @@ func (f *Forest) Add(adds []LeafTXO) {
 func (f *Forest) addv2(adds []LeafTXO) {
 
 	for _, add := range adds {
-		fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
+		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
 		f.positionMap[add.Mini()] = f.numLeaves
 
 		tops, _ := getTopsReverse(f.numLeaves, f.height)

@@ -7,13 +7,13 @@ import (
 )
 
 func TestUndoFixed(t *testing.T) {
-	rand.Seed(6)
+	rand.Seed(2)
 	//	err := undoAddOnly()
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
-	fmt.Printf(BinString(16))
-	err := undoAddDel()
+	// fmt.Printf(BinString(16))
+	err := undoAddDelOnce(7, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,25 +65,27 @@ func undoOnceRandom(blocks int32) error {
 	return nil
 }
 
-func undoAddDel() error {
+func undoAddDelOnce(numAdds, numDels uint32) error {
 	f := NewForest()
 
 	// p.Minleaves = 0
 
 	sc := NewSimChain()
-	sc.durationMask = 0x03
-	adds, delHashes := sc.NextBlock(7)
+	// sc.durationMask = 0x03
+	adds, _ := sc.NextBlock(numAdds)
 	fmt.Printf("\t\tblock %d del %d add %d - %s\n",
-		sc.blockHeight, len(delHashes), len(adds), f.Stats())
+		sc.blockHeight, numDels, numAdds, f.Stats())
 
-	bp, err := f.ProveBlock(delHashes)
+	err := f.Modify(adds, nil)
 	if err != nil {
 		return err
 	}
 
-	err = f.Modify(adds, bp.Targets)
-	if err != nil {
-		return err
+	// just delete from the left side for now.  Can try deleting scattered
+	// randomly later
+	delHashes := make([]Hash, numDels)
+	for i, _ := range delHashes {
+		delHashes[i] = adds[i].Hash
 	}
 
 	preTops := f.GetTops()
@@ -91,11 +93,11 @@ func undoAddDel() error {
 		fmt.Printf("pretop %d %x\n", i, h)
 	}
 
-	adds, delHashes = sc.NextBlock(0)
+	adds, _ = sc.NextBlock(0)
 	fmt.Printf("\t\tblock %d del %d add %d - %s\n",
 		sc.blockHeight, len(delHashes), len(adds), f.Stats())
 
-	bp, err = f.ProveBlock(delHashes)
+	bp, err := f.ProveBlock(delHashes)
 	if err != nil {
 		return err
 	}
