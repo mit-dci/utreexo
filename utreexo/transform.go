@@ -274,9 +274,9 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 	return arrows
 }
 
-// mergeAndReverseArrows is ugly and does what it says but we should change
+// mergerrows is ugly and does what it says but we should change
 // transform itself to not need this
-func mergeAndReverseArrows(a, b []arrow) []arrow {
+func mergeArrows(a, b []arrow) []arrow {
 	c := append(a, b...)
 	sortMoves(c)
 	return c
@@ -293,7 +293,7 @@ func reverseArrowSlice(as []arrow) {
 // topDownTransform is the removeTransform flipped to topDown by topDown()
 func topDownTransform(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	a, b := removeTransform(dels, numLeaves, fHeight)
-	return topDown(mergeAndReverseArrows(a, b), fHeight)
+	return topDown(mergeArrows(a, b), fHeight)
 }
 
 // fmt.Printf("mv %v, stash %v\n", mv, stash)
@@ -358,15 +358,16 @@ func transformLeafUndo(
 	var floor []arrow
 
 	// swapMap := make(map[uint64]bool)
-
+	fmt.Printf("raw: ")
 	for _, a := range moveStashMerged {
+		fmt.Printf("%d -> %d\t", a.from, a.to)
 		if a.from == a.to {
 			continue
 			// TODO: why do these even exist?  get rid of them from
 			// removeTransform output?
 		}
 		leaves := a.toLeaves(fHeight)
-
+		fmt.Printf(" leaf: ")
 		for _, l := range leaves {
 			fmt.Printf("%d -> %d\t", l.from, l.to)
 			// if !swapMap[l.from] {
@@ -374,6 +375,7 @@ func transformLeafUndo(
 			// swapMap[l.to] = true
 			// }
 		}
+		fmt.Printf("\n")
 	}
 
 	fmt.Printf("floor: %v\n", floor)
