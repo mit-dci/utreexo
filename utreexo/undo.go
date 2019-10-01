@@ -150,7 +150,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 			h++
 		}
 		// if bridgeVerbose {
-		fmt.Printf("h %d\n", h)
+		// fmt.Printf("h %d\n", h)
 		// }
 		dirty2d[h] = append(dirty2d[h], pos)
 		dirtyRemaining++

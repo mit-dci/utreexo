@@ -17,7 +17,7 @@ func TestTopDown(t *testing.T) {
 	fdown := NewForest() // top down modified forest
 	// ideally they are the same
 
-	adds := make([]LeafTXO, 16)
+	adds := make([]LeafTXO, 8)
 	for j := range adds {
 		adds[j].Hash[0] = uint8(j) | 0xa0
 	}
@@ -25,14 +25,33 @@ func TestTopDown(t *testing.T) {
 	fup.Modify(adds, nil)
 	fdown.Modify(adds, nil)
 
+	// fmt.Printf(fup.ToString())
+	// fmt.Printf(fdown.ToString())
+
 	//initial state
 	fmt.Printf(fup.ToString())
 
-	dels := []uint64{2, 3}
+	dels := []uint64{0}
 
 	fup.removev2(dels)
-
 	fdown.removev3(dels)
+
+	upTops := fup.GetTops()
+	downTops := fdown.GetTops()
+
+	fmt.Printf("up nl %d %s", fup.numLeaves, fup.ToString())
+	fmt.Printf("down nl %d %s", fdown.numLeaves, fdown.ToString())
+
+	if len(upTops) != len(downTops) {
+		t.Fatalf("tops mismatch up %d down %d\n", len(upTops), len(downTops))
+	}
+	for i, _ := range upTops {
+		fmt.Printf("up %04x down %04x ", upTops[i][:4], downTops[i][:4])
+		if downTops[i] != upTops[i] {
+			t.Fatalf("forest mismatch, up %x down %x",
+				upTops[i][:4], downTops[i][:4])
+		}
+	}
 
 }
 
