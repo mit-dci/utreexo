@@ -227,48 +227,50 @@ func (f *Forest) removev3(dels []uint64) error {
 	var dirt []uint64
 
 	fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
-	swaps := topDownTransform(dels, f.numLeaves, f.height)
+	swaps := floorTransform(dels, f.numLeaves, f.height)
+	fmt.Printf("v3 got swaps: %v\n", swaps)
 
-	for h := f.height; h < 0; h-- {
-		fmt.Printf("h %d dirt %v\n", h, dirt)
-
-		// go through moves for this height
-		for len(swaps) > 0 && detectHeight(swaps[0].to, f.height) == h {
-			// cswap := swaps[0]
-			if h == 0 {
-				// add to undo list
-				// umove := move{from: cmove.to, to: cmove.from}
-				// f.currentUndo = append(f.currentUndo,
-				// undo{Hash: f.forest[umove.to], move: umove})
-			}
-
-			swaps = swaps[1:]
-		}
-
-		for _, pos := range dirt {
-			lpos := child(pos, f.height)
-			// fmt.Printf("%d %x, %d %x\n",
-			// lpos, f.forest[lpos][:4], lpos^1, f.forest[lpos^1][:4])
-			if f.forest[lpos] == empty || f.forest[lpos^1] == empty {
-				f.forest[pos] = empty
-				fmt.Printf("clear pos %d due to empty child\n", pos)
-			} else {
-				f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
-				f.HistoricHashes++
-				parPos := up1(pos, f.height)
-				lhd := len(dirt)
-				// add parent to end of dirty slice if it's not already there
-				if lhd == 0 || dirt[lhd-1] != parPos {
-					fmt.Printf("for h %d pos %d hash %d to hashDirt \n",
-						h, pos, parPos)
-					dirt = append(dirt, parPos)
-				}
-			}
-		}
+	for _, s := range swaps {
+		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
+		dirt = append(dirt, s.to)
 	}
 
 	f.numLeaves -= uint64(len(dels))
-	return nil
+	f.cleanup()
+	return f.reHash(dirt)
+	// if h == 0 {
+	// add to undo list
+	// umove := move{from: cmove.to, to: cmove.from}
+	// f.currentUndo = append(f.currentUndo,
+	// undo{Hash: f.forest[umove.to], move: umove})
+	// }
+
+	// for _, pos := range dirt {
+	// 	lpos := child(pos, f.height)
+	// 	// fmt.Printf("%d %x, %d %x\n",
+	// 	// lpos, f.forest[lpos][:4], lpos^1, f.forest[lpos^1][:4])
+	// 	if f.forest[lpos] == empty || f.forest[lpos^1] == empty {
+	// 		f.forest[pos] = empty
+	// 		fmt.Printf("clear pos %d due to empty child\n", pos)
+	// 	} else {
+	// 		f.forest[pos] = Parent(f.forest[lpos], f.forest[lpos^1])
+	// 		f.HistoricHashes++
+	// 		parPos := up1(pos, f.height)
+	// 		lhd := len(dirt)
+	// 		// add parent to end of dirty slice if it's not already there
+	// 		if lhd == 0 || dirt[lhd-1] != parPos {
+	// 			fmt.Printf("pos %d hash %d to hashDirt \n", pos, parPos)
+	// 			dirt = append(dirt, parPos)
+	// 		}
+	// 	}
+	// }
+}
+
+// cleanup removes extraneous hashes from the forest.  Currently only the bottom
+func (f *Forest) cleanup() {
+	for p := f.numLeaves; p < 1<<f.height; p++ {
+		f.forest[p] = empty
+	}
 }
 
 type rootStash struct {

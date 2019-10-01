@@ -348,7 +348,7 @@ func isDescendantClever(p, a, b uint64, h uint8) (bool, bool) {
 }
 
 // transformLeafUndo gives all the leaf movements.
-func transformLeafUndo(
+func floorTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
 	td := topDownTransform(dels, numLeaves, fHeight)

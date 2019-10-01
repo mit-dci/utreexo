@@ -17,7 +17,7 @@ func TestTopDown(t *testing.T) {
 	fdown := NewForest() // top down modified forest
 	// ideally they are the same
 
-	adds := make([]LeafTXO, 8)
+	adds := make([]LeafTXO, 7)
 	for j := range adds {
 		adds[j].Hash[0] = uint8(j) | 0xa0
 	}
