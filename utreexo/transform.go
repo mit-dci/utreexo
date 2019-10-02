@@ -220,6 +220,8 @@ This should be useful for undo and forest remove as well.
 // give it a slice of arrows and a forest height
 func topDown(arrows []arrow, fh uint8) []arrow {
 	// reverse the arrow list, now it should be top to bottom
+	// TODO but you're not just making it top to bottom, but also reversing order
+	// within each row.  Which is maybe not OK
 	reverseArrowSlice(arrows)
 	fmt.Printf("topDown on %v\n", arrows)
 	// go through every entry.  Except skip the ones on the bottom row.
@@ -279,7 +281,7 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 // transform itself to not need this
 func mergeArrows(a, b []arrow) []arrow {
 	c := append(a, b...)
-	sortMoves(c)
+	sortArrows(c)
 	return c
 }
 
@@ -355,7 +357,7 @@ func floorTransform(
 
 	fmt.Printf("td output %v\n", td)
 
-	arMap := make(map[uint64]uint64)
+	var floor []arrow
 
 	fmt.Printf("raw: ")
 	for _, a := range td {
@@ -371,26 +373,19 @@ func floorTransform(
 
 		for _, l := range leaves {
 			fmt.Printf("%d -> %d\t", l.from, l.to)
+			floor = append(floor, l)
+			// can cutthrough work..?
 
-			prevTo, ok := arMap[l.to]
-			if ok {
-				fmt.Printf("%d in map\n", l.to)
-				arMap[l.from] = prevTo
-				delete(arMap, l.to)
-			} else {
-				arMap[l.from] = l.to
-			}
+			// prevTo, ok := arMap[l.to]
+			// if  ok {
+			// fmt.Printf("%d in map\n", l.to)
+			// arMap[l.from] = prevTo
+			// delete(arMap, l.to)
+			// } else {
+			// arMap[l.from] = l.to
+			// }
 		}
 		fmt.Printf("\n")
-	}
-
-	// move map into slice; it's in random order though, is that OK?
-	// it's a slice of swaps on the floor, so should be fine?
-	floor := make([]arrow, len(arMap))
-	i := 0
-	for from, to := range arMap {
-		floor[i] = arrow{from, to}
-		i++
 	}
 
 	fmt.Printf("floor: %v\n", floor)
@@ -455,8 +450,8 @@ func xxexpandedTransform(
 		i++
 	}
 
-	sortMoves(expandedStash)
-	sortMoves(skipMoves)
+	// sortMoves(expandedStash)
+	// sortMoves(skipMoves)
 
 	return expandedStash, skipMoves, nil
 }

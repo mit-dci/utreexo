@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// test cases for TestTopDown:
+// add 4, remove [0]
+// add 5, remove [0, 3]
+
 func TestTopDown(t *testing.T) {
 
 	// mv, stash := removeTransform([]uint64{1}, 16, 4)
@@ -13,25 +17,23 @@ func TestTopDown(t *testing.T) {
 	// td := topDown(arrows, 4)
 	// fmt.Printf("td %v\n", td)
 
+	//  these should stay the same
 	fup := NewForest()   // bottom up modified forest
 	fdown := NewForest() // top down modified forest
-	// ideally they are the same
 
-	adds := make([]LeafTXO, 10)
+	adds := make([]LeafTXO, 5)
 	for j := range adds {
-		adds[j].Hash[0] = uint8(j) | 0xa0
+		adds[j].Hash[1] = uint8(j)
+		adds[j].Hash[3] = 0xcc
 	}
 
 	fup.Modify(adds, nil)
 	fdown.Modify(adds, nil)
 
-	// fmt.Printf(fup.ToString())
-	// fmt.Printf(fdown.ToString())
-
 	//initial state
 	fmt.Printf(fup.ToString())
 
-	dels := []uint64{0, 1, 2, 3, 4}
+	dels := []uint64{0, 3}
 
 	err := fup.removev2(dels)
 	if err != nil {
@@ -74,7 +76,6 @@ func TestIsDescendant(t *testing.T) {
 		   |---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
 		   00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15
 	*/
-
 	// 3 is under 24 but not 25
 	p, a, b := 3, 24, 25
 	aunder, bunder := isDescendant(uint64(p), uint64(a), uint64(b), 4)
@@ -85,11 +86,9 @@ func TestIsDescendant(t *testing.T) {
 	}
 
 	p, a, b = 20, 28, 29
-
 	aunder, bunder = isDescendant(uint64(p), uint64(a), uint64(b), 4)
 	if aunder || !bunder {
 		t.Fatalf("isDescendant %v %v error for %d under %d %d",
 			aunder, bunder, p, a, b)
 	}
-
 }

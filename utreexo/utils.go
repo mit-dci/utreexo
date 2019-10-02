@@ -311,8 +311,8 @@ func sortNodeSlice(s []Node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
-// sortMoves sorts them by from, not to
-func sortMoves(s []arrow) {
+// sortArrows sorts them by from
+func sortArrows(s []arrow) {
 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
 }
 
