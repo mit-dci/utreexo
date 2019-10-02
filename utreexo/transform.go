@@ -293,6 +293,26 @@ func reverseArrowSlice(as []arrow) {
 	}
 }
 
+// upendArrowSlice moves the low arrows to the top and vice versa, while
+// preserving order within individual rows
+func upendArrowSlice(as []arrow, h uint8) {
+	var a2d [][]arrow
+
+	curHeight := detectHeight(as[0].from, h)
+	row := 0
+	for _, a := range as {
+		aHeight := detectHeight(a.from, h)
+		if aHeight != curHeight {
+			curHeight = aHeight
+			row++
+		}
+		a2d[row] = append(a2d[row], a)
+	}
+
+	// .. then go through the rows in backwards order
+
+}
+
 // topDownTransform is the removeTransform flipped to topDown by topDown()
 func topDownTransform(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	a, b := removeTransform(dels, numLeaves, fHeight)
