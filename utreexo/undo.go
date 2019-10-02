@@ -69,7 +69,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// returns.  So transformLeafUndo() needs to change to return a slice of
 	// arrows in the right order such that it always works.
 	// reverse seems correct though?  In that we're reversing the transform...
-	reverseArrowSlice(leafMoves)
+	// reverseArrowSlice(leafMoves)
 	for i, a := range leafMoves {
 		// if moving to a gap, swap gap
 		if gapMap[a.from] {
@@ -184,6 +184,11 @@ func (f *Forest) reHash(dirt []uint64) error {
 			// skip if next is sibling
 			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
 				continue
+			}
+			if len(tops) == 0 {
+				return fmt.Errorf(
+					"currentRow %v no tops remaining, this shouldn't happen",
+					currentRow)
 			}
 			// also skip if this is a top
 			if pos == tops[0] {

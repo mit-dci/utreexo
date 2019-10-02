@@ -353,12 +353,10 @@ func floorTransform(
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
 	td := topDownTransform(dels, numLeaves, fHeight)
 
-	// moveStashMerged := append(rStashes, rMoves...)
-
 	fmt.Printf("td output %v\n", td)
-	var floor []arrow
 
-	// swapMap := make(map[uint64]bool)
+	arMap := make(map[uint64]uint64)
+
 	fmt.Printf("raw: ")
 	for _, a := range td {
 		fmt.Printf("%d -> %d\t", a.from, a.to)
@@ -370,14 +368,29 @@ func floorTransform(
 		}
 		leaves := a.toLeaves(fHeight)
 		fmt.Printf(" leaf: ")
+
 		for _, l := range leaves {
 			fmt.Printf("%d -> %d\t", l.from, l.to)
-			// if !swapMap[l.from] {
-			floor = append(floor, l)
-			// swapMap[l.to] = true
-			// }
+
+			prevTo, ok := arMap[l.to]
+			if ok {
+				fmt.Printf("%d in map\n", l.to)
+				arMap[l.from] = prevTo
+				delete(arMap, l.to)
+			} else {
+				arMap[l.from] = l.to
+			}
 		}
 		fmt.Printf("\n")
+	}
+
+	// move map into slice; it's in random order though, is that OK?
+	// it's a slice of swaps on the floor, so should be fine?
+	floor := make([]arrow, len(arMap))
+	i := 0
+	for from, to := range arMap {
+		floor[i] = arrow{from, to}
+		i++
 	}
 
 	fmt.Printf("floor: %v\n", floor)

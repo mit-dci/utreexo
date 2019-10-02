@@ -212,6 +212,7 @@ func (f *Forest) removev3(dels []uint64) error {
 		return fmt.Errorf("%d deletions but forest has %d leaves",
 			len(dels), f.numLeaves)
 	}
+	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
 	// check that all dels are there & mark for deletion
 	for _, dpos := range dels {
@@ -232,10 +233,12 @@ func (f *Forest) removev3(dels []uint64) error {
 
 	for _, s := range swaps {
 		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
-		dirt = append(dirt, s.to)
+		if s.to < nextNumLeaves {
+			dirt = append(dirt, s.to)
+		}
 	}
 
-	f.numLeaves -= uint64(len(dels))
+	f.numLeaves = nextNumLeaves
 	f.cleanup()
 	return f.reHash(dirt)
 	// if h == 0 {
