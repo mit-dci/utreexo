@@ -247,17 +247,30 @@ func topDown(bu []arrow, fh uint8) []arrow {
 			// swap from if under either; swap to if under same as from
 			fromA, fromB := isDescendant(
 				arrows[sub].from, arrows[top].from, arrows[top].to, fh)
-			// toA, toB := isDescendant(
-			// arrows[sub].to, arrows[top].from, arrows[top].to, fh)
+			toA, toB := isDescendant(
+				arrows[sub].to, arrows[top].from, arrows[top].to, fh)
 
 			if fromA || fromB {
 				// swap from
+				fmt.Printf("%v causes %v -> ", arrows[top], arrows[sub])
 				arrows[sub].from ^= subMask
+				fmt.Printf("%v\n", arrows[sub])
 			}
-			// if toA || toB {
-			// swap to
-			// arrows[sub].to ^= subMask
-			// }
+
+			if toA || toB {
+				// swap to
+				// fmt.Printf("%v causes %v -> ", arrows[top], arrows[sub])
+				// arrows[sub].to ^= subMask
+				// fmt.Printf("%v\n", arrows[sub])
+			}
+
+			if (toA && fromA) || (toB && fromB) {
+				// swap to
+				fmt.Printf("%v causes %v -> ", arrows[top], arrows[sub])
+				arrows[sub].to ^= subMask
+				fmt.Printf("%v\n", arrows[sub])
+			}
+
 			/*if fromA || fromB {
 				// from is under either A or B; check if to is
 				toA, toB := isDescendant(

@@ -9,6 +9,7 @@ import (
 // add 4, remove [0]
 // add 5, remove [0, 3]
 // add 8, remove [0, 2]
+// add 8, remove [0, 2, 4, 6]
 
 func TestTopDown(t *testing.T) {
 
@@ -34,7 +35,7 @@ func TestTopDown(t *testing.T) {
 	//initial state
 	fmt.Printf(fup.ToString())
 
-	dels := []uint64{0, 2}
+	dels := []uint64{0, 2, 4, 6}
 
 	err := fup.removev2(dels)
 	if err != nil {
