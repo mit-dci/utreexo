@@ -28,6 +28,11 @@ type arrow struct {
 	from, to uint64
 }
 
+type arrowPlus struct {
+	from, to uint64
+	swappy   bool
+}
+
 // Node :
 type Node struct {
 	Pos uint64

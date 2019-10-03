@@ -284,10 +284,10 @@ func subTreeLeafRange(
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrow) toLeaves(forestHeight uint8) []arrow {
+func (a *arrowPlus) toLeaves(forestHeight uint8) []arrow {
 	h := detectHeight(a.from, forestHeight)
 	if h == 0 {
-		return []arrow{*a}
+		return []arrow{arrow{from: a.from, to: a.to}}
 	}
 
 	run := uint64(1 << h)
@@ -312,7 +312,12 @@ func sortNodeSlice(s []Node) {
 }
 
 // sortArrows sorts them by from
-func sortArrows(s []arrow) {
+// func sortArrows(s []arrow) {
+// 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
+// }
+
+// sortArrows sorts them by from
+func sortArrowPlusses(s []arrowPlus) {
 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
 }
 
