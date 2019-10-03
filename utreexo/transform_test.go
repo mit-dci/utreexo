@@ -8,6 +8,7 @@ import (
 // test cases for TestTopDown:
 // add 4, remove [0]
 // add 5, remove [0, 3]
+// add 8, remove [0, 2]
 
 func TestTopDown(t *testing.T) {
 
@@ -21,7 +22,7 @@ func TestTopDown(t *testing.T) {
 	fup := NewForest()   // bottom up modified forest
 	fdown := NewForest() // top down modified forest
 
-	adds := make([]LeafTXO, 4)
+	adds := make([]LeafTXO, 8)
 	for j := range adds {
 		adds[j].Hash[1] = uint8(j)
 		adds[j].Hash[3] = 0xcc
@@ -33,7 +34,7 @@ func TestTopDown(t *testing.T) {
 	//initial state
 	fmt.Printf(fup.ToString())
 
-	dels := []uint64{0}
+	dels := []uint64{0, 2}
 
 	err := fup.removev2(dels)
 	if err != nil {

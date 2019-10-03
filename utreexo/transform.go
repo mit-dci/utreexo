@@ -218,13 +218,15 @@ This should be useful for undo and forest remove as well.
 
 // topDown changes the output from removeTransform into a top-down swap list.
 // give it a slice of arrows and a forest height
-func topDown(arrows []arrow, fh uint8) []arrow {
+func topDown(bu []arrow, fh uint8) []arrow {
 	// reverse the arrow list, now it should be top to bottom
 	// TODO but you're not just making it top to bottom, but also reversing order
 	// within each row.  Which is maybe not OK.
 	// ... yeah it totally changes everything
-	// reverseArrowSlice(arrows)
-	fmt.Printf("topDown on %v\n", arrows)
+	arrows := upendArrowSlice(bu, fh)
+	// reverseArrowSlice(bu)
+	// arrows := bu
+	fmt.Printf("topDown input %v\n", arrows)
 	// go through every entry.  Except skip the ones on the bottom row.
 	for top := 0; top < len(arrows); top++ {
 		// mask is the xor difference between the from and to positions.
@@ -239,10 +241,24 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 			// maybe get a slice of arrows that encodes the arrow heights?
 			subHeight := detectHeight(arrows[sub].from, fh)
 			subMask := topMask << (topHeight - subHeight)
+
+			// swap descendents
+
 			// swap from if under either; swap to if under same as from
 			fromA, fromB := isDescendant(
 				arrows[sub].from, arrows[top].from, arrows[top].to, fh)
+			// toA, toB := isDescendant(
+			// arrows[sub].to, arrows[top].from, arrows[top].to, fh)
+
 			if fromA || fromB {
+				// swap from
+				arrows[sub].from ^= subMask
+			}
+			// if toA || toB {
+			// swap to
+			// arrows[sub].to ^= subMask
+			// }
+			/*if fromA || fromB {
 				// from is under either A or B; check if to is
 				toA, toB := isDescendant(
 					arrows[sub].to, arrows[top].from, arrows[top].to, fh)
@@ -259,7 +275,7 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 				arrows[sub].from ^= subMask
 
 				fmt.Printf("became %d->%d\n", arrows[sub].from, arrows[sub].to)
-			}
+			}*/
 		}
 	}
 	// remove redundant arrows after evertyhing else is done
@@ -275,8 +291,7 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 			i--
 		}
 	}
-	// return arrows
-	return upendArrowSlice(arrows, fh)
+	return arrows
 }
 
 // mergerrows is ugly and does what it says but we should change
@@ -328,8 +343,11 @@ func upendArrowSlice(as []arrow, h uint8) []arrow {
 
 // topDownTransform is the removeTransform flipped to topDown by topDown()
 func topDownTransform(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
-	a, b := removeTransform(dels, numLeaves, fHeight)
-	return topDown(mergeArrows(a, b), fHeight)
+	stash, move := removeTransform(dels, numLeaves, fHeight)
+	if len(stash) != 0 {
+		fmt.Printf("*******************STASH %v\n", stash)
+	}
+	return topDown(mergeArrows(stash, move), fHeight)
 }
 
 // fmt.Printf("mv %v, stash %v\n", mv, stash)
