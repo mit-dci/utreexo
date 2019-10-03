@@ -21,7 +21,7 @@ func TestTopDown(t *testing.T) {
 	fup := NewForest()   // bottom up modified forest
 	fdown := NewForest() // top down modified forest
 
-	adds := make([]LeafTXO, 5)
+	adds := make([]LeafTXO, 4)
 	for j := range adds {
 		adds[j].Hash[1] = uint8(j)
 		adds[j].Hash[3] = 0xcc
@@ -33,7 +33,7 @@ func TestTopDown(t *testing.T) {
 	//initial state
 	fmt.Printf(fup.ToString())
 
-	dels := []uint64{0, 3}
+	dels := []uint64{0}
 
 	err := fup.removev2(dels)
 	if err != nil {
@@ -61,6 +61,13 @@ func TestTopDown(t *testing.T) {
 		}
 	}
 
+}
+
+func TestUpend(t *testing.T) {
+	as := topDownTransform([]uint64{1, 3, 4}, 8, 3)
+	fmt.Printf("%v\n", as)
+	z := upendArrowSlice(as, 3)
+	fmt.Printf("%v\n", z)
 }
 
 func TestIsDescendant(t *testing.T) {

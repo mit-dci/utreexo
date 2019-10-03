@@ -221,8 +221,9 @@ This should be useful for undo and forest remove as well.
 func topDown(arrows []arrow, fh uint8) []arrow {
 	// reverse the arrow list, now it should be top to bottom
 	// TODO but you're not just making it top to bottom, but also reversing order
-	// within each row.  Which is maybe not OK
-	reverseArrowSlice(arrows)
+	// within each row.  Which is maybe not OK.
+	// ... yeah it totally changes everything
+	// reverseArrowSlice(arrows)
 	fmt.Printf("topDown on %v\n", arrows)
 	// go through every entry.  Except skip the ones on the bottom row.
 	for top := 0; top < len(arrows); top++ {
@@ -274,7 +275,8 @@ func topDown(arrows []arrow, fh uint8) []arrow {
 			i--
 		}
 	}
-	return arrows
+	// return arrows
+	return upendArrowSlice(arrows, fh)
 }
 
 // mergerrows is ugly and does what it says but we should change
@@ -295,22 +297,33 @@ func reverseArrowSlice(as []arrow) {
 
 // upendArrowSlice moves the low arrows to the top and vice versa, while
 // preserving order within individual rows
-func upendArrowSlice(as []arrow, h uint8) {
-	var a2d [][]arrow
+func upendArrowSlice(as []arrow, h uint8) []arrow {
+	// currently only works one way: output is always top to bottom
 
-	curHeight := detectHeight(as[0].from, h)
-	row := 0
+	a2d := make([][]arrow, h)
+
 	for _, a := range as {
-		aHeight := detectHeight(a.from, h)
-		if aHeight != curHeight {
-			curHeight = aHeight
-			row++
-		}
-		a2d[row] = append(a2d[row], a)
+		aHeight := int(detectHeight(a.from, h))
+		a2d[aHeight] = append(a2d[aHeight], a)
+		fmt.Printf("%d->%d h %d\n", a.from, a.to, aHeight)
 	}
 
-	// .. then go through the rows in backwards order
+	for i, row := range a2d {
+		fmt.Printf(" %d %v\n", i, row)
+	}
 
+	for i, j := 0, len(a2d)-1; i < j; i, j = i+1, j-1 {
+		a2d[i], a2d[j] = a2d[j], a2d[i]
+	}
+
+	z := make([]arrow, 0, len(as))
+
+	for i, row := range a2d {
+		fmt.Printf("appending %d %v\n", i, row)
+		z = append(z, row...)
+	}
+
+	return z
 }
 
 // topDownTransform is the removeTransform flipped to topDown by topDown()
