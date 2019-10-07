@@ -117,13 +117,14 @@ func removeTransform(
 				// set destinationg to newly vacated right sibling
 				delPos = delPos ^ 1 // |1 should also work
 			}
-
 			a = append(a, arrow{from: rootPos, to: delPos})
 		}
 
 		if haveDel && !rootPresent {
 			// stash sibling
-			stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
+			if delPos^1 != nextTopPoss[0] {
+				stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
+			}
 			nextTopPoss = nextTopPoss[1:]
 			// mark parent for deletion. this happens even if the node
 			// being promoted to root doesn't move
@@ -214,6 +215,10 @@ so it turned into 22<->22 which can be omitted.
 
 This should be useful for undo and forest remove as well.
 
+---- more notes:
+
+the stuff on the bottom may
+
 */
 
 // topDown changes the output from removeTransform into a top-down swap list.
@@ -225,7 +230,7 @@ func topDown(ap []arrowPlus, fh uint8) []arrowPlus {
 	// ... yeah it totally changes everything
 	ap = upendArrowSlice(ap, fh)
 
-	// reverseArrowSlice(bu)
+	// reverseArrowSlice(ap)
 	// arrows := bu
 	fmt.Printf("topDown input %v\n", ap)
 	// go through every entry.  Except skip the ones on the bottom row.
@@ -251,18 +256,18 @@ func topDown(ap []arrowPlus, fh uint8) []arrowPlus {
 			toA, toB := isDescendant(
 				ap[sub].to, ap[top].from, ap[top].to, fh)
 
-			if fromA || fromB {
+			if fromA {
 				// swap from
 				fmt.Printf("%v causes %v -> ", ap[top], ap[sub])
 				ap[sub].from ^= subMask
 				fmt.Printf("%v\n", ap[sub])
 			}
 
-			if toA || toB {
+			if toA {
 				// swap to
-				// fmt.Printf("%v causes %v -> ", arrows[top], arrows[sub])
-				// arrows[sub].to ^= subMask
-				// fmt.Printf("%v\n", arrows[sub])
+				fmt.Printf("%v causes %v -> ", ap[top], ap[sub])
+				ap[sub].to ^= subMask
+				fmt.Printf("%v\n", ap[sub])
 			}
 
 			if (toA && fromA) || (toB && fromB) {
@@ -294,17 +299,18 @@ func topDown(ap []arrowPlus, fh uint8) []arrowPlus {
 	}
 	// remove redundant arrows after evertyhing else is done
 
-	for i := 0; i < len(ap); i++ {
-
-		if ap[i].from == ap[i].to {
-			if i == len(ap) {
-				ap = ap[:i]
-			} else {
-				ap = append(ap[:i], ap[i+1:]...)
+	/*
+		for i := 0; i < len(ap); i++ {
+			if ap[i].from == ap[i].to {
+				if i == len(ap) {
+					ap = ap[:i]
+				} else {
+					ap = append(ap[:i], ap[i+1:]...)
+				}
+				i--
 			}
-			i--
 		}
-	}
+	*/
 	return ap
 }
 
@@ -332,7 +338,7 @@ func mergeArrows(stash, moves []arrow) []arrowPlus {
 
 // reverseArrowSlice does what it says.  Maybe can get rid of if we return
 // the slice top-down instead of bottom-up
-func reverseArrowSlice(as []arrow) {
+func reverseArrowSlice(as []arrowPlus) {
 	for i, j := 0, len(as)-1; i < j; i, j = i+1, j-1 {
 		as[i], as[j] = as[j], as[i]
 	}
@@ -433,7 +439,6 @@ func floorTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
 	td := topDownTransform(dels, numLeaves, fHeight)
-
 	fmt.Printf("td output %v\n", td)
 
 	var floor []arrow
@@ -442,7 +447,7 @@ func floorTransform(
 	for _, a := range td {
 		fmt.Printf("%d -> %d\t", a.from, a.to)
 		if a.from == a.to {
-			fmt.Printf("omitting %d -> %d\n", a.to, a.to)
+			fmt.Printf("omitting ################# %d -> %d\n", a.to, a.to)
 			continue
 			// TODO: why do these even exist?  get rid of them from
 			// removeTransform output?
