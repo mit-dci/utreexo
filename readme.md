@@ -60,7 +60,19 @@ $ ./txottl
 [...takes time again]
 ```
 
-* Now there's a ttl.testnet.txos file, which has everything we need.  At this point you can delete everything else (ttldb, testnet.txos, heck the whole blocks folder if you want).  Now you can run ibdsim to test utreexo sync performance.
+* Now there's a ttl.testnet.txos file, which has everything we need.  At this point you can delete everything else (ttldb, testnet.txos, heck the whole blocks folder if you want).  Now you can run ibdsim to test utreexo sync performance.  First, the "genproofs" flag of ibdsim builds all the block proofs for the blockchain
+
+```
+$ cd ~/go/src/github.com/mit-dci/utreexo/cmd/ibdsim
+$ go build
+$ cp ibdsim ~/.bitcoin/testnet3/blocks
+$ cd ~/.bitcoin/testnet3/blocks
+$ ./ibdsim -genproofs
+[... takes time and builds block proofs]
+```
+
+* "genproofs" should take a few hours as it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk.  This is what the bridge node and archive node would do in a real node.  Next, you can run ibdsim without the "genproofs" flag; by default it will perform IBD as a compact node which maintains only a reduced state, and accepts proofs (which are created in the `proofdb` folder during the previous step)
+
 
 ```
 $ cd ~/go/src/github.com/mit-dci/utreexo/cmd/ibdsim
@@ -68,7 +80,10 @@ $ go build
 $ cp ibdsim ~/.bitcoin/testnet3/blocks
 $ cd ~/.bitcoin/testnet3/blocks
 $ ./ibdsim
-[... takes time but does utreexo sync simulation]
+[... takes time and does utreexo sync simulation]
 ```
 
-Note that your folders or filenames might be different, but this should give you the idea and work on default linux / golang setups.  If you've tried this and it doesn't work and you'd like to help out, you can either fix the code / documentation so that it does work and make a pull request, or open an issue describing what doesn't work.  Thanks!
+Note that your folders or filenames might be different, but this should give you the idea and work on default linux / golang setups.  If you've tried this and it doesn't work and you'd like to help out, you can either fix the code / documentation so that it does work and make a pull request, or open an issue describing what doesn't work.
+
+Also, if you think this setup is overly complicated and too many steps, I agree!  Couldn't blockparset and txottl be merged into one binary?  Sure could!  Maybe IBDsim could absorb that as well!  There's lots of stuff to work on.  (As of October 2019 I'm working on reorgs / undoing blocks)
+  
