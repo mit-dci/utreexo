@@ -25,6 +25,53 @@ half-there.
 Maybe modify removeTransform to do this; that might make leaftransform easier
 */
 
+// remTrans2 -- simpler and better -- lets see if it works!
+func remTrans2(dels []uint64, numLeaves uint64) []arrow {
+
+	var swaps []arrow
+
+	fHeight := treeHeight(numLeaves)
+	// the main floor loop.
+	// per row: sort / extract / swap / root / promote
+	for h := uint8(0); h <= fHeight; h++ {
+		if len(dels) == 0 { // if there's nothing to delete, we're done
+			break
+		}
+		var twinNextDels, swapNextDels []uint64
+
+		// *** dedupe
+		twinNextDels, dels = ExTwin2(dels, fHeight)
+
+		// *** swap
+		for len(dels) > 1 {
+			swaps = append(swaps, arrow{from: dels[1] ^ 1, to: dels[0]})
+			// deletion promotes to next row
+			swapNextDels = append(swapNextDels, up1(dels[1], fHeight))
+			dels = dels[2:]
+		}
+
+		// *** root
+		rootPresent := numLeaves&(1<<h) != 0
+
+		// IN PROGRESS
+		// OK there's still go to be some kind of "swap" idea, at least
+		// in the scope of this function.  I don't see any way to avoid that.
+		// But it does look like it can stay within the function.  If you have
+		// a stash, track it, and see when moves occur above it.  If they do,
+		// change the stash "to" to "what ends up there".
+		// e.g 4 leaves, delete 0.
+		// row 0: 1->2 stash
+		// row 1: 5->4 (stash but top so)
+		// 5 above 2; 2 becomes 0, row 0 move becomes 1->0.
+		// total output of function is {1,0} {5,4}
+
+		// done with this row, move dels and proceed up to next row
+		dels = mergeSortedSlices(twinNextDels, swapNextDels)
+	}
+
+	return swaps
+}
+
 // RemoveTransform takes in the positions of the leaves to be deleted, as well
 // as the number of leaves and height of the forest (semi redundant).  It returns
 // 2 slices of movePos which is a sequential list of from/to move pairs.

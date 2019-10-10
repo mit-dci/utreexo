@@ -73,6 +73,20 @@ func ExtractTwins(nodes []uint64) (twins, onlychildren []uint64) {
 	return
 }
 
+// takes a slice of dels, removes the twins (in place) and returns a slice
+// of parents of twins
+func ExTwin2(nodes []uint64, height uint8) (parents, dels []uint64) {
+	for i := 0; i < len(nodes); i++ {
+		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
+			parents = append(parents, up1(nodes[i], height))
+			i++ // skip one here
+		} else {
+			dels = append(dels, nodes[i])
+		}
+	}
+	return
+}
+
 // tree height 0 means there's 1 lead.  Tree height 1 means 2 leaves.
 // so it's 1<<height leaves.  ... pretty sure about this
 
