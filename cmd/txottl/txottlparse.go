@@ -1,4 +1,4 @@
-package main
+package txottl
 
 import (
 	"bufio"
@@ -13,6 +13,7 @@ import (
 )
 
 type Hash [32]byte
+
 
 func HashFromString(s string) Hash {
 	return blake2b.Sum256([]byte(s))
@@ -110,7 +111,7 @@ func lookerUpperWorker(
 }
 
 // read from the DB and tack on TTL values
-func readTTLdb() error {
+func ReadTTLdb() error {
 
 	// open database
 	o := new(opt.Options)
