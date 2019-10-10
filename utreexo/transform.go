@@ -10,6 +10,21 @@ They're some of the tricky parts of utreexo, on how to rearrange the forest node
 when deletions occur.
 */
 
+/*
+idea for transform
+get rid of stash, and use swaps instead.
+Where you would encounter stashing, here's what to do:
+stash in place: It's OK, that doesn't even count as a stash
+stash to sibling: Also OK, go for it.  The sib must have been deleted, right?
+
+stash elsewhere: Only swap to the LSB of destination (sibling).  If LSB of
+destination is same as current LSB, don't move.  You will get there later.
+When you do this, you still flag the parent as "deleted" even though it's still
+half-there.
+
+Maybe modify removeTransform to do this; that might make leaftransform easier
+*/
+
 // RemoveTransform takes in the positions of the leaves to be deleted, as well
 // as the number of leaves and height of the forest (semi redundant).  It returns
 // 2 slices of movePos which is a sequential list of from/to move pairs.
