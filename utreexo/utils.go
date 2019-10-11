@@ -231,6 +231,16 @@ func treeHeight(n uint64) uint8 {
 	return e
 }
 
+// topPos: given a number of leaves and a height, find the position of the
+// root at that height.  Does not return an error if there's no root at that
+// height so watch out and check first.  Checking is easy: leaves & (1<<h)
+func topPos(leaves uint64, h, forestHeight uint8) uint64 {
+	mask := uint64(2<<forestHeight) - 1
+	before := leaves & (mask << (h + 1))
+	shifted := (before >> h) | (mask << (forestHeight - (h - 1)))
+	return shifted & mask
+}
+
 // getTops gives you the positions of the tree tops, given a number of leaves.
 // LOWEST first (right to left) (blarg change this)
 func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights []uint8) {

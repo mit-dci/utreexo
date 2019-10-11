@@ -25,6 +25,18 @@ half-there.
 Maybe modify removeTransform to do this; that might make leaftransform easier
 */
 
+// IN PROGRESS
+// OK there's still go to be some kind of "swap" idea, at least
+// in the scope of this function.  I don't see any way to avoid that.
+// But it does look like it can stay within the function.  If you have
+// a stash, track it, and see when moves occur above it.  If they do,
+// change the stash "to" to "what ends up there".
+// e.g 4 leaves, delete 0.
+// row 0: 1->2 stash
+// row 1: 5->4 (stash but top so)
+// 5 above 2; 2 becomes 0, row 0 move becomes 1->0.
+// total output of function is {1,0} {5,4}
+
 // remTrans2 -- simpler and better -- lets see if it works!
 func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 
@@ -50,20 +62,30 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 			dels = dels[2:]
 		}
 
-		// *** root
+		// *** root. only 1 del can be left here
 		rootPresent := numLeaves&(1<<h) != 0
+		haveDel := len(dels) != 0
+		rootPos := topPos(numLeaves, h, fHeight) // invalid if root not present
+		rootNextPos := topPos(numLeaves-uint64(len(dels)), h, fHeight)
 
-		// IN PROGRESS
-		// OK there's still go to be some kind of "swap" idea, at least
-		// in the scope of this function.  I don't see any way to avoid that.
-		// But it does look like it can stay within the function.  If you have
-		// a stash, track it, and see when moves occur above it.  If they do,
-		// change the stash "to" to "what ends up there".
-		// e.g 4 leaves, delete 0.
-		// row 0: 1->2 stash
-		// row 1: 5->4 (stash but top so)
-		// 5 above 2; 2 becomes 0, row 0 move becomes 1->0.
-		// total output of function is {1,0} {5,4}
+		if haveDel && rootPresent { // deroot, move to sibling, no stash
+			swaps = append(swaps, arrow{from: rootPos, to: dels[0]})
+		}
+
+		// vvv these 2 are kindof the same?
+		if haveDel && !rootPresent { // stash sibling for rooting
+			// if delPos^1 != nextTopPoss[0] {
+			// stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
+			// }
+			// swapNextDels = append(swapNextDels, up1(dels[0], fHeight))
+		}
+		if !haveDel && rootPresent { // stash root for collapse
+			//  stash existing root (it will collapse left later)
+			// stash = append(stash, arrow{from: rootPos, to: nextTopPoss[0]})
+			// nextTopPoss = nextTopPoss[1:]
+		}
+
+		// if neither haveDel nor rootPresent, nothing to do
 
 		// done with this row, move dels and proceed up to next row
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
