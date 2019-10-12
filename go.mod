@@ -1,4 +1,4 @@
-module github.com/chainsafe/utreexo
+module github.com/mit-dci/utreexo
 
 go 1.12
 

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/chainsafe/utreexo/config"
-	"github.com/chainsafe/utreexo/node"
+	"github.com/mit-dci/utreexo/config"
+	"github.com/mit-dci/utreexo/node"
 	"github.com/urfave/cli"
 	"os"
 )

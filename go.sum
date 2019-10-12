@@ -37,7 +37,7 @@ github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 h1:lYpkrQH5ajf0
 github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1/go.mod h1:pD8RvIylQ358TN4wwqatJ8rNavkEINozVn9DtGI3dfQ=
 github.com/mit-dci/lit v0.0.0-20190430192525-57c63ed5cc95 h1:LhHcPZcc/vHPboI+zuOyiJpyV2k4WG0s1bBH/ayr7m0=
 github.com/mit-dci/lit v0.0.0-20190430192525-57c63ed5cc95/go.mod h1:w4kLxTIH6bwnHCwyTzyrTBnRWBFej4EWyCP10AElz6g=
-github.com/chainsafe/utreexo v0.0.0-20190924220902-7e0d7146473f h1:zQMizidfPqk9QonZGDQLja0Y9E4GBVs9yLScxQSmB9k=
+github.com/mit-dci/utreexo v0.0.0-20190924220902-7e0d7146473f h1:zQMizidfPqk9QonZGDQLja0Y9E4GBVs9yLScxQSmB9k=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0 h1:WSHQ+IS43OoUrWtD1/bbclrwK8TTH5hzp+umCiuxHgs=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

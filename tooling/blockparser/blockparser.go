@@ -2,7 +2,7 @@ package blockparser
 
 import (
 	"fmt"
-	defaults "github.com/chainsafe/utreexo/config"
+	defaults "github.com/mit-dci/utreexo/config"
 	"os"
 	"sync"
 

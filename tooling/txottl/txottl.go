@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/chainsafe/utreexo/config"
+	"github.com/mit-dci/utreexo/config"
 )
 
 func Start(config *config.Config) {

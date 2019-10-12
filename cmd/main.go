@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/chainsafe/utreexo/tooling/blockparser"
-	"github.com/chainsafe/utreexo/tooling/txottl"
+	"github.com/mit-dci/utreexo/tooling/blockparser"
+	"github.com/mit-dci/utreexo/tooling/txottl"
 	"os"
 
 	log "github.com/ChainSafe/log15"
