@@ -1,4 +1,6 @@
 *.txos
+*.swp
+*.swo
 cmd/txottl/txottl
 cmd/blockparser/blockparser
 cmd/ibdsim/ibdsim
