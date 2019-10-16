@@ -1,6 +1,10 @@
 # utreexo
 
-a dynamic hash based accumulator designed for the Bitcoin UTXO set
+A dynamic hash based accumulator designed for the Bitcoin UTXO set
+
+Check out the ePrint paper here: [https://eprint.iacr.org/2019/611](https://eprint.iacr.org/2019/611)
+
+Currently under active development.  If you're interested and have questions, checkout #utreexo on freenode.
 
 ## folders
 
