@@ -74,6 +74,15 @@ func TestExTwin(t *testing.T) {
 	fmt.Printf("parents %v dels %v\n", parents, dels)
 }
 
+func TestGetTop(t *testing.T) {
+
+	nl := uint64(11)
+	h := uint8(1)
+	top := getTopAtHeight(nl, h, 4)
+
+	fmt.Printf("%d leaves, top at h %d is %d\n", nl, h, top)
+}
+
 func TestUpend(t *testing.T) {
 	as := topDownTransform([]uint64{1, 3, 4}, 8, 3)
 	fmt.Printf("%v\n", as)

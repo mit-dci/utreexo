@@ -27,13 +27,15 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 
 // remTrans2 -- simpler and better -- lets see if it works!
 func remTrans2(dels []uint64, numLeaves uint64) []arrow {
-
+	nextNumLeaves := numLeaves - uint64(len(dels))
 	var swaps []arrow
+	var stashes []arrow
 
 	fHeight := treeHeight(numLeaves)
 	// the main floor loop.
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h <= fHeight; h++ {
+
 		if len(dels) == 0 { // if there's nothing to delete, we're done
 			break
 		}
@@ -42,16 +44,34 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 		// *** dedupe
 		twinNextDels, dels = ExTwin2(dels, fHeight)
 
+		var rowSwaps []arrow
 		// *** swap
 		for len(dels) > 1 {
-			swaps = append(swaps, arrow{from: dels[1] ^ 1, to: dels[0]})
+			rowSwaps = append(rowSwaps, arrow{from: dels[1] ^ 1, to: dels[0]})
 			// deletion promotes to next row
 			swapNextDels = append(swapNextDels, up1(dels[1], fHeight))
 			dels = dels[2:]
 		}
 
+		// apply match/modify to lower stashes
+
 		// *** root
 		rootPresent := numLeaves&(1<<h) != 0
+		delRemains := len(dels) != 0
+
+		if rootPresent && delRemains { // root moves to sibling, no stash
+			rootPos := getTopAtHeight(numLeaves, h, fHeight)
+			rowSwaps = append(rowSwaps, arrow{from: rootPos, to: dels[0] ^ 1})
+		}
+
+		if rootPresent && !delRemains { // stash root (collapse later)
+			rootPos := getTopAtHeight(numLeaves, h, fHeight)
+			stashes = append(stashes, arrow{from: rootPos, to: rootPos})
+		}
+		if !rootPresent && delRemains { // sibling becomes stashed root
+			rootDest := getTopAtHeight(nextNumLeaves, h, fHeight)
+			stashes = append(stashes, arrow{from: dels[0] ^ 1, to: rootDest})
+		}
 
 		// IN PROGRESS
 		// OK there's still go to be some kind of "swap" idea, at least
@@ -65,11 +85,29 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 		// 5 above 2; 2 becomes 0, row 0 move becomes 1->0.
 		// total output of function is {1,0} {5,4}
 
+		swaps = append(swaps, rowSwaps...)
 		// done with this row, move dels and proceed up to next row
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
 
 	return swaps
+}
+
+// modifies the stash slice in place
+func matchAndModify(a arrow, stash []arrow, fh uint8) {
+	topMask := a.from ^ a.to
+	topHeight := detectHeight(a.from, fh)
+	for _, s := range stash {
+
+		sHeight := detectHeight(s.from, fh)
+		sMask := topMask << (topHeight - sHeight)
+
+		// detect if s.to is below a.to or a.from
+		underTo, underFrom := isDescendant(s.to, a.from, a.to, fh)
+		if underTo || underFrom { // can't be both, right?
+			s.to ^= sMask
+		}
+	}
 }
 
 // RemoveTransform takes in the positions of the leaves to be deleted, as well
