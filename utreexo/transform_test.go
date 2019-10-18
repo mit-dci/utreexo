@@ -67,6 +67,8 @@ func TestTopDown(t *testing.T) {
 
 func TestExTwin(t *testing.T) {
 
+	fmt.Printf("%d\n", topPos(15, 0, 4))
+
 	dels := []uint64{0, 1, 2, 3, 9}
 
 	parents, dels := ExTwin2(dels, 4)

@@ -231,6 +231,26 @@ func treeHeight(n uint64) uint8 {
 	return e
 }
 
+// topPos: given a number of leaves and a height, find the position of the
+// root at that height.  Does not return an error if there's no root at that
+// height so watch out and check first.  Checking is easy: leaves & (1<<h)
+func topPos(leaves uint64, h, forestHeight uint8) uint64 {
+	mask := uint64(2<<forestHeight) - 1
+	before := leaves & (mask << (h + 1))
+	shifted := (before >> h) | (mask << (forestHeight - (h - 1)))
+	return shifted & mask
+}
+
+//  huh these two are the same; I forgot I wrote the top one first.
+// which is better eh?  They look the same.
+
+// getTopAtHeight returns the position of the top at a given height.
+// behavior is undefined if there's no top at that height.
+func getTopAtHeight(numLeaves uint64, height, fHeight uint8) uint64 {
+	base := (numLeaves >> (height + 1)) << (height + 1)
+	return upMany(base, height, fHeight)
+}
+
 // getTops gives you the positions of the tree tops, given a number of leaves.
 // LOWEST first (right to left) (blarg change this)
 func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights []uint8) {
@@ -249,13 +269,6 @@ func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights [
 		}
 	}
 	return
-}
-
-// getTopAtHeight returns the position of the top at a given height.
-// behavior is undefined if there's no top at that height.
-func getTopAtHeight(numLeaves uint64, height, fHeight uint8) uint64 {
-	base := (numLeaves >> (height + 1)) << (height + 1)
-	return upMany(base, height, fHeight)
 }
 
 // subTreePositions takes in a node position and forestHeight and returns the
