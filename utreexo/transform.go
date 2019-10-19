@@ -47,11 +47,18 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 	// the main floor loop.
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h <= fHeight; h++ {
-
 		if len(dels) == 0 { // if there's nothing to delete, we're done
 			break
 		}
 		var twinNextDels, swapNextDels []uint64
+		rootPresent := numLeaves&(1<<h) != 0
+		delRemains := len(dels)%2 != 0
+
+		// somehow figure this out
+		// if theres a root, and no delRemains, where should it go?
+		// if there's no root and delremains, only flip the LSB of
+		// root position
+		var rootDest uint64
 
 		// *** dedupe
 		twinNextDels, dels = ExTwin2(dels, fHeight)
@@ -65,25 +72,22 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 			dels = dels[2:]
 		}
 
-		// apply match/modify to lower stashes
+		// apply stashModify to lower stashes
 
 		// *** root
-		rootPresent := numLeaves&(1<<h) != 0
-		delRemains := len(dels) != 0
 
 		if rootPresent && delRemains { // root moves to sibling, no stash
-			rootPos := getTopAtHeight(numLeaves, h, fHeight)
+			rootPos := topPos(numLeaves, h, fHeight)
 			rowSwaps = append(rowSwaps, arrow{from: rootPos, to: dels[0] ^ 1})
 		}
 
 		if rootPresent && !delRemains { // stash root (collapse later)
-			rootPos := getTopAtHeight(numLeaves, h, fHeight)
+			rootPos := topPos(numLeaves, h, fHeight)
 			stashes = append(stashes, arrow{from: rootPos, to: rootPos})
 		}
 		if !rootPresent && delRemains { // sibling becomes stashed root
-			rootDest := getTopAtHeight(nextNumLeaves, h, fHeight)
+			rootDest := topPos(nextNumLeaves, h, fHeight)
 			stashes = append(stashes, arrow{from: dels[0] ^ 1, to: rootDest})
-
 		}
 
 		// if neither haveDel nor rootPresent, nothing to do
