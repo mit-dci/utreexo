@@ -39,7 +39,7 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 
 // remTrans2 -- simpler and better -- lets see if it works!
 func remTrans2(dels []uint64, numLeaves uint64) []arrow {
-	nextNumLeaves := numLeaves - uint64(len(dels))
+	// nextNumLeaves := numLeaves - uint64(len(dels))
 	var swaps []arrow
 	var stashes []arrow
 
@@ -66,6 +66,7 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 		var rowSwaps []arrow
 		// *** swap
 		for len(dels) > 1 {
+			rootDest = dels[0] // no it's not that simple
 			rowSwaps = append(rowSwaps, arrow{from: dels[1] ^ 1, to: dels[0]})
 			// deletion promotes to next row
 			swapNextDels = append(swapNextDels, up1(dels[1], fHeight))
@@ -81,13 +82,15 @@ func remTrans2(dels []uint64, numLeaves uint64) []arrow {
 			rowSwaps = append(rowSwaps, arrow{from: rootPos, to: dels[0] ^ 1})
 		}
 
-		if rootPresent && !delRemains { // stash root (collapse later)
+		if rootPresent && !delRemains { // stash root (collapses)
 			rootPos := topPos(numLeaves, h, fHeight)
-			stashes = append(stashes, arrow{from: rootPos, to: rootPos})
+			stashes = append(stashes, arrow{from: rootPos, to: rootDest})
 		}
 		if !rootPresent && delRemains { // sibling becomes stashed root
-			rootDest := topPos(nextNumLeaves, h, fHeight)
-			stashes = append(stashes, arrow{from: dels[0] ^ 1, to: rootDest})
+			// move to LSB 0
+			rootFrom := dels[0] ^ 1
+			rootTo := rootFrom & dels[0]
+			stashes = append(stashes, arrow{from: rootFrom, to: rootTo})
 		}
 
 		// if neither haveDel nor rootPresent, nothing to do
