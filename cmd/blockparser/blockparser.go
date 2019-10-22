@@ -1,4 +1,4 @@
-package main
+package blockparser
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 Read bitcoin core's levelDB index folder, and the blk000.dat files with
 the blocks.
 Writes a text txo file, and also creates a levelDB folder with the block
-heights where every txo is consumed.  These files feed in to txottl to
+heights where every txo is consumed. These files feed in to txottl to
 make a txo text file with the ttl times on each line
 */
 
@@ -33,16 +33,7 @@ var testNet3GenHash = chainhash.Hash{
 	0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
 }
 
-func main() {
-	fmt.Printf("hi\n")
-
-	err := parser()
-	if err != nil {
-		panic(err)
-	}
-}
-
-func parser() error {
+func Parser() error {
 	tipnum := 0
 	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
 	tip := testNet3GenHash
@@ -97,17 +88,14 @@ func parser() error {
 }
 
 func IsUnspendable(o *wire.TxOut) bool {
-	if o == nil {
+	switch {
+	case len(o.PkScript) > 10000: //len 0 is OK, spendable
 		return true
-	}
-	if len(o.PkScript) > 10000 { // len 0 is OK, spendable
+	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: //OP_RETURN is 0x6a
 		return true
+	default:
+		return false
 	}
-	if len(o.PkScript) > 0 && o.PkScript[0] == 0x6a { // OP_RETURN is 0x6a
-		return true
-	}
-
-	return false
 }
 
 func sortBlocks(

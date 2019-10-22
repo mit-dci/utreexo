@@ -1,4 +1,4 @@
-package main
+package ibdsim
 
 import (
 	"bufio"
@@ -6,9 +6,9 @@ import (
 	"os"
 )
 
-func histogram() error {
+func Histogram(ttlfn string) error {
 
-	txofile, err := os.OpenFile(*ttlfn, os.O_RDONLY, 0600)
+	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package main
+package blockparser
 
 import (
 	"bytes"
@@ -82,6 +82,7 @@ func U32tB(i uint32) []byte {
 	return buf.Bytes()
 }
 
+//TODO make actual error return here
 // 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
 func BtU32(b []byte) uint32 {
 	if len(b) != 4 {
