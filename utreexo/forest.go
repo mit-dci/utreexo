@@ -231,10 +231,15 @@ func (f *Forest) removev3(dels []uint64) error {
 	swaps := floorTransform(dels, f.numLeaves, f.height)
 	fmt.Printf("v3 got swaps: %v\n", swaps)
 
+	// TODO definitely not how to do this, way inefficient
+	// dirt should be on the top, this is redundant
 	for _, s := range swaps {
 		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
 		if s.to < nextNumLeaves {
 			dirt = append(dirt, s.to)
+			if s.from < nextNumLeaves {
+				dirt = append(dirt, s.from)
+			}
 		}
 	}
 

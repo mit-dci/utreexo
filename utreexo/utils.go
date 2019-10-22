@@ -326,6 +326,26 @@ func (a *arrowPlus) toLeaves(forestHeight uint8) []arrow {
 	return leaves
 }
 
+// to leaves takes a arrow and returns a slice of arrows that are all the
+// leaf arrows below it
+func (a *arrow) toLeaves(forestHeight uint8) []arrow {
+	h := detectHeight(a.from, forestHeight)
+	if h == 0 {
+		return []arrow{arrow{from: a.from, to: a.to}}
+	}
+
+	run := uint64(1 << h)
+	fromStart := childMany(a.from, h, forestHeight)
+	toStart := childMany(a.to, h, forestHeight)
+
+	leaves := make([]arrow, run)
+	for i := uint64(0); i < run; i++ {
+		leaves[i] = arrow{from: fromStart + i, to: toStart + i}
+	}
+
+	return leaves
+}
+
 // it'd be cool if you just had .sort() methods on slices of builtin types...
 func sortUint64s(s []uint64) {
 	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
