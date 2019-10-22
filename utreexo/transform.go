@@ -131,32 +131,45 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	return swaps
 }
 
+// TODO make all arrows have a height attached?  then we don't have to keep
+// calling detectHeight all the time huh.
+type swapNheight struct {
+	arrow
+	h uint8
+}
+
 // collapseSwap modifies to field of arrows for root collapse
 // rh = height of rowSwaps, fh = forest height
-func collapseSwaps(rowSwaps, collapses []arrow, newCollapse arrow, rh, fh uint8) {
+func collapseSwaps(rowSwaps, collapses []arrow, newCollapse arrow, sh, fh uint8) {
 	if len(collapses) == 0 {
 		return
 	}
-	/* LAST(?) PROBLEM:
-	we need to cascade collapses.
-	so if something modifies a collapse at height 3,
-	that is a "new" collapse that can match against collapses at height 2, 1,0
-	*/
 	fmt.Printf("collapseSwaps on rowSwap %v collapses %v\n", rowSwaps, collapses)
-
-	// the most recent (highest) collapse can affect lower collapses
-	if newCollapse.from != newCollapse.to {
-		for i, c := range collapses {
-			ch := detectHeight(c.to, fh)
-			// swaps c.to if needed
-			collapses[i].to ^= swapIfDescendant(newCollapse, c, rh, ch, fh)
-		}
+	swaps := make([]swapNheight, len(rowSwaps))
+	for i, rs := range rowSwaps {
+		swaps[i].arrow = rs
+		swaps[i].h = sh
 	}
-	for _, s := range rowSwaps {
+
+	if newCollapse.from != newCollapse.to {
+		swaps = append(swaps, swapNheight{arrow: newCollapse, h: sh})
+	}
+
+	// range over the upperSwaps, appending to upperSwaps when collapses
+	// are modified
+	for n := 0; n < len(swaps); n++ {
+		fmt.Printf("on swap %d swaps %v\n", n, swaps)
 		for i, c := range collapses {
 			ch := detectHeight(c.to, fh)
-			// swaps c.to if needed
-			collapses[i].to ^= swapIfDescendant(s, c, rh, ch, fh)
+			if ch < swaps[n].h {
+				// swaps c.to if needed
+				mask := swapIfDescendant(swaps[n].arrow, c, swaps[n].h, ch, fh)
+				if mask != 0 {
+					collapses[i].to ^= mask
+					swaps = append(swaps, swapNheight{arrow: collapses[i], h: ch})
+					fmt.Printf("---------- extra swap %v\n", collapses[i])
+				}
+			}
 		}
 	}
 }
