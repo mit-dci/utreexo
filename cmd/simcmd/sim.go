@@ -41,7 +41,7 @@ var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr", "assig
 
 func main() {
 	//check if enough arguments were given
-	if len(os.Args) < 3{
+	if len(os.Args) < 2 {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
@@ -53,7 +53,7 @@ func main() {
 		fmt.Println("Generating txo time to live...")
 		txottl.ReadTTLdb()
 	case "ibdsim":
-		optionCmd.Parse(os.Args[2:3])
+		optionCmd.Parse(os.Args[2:])
 		err := ibdsim.RunIBD(*ttlfn, *schedFileName)
 		if err != nil {
 			panic(err)
