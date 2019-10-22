@@ -28,6 +28,11 @@ type arrow struct {
 	from, to uint64
 }
 
+type arrowh struct {
+	from, to uint64
+	ht        uint8
+}
+
 type arrowPlus struct {
 	from, to uint64
 	swappy   bool

@@ -328,15 +328,14 @@ func (a *arrowPlus) toLeaves(forestHeight uint8) []arrow {
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrow) toLeaves(forestHeight uint8) []arrow {
-	h := detectHeight(a.from, forestHeight)
-	if h == 0 {
+func (a *arrowh) toLeaves(forestHeight uint8) []arrow {
+	if a.ht == 0 {
 		return []arrow{arrow{from: a.from, to: a.to}}
 	}
 
-	run := uint64(1 << h)
-	fromStart := childMany(a.from, h, forestHeight)
-	toStart := childMany(a.to, h, forestHeight)
+	run := uint64(1 << a.ht)
+	fromStart := childMany(a.from, a.ht, forestHeight)
+	toStart := childMany(a.to, a.ht, forestHeight)
 
 	leaves := make([]arrow, run)
 	for i := uint64(0); i < run; i++ {

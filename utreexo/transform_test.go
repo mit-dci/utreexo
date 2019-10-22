@@ -35,7 +35,7 @@ func TestTopDown(t *testing.T) {
 	//initial state
 	fmt.Printf(fup.ToString())
 
-	dels := []uint64{1, 2, 3, 4, 5}
+	dels := []uint64{0, 1, 2, 3, 5}
 
 	err := fup.removev2(dels)
 	if err != nil {

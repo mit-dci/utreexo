@@ -38,15 +38,13 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 // total output of function is {1,0} {5,4}
 
 // remTrans2 -- simpler and better -- lets see if it works!
-func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
+func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 	nextNumLeaves := numLeaves - uint64(len(dels))
 	// fHeight := treeHeight(numLeaves)
-	var collapses []arrow
-	swapRows := make([][]arrow, fHeight)
+	var swaps, collapses []arrowh
 	fmt.Printf("rt2 on %v\n", dels)
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h < fHeight; h++ {
-
 		fmt.Printf("h %d del %v col %v\n", h, dels, collapses)
 		if len(dels) == 0 { // if there's nothing to delete, we're done
 			break
@@ -70,8 +68,8 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 
 		// *** swap
 		for len(dels) > 1 {
-			swapRows[h] = append(swapRows[h],
-				arrow{from: dels[1] ^ 1, to: dels[0]})
+			swaps = append(swaps,
+				arrowh{from: dels[1] ^ 1, to: dels[0], ht: h})
 			// deletion promotes to next row
 			swapNextDels = append(swapNextDels, up1(dels[1], fHeight))
 			dels = dels[2:]
@@ -79,19 +77,17 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 
 		// *** root
 		if rootPresent && delRemains { // root to del, no stash / upper del
-			// rootPos := topPos(numLeaves, h, fHeight)
-			swapRows[h] = append(swapRows[h], arrow{from: rootPos, to: dels[0]})
+			swaps = append(swaps, arrowh{from: rootPos, to: dels[0], ht: h})
 		}
 
-		var newCollapse arrow
 		// root but no del, and del but no root
 		// these are special cases, need to run collapseCheck
 		// on the collapses with later rows of swaps
 		if rootPresent && !delRemains { // stash root (collapses)
 			rootSrc := topPos(numLeaves, h, fHeight)
 			rootDest := topPos(nextNumLeaves, h, fHeight)
-			newCollapse.from, newCollapse.to = rootSrc, rootDest
-			// collapses = append(collapses, arrow{from: rootSrc, to: rootDest})
+			collapses = append(collapses,
+				arrowh{from: rootSrc, to: rootDest, ht: h})
 			fmt.Printf("%d root, collapse to %d\n", rootSrc, rootDest)
 		}
 		// no root but 1 del: sibling becomes root & collapses
@@ -99,16 +95,10 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 		if !rootPresent && delRemains {
 			rootSrc := dels[0] ^ 1
 			rootDest := topPos(nextNumLeaves, h, fHeight)
-			newCollapse.from, newCollapse.to = rootSrc, rootDest
-			// collapses = append(collapses, arrow{from: rootSrc, to: rootDest})
+			collapses = append(collapses,
+				arrowh{from: rootSrc, to: rootDest, ht: h})
 			fmt.Printf("%d promote to root, collapse to %d\n", rootSrc, rootDest)
-			// swapRows[h] = append(swapRows[h], arrow{from: sibling, to: even})
 			swapNextDels = append(swapNextDels, up1(dels[0], fHeight))
-		}
-		// apply swaps to lower collapses
-		collapseSwaps(swapRows[h], collapses, newCollapse, h, fHeight)
-		if newCollapse.from != newCollapse.to {
-			collapses = append(collapses, newCollapse)
 		}
 		// if neither haveDel nor rootPresent, nothing to do
 
@@ -116,70 +106,79 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
 
-	fmt.Printf("rt2 swapRows %v\n", swapRows)
+	swapCollapses(swaps, collapses, fHeight)
 
-	var swaps []arrow
-	for rh, r := range swapRows {
-		swaps = append(swaps, r...)
-		if len(collapses) > 0 &&
-			detectHeight(collapses[0].to, fHeight) == uint8(rh) {
-			swaps = append(swaps, collapses[0])
-			collapses = collapses[1:]
+	fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
+
+	// merge slice of collapses, placing the collapses at the end of the row
+	si := 0
+	for _, c := range collapses {
+		for len(swaps) > si && swaps[si].ht <= c.ht {
+			si++
 		}
+		swaps = append(swaps[:si], append([]arrowh{c}, swaps[si:]...)...)
 	}
 
 	return swaps
 }
 
-// TODO make all arrows have a height attached?  then we don't have to keep
-// calling detectHeight all the time huh.
-type swapNheight struct {
-	arrow
-	h uint8
-}
-
-// collapseSwap modifies to field of arrows for root collapse
+// swapCollapses modifies to field of arrows for root collapse
 // rh = height of rowSwaps, fh = forest height
-func collapseSwaps(rowSwaps, collapses []arrow, newCollapse arrow, sh, fh uint8) {
+// go backwards in the slice, top down
+func swapCollapses(swaps, collapses []arrowh, fh uint8) {
 	if len(collapses) == 0 {
 		return
 	}
-	fmt.Printf("collapseSwaps on rowSwap %v collapses %v\n", rowSwaps, collapses)
-	swaps := make([]swapNheight, len(rowSwaps))
-	for i, rs := range rowSwaps {
-		swaps[i].arrow = rs
-		swaps[i].h = sh
-	}
+	fmt.Printf("swapCollapses on swaps %v collapses %v\n", swaps, collapses)
 
-	if newCollapse.from != newCollapse.to {
-		swaps = append(swaps, swapNheight{arrow: newCollapse, h: sh})
-	}
+	// si, ci are indexes for swaps and collapses
+	si, ci := len(swaps)-1, len(collapses)-1
 
-	// range over the upperSwaps, appending to upperSwaps when collapses
-	// are modified
-	for n := 0; n < len(swaps); n++ {
-		fmt.Printf("on swap %d swaps %v\n", n, swaps)
-		for i, c := range collapses {
-			ch := detectHeight(c.to, fh)
-			if ch < swaps[n].h {
-				// swaps c.to if needed
-				mask := swapIfDescendant(swaps[n].arrow, c, swaps[n].h, ch, fh)
-				if mask != 0 {
-					collapses[i].to ^= mask
-					swaps = append(swaps, swapNheight{arrow: collapses[i], h: ch})
-					fmt.Printf("---------- extra swap %v\n", collapses[i])
+	// go down from fh.  swaps at h0 can't modify anything so stop at 1
+	// if si or ci get to -1 the
+	for h := fh; h > 0; h-- {
+		fmt.Printf("swapCol h %d\n", h)
+		// tick through swaps at this height
+		for si >= 0 && swaps[si].ht == h {
+			// do swap on lower collapses
+			for i, c := range collapses {
+				fmt.Printf("swap %v on col %v\n", swaps[si], c)
+				if c.ht < h {
+					mask := swapIfDescendant(swaps[si], c, fh)
+					if mask != 0 {
+						fmt.Printf("****col %v becomes ", c)
+						collapses[i].to ^= mask
+						fmt.Printf("%v due to %v\n", c, collapses[ci])
+					}
 				}
 			}
+			si--
+		}
+		if ci >= 0 && collapses[ci].ht == h {
+			// do collapse on lower collapses
+			for i, c := range collapses {
+				fmt.Printf("col %v on col %v\n", collapses[ci], c)
+				if c.ht < h {
+					mask := swapIfDescendant(collapses[ci], c, fh)
+					if mask != 0 {
+						fmt.Printf("****col %v becomes ", c)
+						collapses[i].to ^= mask
+						fmt.Printf("%v due to %v\n", c, collapses[ci])
+					}
+				}
+			}
+			ci--
 		}
 	}
+
 }
 
 // swapIfDescendant checks if a.to or a.from is above b
 // ah= height of a, bh=height of b, fh= forest height
 // if a.to xor a.from is above b, it will also calculates the new position of b
 // were it swapped to being below the other one.  Returns what to xor b.to.
-func swapIfDescendant(a, b arrow, ah, bh, fh uint8) (subMask uint64) {
-	hdiff := ah - bh
+func swapIfDescendant(a, b arrowh, fh uint8) (subMask uint64) {
+	hdiff := a.ht - b.ht
 	// a must always be higher than b; we're not checking for that
 	// TODO probably doesn't matter, but it's running upMany every time
 	// isAncestorSwap is called.  UpMany isn't even a loop so who cares.  But
