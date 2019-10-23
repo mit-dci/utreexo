@@ -5,14 +5,54 @@ import (
 	"testing"
 )
 
-// Add 2. delete 1.  Repeat.
+func TestForestAddDel(t *testing.T) {
 
+	numAdds := 19
+	numDels := 14
+
+	for b := 0; b < 1000; b++ {
+		//  these should stay the same
+		f := NewForest() // bottom up modified forest
+
+		delMap := make(map[uint64]bool)
+		adds := make([]LeafTXO, numAdds)
+		for j := range adds {
+			adds[j].Hash[1] = uint8(j)
+			adds[j].Hash[3] = 0xcc
+			delMap[uint64(j)] = true
+		}
+
+		err := f.Modify(adds, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var k int
+		dels := make([]uint64, numDels)
+		for i, _ := range delMap {
+			dels[k] = i
+			k++
+			if k >= numDels {
+				break
+			}
+		}
+
+		err = f.removev2(dels)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+	}
+}
+
+// Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
 	f := NewForest()
 	var absidx uint32
 	adds := make([]LeafTXO, 2)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 
 		for j := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0

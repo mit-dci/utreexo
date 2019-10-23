@@ -201,7 +201,7 @@ func (f *Forest) removev2(dels []uint64) error {
 		}
 	}
 	f.numLeaves -= uint64(len(dels))
-	return nil
+	return f.sanity()
 }
 
 // removev3 uses top down swaps and hopefully works the exact same as before
@@ -245,6 +245,10 @@ func (f *Forest) removev3(dels []uint64) error {
 
 	f.numLeaves = nextNumLeaves
 	f.cleanup()
+	err := f.sanity()
+	if err != nil {
+		return err
+	}
 	return f.reHash(dirt)
 	// if h == 0 {
 	// add to undo list
@@ -471,7 +475,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 	}
 	fmt.Printf("\n")
 
-	return nil
+	return f.sanity()
 }
 
 // reMap changes the height of the forest
@@ -540,6 +544,24 @@ height 0 they move -12 (-3 << 2).  Can't really do signed shifts but can subtrac
 in the cases when subtrees move right, add instead.  Moving right is rare though.
 
 */
+
+// sanity checks forest sanity: does numleaves make sense, and are the tops
+// populated?
+func (f *Forest) sanity() error {
+
+	if f.numLeaves > 1<<f.height {
+		return fmt.Errorf("forest has %d leaves but insufficient height %d",
+			f.numLeaves, f.height)
+	}
+	tops, _ := getTopsReverse(f.numLeaves, f.height)
+	for _, t := range tops {
+		if f.forest[t] == empty {
+			return fmt.Errorf("Forest has %d leaves %d tops, but top @%d is empty",
+				f.numLeaves, len(tops), t)
+		}
+	}
+	return nil
+}
 
 // GetTops returns all the tops of the trees
 func (f *Forest) GetTops() []Hash {

@@ -29,18 +29,24 @@ func TestTopDown(t *testing.T) {
 		adds[j].Hash[3] = 0xcc
 	}
 
-	fup.Modify(adds, nil)
-	fdown.Modify(adds, nil)
-
+	err := fup.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = fdown.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	//initial state
 	fmt.Printf(fup.ToString())
 
 	dels := []uint64{0, 1, 2, 3, 5}
 
-	err := fup.removev2(dels)
+	err = fup.removev2(dels)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = fdown.removev3(dels)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +79,7 @@ func TestRandTopDown(t *testing.T) {
 	// td := topDown(arrows, 4)
 	// fmt.Printf("td %v\n", td)
 	numAdds := 10
-	numDels := 5
+	numDels := 2
 
 	for b := 0; b < 100; b++ {
 
@@ -89,8 +95,14 @@ func TestRandTopDown(t *testing.T) {
 			delMap[uint64(j)] = true
 		}
 
-		fup.Modify(adds, nil)
-		fdown.Modify(adds, nil)
+		err := fup.Modify(adds, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = fdown.Modify(adds, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		//initial state
 		fmt.Printf(fup.ToString())
@@ -105,7 +117,7 @@ func TestRandTopDown(t *testing.T) {
 			}
 		}
 
-		err := fup.removev2(dels)
+		err = fup.removev2(dels)
 		if err != nil {
 			t.Fatal(err)
 		}
