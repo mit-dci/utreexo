@@ -293,7 +293,7 @@ func removeTransform(
 			delPos = dels[0]
 			haveDel = true
 		}
-		fmt.Printf("haveDel %v rootpresent %v\n", haveDel, rootPresent)
+		fmt.Printf("h %d haveDel %v rootpresent %v\n", h, haveDel, rootPresent)
 
 		if haveDel && rootPresent {
 			// deroot, move to sibling
@@ -307,9 +307,10 @@ func removeTransform(
 
 		if haveDel && !rootPresent {
 			// stash sibling
-			if delPos^1 != nextTopPoss[0] {
-				stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
-			}
+			// if delPos^1 != nextTopPoss[0] {
+			stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
+			// }
+
 			nextTopPoss = nextTopPoss[1:]
 			// mark parent for deletion. this happens even if the node
 			// being promoted to root doesn't move

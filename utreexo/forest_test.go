@@ -7,8 +7,8 @@ import (
 
 func TestForestAddDel(t *testing.T) {
 
-	numAdds := 19
-	numDels := 14
+	numAdds := 10
+	numDels := 5
 
 	for b := 0; b < 1000; b++ {
 		//  these should stay the same
