@@ -128,6 +128,9 @@ func (f *Forest) BuildUndoData(adds []LeafTXO, dels []uint64) *undoBlock {
 // TODO: switch the meaning of "dirt" to mean parents with changed children;
 // this will probably make it a lot simpler.
 func (f *Forest) reHash(dirt []uint64) error {
+	if f.height == 0 || len(dirt) == 0 { // nothing to hash
+		return nil
+	}
 	tops, topheights := getTopsReverse(f.numLeaves, f.height)
 	fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
 
@@ -142,6 +145,9 @@ func (f *Forest) reHash(dirt []uint64) error {
 		// increase height if needed
 		for h < dHeight {
 			h++
+		}
+		if h > f.height {
+			return fmt.Errorf("postion %d at height %d but forest only %d high", pos, h, f.height)
 		}
 		// if bridgeVerbose {
 		// fmt.Printf("h %d\n", h)
