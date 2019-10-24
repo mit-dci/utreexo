@@ -116,7 +116,7 @@ func (f *Forest) removev2(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 		// clear all entries from positionMap as they won't be needed any more
-		fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
+		// fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
 		delete(f.positionMap, f.forest[dpos].Mini())
 	}
 
@@ -226,7 +226,7 @@ func (f *Forest) removev3(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 		// clear all entries from positionMap as they won't be needed any more
-		fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
+		// fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
 		delete(f.positionMap, f.forest[dpos].Mini())
 	}
 
@@ -453,11 +453,11 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 	f.addv2(adds)
 
 	fmt.Printf("done modifying block, added %d\n", len(adds))
-	fmt.Printf("post add %s\n", f.ToString())
-	for m, p := range f.positionMap {
-		fmt.Printf("%x @%d\t", m[:4], p)
-	}
-	fmt.Printf("\n")
+	// fmt.Printf("post add %s\n", f.ToString())
+	// for m, p := range f.positionMap {
+	// 	fmt.Printf("%x @%d\t", m[:4], p)
+	// }
+	// fmt.Printf("\n")
 
 	return f.sanity()
 }

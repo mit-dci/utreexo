@@ -78,11 +78,10 @@ func TestRandTopDown(t *testing.T) {
 	// arrows := mergeAndReverseArrows(mv, stash)
 	// td := topDown(arrows, 4)
 	// fmt.Printf("td %v\n", td)
-	numAdds := 10
-	numDels := 2
+	numAdds := 1005
 
-	for b := 0; b < 100; b++ {
-
+	for b := 1; b < 1000; b++ {
+		numDels := b
 		//  these should stay the same
 		fup := NewForest()   // bottom up modified forest
 		fdown := NewForest() // top down modified forest

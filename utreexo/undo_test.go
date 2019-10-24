@@ -24,7 +24,7 @@ func TestUndoFixed(t *testing.T) {
 	// }
 
 	// needs in-order
-	err := undoAddDelOnce(7, 5)
+	err := undoAddDelOnce(17, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
