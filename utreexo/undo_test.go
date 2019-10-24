@@ -37,8 +37,8 @@ func TestUndoFixed(t *testing.T) {
 }
 
 func TestUndoRandom(t *testing.T) {
-	rand.Seed(6)
-	err := undoOnceRandom(5)
+	rand.Seed(2)
+	err := undoOnceRandom(23)
 	if err != nil {
 		t.Fatal(err)
 	}
