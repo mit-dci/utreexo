@@ -1,9 +1,8 @@
 package utreexo
 
 import (
+	"crypto/sha256"
 	"math/rand"
-
-	"golang.org/x/crypto/blake2b"
 )
 
 // Hash :
@@ -20,7 +19,7 @@ type MiniHash [12]byte
 
 // HashFromString :
 func HashFromString(s string) Hash {
-	return blake2b.Sum256([]byte(s))
+	return sha256.Sum256([]byte(s))
 }
 
 type move struct {
@@ -50,7 +49,7 @@ func Parent(l, r Hash) Hash {
 	if r == empty {
 		panic("got a right empty here. ")
 	}
-	return blake2b.Sum256(append(l[:], r[:]...))
+	return sha256.Sum256(append(l[:], r[:]...))
 }
 
 // XORParent is just xor, it's faster and works the same if non-adversarial

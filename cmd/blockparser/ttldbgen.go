@@ -2,12 +2,12 @@ package blockparser
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
 
-	blake2b "github.com/minio/blake2b-simd"
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -72,7 +72,7 @@ func dbWorker(
 	}
 }
 func HashFromString(s string) chainhash.Hash {
-	return blake2b.Sum256([]byte(s))
+	return sha256.Sum256([]byte(s))
 }
 
 // uint32 to 4 bytes.  Always works.

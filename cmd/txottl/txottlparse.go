@@ -2,6 +2,7 @@ package txottl
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,14 +10,13 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"golang.org/x/crypto/blake2b"
 )
 
 type Hash [32]byte
 
 
 func HashFromString(s string) Hash {
-	return blake2b.Sum256([]byte(s))
+	return sha256.Sum256([]byte(s))
 }
 
 const txoFilename = "testnet.txos"
