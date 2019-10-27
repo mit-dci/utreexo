@@ -29,11 +29,11 @@ func TestTopDown(t *testing.T) {
 		adds[j].Hash[3] = 0xcc
 	}
 
-	err := fup.Modify(adds, nil)
+	_, err := fup.Modify(adds, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = fdown.Modify(adds, nil)
+	_, err = fdown.Modify(adds, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,11 +94,11 @@ func TestRandTopDown(t *testing.T) {
 			delMap[uint64(j)] = true
 		}
 
-		err := fup.Modify(adds, nil)
+		_, err := fup.Modify(adds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = fdown.Modify(adds, nil)
+		_, err = fdown.Modify(adds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

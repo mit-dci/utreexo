@@ -241,6 +241,8 @@ func (f *Forest) removev3(dels []uint64) error {
 	for _, s := range swaps {
 		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
 		if s.to < nextNumLeaves {
+			f.positionMap[f.forest[s.to].Mini()] = s.to
+			// from as well?
 			dirt = append(dirt, s.to)
 			if s.from < nextNumLeaves {
 				dirt = append(dirt, s.from)
@@ -249,7 +251,8 @@ func (f *Forest) removev3(dels []uint64) error {
 	}
 
 	f.numLeaves = nextNumLeaves
-	f.cleanup()
+	// f.cleanup()
+
 	err := f.sanity()
 	if err != nil {
 		return err
@@ -432,23 +435,30 @@ func (f *Forest) addv2(adds []LeafTXO) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
-
-	delta := uint64(len(adds) - len(dels)) // watch 32/64 bit
+func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
+	numdels, numadds := uint64(len(dels)), uint64(len(adds))
+	delta := numadds - numdels // watch 32/64 bit
 	// remap to expand the forest if needed
 	for f.numLeaves+delta > 1<<f.height {
 		fmt.Printf("current cap %d need %d\n",
 			1<<f.height, f.numLeaves+delta)
 		err := f.reMap(f.height + 1)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	err := f.removev2(dels)
+	// v3 should do the exact same thing as v2 now
+	err := f.removev3(dels)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	// save the leaves past the edge for undo
+	// dels hasn't been mangled by remove up above, right?
+	// BuildUndoData takes all the stuff swapped to the right by removev3
+	// and saves it in the order it's in, which should make it go back to
+	// the right place when it's swapped in reverse
+	ub := f.BuildUndoData(numadds, dels)
 
 	f.addv2(adds)
 
@@ -458,8 +468,8 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) error {
 	// 	fmt.Printf("%x @%d\t", m[:4], p)
 	// }
 	// fmt.Printf("\n")
-
-	return f.sanity()
+	err = f.sanity()
+	return ub, err
 }
 
 // reMap changes the height of the forest

@@ -141,9 +141,15 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	if len(hs) == 0 {
 		return bp, nil
 	}
+	if len(f.forest) < 2 {
+		return bp, nil
+	}
+
+	for h, p := range f.positionMap {
+		fmt.Printf("%x@%d ", h[:4], p)
+	}
 
 	// first get all the leaf positions
-
 	// there shouldn't be any duplicates in hs, but if there are I guess
 	// it's not an error.
 	bp.Targets = make([]uint64, len(hs))
@@ -152,6 +158,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 
 		pos, ok := f.positionMap[wanted.Mini()]
 		if !ok {
+			fmt.Printf(f.ToString())
 			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 

@@ -22,7 +22,7 @@ func TestForestAddDel(t *testing.T) {
 			delMap[uint64(j)] = true
 		}
 
-		err := f.Modify(adds, nil)
+		_, err := f.Modify(adds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func Test2Fwd1Back(t *testing.T) {
 		fmt.Printf("\t\t\t########### block %d ##########\n\n", i)
 
 		// add 2
-		err := f.Modify(adds, nil)
+		_, err := f.Modify(adds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +137,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	}
 
 	// add x
-	err := f.Modify(adds, nil)
+	_, err := f.Modify(adds, nil)
 	if err != nil {
 		return err
 	}
