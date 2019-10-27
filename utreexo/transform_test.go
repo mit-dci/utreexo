@@ -42,7 +42,7 @@ func TestTopDown(t *testing.T) {
 
 	dels := []uint64{0, 1, 2, 3, 5}
 
-	err = fup.removev2(dels)
+	err = fup.removev3(dels) // was v2
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestRandTopDown(t *testing.T) {
 			}
 		}
 
-		err = fup.removev2(dels)
+		err = fup.removev3(dels) // was v2
 		if err != nil {
 			t.Fatal(err)
 		}
