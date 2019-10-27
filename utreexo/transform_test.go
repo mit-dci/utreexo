@@ -116,7 +116,7 @@ func TestRandTopDown(t *testing.T) {
 			}
 		}
 
-		err = fup.removev3(dels) // was v2
+		err = fup.removev3(dels) // was v2b
 		if err != nil {
 			t.Fatal(err)
 		}
