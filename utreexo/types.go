@@ -33,11 +33,6 @@ type arrowh struct {
 	ht       uint8
 }
 
-type arrowPlus struct {
-	from, to uint64
-	swappy   bool
-}
-
 // Node :
 type Node struct {
 	Pos uint64

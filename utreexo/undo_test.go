@@ -10,7 +10,7 @@ func TestUndoFixed(t *testing.T) {
 	rand.Seed(2)
 
 	// needs in-order
-	err := undoAddDelOnce(15, 3, 3)
+	err := undoAddDelOnce(5, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -308,26 +308,6 @@ func subTreeLeafRange(
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrowPlus) toLeaves(forestHeight uint8) []arrow {
-	h := detectHeight(a.from, forestHeight)
-	if h == 0 {
-		return []arrow{arrow{from: a.from, to: a.to}}
-	}
-
-	run := uint64(1 << h)
-	fromStart := childMany(a.from, h, forestHeight)
-	toStart := childMany(a.to, h, forestHeight)
-
-	leaves := make([]arrow, run)
-	for i := uint64(0); i < run; i++ {
-		leaves[i] = arrow{from: fromStart + i, to: toStart + i}
-	}
-
-	return leaves
-}
-
-// to leaves takes a arrow and returns a slice of arrows that are all the
-// leaf arrows below it
 func (a *arrowh) toLeaves(forestHeight uint8) []arrow {
 	if a.ht == 0 {
 		return []arrow{arrow{from: a.from, to: a.to}}
@@ -358,11 +338,6 @@ func sortNodeSlice(s []Node) {
 // func sortArrows(s []arrow) {
 // 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
 // }
-
-// sortArrows sorts them by from
-func sortArrowPlusses(s []arrowPlus) {
-	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
-}
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into
