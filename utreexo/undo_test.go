@@ -17,8 +17,8 @@ func TestUndoFixed(t *testing.T) {
 }
 
 func TestUndoRandom(t *testing.T) {
-	rand.Seed(9)
-	err := undoOnceRandom(23)
+	rand.Seed(59)
+	err := undoOnceRandom(4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,21 +49,22 @@ func undoOnceRandom(blocks int32) error {
 		for h, p := range f.positionMap {
 			fmt.Printf("%x@%d ", h[:4], p)
 		}
-		// always build the undo data, even if we don't use it
-		// ub := f.BuildUndoData(adds, bp.Targets)
-		fmt.Printf(ub.ToString())
 
 		//undo every 3rd block
-		if b%3 == 0 {
-			err := f.Undo(*ub)
+		if b%3 == 2 {
+			// always build the undo data, even if we don't use it
+			// ub := f.BuildUndoData(adds, bp.Targets)
+			fmt.Printf(ub.ToString())
+			err := f.Undov2(*ub)
 			if err != nil {
 				return err
 			}
+			fmt.Printf("\n post undo: ")
+			for h, p := range f.positionMap {
+				fmt.Printf("%x@%d ", h[:4], p)
+			}
 		}
-		fmt.Printf("\n post undo: ")
-		for h, p := range f.positionMap {
-			fmt.Printf("%x@%d ", h[:4], p)
-		}
+
 	}
 	return nil
 }
@@ -104,6 +105,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf(f.ToString())
 	fmt.Printf(ub.ToString())
 	afterTops := f.GetTops()
 	for i, h := range afterTops {

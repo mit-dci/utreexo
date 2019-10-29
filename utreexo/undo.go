@@ -9,6 +9,8 @@ compact nodes can just keep old roots.
 although actually it can make sense for non-bridge nodes to undo as well...
 */
 
+// TODO in general, deal with numLeaves going to 0
+
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
 type undoBlock struct {
@@ -137,16 +139,21 @@ func (f *Forest) Undov2(ub undoBlock) error {
 		delete(f.positionMap, f.forest[p].Mini())
 	}
 
+	// also add everything past numleaves and prevnumleaves to dirt
+	// which might already be there, inefficient!
+	// TODO fix this dirt thing
+	dirt := make([]uint64, len(leafMoves)*2)
+
 	// place hashes starting at old post-remove numLeaves.  they're off the
 	// forest bounds to the right; they will be shuffled in to the left.
 	for i, h := range ub.hashes {
 		f.forest[f.numLeaves+uint64(i)] = h
+		dirt = append(dirt, f.numLeaves+uint64(i))
 	}
 
 	// go through swaps in reverse order
-	dirt := make([]uint64, len(leafMoves)*2)
 	for i, a := range leafMoves {
-		fmt.Printf("swaped %d, %d\n", a.to, a.from)
+		fmt.Printf("swaped %d %x, %d %x\n", a.to, f.forest[a.to][:4], a.from, f.forest[a.from][:4])
 		f.forest[a.from], f.forest[a.to] = f.forest[a.to], f.forest[a.from]
 		dirt[2*i] = a.to       // this is wrong, it way over hashes
 		dirt[(2*i)+1] = a.from // also should be parents
