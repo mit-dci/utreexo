@@ -12,7 +12,7 @@ although actually it can make sense for non-bridge nodes to undo as well...
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
 type undoBlock struct {
-	numAdds      uint32   // number of adds in the block
+	numAdds   uint32   // number of adds in the block
 	positions []uint64 // position of all deletions this block
 	hashes    []Hash   // hashes that were deleted
 }
@@ -132,8 +132,8 @@ func (f *Forest) Undov2(ub undoBlock) error {
 	fmt.Printf("ub hashes %d\n", len(ub.hashes))
 
 	// remove everything between prevNumLeaves and numLeaves from positionMap
-	for p := f.numLeaves; p < prevNumLeaves; p++ {
-		fmt.Printf("remove %x@%d from map\n", f.forest[p][:4], p)
+	for p := f.numLeaves; p < f.numLeaves+prevAdds; p++ {
+		fmt.Printf("remove %x@%d from map\n", f.forest[p][:4], f.positionMap[f.forest[p].Mini()])
 		delete(f.positionMap, f.forest[p].Mini())
 	}
 
@@ -154,12 +154,12 @@ func (f *Forest) Undov2(ub undoBlock) error {
 
 	// update positionMap.  The stuff we do want has been moved in to the forest,
 	// the stuff we don't want has been moved to the right past the edge
-	for p := f.numLeaves; p < prevNumLeaves+prevDels; p++ {
-		fmt.Printf("remove %x@%d from map\n", f.forest[p][:4], p)
-		delete(f.positionMap, f.forest[p].Mini())
+	for p := f.numLeaves; p < prevNumLeaves; p++ {
+		fmt.Printf("put back edge %x@%d from map\n", f.forest[p][:4], p)
+		f.positionMap[f.forest[p].Mini()] = p
 	}
 	for _, p := range ub.positions {
-		fmt.Printf("put back %x@%d in map\n", f.forest[p][:4], p)
+		fmt.Printf("put back internal %x@%d in map\n", f.forest[p][:4], p)
 		f.positionMap[f.forest[p].Mini()] = p
 	}
 

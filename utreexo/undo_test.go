@@ -10,7 +10,7 @@ func TestUndoFixed(t *testing.T) {
 	rand.Seed(2)
 
 	// needs in-order
-	err := undoAddDelOnce(5, 1, 1)
+	err := undoAddDelOnce(6, 4, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +79,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf(f.ToString())
 	beforeTops := f.GetTops()
 	for i, h := range beforeTops {
 		fmt.Printf("beforeTops %d %x\n", i, h)
