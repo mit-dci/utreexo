@@ -17,8 +17,16 @@ func TestUndoFixed(t *testing.T) {
 }
 
 func TestUndoRandom(t *testing.T) {
-	rand.Seed(59)
-	err := undoOnceRandom(4)
+	rand.Seed(6)
+	err := undoOnceRandom(9)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUndoTest(t *testing.T) {
+	rand.Seed(1)
+	err := undoTestSimChain()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,8 +35,7 @@ func TestUndoRandom(t *testing.T) {
 func undoOnceRandom(blocks int32) error {
 	f := NewForest()
 
-	sc := NewSimChain()
-	sc.durationMask = 0x07
+	sc := NewSimChain(0x07)
 	sc.lookahead = 0
 	for b := int32(0); b < blocks; b++ {
 
@@ -63,6 +70,7 @@ func undoOnceRandom(blocks int32) error {
 			for h, p := range f.positionMap {
 				fmt.Printf("%x@%d ", h[:4], p)
 			}
+			sc.BackOne(adds, delHashes)
 		}
 
 	}
@@ -71,7 +79,7 @@ func undoOnceRandom(blocks int32) error {
 
 func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	f := NewForest()
-	sc := NewSimChain()
+	sc := NewSimChain(0xff)
 
 	// --------------- block 0
 	// make starting forest with numStart leaves, and store tops
@@ -134,5 +142,19 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	}
 	fmt.Printf("\n")
 
+	return nil
+}
+
+func undoTestSimChain() error {
+
+	sc := NewSimChain(7)
+	sc.NextBlock(3)
+	sc.NextBlock(3)
+	sc.NextBlock(3)
+	fmt.Printf(sc.ttlString())
+	l1, h1 := sc.NextBlock(3)
+	fmt.Printf(sc.ttlString())
+	sc.BackOne(l1, h1)
+	fmt.Printf(sc.ttlString())
 	return nil
 }
