@@ -141,9 +141,15 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	if len(hs) == 0 {
 		return bp, nil
 	}
+	if len(f.forest) < 2 {
+		return bp, nil
+	}
+
+	for h, p := range f.positionMap {
+		fmt.Printf("%x@%d ", h[:4], p)
+	}
 
 	// first get all the leaf positions
-
 	// there shouldn't be any duplicates in hs, but if there are I guess
 	// it's not an error.
 	bp.Targets = make([]uint64, len(hs))
@@ -152,18 +158,25 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 
 		pos, ok := f.positionMap[wanted.Mini()]
 		if !ok {
+			fmt.Printf(f.ToString())
 			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 
 		// should never happen
 		if pos > f.numLeaves {
+			for m, p := range f.positionMap {
+				fmt.Printf("%x @%d\t", m[:4], p)
+			}
 			return bp, fmt.Errorf(
-				"prove: got leaf position %d but only %d leaves exist",
+				"ProveBlock: got leaf position %d but only %d leaves exist",
 				pos, f.numLeaves)
 		}
 		bp.Targets[i] = pos
 	}
 	// targets need to be sorted because the proof hashes are sorted
+	// NOTE that this is a big deal -- we lose in-block positional information
+	// because of this sorting.  Does that hurt locality or performance?  My
+	// guess is no, but that's untested.
 	sortUint64s(bp.Targets)
 
 	// TODO feels like you could do all this with just slices and no maps...

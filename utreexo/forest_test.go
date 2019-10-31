@@ -5,14 +5,54 @@ import (
 	"testing"
 )
 
-// Add 2. delete 1.  Repeat.
+func TestForestAddDel(t *testing.T) {
 
+	numAdds := 10
+	numDels := 5
+
+	for b := 0; b < 1000; b++ {
+		//  these should stay the same
+		f := NewForest() // bottom up modified forest
+
+		delMap := make(map[uint64]bool)
+		adds := make([]LeafTXO, numAdds)
+		for j := range adds {
+			adds[j].Hash[1] = uint8(j)
+			adds[j].Hash[3] = 0xcc
+			delMap[uint64(j)] = true
+		}
+
+		_, err := f.Modify(adds, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var k int
+		dels := make([]uint64, numDels)
+		for i, _ := range delMap {
+			dels[k] = i
+			k++
+			if k >= numDels {
+				break
+			}
+		}
+
+		err = f.removev3(dels) // was v2
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+	}
+}
+
+// Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
 	f := NewForest()
 	var absidx uint32
 	adds := make([]LeafTXO, 2)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
 
 		for j := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0
@@ -29,7 +69,7 @@ func Test2Fwd1Back(t *testing.T) {
 		fmt.Printf("\t\t\t########### block %d ##########\n\n", i)
 
 		// add 2
-		err := f.Modify(adds, nil)
+		_, err := f.Modify(adds, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +110,7 @@ func Test2Fwd1Back(t *testing.T) {
 // Add and delete variable numbers, repeat.
 // deletions are all on the left side and contiguous.
 func TestAddxDelyLeftFullBlockProof(t *testing.T) {
-	for x := 0; x < 100; x++ {
+	for x := 0; x < 10; x++ {
 		for y := 0; y < x; y++ {
 			err := AddDelFullBlockProof(x, y)
 			if err != nil {
@@ -97,7 +137,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	}
 
 	// add x
-	err := f.Modify(adds, nil)
+	_, err := f.Modify(adds, nil)
 	if err != nil {
 		return err
 	}

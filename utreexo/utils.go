@@ -73,6 +73,20 @@ func ExtractTwins(nodes []uint64) (twins, onlychildren []uint64) {
 	return
 }
 
+// takes a slice of dels, removes the twins (in place) and returns a slice
+// of parents of twins
+func ExTwin2(nodes []uint64, height uint8) (parents, dels []uint64) {
+	for i := 0; i < len(nodes); i++ {
+		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
+			parents = append(parents, up1(nodes[i], height))
+			i++ // skip one here
+		} else {
+			dels = append(dels, nodes[i])
+		}
+	}
+	return
+}
+
 // tree height 0 means there's 1 lead.  Tree height 1 means 2 leaves.
 // so it's 1<<height leaves.  ... pretty sure about this
 
@@ -184,6 +198,9 @@ func cousin(position uint64) uint64 {
 	return position ^ 2
 }
 
+// TODO  inForest can probably be done better a different way.
+// do we really need this at all?  only used for error detection in descendToPos
+
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves
 // (same as childmany)
@@ -214,6 +231,16 @@ func treeHeight(n uint64) uint8 {
 	return e
 }
 
+// topPos: given a number of leaves and a height, find the position of the
+// root at that height.  Does not return an error if there's no root at that
+// height so watch out and check first.  Checking is easy: leaves & (1<<h)
+func topPos(leaves uint64, h, forestHeight uint8) uint64 {
+	mask := uint64(2<<forestHeight) - 1
+	before := leaves & (mask << (h + 1))
+	shifted := (before >> h) | (mask << (forestHeight - (h - 1)))
+	return shifted & mask
+}
+
 // getTops gives you the positions of the tree tops, given a number of leaves.
 // LOWEST first (right to left) (blarg change this)
 func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights []uint8) {
@@ -241,7 +268,7 @@ func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights [
 // can also be used with the "to" return discarded to just enumerate a subtree
 // swap tells whether to activate the sibling swap to try to preserve order
 func subTreePositions(
-	subroot uint64, moveTo uint64, forestHeight uint8) (m []move) {
+	subroot uint64, moveTo uint64, forestHeight uint8) (as []arrow) {
 
 	subHeight := detectHeight(subroot, forestHeight)
 	//	fmt.Printf("node %d height %d\n", subroot, subHeight)
@@ -260,13 +287,14 @@ func subTreePositions(
 			// loop left to right
 			f := leftmost + i
 			t := uint64(int64(f) + rowDelta)
-			m = append(m, move{from: f, to: t})
+			as = append(as, arrow{from: f, to: t})
 		}
 	}
 
 	return
 }
 
+// TODO: unused? useless?
 // subTreeLeafRange gives the range of leaves under a node
 func subTreeLeafRange(
 	subroot uint64, forestHeight uint8) (uint64, uint64) {
@@ -278,6 +306,25 @@ func subTreeLeafRange(
 	return left, run
 }
 
+// to leaves takes a arrow and returns a slice of arrows that are all the
+// leaf arrows below it
+func (a *arrowh) toLeaves(forestHeight uint8) []arrow {
+	if a.ht == 0 {
+		return []arrow{arrow{from: a.from, to: a.to}}
+	}
+
+	run := uint64(1 << a.ht)
+	fromStart := childMany(a.from, a.ht, forestHeight)
+	toStart := childMany(a.to, a.ht, forestHeight)
+
+	leaves := make([]arrow, run)
+	for i := uint64(0); i < run; i++ {
+		leaves[i] = arrow{from: fromStart + i, to: toStart + i}
+	}
+
+	return leaves
+}
+
 // it'd be cool if you just had .sort() methods on slices of builtin types...
 func sortUint64s(s []uint64) {
 	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
@@ -287,10 +334,10 @@ func sortNodeSlice(s []Node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
-// sortMoves sorts them by from, not to
-func sortMoves(s []move) {
-	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
-}
+// sortArrows sorts them by from
+// func sortArrows(s []arrow) {
+// 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
+// }
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into

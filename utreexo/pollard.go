@@ -115,13 +115,13 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 }
 
 // TODO for rem:
-// turn the dirtymap into a slice. I think it's always ordered so easy
 // get rid of dirtymap and rehash entirely?  Not sure if we can
 // if not then make it so only rehash hashes, and movenode doesn't.  same with
 // pruning?  seems that rehash and movenode do a lot of the same things.
 
 // rem deletes stuff from the pollard.  The hard part.
 func (p *Pollard) rem(dels []uint64) error {
+
 	if len(dels) == 0 {
 		return nil // that was quick
 	}
@@ -129,7 +129,6 @@ func (p *Pollard) rem(dels []uint64) error {
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 	overlap := p.numLeaves & nextNumLeaves
-
 	// remove tops and add empty tops based just on popcount
 	nexTops := make([]*polNode, PopCount(nextNumLeaves))
 	// keeping track of these separately is annoying.  I'm sure there's a
@@ -138,27 +137,20 @@ func (p *Pollard) rem(dels []uint64) error {
 	oldTopIdx := len(p.tops) - 1
 	nexTopIdx := len(nexTops) - 1
 
-	stash, moves, err := removeTransform(dels, p.numLeaves, ph)
-	if err != nil {
-		return err
-	}
+	stash, moves := removeTransform(dels, p.numLeaves, ph)
 
-	// TODO how about instead of a map or even a slice of uint64s, you just
-	// have a slice of pointers?  And you need to run AuntOp on these pointers
-	// if you aren't doing it already from something else.
+	fmt.Printf("stash %v\n", stash)
+	// TODO how about instead of a slice of uint64s, you just
+	// have a slice of pointers?  Then less descent.
 	var moveDirt []uint64
 	var hashDirt []uint64
-	// can use some kind of queues or something later.
+
+	tops, topHeights := getTopsReverse(p.numLeaves, ph)
+	var curRowTop uint64
 
 	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
 	//		ph, p.numLeaves, len(dels), nextNumLeaves, len(rawStash), len(rawMoves))
-
 	for h := uint8(0); h < ph; h++ {
-
-		//		if verbose {
-		// fmt.Printf("pol rem row %d\n", h)
-		//		}
-
 		// copy the top over directly if there's a bit overlap
 		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
 		if (1<<h)&overlap != 0 {
@@ -167,6 +159,36 @@ func (p *Pollard) rem(dels []uint64) error {
 			nexTops[nexTopIdx] = p.tops[oldTopIdx]
 		}
 
+		if topHeights[0] == h {
+			curRowTop = tops[0]
+			topHeights = topHeights[1:]
+			tops = tops[1:]
+		} else {
+			curRowTop = 0
+		}
+
+		// hash first
+		curDirt := mergeSortedSlices(moveDirt, hashDirt)
+		moveDirt, hashDirt = []uint64{}, []uint64{}
+		// if there's curDirt, hash
+		fmt.Printf("h %d curDirt %v\n", h, curDirt)
+		for _, pos := range curDirt {
+			err := p.reHashOne(pos)
+			if err != nil {
+				return fmt.Errorf("rem rehash %s", err.Error())
+			}
+			parPos := up1(pos, ph)
+			lhd := len(hashDirt)
+			// add dirt unless:
+			// this node is a current top, or already in the dirt slice
+			if pos != curRowTop &&
+				(lhd == 0 || hashDirt[lhd-1] != parPos) {
+				fmt.Printf("pol h %d hash %d to hashDirt \n", h, parPos)
+				hashDirt = append(hashDirt, parPos)
+			}
+		}
+
+		fmt.Printf("this row top %d\n", curRowTop)
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, ph) == h {
 			if len(p.tops) == 0 || p.tops[0] == nil {
@@ -179,11 +201,12 @@ func (p *Pollard) rem(dels []uint64) error {
 			}
 			dirt := up1(moves[0].to, ph)
 			lmvd := len(moveDirt)
-			// the dirt returned by moveNode is always a parent so can never be 0
-			if inForest(dirt, p.numLeaves) &&
-				(lmvd == 0 || moveDirt[lmvd-1] != dirt) {
+			// the dirt returned by moveNode is always a parent
+			if lmvd == 0 || moveDirt[lmvd-1] != dirt {
 				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
 				moveDirt = append(moveDirt, dirt)
+			} else {
+				fmt.Printf("pol skip %d  \n", dirt)
 			}
 			moves = moves[1:]
 		}
@@ -192,7 +215,7 @@ func (p *Pollard) rem(dels []uint64) error {
 		for len(stash) > 0 &&
 			detectHeight(stash[0].to, ph) == h {
 			// populate top; stashes always become tops
-			// fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
+			fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
 			pr, sibs, err := p.descendToPos(stash[0].from)
 			if err != nil {
 				return fmt.Errorf("rem stash %s", err.Error())
@@ -214,29 +237,6 @@ func (p *Pollard) rem(dels []uint64) error {
 			stash = stash[1:]
 		}
 
-		curDirt := mergeSortedSlices(moveDirt, hashDirt)
-		moveDirt, hashDirt = []uint64{}, []uint64{}
-		// if we're not at the top, and there's curDirty left, hash
-		if h < ph-1 {
-			fmt.Printf("h %d curDirt %v\n", h, curDirt)
-			for _, pos := range curDirt {
-				err := p.reHashOne(pos)
-				if err != nil {
-					return fmt.Errorf("rem rehash %s", err.Error())
-				}
-
-				parPos := up1(pos, ph)
-				lhd := len(hashDirt)
-				// add parent to end of dirty slice if it's not already there
-				if inForest(parPos, p.numLeaves) &&
-					(lhd == 0 || hashDirt[lhd-1] != parPos) {
-					fmt.Printf("h %d hash %d to hashDirt \n", h, parPos)
-					hashDirt = append(hashDirt, parPos)
-				}
-				//  fmt.Printf("adding dirt %d\n", parPos)
-			}
-		}
-
 		// if there's a 1 in the nextNum, decrement top number
 		if (1<<h)&nextNumLeaves != 0 {
 			nexTopIdx--
@@ -244,25 +244,24 @@ func (p *Pollard) rem(dels []uint64) error {
 		if (1<<h)&p.numLeaves != 0 {
 			oldTopIdx--
 		}
-	}
 
+	}
 	p.numLeaves = nextNumLeaves
 	p.tops = nexTops
-
 	return nil
 }
 
 // swap moves a node from one place to another.  Note that it leaves the
 // node in the "from" place to be dealt with some other way.
 // Also it hashes new parents so the hashes & pointers are consistent.
-func (p *Pollard) moveNode(m move) error {
+func (p *Pollard) moveNode(a arrow) error {
 
-	prfrom, sibfrom, err := p.descendToPos(m.from)
+	prfrom, sibfrom, err := p.descendToPos(a.from)
 	if err != nil {
 		return fmt.Errorf("from %s", err.Error())
 	}
 
-	prto, sibto, err := p.descendToPos(m.to)
+	prto, sibto, err := p.descendToPos(a.to)
 	if err != nil {
 		return fmt.Errorf("to %s", err.Error())
 	}
@@ -270,7 +269,7 @@ func (p *Pollard) moveNode(m move) error {
 	// build out full branch to target if it's not populated
 	// I think this efficient / never creates usless nodes but not sure..?
 	for i := range sibto {
-		tgtLR := (m.to >> uint8(i)) & 1
+		tgtLR := (a.to >> uint8(i)) & 1
 		if sibto[i] == nil {
 			sibto[i] = new(polNode)
 		}
@@ -291,29 +290,6 @@ func (p *Pollard) moveNode(m move) error {
 	} else {
 		prto[0].chop() // need this
 	}
-
-	// now hash (if there's something above) (Which there always will be...?)
-	/*
-		if len(prto) > 1 { // true unless moving to a top? in which case just return?
-			if sibto[1] == nil { // create & link if it doesn't exist
-				// fmt.Printf("mv make parent node at %d\n", up1(to, p.height()))
-				sibto[1] = new(polNode)
-				if prto[2] != nil {
-					prto[2].niece[(m.to>>1)&1] = sibto[1]
-				}
-			}
-			p.hashesEver++
-			sibto[1].data = prto[1].auntOp()
-			//		fmt.Printf("compute %04x at %d evap tgt %v sib %v\n",
-			//			sibto[1].data[:4], up1(m.to, p.height()), evapTgt, evapSib)
-			// after auntopping, delete nodes.
-			if m.to < p.numLeaves {
-				prto[1].leafPrune()
-			} else {
-				prto[1].prune()
-			}
-		}*/
-
 	return nil
 }
 
@@ -333,12 +309,16 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	//		pos, len(pr), len(sib), pr[0].niece)
 	if sib[0] == nil {
 		sib[0] = new(polNode)
+		if len(pr) < 2 || pr[1] == nil {
+			return fmt.Errorf("rehashone sib[0] nil pr[1] nil")
+		}
 		pr[1].niece[pos&1] = sib[0]
 		//		return fmt.Errorf("sib[0] nil")
 	}
 	p.hashesEver++
 	sib[0].data = pr[0].auntOp()
-	//	fmt.Printf("rehash %04x\n", sib[0].data[:4])
+	fmt.Printf("rehashone %x, %x -> %04x\n",
+		pr[0].niece[0].data[:4], pr[0].niece[1].data[:4], sib[0].data[:4])
 	pr[0].prune()
 
 	return nil
@@ -353,11 +333,8 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
 	// need to figure out offsets for smaller trees.
 
-	//	nh := detectHeight(pos, p.height())
-
 	if !inForest(pos, p.numLeaves) {
-		//	if (nh == 0 && pos >= p.numLeaves) || pos >= (p.numLeaves*2)-1 {
-		// need better check for "there isn't a node there"
+		//	if pos >= (p.numLeaves*2)-1 {
 		return nil, nil,
 			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)
 	}
@@ -401,10 +378,14 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
 func (p *Pollard) toFull() (*Forest, error) {
+
 	ff := NewForest()
 	ff.height = p.height()
 	ff.numLeaves = p.numLeaves
 	ff.forest = make([]Hash, 2<<ff.height)
+	if p.numLeaves == 0 {
+		return ff, nil
+	}
 
 	//	for topIdx, top := range p.tops {
 	//	}
