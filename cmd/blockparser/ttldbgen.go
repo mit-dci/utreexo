@@ -1,13 +1,13 @@
-package main
+package blockparser
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
 
-	blake2b "github.com/minio/blake2b-simd"
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -72,7 +72,7 @@ func dbWorker(
 	}
 }
 func HashFromString(s string) chainhash.Hash {
-	return blake2b.Sum256([]byte(s))
+	return sha256.Sum256([]byte(s))
 }
 
 // uint32 to 4 bytes.  Always works.
@@ -82,6 +82,7 @@ func U32tB(i uint32) []byte {
 	return buf.Bytes()
 }
 
+//TODO make actual error return here
 // 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
 func BtU32(b []byte) uint32 {
 	if len(b) != 4 {

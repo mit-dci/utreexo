@@ -1,10 +1,9 @@
 /* test the utreexo forest */
 
-package main
+package ibdsim
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -17,42 +16,13 @@ import (
 )
 
 var maxmalloc uint64
-var genproofs = flag.Bool("genproofs", false, "Generate proofs")
-var genhist = flag.Bool("genhist", false, "Generate histogram")
-
-var ttlfn = flag.String("ttlfn", "ttl.mainnet.txos", "ttl filename")
-var schedFileName = flag.String("s", "schedule1pos.clr", "schedule file to use")
-
-func main() {
-	flag.Parse()
-	if *genproofs {
-		fmt.Println("Building proofs...")
-		err := buildProofs()
-		if err != nil {
-			panic(err)
-		}
-		return
-	}
-	if *genhist {
-		err := histogram()
-		if err != nil {
-			panic(err)
-		}
-		return
-	}
-	err := runIBD()
-	if err != nil {
-		panic(err)
-	}
-
-}
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
 // the deletion data and proofs though, we get from the leveldb
 // which was created by the bridge node.
-func runIBD() error {
-	txofile, err := os.OpenFile(*ttlfn, os.O_RDONLY, 0600)
+func RunIBD(ttlfn string, schedFileName string) error {
+	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -93,7 +63,7 @@ func runIBD() error {
 	// p.Lookahead = 1000
 	lookahead := int32(1000) // keep txos that last less than this many blocks
 
-	fname := fmt.Sprintf("mem%s", *schedFileName)
+	fname := fmt.Sprintf("mem%s", schedFileName)
 
 	for scanner.Scan() {
 		// keep schedule buffer full, 100KB chunks at a time
@@ -202,10 +172,10 @@ func runIBD() error {
 }
 
 // build the bridge node / proofs
-func buildProofs() error {
+func BuildProofs(ttlfn string) error {
 
-	fmt.Println(*ttlfn)
-	txofile, err := os.OpenFile(*ttlfn, os.O_RDONLY, 0600)
+	fmt.Println(ttlfn)
+	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
