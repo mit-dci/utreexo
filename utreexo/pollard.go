@@ -114,6 +114,62 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	return nil
 }
 
+// rem2 deletes stuff from the pollard, using remtrans2
+func (p *Pollard) rem2(dels []uint64) error {
+
+	if len(dels) == 0 {
+		return nil // that was quick
+	}
+
+	ph := p.height() // height of pollard
+	nextNumLeaves := p.numLeaves - uint64(len(dels))
+	// overlap := p.numLeaves & nextNumLeaves
+	// remove tops and add empty tops based just on popcount
+	nexTops := make([]*polNode, PopCount(nextNumLeaves))
+	// keeping track of these separately is annoying.  I'm sure there's a
+	// clever bit shifty way to not need to do this.  It doesn't actually
+	// take any cpu time or ram though.
+	// oldTopIdx := len(p.tops) - 1
+	// nexTopIdx := len(nexTops) - 1
+
+	swapswithheight := remTrans2(dels, p.numLeaves, ph)
+
+	swaps := make([]arrow, len(swapswithheight))
+	for i, s := range swapswithheight {
+		swaps[i].from = s.from
+		swaps[i].to = s.to
+	}
+
+	// var moveDirt []uint64
+	// var hashDirt []uint64
+
+	// tops, topHeights := getTopsReverse(p.numLeaves, ph)
+
+	// don't even go by height?  just through the swaps backwards?
+	reverseArrowSlice(swaps)
+
+	for _, s := range swaps {
+		aparity := s.from & 1
+		aparent, err := p.descendToParent(s.from)
+		if err != nil {
+			return err
+		}
+		bparity := s.to & 1
+		bparent, err := p.descendToParent(s.to)
+		if err != nil {
+			return err
+		}
+
+		// swap here
+		aparent.niece[aparity], bparent.niece[bparity] =
+			bparent.niece[bparity], aparent.niece[aparity]
+	}
+
+	p.numLeaves = nextNumLeaves
+	p.tops = nexTops
+	return nil
+}
+
 // TODO for rem:
 // get rid of dirtymap and rehash entirely?  Not sure if we can
 // if not then make it so only rehash hashes, and movenode doesn't.  same with
@@ -322,6 +378,16 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	pr[0].prune()
 
 	return nil
+}
+
+// descendToParent wraps descendToPos for now but probably could be faster
+func (p *Pollard) descendToParent(pos uint64) (*polNode, error) {
+	_, sibs, err := p.descendToPos(pos)
+	if err != nil {
+		return nil, err
+	}
+
+	return sibs[len(sibs)-1], nil
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
