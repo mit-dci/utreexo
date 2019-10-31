@@ -169,21 +169,6 @@ func (f *Forest) cleanup() {
 	}
 }
 
-type rootStash struct {
-	vals  []Hash
-	dirts []int // I know, I know, it's ugly but it's for slice indexes...
-}
-
-func (r *rootStash) toTStash(to uint64) tStash {
-	return tStash{vals: r.vals, dest: to}
-}
-
-// tStash is a stash used with removeTransform
-type tStash struct {
-	vals []Hash
-	dest uint64
-}
-
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) Add(adds []LeafTXO) {
 	f.addv2(adds)
@@ -309,18 +294,6 @@ func (f *Forest) reMap(destHeight uint8) error {
 	f.height = destHeight
 	return nil
 }
-
-/*
-
-For re-arranging sub-trees in the full tree mode.
-Usually you move things left, by subtracting from their position.
-eg 27 moves to 24.  If that's at height 2, the nodes below at heights 1, 0 also
-move.  The way they move: take the initial movement at the top (height 2),
-in this case 2 (27-24 = 3)  At height 1, they will move -6 (-3 << 1) and at
-height 0 they move -12 (-3 << 2).  Can't really do signed shifts but can subtract;
-in the cases when subtrees move right, add instead.  Moving right is rare though.
-
-*/
 
 // sanity checks forest sanity: does numleaves make sense, and are the tops
 // populated?
