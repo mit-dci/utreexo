@@ -70,7 +70,7 @@ func parser() error {
 		go dbWorker(batchan, lvdb, &batchwg)
 	}
 
-	for fileNum := 154; ; fileNum++ {
+	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
 		fmt.Printf("reading %s\n", fileName)
 

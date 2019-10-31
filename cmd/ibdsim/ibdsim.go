@@ -73,7 +73,7 @@ func runIBD() error {
 	scanner := bufio.NewScanner(txofile)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
 
-	var scheduleBuffer []byte
+	// var scheduleBuffer []byte
 
 	var height uint32
 	height = 1
@@ -130,10 +130,10 @@ func runIBD() error {
 				// scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
 
 				totalTXOAdded++
-				if totalTXOAdded%8 == 0 {
-					// after every 8 reads, pop the first byte off the front
-					scheduleBuffer = scheduleBuffer[1:]
-				}
+				// if totalTXOAdded%8 == 0 {
+				// after every 8 reads, pop the first byte off the front
+				// scheduleBuffer = scheduleBuffer[1:]
+				// }
 				blockAdds = append(blockAdds, a)
 			}
 
