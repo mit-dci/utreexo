@@ -132,12 +132,23 @@ func (f *Forest) removev3(dels []uint64) error {
 	for _, s := range swaps {
 		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
 		if s.to < nextNumLeaves {
-			f.positionMap[f.forest[s.to].Mini()] = s.to
 			// from as well?
 			dirt = append(dirt, s.to)
 			if s.from < nextNumLeaves {
 				dirt = append(dirt, s.from)
 			}
+		}
+	}
+	// go through dirt and update map
+	for _, d := range dirt {
+		// everything that moved needs to have its position updated in the map
+		// TODO does it..?
+		m := f.forest[d].Mini()
+		oldpos := f.positionMap[m]
+		if oldpos != d {
+			fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
+			delete(f.positionMap, m)
+			f.positionMap[m] = d
 		}
 	}
 

@@ -18,15 +18,15 @@ func TestUndoFixed(t *testing.T) {
 
 func TestUndoRandom(t *testing.T) {
 
-	// for z := int64(0); z < 999; z++ {
-	z := int64(316)
-	rand.Seed(z)
-	err := undoOnceRandom(10)
-	if err != nil {
-		fmt.Printf("rand seed %d\n", z)
-		t.Fatal(err)
+	for z := int64(0); z < 999; z++ {
+		// z := int64(11)
+		rand.Seed(z)
+		err := undoOnceRandom(101)
+		if err != nil {
+			fmt.Printf("rand seed %d\n", z)
+			t.Fatal(err)
+		}
 	}
-	// }
 }
 
 func TestUndoTest(t *testing.T) {
@@ -71,7 +71,7 @@ func undoOnceRandom(blocks int32) error {
 		//undo every 3rd block
 		if b%3 == 2 {
 			fmt.Printf(ub.ToString())
-			err := f.Undov2(*ub)
+			err := f.Undo(*ub)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		fmt.Printf("afterTops %d %x\n", i, h)
 	}
 
-	err = f.Undov2(*ub)
+	err = f.Undo(*ub)
 	if err != nil {
 		return err
 	}
