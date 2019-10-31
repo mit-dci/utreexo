@@ -169,6 +169,17 @@ func (f *Forest) Undov2(ub undoBlock) error {
 		fmt.Printf("put back internal %x@%d in map\n", f.forest[p][:4], p)
 		f.positionMap[f.forest[p].Mini()] = p
 	}
+	for _, d := range dirt {
+		// everything that moved needs to have its position updated in the map
+		// TODO does it..?
+		m := f.forest[d].Mini()
+		oldpos := f.positionMap[m]
+		if oldpos != d {
+			fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
+			delete(f.positionMap, m)
+			f.positionMap[m] = d
+		}
+	}
 
 	// rehash above all tos/froms
 	f.numLeaves = prevNumLeaves // change numLeaves before rehashing
@@ -179,7 +190,7 @@ func (f *Forest) Undov2(ub undoBlock) error {
 		return err
 	}
 
-	fmt.Printf("post undo %s\n", f.ToString())
+	fmt.Printf("post undo forest %s\n", f.ToString())
 	return nil
 }
 

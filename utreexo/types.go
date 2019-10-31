@@ -119,7 +119,6 @@ func (s *SimChain) BackOne(leaves []LeafTXO, dels []Hash) {
 	}
 
 	s.blockHeight--
-	s.leafCounter -= uint64(len(leaves))
 	return
 }
 
@@ -140,6 +139,10 @@ func (s *SimChain) ttlString() string {
 func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
+
+	if s.blockHeight == 0 && numAdds == 0 {
+		numAdds = 1
+	}
 	// they're all forgettable
 	adds := make([]LeafTXO, numAdds)
 
@@ -166,7 +169,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		// the first utxo addded lives forever.
 		// (prevents leaves from goign to 0 which is buggy)
 
-		if s.blockHeight == 0 && j == 0 {
+		if s.blockHeight == 0 {
 			adds[j].Duration = 0
 		}
 

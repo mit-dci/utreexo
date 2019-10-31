@@ -17,11 +17,16 @@ func TestUndoFixed(t *testing.T) {
 }
 
 func TestUndoRandom(t *testing.T) {
-	rand.Seed(6)
-	err := undoOnceRandom(9)
+
+	// for z := int64(0); z < 999; z++ {
+	z := int64(316)
+	rand.Seed(z)
+	err := undoOnceRandom(10)
 	if err != nil {
+		fmt.Printf("rand seed %d\n", z)
 		t.Fatal(err)
 	}
+	// }
 }
 
 func TestUndoTest(t *testing.T) {
@@ -53,20 +58,24 @@ func undoOnceRandom(blocks int32) error {
 		if err != nil {
 			return err
 		}
+		fmt.Printf(f.ToString())
+		fmt.Printf(sc.ttlString())
 		for h, p := range f.positionMap {
 			fmt.Printf("%x@%d ", h[:4], p)
+		}
+		err = f.PosMapSanity()
+		if err != nil {
+			return err
 		}
 
 		//undo every 3rd block
 		if b%3 == 2 {
-			// always build the undo data, even if we don't use it
-			// ub := f.BuildUndoData(adds, bp.Targets)
 			fmt.Printf(ub.ToString())
 			err := f.Undov2(*ub)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("\n post undo: ")
+			fmt.Printf("\n post undo map: ")
 			for h, p := range f.positionMap {
 				fmt.Printf("%x@%d ", h[:4], p)
 			}

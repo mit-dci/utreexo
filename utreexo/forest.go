@@ -326,6 +326,22 @@ func (f *Forest) sanity() error {
 				f.numLeaves, len(tops), t)
 		}
 	}
+	if uint64(len(f.positionMap)) > f.numLeaves {
+		return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
+			len(f.positionMap), f.numLeaves)
+	}
+
+	return nil
+}
+
+// PosMapSanity is costly / slow: check that everything in posMap is correct
+func (f *Forest) PosMapSanity() error {
+	for i := uint64(0); i < f.numLeaves; i++ {
+		if f.positionMap[f.forest[i].Mini()] != i {
+			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
+				f.forest[i][:4], f.positionMap[f.forest[i].Mini()], i)
+		}
+	}
 	return nil
 }
 
