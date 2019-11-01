@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/mit-dci/utreexo/cmd/blockparser"
 	"github.com/mit-dci/utreexo/cmd/txottl"
@@ -36,6 +38,7 @@ var genhistCmd = flag.NewFlagSet("genhist", flag.ExitOnError)
 
 //bit of a hack. Stdandard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
+var testnetOrMainnet = optionCmd.Bool("testnetormainnet", false, "Flag to perform on testnet or mainnet")
 var ttlfn = optionCmd.String("ttlfn", "ttl.mainnet.txos", "assign a ttlfn file name with 'ttlfn=filename'")
 var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr", "assign a scheduled file to use with 'schedFileName=filename'")
 
@@ -45,10 +48,13 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
+	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
+	sig := make(chan bool,1)
+	handleIntSig(sig)
 
 	switch os.Args[1] {
 	case "parseblock":
-		blockparser.Parser()
+		blockparser.Parser(sig)
 	case "txottlgen":
 		fmt.Println("Generating txo time to live...")
 		txottl.ReadTTLdb()
@@ -76,3 +82,13 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+func handleIntSig(sig chan bool) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		<-s
+		sig <- true
+	}()
+}
+

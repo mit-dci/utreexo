@@ -2,8 +2,10 @@ package blockparser
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"sync"
+	"strconv"
 
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
@@ -14,6 +16,10 @@ import (
 /*
 Read bitcoin core's levelDB index folder, and the blk000.dat files with
 the blocks.
+
+Currently, sortBlocks() reads from the .dat files and sorts the blocks.
+Once the blocks are sorted, sortBlocks calls writeBlock() and it starts writing to the .txos file.
+
 Writes a text txo file, and also creates a levelDB folder with the block
 heights where every txo is consumed. These files feed in to txottl to
 make a txo text file with the ttl times on each line
@@ -33,17 +39,26 @@ var testNet3GenHash = chainhash.Hash{
 	0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
 }
 
-func Parser() error {
-	tipnum := 0
-	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
+//Parser parses blocks from the .dat files bitcoin core provides
+func Parser(sig chan bool) error {
+
+	tipnum := getTipNum()
 	tip := testNet3GenHash
 
-	outfile, err := os.Create("testnet.txos")
+	go stopParse(sig, tipnum)
+
+	//append if testnet.txos exists. Create one if it doesn't exist
+	outfile, err := os.OpenFile("testnet.txos", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
-	// open database
+	cb, err := os.OpenFile("currentblock.txos", os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
 	lvdb, err := leveldb.OpenFile("./ttldb", o)
@@ -70,14 +85,13 @@ func Parser() error {
 			fmt.Printf("%s doesn't exist; done reading\n", fileName)
 			break
 		}
-
 		blocks, err := readRawBlocksFromFile(fileName)
 		if err != nil {
 			return err
 		}
 
 		tip, tipnum, err = sortBlocks(
-			blocks, nextMap, tip, tipnum, outfile, batchan, &batchwg)
+			blocks, nextMap, tip, tipnum, outfile, cb, batchan, &batchwg)
 		if err != nil {
 			return err
 		}
@@ -87,7 +101,9 @@ func Parser() error {
 	return nil
 }
 
-func IsUnspendable(o *wire.TxOut) bool {
+//isUnspendable determines whether a tx is spenable or not.
+//returns true if spendable, false if unspenable.
+func isUnspendable(o *wire.TxOut) bool {
 	switch {
 	case len(o.PkScript) > 10000: //len 0 is OK, spendable
 		return true
@@ -96,51 +112,6 @@ func IsUnspendable(o *wire.TxOut) bool {
 	default:
 		return false
 	}
-}
-
-func sortBlocks(
-	blocks []wire.MsgBlock,
-	nextMap map[chainhash.Hash]wire.MsgBlock,
-	tip chainhash.Hash, tipnum int,
-	outfile *os.File,
-	batchan chan *leveldb.Batch,
-	batchwg *sync.WaitGroup) (chainhash.Hash, int, error) {
-
-	for _, b := range blocks {
-		if len(nextMap) > 10000 {
-			fmt.Printf("dead-end tip at %d %s\n", tipnum, tip.String())
-			break
-		}
-
-		if b.Header.PrevBlock != tip { // not in line, add to map
-			nextMap[b.Header.PrevBlock] = b
-			continue
-		}
-
-		// inline, progress tip and deplete map
-		tip = b.BlockHash()
-		tipnum++
-		err := writeBlock(b, tipnum, outfile, batchan, batchwg)
-		if err != nil {
-			return tip, tipnum, err
-		}
-
-		// check for next blocks in map
-		stashedBlock, ok := nextMap[tip]
-		for ok {
-			tip = stashedBlock.BlockHash()
-			tipnum++
-			err := writeBlock(stashedBlock, tipnum, outfile, batchan, batchwg)
-			if err != nil {
-				return tip, tipnum, err
-			}
-
-			delete(nextMap, stashedBlock.Header.PrevBlock)
-			stashedBlock, ok = nextMap[tip]
-		}
-	}
-	fmt.Printf("tip %d map %d\n", tipnum, len(nextMap))
-	return tip, tipnum, nil
 }
 
 func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
@@ -169,6 +140,7 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 			break
 		}
 
+		//reads 4 bytes from the current offset
 		loc, err = f.Seek(4, 1)
 		if err != nil {
 			return nil, err
@@ -192,4 +164,76 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 	}
 
 	return blocks, nil
+}
+
+//sortBlocks sorts blocks from the .dat files inside blocks/ folder.
+//Blocks by default are not in order when synced with bitcoin core.
+//It also calls writeBlocks, which writes to the .txos file.
+func sortBlocks(
+	blocks []wire.MsgBlock,
+	nextMap map[chainhash.Hash]wire.MsgBlock,
+	tip chainhash.Hash, tipnum int,
+	outfile *os.File,
+	cb *os.File,
+	batchan chan *leveldb.Batch,
+	batchwg *sync.WaitGroup) (chainhash.Hash, int, error) {
+
+	for _, b := range blocks {
+		if len(nextMap) > 10000 {
+			fmt.Printf("dead-end tip at %d %s\n", tipnum, tip.String())
+			break
+		}
+
+		if b.Header.PrevBlock != tip { // not in line, add to map
+			nextMap[b.Header.PrevBlock] = b
+			continue
+		}
+
+		// inline, progress tip and deplete map
+		tip = b.BlockHash()
+		tipnum++
+		err := writeBlock(b, tipnum, outfile, cb, batchan, batchwg)
+		if err != nil {
+			return tip, tipnum, err
+		}
+
+		// check for next blocks in map
+		stashedBlock, ok := nextMap[tip]
+		for ok {
+			tip = stashedBlock.BlockHash()
+			tipnum++
+			err := writeBlock(stashedBlock, tipnum, outfile, cb, batchan, batchwg)
+			if err != nil {
+				return tip, tipnum, err
+			}
+
+			delete(nextMap, stashedBlock.Header.PrevBlock)
+			stashedBlock, ok = nextMap[tip]
+		}
+	}
+	fmt.Printf("tip %d map %d\n", tipnum, len(nextMap))
+	return tip, tipnum, nil
+}
+
+//getTipNum resumes where the parsing left off.
+//It starts from the beginning if tipnum.txos file wasn't found.
+func getTipNum() int {
+	file, err := os.OpenFile("currentblock.txos", os.O_RDONLY, 0400)
+	if err != nil {
+		var tipnum int
+		return tipnum
+	}
+
+	b, err := ioutil.ReadAll(file)
+	tipnum, err := strconv.Atoi(string(b))
+	fmt.Println(tipnum)
+	return tipnum
+}
+
+//StopParse deletes the current block.
+//Handles SIGTERM and SIGINT.
+func stopParse(sig chan bool, tipnum int) {
+	<-sig
+	fmt.Println("Exiting...")
+	os.Exit(1)
 }
