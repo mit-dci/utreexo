@@ -261,7 +261,7 @@ func BuildProofs(ttlfn string) error {
 
 			//			fmt.Printf("----------------------- call modify for block %d\n", height)
 
-			err = f.Modify(blockAdds, blockProof.Targets)
+			_, err = f.Modify(blockAdds, blockProof.Targets)
 			if err != nil {
 				return err
 			}
