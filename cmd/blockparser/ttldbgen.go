@@ -12,9 +12,10 @@ import (
 	"github.com/mit-dci/lit/wire"
 	"github.com/syndtr/goleveldb/leveldb"
 )
+
 //writeBlock writes to the .txos file.
 //Adds - for txinput, - for txoutput, z for unspenable txos, and the height number for that block
-func writeBlock(b wire.MsgBlock, tipnum int, f *os.File, cb *os.File,
+func writeBlock(b blockInfo, f *os.File, progressfile *os.File,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
 	var s string
@@ -26,7 +27,7 @@ func writeBlock(b wire.MsgBlock, tipnum int, f *os.File, cb *os.File,
 				opString := in.PreviousOutPoint.String()
 				s += "-" + opString + "\n"
 				h := HashFromString(opString)
-				blockBatch.Put(h[:], U32tB(uint32(tipnum)))
+				blockBatch.Put(h[:], U32tB(b.height))
 			}
 		}
 
@@ -45,15 +46,14 @@ func writeBlock(b wire.MsgBlock, tipnum int, f *os.File, cb *os.File,
 	wg.Add(1)
 	batchan <- blockBatch
 
-	s += fmt.Sprintf("h: %d\n", tipnum)
+	s += fmt.Sprintf("h: %d\n", b.height)
 	_, err := f.WriteString(s)
 	if err != nil {
 		panic(err)
 	}
-	cbh := fmt.Sprintf("%d", tipnum)
-	cb.WriteAt([]byte(cbh), 0)
 
-	return err
+	return dumpTipInfo(progressfile, b)
+
 }
 
 // dbWorker writes everything to the db. It's it's own goroutine so it

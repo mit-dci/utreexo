@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
-	"strconv"
 
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
@@ -42,23 +41,41 @@ var testNet3GenHash = chainhash.Hash{
 //Parser parses blocks from the .dat files bitcoin core provides
 func Parser(sig chan bool) error {
 
-	tipnum := getTipNum()
-	tip := testNet3GenHash
-
-	go stopParse(sig, tipnum)
-
-	//append if testnet.txos exists. Create one if it doesn't exist
+	// append if testnet.txos exists. Create one if it doesn't exist
 	outfile, err := os.OpenFile("testnet.txos", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	cb, err := os.OpenFile("currentblock.txos", os.O_CREATE|os.O_WRONLY, 0600)
+	progressfile, err := os.OpenFile("progress", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		panic(err)
+		return err
+	}
+	pinfo, err := progressfile.Stat()
+	if err != nil {
+		return err
 	}
 
-	nextMap := make(map[chainhash.Hash]wire.MsgBlock)
+	var lastblock blockInfo
+	var tipnum uint32
+	var offset int64
+	var tipHash chainhash.Hash
+
+	if pinfo.Size() == 44 {
+		lastblock, tipHash, err = getTipInfo(progressfile)
+		if err != nil {
+			return err
+		}
+		tipnum = lastblock.height
+		offset = int64(lastblock.offset)
+	} else {
+		tipHash = testNet3GenHash
+		// everything else is 0
+	}
+
+	go stopParse(sig)
+
+	nextMap := make(map[chainhash.Hash]blockInfo)
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
 	lvdb, err := leveldb.OpenFile("./ttldb", o)
@@ -76,26 +93,23 @@ func Parser(sig chan bool) error {
 		go dbWorker(batchan, lvdb, &batchwg)
 	}
 
-	for fileNum := 0; ; fileNum++ {
-		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
-		fmt.Printf("reading %s\n", fileName)
-
-		_, err := os.Stat(fileName)
-		if os.IsNotExist(err) {
-			fmt.Printf("%s doesn't exist; done reading\n", fileName)
-			break
-		}
-		blocks, err := readRawBlocksFromFile(fileName)
+	for fileNum := lastblock.fnum; ; fileNum++ {
+		blocks, err := readRawBlocksFromFile(fileNum, offset)
 		if err != nil {
 			return err
 		}
+		if blocks == nil {
+			break
+		}
+		offset = 0 // only applies to first file read
 
-		tip, tipnum, err = sortBlocks(
-			blocks, nextMap, tip, tipnum, outfile, cb, batchan, &batchwg)
+		tipHash, tipnum, err = sortBlocks(
+			blocks, nextMap, tipHash, tipnum, outfile, progressfile, batchan, &batchwg)
 		if err != nil {
 			return err
 		}
 	}
+
 	batchwg.Wait()
 
 	return nil
@@ -114,8 +128,27 @@ func isUnspendable(o *wire.TxOut) bool {
 	}
 }
 
-func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
-	var blocks []wire.MsgBlock
+type blockInfo struct {
+	wire.MsgBlock
+	height uint32 // height within the blockchain
+	fnum   uint32 // file number from where this block came from
+	offset uint32 // byte offset -- the byte AFTER this block ends
+	// NOTE that because we use uint32s here this doesn't support files of
+	// more than 4GB (they all seem to be 128MB) or more than 4 billion
+	// block files.  (seems pretty unlikely as that'd be half an exabyte)
+}
+
+func readRawBlocksFromFile(fileNum uint32, offset int64) ([]blockInfo, error) {
+	fileName := fmt.Sprintf("blk%05d.dat", fileNum)
+	fmt.Printf("reading %s\n", fileName)
+
+	_, err := os.Stat(fileName)
+	if os.IsNotExist(err) {
+		fmt.Printf("%s doesn't exist; done reading\n", fileName)
+		return nil, nil
+	}
+
+	var blocks []blockInfo
 
 	f, err := os.Open(fileName)
 	if err != nil {
@@ -127,21 +160,21 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 		return nil, err
 	}
 
-	loc := int64(0) // presumably we start at offset 0
+	f.Seek(offset, 0)
 	blockInFile := 0
 	var prevHdr wire.BlockHeader
-	for loc != fstat.Size() {
-
+	for offset != fstat.Size() {
 		var magicbytes [4]byte
 		f.Read(magicbytes[:])
 		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} && //testnet
 			magicbytes != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} { // mainnet
 			fmt.Printf("got non magic bytes %x, finishing\n", magicbytes)
+			fmt.Printf("offset %d file %d\n", offset, fileNum)
 			break
 		}
 
 		//reads 4 bytes from the current offset
-		loc, err = f.Seek(4, 1)
+		offset, err = f.Seek(4, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -150,15 +183,19 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 		err = b.Deserialize(f)
 		if err != nil {
 			fmt.Printf("prev idx %d hash %s file %s offset %d\n",
-				blockInFile, prevHdr.BlockHash().String(), fileName, loc)
+				blockInFile, prevHdr.BlockHash().String(), fileName, offset)
 			return nil, err
 		}
 
-		blocks = append(blocks, *b)
-		loc, err = f.Seek(0, 1)
+		offset, err = f.Seek(0, 1) // gets the offset we're at now
 		if err != nil {
 			return nil, err
 		}
+
+		// height unknown yet, but filenum and offset are known
+		blocks = append(blocks,
+			blockInfo{MsgBlock: *b, fnum: fileNum, offset: uint32(offset)})
+
 		prevHdr = b.Header
 		blockInFile++
 	}
@@ -170,13 +207,13 @@ func readRawBlocksFromFile(fileName string) ([]wire.MsgBlock, error) {
 //Blocks by default are not in order when synced with bitcoin core.
 //It also calls writeBlocks, which writes to the .txos file.
 func sortBlocks(
-	blocks []wire.MsgBlock,
-	nextMap map[chainhash.Hash]wire.MsgBlock,
-	tip chainhash.Hash, tipnum int,
+	blocks []blockInfo,
+	nextMap map[chainhash.Hash]blockInfo,
+	tip chainhash.Hash, tipnum uint32,
 	outfile *os.File,
-	cb *os.File,
+	progressfile *os.File,
 	batchan chan *leveldb.Batch,
-	batchwg *sync.WaitGroup) (chainhash.Hash, int, error) {
+	batchwg *sync.WaitGroup) (chainhash.Hash, uint32, error) {
 
 	for _, b := range blocks {
 		if len(nextMap) > 10000 {
@@ -184,7 +221,7 @@ func sortBlocks(
 			break
 		}
 
-		if b.Header.PrevBlock != tip { // not in line, add to map
+		if b.Header.PrevBlock != tip { // not in line, height unknown, add to map
 			nextMap[b.Header.PrevBlock] = b
 			continue
 		}
@@ -192,7 +229,8 @@ func sortBlocks(
 		// inline, progress tip and deplete map
 		tip = b.BlockHash()
 		tipnum++
-		err := writeBlock(b, tipnum, outfile, cb, batchan, batchwg)
+		b.height = tipnum
+		err := writeBlock(b, outfile, progressfile, batchan, batchwg)
 		if err != nil {
 			return tip, tipnum, err
 		}
@@ -202,7 +240,8 @@ func sortBlocks(
 		for ok {
 			tip = stashedBlock.BlockHash()
 			tipnum++
-			err := writeBlock(stashedBlock, tipnum, outfile, cb, batchan, batchwg)
+			stashedBlock.height = tipnum
+			err := writeBlock(stashedBlock, outfile, progressfile, batchan, batchwg)
 			if err != nil {
 				return tip, tipnum, err
 			}
@@ -215,24 +254,48 @@ func sortBlocks(
 	return tip, tipnum, nil
 }
 
-//getTipNum resumes where the parsing left off.
-//It starts from the beginning if tipnum.txos file wasn't found.
-func getTipNum() int {
-	file, err := os.OpenFile("currentblock.txos", os.O_RDONLY, 0400)
+// getTipNum resumes where the parsing left off.
+// It starts from the beginning if progress file wasn't found.
+// returns a blockinfo and a hash, as it doesn't have an acual block
+func getTipInfo(progressfile *os.File) (blockInfo, chainhash.Hash, error) {
+	var b blockInfo
+	pbytes, err := ioutil.ReadAll(progressfile)
 	if err != nil {
-		var tipnum int
-		return tipnum
+		return b, b.BlockHash(), err
+	}
+	b.height = BtU32(pbytes[0:4])
+	b.fnum = BtU32(pbytes[4:8])
+	b.offset = BtU32(pbytes[8:12])
+
+	var bhash chainhash.Hash
+	err = bhash.SetBytes(pbytes[12:44])
+	return b, bhash, err
+}
+
+func dumpTipInfo(progressfile *os.File, b blockInfo) error {
+	fmt.Printf("dumping h %d fn %d offset %d %s\n",
+		b.height, b.fnum, b.offset, b.BlockHash().String())
+	_, err := progressfile.WriteAt(U32tB(b.height), 0)
+	if err != nil {
+		return err
 	}
 
-	b, err := ioutil.ReadAll(file)
-	tipnum, err := strconv.Atoi(string(b))
-	fmt.Println(tipnum)
-	return tipnum
+	_, err = progressfile.WriteAt(U32tB(b.fnum), 4)
+	if err != nil {
+		return err
+	}
+	_, err = progressfile.WriteAt(U32tB(uint32(b.offset)), 8)
+	if err != nil {
+		return err
+	}
+	tipHash := b.BlockHash()
+	_, err = progressfile.WriteAt(tipHash[:], 12)
+	return err
 }
 
 //StopParse deletes the current block.
 //Handles SIGTERM and SIGINT.
-func stopParse(sig chan bool, tipnum int) {
+func stopParse(sig chan bool) {
 	<-sig
 	fmt.Println("Exiting...")
 	os.Exit(1)

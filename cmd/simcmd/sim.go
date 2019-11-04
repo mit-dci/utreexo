@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/mit-dci/utreexo/cmd/blockparser"
-	"github.com/mit-dci/utreexo/cmd/txottl"
 	"github.com/mit-dci/utreexo/cmd/ibdsim"
+	"github.com/mit-dci/utreexo/cmd/txottl"
 )
 
 var msg = `
@@ -49,12 +49,15 @@ func main() {
 		os.Exit(1)
 	}
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
-	sig := make(chan bool,1)
+	sig := make(chan bool, 1)
 	handleIntSig(sig)
 
 	switch os.Args[1] {
 	case "parseblock":
-		blockparser.Parser(sig)
+		err := blockparser.Parser(sig)
+		if err != nil {
+			panic(err)
+		}
 	case "txottlgen":
 		fmt.Println("Generating txo time to live...")
 		txottl.ReadTTLdb()
@@ -91,4 +94,3 @@ func handleIntSig(sig chan bool) {
 		sig <- true
 	}()
 }
-
