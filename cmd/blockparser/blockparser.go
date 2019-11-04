@@ -215,6 +215,9 @@ func sortBlocks(
 	batchan chan *leveldb.Batch,
 	batchwg *sync.WaitGroup) (chainhash.Hash, uint32, error) {
 
+	// var foffsetSlice []uint64
+	// keep a slice of offsets of the blocks in ram (nextMap) and write
+	// the earliest one to disk?
 	for _, b := range blocks {
 		if len(nextMap) > 10000 {
 			fmt.Printf("dead-end tip at %d %s\n", tipnum, tip.String())
@@ -247,6 +250,13 @@ func sortBlocks(
 			}
 
 			delete(nextMap, stashedBlock.Header.PrevBlock)
+			fmt.Printf("nextMap %d\n", len(nextMap))
+			if len(nextMap) == 1 {
+				for h, b := range nextMap {
+					fmt.Printf("map has %x %d\n", h, b.height)
+				}
+			}
+
 			stashedBlock, ok = nextMap[tip]
 		}
 	}
