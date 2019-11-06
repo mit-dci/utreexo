@@ -125,44 +125,27 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 	// overlap := p.numLeaves & nextNumLeaves
 	// remove tops and add empty tops based just on popcount
-	nexTops := make([]*polNode, PopCount(nextNumLeaves))
+	// nexTops := make([]*polNode, PopCount(nextNumLeaves))
 	// keeping track of these separately is annoying.  I'm sure there's a
 	// clever bit shifty way to not need to do this.  It doesn't actually
 	// take any cpu time or ram though.
 	// oldTopIdx := len(p.tops) - 1
 	// nexTopIdx := len(nexTops) - 1
 
+	// get all the swaps, then apply them all
 	swapswithheight := remTrans2(dels, p.numLeaves, ph)
-
-	swaps := make([]arrow, len(swapswithheight))
-	for i, s := range swapswithheight {
-		swaps[i].from = s.from
-		swaps[i].to = s.to
+	for _, s := range swapswithheight {
+		err := p.swapNodes(s)
+		if err != nil {
+			return err
+		}
 	}
 
-	// var moveDirt []uint64
-	// var hashDirt []uint64
-
-	// tops, topHeights := getTopsReverse(p.numLeaves, ph)
-
-	// don't even go by height?  just through the swaps backwards?
-	reverseArrowSlice(swaps)
-
-	for _, s := range swaps {
-		aparity := s.from & 1
-		aparent, err := p.descendToParent(s.from)
-		if err != nil {
-			return err
-		}
-		bparity := s.to & 1
-		bparent, err := p.descendToParent(s.to)
-		if err != nil {
-			return err
-		}
-
-		// swap here
-		aparent.niece[aparity], bparent.niece[bparity] =
-			bparent.niece[bparity], aparent.niece[aparity]
+	// set new tops
+	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
+	nexTops := make([]*polNode, PopCount(nextNumLeaves))
+	for i, _ := range nexTops {
+		_, _, _ = p.descendToPos(nextTopPoss[i])
 	}
 
 	p.numLeaves = nextNumLeaves
@@ -380,14 +363,49 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	return nil
 }
 
-// descendToParent wraps descendToPos for now but probably could be faster
-func (p *Pollard) descendToParent(pos uint64) (*polNode, error) {
-	_, sibs, err := p.descendToPos(pos)
-	if err != nil {
-		return nil, err
+// swapNodes swaps the nodes at positions a and b.
+func (p *Pollard) swapNodes(r arrowh) error {
+	if !inForest(r.from, p.numLeaves) || !inForest(r.to, p.numLeaves) {
+		return fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)
 	}
 
-	return sibs[len(sibs)-1], nil
+	// TODO could be improved by getting the highest common ancestor
+	// and then splitting instead of doing 2 full descents
+	aTree, aBranchLen, aBits := detectOffset(r.from, p.numLeaves)
+	bTree, bBranchLen, bBits := detectOffset(r.to, p.numLeaves)
+
+	var aNode, bNode *polNode
+
+	if aBranchLen == 0 {
+		aNode = p.tops[aTree]
+	} else {
+		for h := aBranchLen - 1; h < 64; h-- {
+			lr := (aBits >> h) & 1
+			aNode = aNode.niece[lr]
+			if aNode == nil && h != 0 {
+				return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
+			}
+		}
+	}
+
+	if bBranchLen == 0 {
+		bNode = p.tops[bTree]
+	} else {
+		for h := bBranchLen - 1; h < 64; h-- {
+			lr := (bBits >> h) & 1
+			bNode = bNode.niece[lr]
+			if aNode == nil && h != 0 {
+				return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
+			}
+		}
+	}
+
+	// _, sibs, err := p.descendToPos(pos)
+	// if err != nil {
+	// return nil, err
+	// }
+
+	return nil
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling

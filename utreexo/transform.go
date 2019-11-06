@@ -26,6 +26,7 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 */
 
 // remTrans2 -- simpler and better -- lets see if it works!
+// returns a slice of swapswithHeight in bottom to top order
 func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 	nextNumLeaves := numLeaves - uint64(len(dels))
 	// fHeight := treeHeight(numLeaves)

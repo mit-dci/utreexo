@@ -45,7 +45,7 @@ func DedupeHashSlices(as *[]LeafTXO, bs *[]Hash) {
 // PopCount returns the number of 1 bits in a uint64
 func PopCount(i uint64) uint8 {
 	var count uint8
-	for j := 0; j < 64; j++ {
+	for i != 0 {
 		if i&1 == 1 {
 			count++
 		}
