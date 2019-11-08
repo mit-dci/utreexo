@@ -408,6 +408,40 @@ func (p *Pollard) swapNodes(r arrowh) error {
 	return nil
 }
 
+// descendToParent gives you the *parent* of the node at position pos
+// if pos doesn't have a parent (because it's a top) it will return nil and no
+// error.
+func (p *Pollard) descendToParent(pos uint64) (*polNode, error) {
+	if !inForest(pos, p.numLeaves) {
+		return nil, fmt.Errorf(
+			"descendToParent: to %d but only %d leaves", pos, p.numLeaves)
+	}
+
+	// find which tree we're in
+	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
+
+	n := p.tops[tNum]
+	if n == nil || branchLen > 64 {
+		return nil, fmt.Errorf("descendToParent: top %d is nil", tNum)
+	}
+
+	// no branch, it is a top, so we can't return the parent as there isn't one
+	if branchLen == 0 {
+		return nil, nil
+	}
+
+	for h := branchLen - 1; h > 0; h-- {
+		lr := (bits >> h) & 1
+		n = n.niece[lr]
+		if n == nil && h != 0 {
+			return nil, fmt.Errorf(
+				"descendToParent %d nil neice at height %d", pos, h)
+		}
+	}
+
+	return nil, nil
+}
+
 // DescendToPos returns the path to the target node, as well as the sibling
 // path.  Retruns paths in bottom-to-top order (backwards)
 func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
