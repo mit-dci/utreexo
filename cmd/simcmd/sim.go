@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/mit-dci/utreexo/cmd/blockparser"
 	"github.com/mit-dci/utreexo/cmd/txottl"
@@ -45,29 +47,32 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
+	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
+	sig := make(chan bool, 1)
+	handleIntSig(sig)
 
 	switch os.Args[1] {
 	case "parseblock":
-		blockparser.Parser()
+		blockparser.Parser(sig)
 	case "txottlgen":
 		fmt.Println("Generating txo time to live...")
-		txottl.ReadTTLdb()
+		txottl.ReadTTLdb(sig)
 	case "ibdsim":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.RunIBD(*ttlfn, *schedFileName)
+		err := ibdsim.RunIBD(*ttlfn, *schedFileName, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genproofs":
 		optionCmd.Parse(os.Args[2:])
 		fmt.Println("Building Proofs...")
-		err := ibdsim.BuildProofs(*ttlfn)
+		err := ibdsim.BuildProofs(*ttlfn, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genhist":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.Histogram(*ttlfn)
+		err := ibdsim.Histogram(*ttlfn, sig)
 		if err != nil {
 			panic(err)
 		}
@@ -76,3 +81,13 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+func handleIntSig(sig chan bool) {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		<-s
+		sig <- true
+	}()
+}
+

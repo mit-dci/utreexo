@@ -21,7 +21,9 @@ var maxmalloc uint64
 // we get the new utxo info from the same txos text file
 // the deletion data and proofs though, we get from the leveldb
 // which was created by the bridge node.
-func RunIBD(ttlfn string, schedFileName string) error {
+func RunIBD(ttlfn string, schedFileName string, sig chan bool) error {
+
+	go stopRunIBD(sig)
 	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
@@ -119,6 +121,7 @@ func RunIBD(ttlfn string, schedFileName string) error {
 			// right after plusLine
 
 			// read a block proof from the db
+			//TODO attach to normal block. Don't need leveldb
 			bpBytes, err := proofDB.Get(utreexo.U32tB(height), nil)
 			if err != nil {
 				return err
@@ -172,7 +175,9 @@ func RunIBD(ttlfn string, schedFileName string) error {
 }
 
 // build the bridge node / proofs
-func BuildProofs(ttlfn string) error {
+func BuildProofs(ttlfn string, sig chan bool) error {
+
+	go stopBuildProofs(sig)
 
 	fmt.Println(ttlfn)
 	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
@@ -238,6 +243,7 @@ func BuildProofs(ttlfn string) error {
 			}
 
 			totalProofNodes += len(blockProof.Proof)
+			//TODO dumb
 			err = proofDB.Put(
 				utreexo.U32tB(uint32(height)), blockProof.ToBytes(), nil)
 			if err != nil {
@@ -318,4 +324,17 @@ func MemStatString(fname string) string {
 	s += fmt.Sprintf("\tsys %d MB", m.Sys>>20)
 	s += fmt.Sprintf("\tnumGC %d\n", m.NumGC)
 	return s
+}
+
+func stopRunIBD(sig chan bool) {
+	<-sig
+	fmt.Println("Exiting...")
+	os.Exit(1)
+}
+
+
+func stopBuildProofs(sig chan bool) {
+	<-sig
+	fmt.Println("Exiting...")
+	os.Exit(1)
 }

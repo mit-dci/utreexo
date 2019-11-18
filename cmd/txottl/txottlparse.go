@@ -111,7 +111,9 @@ func lookerUpperWorker(
 }
 
 // read from the DB and tack on TTL values
-func ReadTTLdb() error {
+func ReadTTLdb(sig chan bool) error {
+
+	go stopTxottl(sig)
 
 	// open database
 	o := new(opt.Options)
@@ -239,4 +241,12 @@ func ReadTTLdb() error {
 
 	}
 	return nil
+}
+
+//stopTxottl receives and handles sig from the system
+//Handles SIGTERM, SIGINT, and SIGQUIT
+func stopTxottl(sig chan bool) {
+	<-sig
+	fmt.Println("Exiting...")
+	os.Exit(1)
 }

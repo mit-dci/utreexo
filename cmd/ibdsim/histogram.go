@@ -6,7 +6,9 @@ import (
 	"os"
 )
 
-func Histogram(ttlfn string) error {
+func Histogram(ttlfn string, sig chan bool) error {
+
+	go stopHistogram(sig)
 
 	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
@@ -41,4 +43,10 @@ func Histogram(ttlfn string) error {
 
 	return scanner.Err()
 
+}
+
+func stopHistogram(sig chan bool) {
+	<-sig
+	fmt.Println("Exiting...")
+	os.Exit(1)
 }
