@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/mit-dci/utreexo/cmd/blockparser"
-	"github.com/mit-dci/utreexo/cmd/txottl"
 	"github.com/mit-dci/utreexo/cmd/ibdsim"
+	"github.com/mit-dci/utreexo/cmd/txottl"
 )
 
 var msg = `
@@ -23,8 +23,7 @@ Commands:
   genproofs      generates proofs from the ttl.testnet.txos file
   genhist        generates a histogram from the ttl.testnet.txos file
 OPTIONS:
-  ttlfn          can assign a ttlfn file name with 'ttlfn=filename'. Defaults to 'ttlfn=ttl.mainnet.txos'
-  schedFileName  can assign a scheduled file to use with 'schedFileName=filename'. Defaults to 'schedFileName=schedule1pos.clr'
+  testnet        configure whether the simulator should target testnet or not. Usage 'testnet=true'
 `
 
 //commands
@@ -38,8 +37,12 @@ var genhistCmd = flag.NewFlagSet("genhist", flag.ExitOnError)
 
 //bit of a hack. Stdandard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
-var ttlfn = optionCmd.String("ttlfn", "ttl.mainnet.txos", "assign a ttlfn file name with 'ttlfn=filename'")
-var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr", "assign a scheduled file to use with 'schedFileName=filename'")
+var testnetCmd = optionCmd.Bool("testnet", false, "Target testnet instead of mainnet. Usage: testnet=true")
+var txos = optionCmd.String("txos", "mainnet.txos", "assign a txos file name. Usage: 'txos=filename'")
+var ttlfn = optionCmd.String("ttlfn", "ttl.mainnet.txos", "assign a ttlfn file name. Usage: 'ttlfn=filename'")
+var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr", "assign a scheduled file to use. Usage: 'schedFileName=filename'")
+var ttldb = optionCmd.String("ttldb", "ttldb", "assign a ttldb/ name to use. Usage: 'ttldb=dirname'")
+var offsetfile = optionCmd.String("offsetfile", "offsetfile", "assign a offsetfile name to use. Usage: 'offsetfile=dirname'")
 
 func main() {
 	//check if enough arguments were given
@@ -47,26 +50,31 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
+	optionCmd.Parse(os.Args[2:])
+	if *testnetCmd == true {
+		*txos = "testnet.txos"
+		*ttlfn = "ttl.testnet.txos"
+		*ttldb = "ttldb-testnet"
+		*offsetfile = "offsetfile-testnet"
+	}
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
 	handleIntSig(sig)
 
 	switch os.Args[1] {
 	case "parseblock":
-		blockparser.Parser(sig)
+		blockparser.Parser(*testnetCmd, *txos, *ttldb, *offsetfile, sig)
 	case "txottlgen":
-		fmt.Println("Generating txo time to live...")
-		txottl.ReadTTLdb(sig)
+		txottl.ReadTTLdb(*testnetCmd, *txos, *ttldb, sig)
 	case "ibdsim":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.RunIBD(*ttlfn, *schedFileName, sig)
+		err := ibdsim.RunIBD(*testnetCmd, *ttlfn, *schedFileName, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genproofs":
 		optionCmd.Parse(os.Args[2:])
-		fmt.Println("Building Proofs...")
-		err := ibdsim.BuildProofs(*ttlfn, sig)
+		err := ibdsim.BuildProofs(*testnetCmd, *ttlfn, sig)
 		if err != nil {
 			panic(err)
 		}
@@ -78,7 +86,7 @@ func main() {
 		}
 	default:
 		fmt.Println(msg)
-		os.Exit(1)
+		os.Exit(0)
 	}
 }
 
@@ -90,4 +98,3 @@ func handleIntSig(sig chan bool) {
 		sig <- true
 	}()
 }
-

@@ -14,12 +14,9 @@ import (
 
 type Hash [32]byte
 
-
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
-
-const txoFilename = "testnet.txos"
 
 // for parallel txofile building we need to have a buffer
 type txotx struct {
@@ -81,7 +78,7 @@ func lookerUpperWorker(
 	txid string, blockPos, txPos uint32,
 	infoChan chan deathInfo, db *leveldb.DB) {
 
-	// start deathInfo struck to send back
+	// start deathInfo struct to send back
 	var di deathInfo
 	di.blockPos, di.txPos = blockPos, txPos
 
@@ -111,26 +108,28 @@ func lookerUpperWorker(
 }
 
 // read from the DB and tack on TTL values
-func ReadTTLdb(sig chan bool) error {
+func ReadTTLdb(isTestnet bool, txos string, ttldb string, sig chan bool) error {
 
 	go stopTxottl(sig)
+
+	checkTestnet(isTestnet)
 
 	// open database
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
 	o.ReadOnly = true
-	lvdb, err := leveldb.OpenFile("./ttldb", o)
+	lvdb, err := leveldb.OpenFile(ttldb, o)
 	if err != nil {
 		panic(err)
 	}
 	defer lvdb.Close()
 
-	txofile, err := os.OpenFile(txoFilename, os.O_RDONLY, 0600)
+	txofile, err := os.OpenFile(txos, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
 	}
 	defer txofile.Close()
-	ttlfile, err := os.OpenFile("ttl."+txoFilename, os.O_RDWR|os.O_CREATE, 0600)
+	ttlfile, err := os.OpenFile("ttl."+txos, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
@@ -145,6 +144,7 @@ func ReadTTLdb(sig chan bool) error {
 
 	blocktxs := []*txotx{new(txotx)}
 
+	fmt.Println("Generating txo time to live...")
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
 		case '-':
@@ -241,6 +241,26 @@ func ReadTTLdb(sig chan bool) error {
 
 	}
 	return nil
+}
+
+func checkTestnet(isTestnet bool) {
+	if isTestnet == false {
+		f, err := os.Open("mainnet.txos")
+		if err != nil {
+			fmt.Println("mainnet.txos not present. Please check option -testnet=true is set if simulating testnet")
+			fmt.Println("Exiting...")
+			os.Exit(2)
+		}
+		f.Close()
+	} else {
+		f, err := os.Open("testnet.txos")
+		if err != nil {
+			fmt.Println("testnet.txos not present. Please uncheck option -testnet=true is set if simulating mainnet")
+			fmt.Println("Exiting...")
+			os.Exit(2)
+		}
+		f.Close()
+	}
 }
 
 //stopTxottl receives and handles sig from the system
