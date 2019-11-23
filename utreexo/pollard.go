@@ -119,12 +119,14 @@ func (p *Pollard) rem2(dels []uint64) error {
 	if len(dels) == 0 {
 		return nil // that was quick
 	}
-
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 
 	// get all the swaps, then apply them all
 	swapswithheight := remTrans2(dels, p.numLeaves, ph)
+
+	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
+
 	for _, s := range swapswithheight {
 		err := p.swapNodes(s)
 		if err != nil {
@@ -132,16 +134,23 @@ func (p *Pollard) rem2(dels []uint64) error {
 		}
 	}
 
+	var err error
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
+	reverseUint64Slice(nextTopPoss)
 	nexTops := make([]*polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		pr, _, _ := p.descendToPos(nextTopPoss[i])
-		nexTops[i] = pr[0]
+		nexTops[i], err = p.grabPos(nextTopPoss[i])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("set nextTop %d to old %d %x\n",
+			i, nextTopPoss[i], nexTops[i].data)
 	}
 
 	p.numLeaves = nextNumLeaves
 	p.tops = nexTops
+
 	return nil
 }
 
@@ -282,7 +291,7 @@ func (p *Pollard) rem(dels []uint64) error {
 	return nil
 }
 
-// swap moves a node from one place to another.  Note that it leaves the
+// moveNode moves a node from one place to another.  Note that it leaves the
 // node in the "from" place to be dealt with some other way.
 // Also it hashes new parents so the hashes & pointers are consistent.
 func (p *Pollard) moveNode(a arrow) error {
@@ -364,51 +373,66 @@ func (p *Pollard) swapNodes(r arrowh) error {
 	// what to do: swap a & b.  To do that, you need to get the thing that
 	// points to a & b, so the pointer to the pointer.
 
-	// this is basically just descend to a and b and then call swap on em
-
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
-	aTree, aBranchLen, aBits := detectOffset(r.from, p.numLeaves)
-	bTree, bBranchLen, bBits := detectOffset(r.to, p.numLeaves)
 
-	fmt.Printf("swap %d (len %d %x) with %d (len %d %x) at h %d  \n",
-		r.from, aBranchLen, aBits, r.to, bBranchLen, bBits, r.ht)
+	a, err := p.grabPos(r.from)
+	if err != nil {
+		return err
+	}
+	b, err := p.grabPos(r.to)
+	if err != nil {
+		return err
+	}
 
-	aNode := p.tops[aTree]
-	bNode := p.tops[bTree]
+	fmt.Printf("swapNodes swapping %d %x with %d %x\n",
+		r.from, a.data[:4], r.to, b.data[:4])
+	a.swap(b)
 
-	for h := aBranchLen - 1; h < 64; h-- {
-		lr := (aBits >> h) & 1
-		aNode = aNode.niece[lr]
-		if aNode == nil && h != 0 {
-			return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
+	return nil
+}
+
+// moveNode moves a node from one place to another.  Note that it leaves the
+// node in the "from" place to be dealt with some other way.
+// Also it hashes new parents so the hashes & pointers are consistent.
+func (p *Pollard) swapNodesx(r arrowh) error {
+
+	pra, siba, err := p.descendToPos(r.from)
+	if err != nil {
+		return fmt.Errorf("from %s", err.Error())
+	}
+
+	prb, sibb, err := p.descendToPos(r.to)
+	if err != nil {
+		return fmt.Errorf("to %s", err.Error())
+	}
+
+	// build out full branch to target if it's not populated
+	// I think this efficient / never creates usless nodes but not sure..?
+	for i := range sibb {
+		tgtLR := (r.to >> uint8(i)) & 1
+		if sibb[i] == nil {
+			sibb[i] = new(polNode)
+		}
+		if len(prb) > i+1 && prb[i+1] != nil {
+			prb[i+1].niece[tgtLR] = sibb[i]
 		}
 	}
 
-	for h := bBranchLen - 1; h < 64; h-- {
-		fmt.Printf("to branchheight %d\n", h)
-		lr := (bBits >> h) & 1
-		fmt.Printf("to branchheight %d lr %d\n", h, lr)
-		bNode = bNode.niece[lr]
-		if aNode == nil && h != 0 {
-			return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
-		}
+	// this works even if moving from a top, because sibfrom[0] and prfrom[0]
+	// will be the same
+	// gotta move the data, but move nieces if you can.  If you can't move the
+	// nieces you have to delete the destination nieces!
+	//	fmt.Printf("move %04x over %04x prfromnil %v\n",
+	//		sibfrom[0].data[:4], sibto[0].data[:4], prfrom[0] == nil)
+	sibb[0].data, siba[0].data = siba[0].data, sibb[0].data
+	pra[0].niece = prb[0].niece
+
+	if pra[0] != nil {
+		prb[0].niece = pra[0].niece
+	} else {
+		prb[0].chop() // need this
 	}
-
-	fmt.Printf("aNode has hash %x, left %v right %v\n",
-		aNode.data[:4], aNode.niece[0] != nil, aNode.niece[1] != nil)
-
-	fmt.Printf("bNode has hash %x, left %v right %v\n",
-		bNode.data[:4], bNode.niece[0] != nil, bNode.niece[1] != nil)
-
-	aNode.swap(bNode)
-
-	fmt.Printf("aNode has hash %x, left %v right %v\n",
-		aNode.data[:4], aNode.niece[0] != nil, aNode.niece[1] != nil)
-
-	fmt.Printf("bNode has hash %x, left %v right %v\n",
-		bNode.data[:4], bNode.niece[0] != nil, bNode.niece[1] != nil)
-
 	return nil
 }
 
@@ -418,9 +442,28 @@ func (n *polNode) swap(k *polNode) {
 	n.niece, k.niece = k.niece, n.niece
 }
 
+// grabPos is like descendToPos but simpler
+func (p *Pollard) grabPos(pos uint64) (*polNode, error) {
+	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
+	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	bits = ^bits
+	n := p.tops[tree]
+	for h := branchLen - 1; h != 255; h-- {
+		lr := (bits >> h) & 1
+		if h == 0 {
+			return n.niece[lr^1], nil
+		}
+		n = n.niece[lr]
+		if n == nil {
+			return nil, fmt.Errorf("grab %d nil neice at height %d", pos, h)
+		}
+	}
+	return n, nil // only happens when returning a top
+}
+
 // DescendToPos returns the path to the target node, as well as the sibling
 // path.  Retruns paths in bottom-to-top order (backwards)
-// proofs[0] is the node you actually asked for
+// sibs[0] is the node you actually asked for
 func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// interate to descend.  It's like the leafnum, xored with ...1111110
 	// so flip every bit except the last one.
@@ -499,4 +542,12 @@ func (p *Pollard) toFull() (*Forest, error) {
 	}
 
 	return ff, nil
+}
+
+func (p *Pollard) toString() string {
+	f, err := p.toFull()
+	if err != nil {
+		return err.Error()
+	}
+	return f.toString()
 }

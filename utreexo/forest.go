@@ -355,7 +355,7 @@ func (f *Forest) Stats() string {
 }
 
 // ToString prints out the whole thing.  Only viable for small forests
-func (f *Forest) ToString() string {
+func (f *Forest) toString() string {
 
 	fh := f.height
 	// tree height should be 6 or less

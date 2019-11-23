@@ -34,7 +34,7 @@ func TestPollardFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(5)
+	err := fixedPollard(4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		fmt.Printf("pol postadd %s", f2.ToString())
+		fmt.Printf("pol postadd %s", f2.toString())
 		//		fmt.Printf("forgetslice %v\n", p.forget)
 		// if p.rememberLeaf {
 		//			return fmt.Errorf("nobody should be memorable")
@@ -152,7 +152,7 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
+	fmt.Printf("forest  post del %s", f.toString())
 
 	var p Pollard
 
@@ -161,11 +161,7 @@ func fixedPollard(leaves int32) error {
 		return err
 	}
 
-	f2, err := p.toFull()
-	if err != nil {
-		return err
-	}
-	fmt.Printf(f2.ToString())
+	fmt.Printf("pollard post add %s", p.toString())
 
 	err = p.rem2(dels)
 	if err != nil {
@@ -176,13 +172,9 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
+	fmt.Printf("forest  post del %s", f.toString())
 
-	f2, err = p.toFull()
-	if err != nil {
-		return err
-	}
-	fmt.Printf(f2.ToString())
+	fmt.Printf("pollard post del %s", p.toString())
 
 	return nil
 }

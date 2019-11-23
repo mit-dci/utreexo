@@ -333,9 +333,17 @@ func removeTransform(
 
 // reverseArrowSlice does what it says.  Maybe can get rid of if we return
 // the slice top-down instead of bottom-up
-func reverseArrowSlice(as []arrow) {
-	for i, j := 0, len(as)-1; i < j; i, j = i+1, j-1 {
-		as[i], as[j] = as[j], as[i]
+func reverseArrowSlice(a []arrow) {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
+	}
+}
+
+// exact same code twice, couldn't you have a reverse *any* slice func...?
+// but maybe that's generics or something
+func reverseUint64Slice(a []uint64) {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
 	}
 }
 

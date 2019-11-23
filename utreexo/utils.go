@@ -142,7 +142,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// B: mask
 	// C: 1<<th & numleaves (treeSize)
 	// The predicate is then if (A&B >= C)
-	// A is position up shifted by the height of the node we're targeting.
+	// A is position up-shifted by the height of the node we're targeting.
 	// B is the "mask" we use in other functions; a bunch of 0s at the MSB side
 	// and then a bunch of 1s on the LSB side, such that we can use bitwise AND
 	// to discard high bits.  Together, A&B is shifting position up by nh bits,

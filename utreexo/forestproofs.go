@@ -47,7 +47,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 
 		pr.Siblings[h] = f.forest[pos^1]
 		if pr.Siblings[h] == empty {
-			fmt.Printf(f.ToString())
+			fmt.Printf(f.toString())
 			return pr, fmt.Errorf(
 				"prove: got empty hash proving leaf %d height %d pos %d nl %d",
 				pr.Position, h, pos^1, f.numLeaves)
@@ -158,7 +158,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 
 		pos, ok := f.positionMap[wanted.Mini()]
 		if !ok {
-			fmt.Printf(f.ToString())
+			fmt.Printf(f.toString())
 			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 

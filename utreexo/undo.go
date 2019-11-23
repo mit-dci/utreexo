@@ -112,7 +112,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 		return err
 	}
 
-	fmt.Printf("post undo forest %s\n", f.ToString())
+	fmt.Printf("post undo forest %s\n", f.toString())
 	return nil
 }
 
