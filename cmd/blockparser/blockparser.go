@@ -84,7 +84,7 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 	nextMap := make(map[[32]byte]RawHeaderData)
 
 	//if there isn't an offset file, make one
-	if hasAccess(offsetfile) == false {
+	if HasAccess(offsetfile) == false {
 		currentOffsetHeight, _ = buildOffsetFile(tip, tipnum, nextMap, offsetfile, offsetfinished)
 	} else {
 		//if there is a offset file, we should pass true to offsetfinished
@@ -92,9 +92,9 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 		offsetfinished <- true
 	}
 	//if there is a .txos file, get the tipnum from that
-	if hasAccess(txos) == true {
-		fmt.Println("Got tip number from .txos file")
-		tipnum, _ = getTipNum(txos)
+	tipnum, err := GetTipNum(txos)
+	if err != nil {
+		panic(err)
 	}
 
 	//grab the last block height from currentoffsetheight
@@ -133,13 +133,12 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 	fmt.Println("Building the .txos file...")
 	fmt.Println("Starting from block:", tipnum)
 
-	//Receive signal from stopParse so the for loop can break
+	//bool to stop the main loop
 	var stop bool
-	go func() {
-		stop = <-stopGoing
-	}()
+
 	//tell stopParse that the main loop is running
 	running <- true
+
 	//read off the offset file and start writing to the .txos file
 	for ; tipnum != currentOffsetHeight && stop != true; tipnum++ {
 		offsetFile, err := os.Open(offsetfile)
@@ -150,16 +149,23 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 		if err != nil {
 			panic(err)
 		}
+
 		//write to the .txos file
 		writeBlock(block, tipnum+1, outfile, batchan, &batchwg)
+
 		//Just something to let the user know that the program is still running
 		//The actual block the program is on is +1 of the printed number
 		if tipnum%50000 == 0 {
 			fmt.Println("On block :", tipnum)
 		}
+		select {
+		case stop = <-stopGoing:
+		default:
+		}
 	}
 	batchwg.Wait()
 	fmt.Println("Finished writing.")
+
 	//tell stopParse that it's ok to exit
 	done <- true
 	return nil
@@ -205,11 +211,11 @@ func checkTestnet(isTestnet bool, tip chainhash.Hash) {
 }
 
 //Gets the latest tipnum from the .txos file
-func getTipNum(txos string) (int, error) {
+func GetTipNum(txos string) (int, error) {
 	//check if there is access to the .txos file
-	if hasAccess(txos) == false {
-		fmt.Println("No .txos file found")
-		os.Exit(1)
+	if HasAccess(txos) == false {
+		fmt.Println("No .txos file found, Syncing from the genesis block...")
+		return 0, nil
 	}
 
 	f, err := os.Open(txos)
@@ -219,7 +225,7 @@ func getTipNum(txos string) (int, error) {
 
 	//check if the .txos file is empty
 	fstat, _ := f.Stat()
-	if fstat.Size() == 0 {
+	if fstat.Size() == 0 || fstat.Size() == 1 {
 		fmt.Println(".txos file is empty. Syncing from the genesis block...")
 		return 0, nil
 	}
@@ -249,7 +255,7 @@ func getTipNum(txos string) (int, error) {
 	tipstring := fmt.Sprintf("%s", all)
 	num, err := strconv.Atoi(reverse(tipstring))
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
 	f.Close()
 	return num, nil
@@ -550,10 +556,11 @@ func reverse(s string) (result string) {
 	return
 }
 
-//hasAccess reports whether we have acces to the named file.
+//HasAccess reports whether we have acces to the named file.
+//Returns true if HasAccess, false if it doesn't.
 //Does NOT tell us if the file exists or not.
 //File might exist but may not be available to us
-func hasAccess(fileName string) bool {
+func HasAccess(fileName string) bool {
 	if _, err := os.Stat(fileName); err != nil {
 		if os.IsNotExist(err) {
 			return false
