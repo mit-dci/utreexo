@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRandPollard(t *testing.T) {
+func TestPollardRand(t *testing.T) {
 	rand.Seed(9)
 	//	err := pollardMiscTest()
 	//	if err != nil {
@@ -25,6 +25,19 @@ func TestRandPollard(t *testing.T) {
 	}
 	//	}
 
+}
+
+func TestPollardFixed(t *testing.T) {
+	rand.Seed(9)
+	//	err := pollardMiscTest()
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+	//	for i := 6; i < 100; i++ {
+	err := fixedPollard(5)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func pollardRandomRemember(blocks int32) error {
@@ -114,14 +127,14 @@ func fixedPollard(leaves int32) error {
 
 	leafCounter := uint64(0)
 
-	dels := []uint64{0, 1, 7, 8, 10}
+	dels := []uint64{0}
 
 	// they're all forgettable
 	adds := make([]LeafTXO, leaves)
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
-	for j := range adds {
+	for j, _ := range adds {
 		adds[j].Hash[1] = uint8(leafCounter)
 		adds[j].Hash[2] = uint8(leafCounter >> 8)
 		adds[j].Hash[3] = uint8(leafCounter >> 16)
@@ -130,7 +143,7 @@ func fixedPollard(leaves int32) error {
 
 		// the first utxo addded lives forever.
 		// (prevents leaves from goign to 0 which is buggy)
-
+		adds[j].Remember = true
 		leafCounter++
 	}
 
@@ -154,7 +167,7 @@ func fixedPollard(leaves int32) error {
 	}
 	fmt.Printf(f2.ToString())
 
-	err = p.rem(dels)
+	err = p.rem2(dels)
 	if err != nil {
 		return err
 	}

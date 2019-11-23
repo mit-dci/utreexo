@@ -116,21 +116,12 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 // rem2 deletes stuff from the pollard, using remtrans2
 func (p *Pollard) rem2(dels []uint64) error {
-
 	if len(dels) == 0 {
 		return nil // that was quick
 	}
 
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
-	// overlap := p.numLeaves & nextNumLeaves
-	// remove tops and add empty tops based just on popcount
-	// nexTops := make([]*polNode, PopCount(nextNumLeaves))
-	// keeping track of these separately is annoying.  I'm sure there's a
-	// clever bit shifty way to not need to do this.  It doesn't actually
-	// take any cpu time or ram though.
-	// oldTopIdx := len(p.tops) - 1
-	// nexTopIdx := len(nexTops) - 1
 
 	// get all the swaps, then apply them all
 	swapswithheight := remTrans2(dels, p.numLeaves, ph)
@@ -143,9 +134,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
-	nexTops := make([]*polNode, PopCount(nextNumLeaves))
+	nexTops := make([]*polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		_, _, _ = p.descendToPos(nextTopPoss[i])
+		pr, _, _ := p.descendToPos(nextTopPoss[i])
+		nexTops[i] = pr[0]
 	}
 
 	p.numLeaves = nextNumLeaves
@@ -369,81 +361,66 @@ func (p *Pollard) swapNodes(r arrowh) error {
 		return fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)
 	}
 
+	// what to do: swap a & b.  To do that, you need to get the thing that
+	// points to a & b, so the pointer to the pointer.
+
+	// this is basically just descend to a and b and then call swap on em
+
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 	aTree, aBranchLen, aBits := detectOffset(r.from, p.numLeaves)
 	bTree, bBranchLen, bBits := detectOffset(r.to, p.numLeaves)
 
-	var aNode, bNode *polNode
+	fmt.Printf("swap %d (len %d %x) with %d (len %d %x) at h %d  \n",
+		r.from, aBranchLen, aBits, r.to, bBranchLen, bBits, r.ht)
 
-	if aBranchLen == 0 {
-		aNode = p.tops[aTree]
-	} else {
-		for h := aBranchLen - 1; h < 64; h-- {
-			lr := (aBits >> h) & 1
-			aNode = aNode.niece[lr]
-			if aNode == nil && h != 0 {
-				return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
-			}
+	aNode := p.tops[aTree]
+	bNode := p.tops[bTree]
+
+	for h := aBranchLen - 1; h < 64; h-- {
+		lr := (aBits >> h) & 1
+		aNode = aNode.niece[lr]
+		if aNode == nil && h != 0 {
+			return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
 		}
 	}
 
-	if bBranchLen == 0 {
-		bNode = p.tops[bTree]
-	} else {
-		for h := bBranchLen - 1; h < 64; h-- {
-			lr := (bBits >> h) & 1
-			bNode = bNode.niece[lr]
-			if aNode == nil && h != 0 {
-				return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
-			}
+	for h := bBranchLen - 1; h < 64; h-- {
+		fmt.Printf("to branchheight %d\n", h)
+		lr := (bBits >> h) & 1
+		fmt.Printf("to branchheight %d lr %d\n", h, lr)
+		bNode = bNode.niece[lr]
+		if aNode == nil && h != 0 {
+			return fmt.Errorf("descend %d nil neice at height %d", r.from, h)
 		}
 	}
 
-	// _, sibs, err := p.descendToPos(pos)
-	// if err != nil {
-	// return nil, err
-	// }
+	fmt.Printf("aNode has hash %x, left %v right %v\n",
+		aNode.data[:4], aNode.niece[0] != nil, aNode.niece[1] != nil)
+
+	fmt.Printf("bNode has hash %x, left %v right %v\n",
+		bNode.data[:4], bNode.niece[0] != nil, bNode.niece[1] != nil)
+
+	aNode.swap(bNode)
+
+	fmt.Printf("aNode has hash %x, left %v right %v\n",
+		aNode.data[:4], aNode.niece[0] != nil, aNode.niece[1] != nil)
+
+	fmt.Printf("bNode has hash %x, left %v right %v\n",
+		bNode.data[:4], bNode.niece[0] != nil, bNode.niece[1] != nil)
 
 	return nil
 }
 
-// descendToParent gives you the *parent* of the node at position pos
-// if pos doesn't have a parent (because it's a top) it will return nil and no
-// error.
-func (p *Pollard) descendToParent(pos uint64) (*polNode, error) {
-	if !inForest(pos, p.numLeaves) {
-		return nil, fmt.Errorf(
-			"descendToParent: to %d but only %d leaves", pos, p.numLeaves)
-	}
-
-	// find which tree we're in
-	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
-
-	n := p.tops[tNum]
-	if n == nil || branchLen > 64 {
-		return nil, fmt.Errorf("descendToParent: top %d is nil", tNum)
-	}
-
-	// no branch, it is a top, so we can't return the parent as there isn't one
-	if branchLen == 0 {
-		return nil, nil
-	}
-
-	for h := branchLen - 1; h > 0; h-- {
-		lr := (bits >> h) & 1
-		n = n.niece[lr]
-		if n == nil && h != 0 {
-			return nil, fmt.Errorf(
-				"descendToParent %d nil neice at height %d", pos, h)
-		}
-	}
-
-	return nil, nil
+// swap swaps the contents of two polNodes & leaves pointers to them intact
+func (n *polNode) swap(k *polNode) {
+	n.data, k.data = k.data, n.data
+	n.niece, k.niece = k.niece, n.niece
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
 // path.  Retruns paths in bottom-to-top order (backwards)
+// proofs[0] is the node you actually asked for
 func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// interate to descend.  It's like the leafnum, xored with ...1111110
 	// so flip every bit except the last one.

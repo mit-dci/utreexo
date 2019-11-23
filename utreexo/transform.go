@@ -283,6 +283,9 @@ func removeTransform(
 			haveDel = true
 		}
 		fmt.Printf("h %d haveDel %v rootpresent %v\n", h, haveDel, rootPresent)
+		if len(nextTopPoss) == 0 {
+			panic("nextTopPos nil")
+		}
 
 		if haveDel && rootPresent {
 			// deroot, move to sibling
