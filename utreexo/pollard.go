@@ -135,20 +135,23 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 
 	var err error
+	var sib *polNode
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
-	reverseUint64Slice(nextTopPoss)
 	nexTops := make([]*polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		nexTops[i], err = p.grabPos(nextTopPoss[i])
+		nexTops[i], sib, err = p.grabPos(nextTopPoss[i])
 		if err != nil {
 			return err
 		}
+		// set neices to sib's neices as tops neices are really children
+		nexTops[i].niece = sib.niece
 		fmt.Printf("set nextTop %d to old %d %x\n",
 			i, nextTopPoss[i], nexTops[i].data)
 	}
 
 	p.numLeaves = nextNumLeaves
+	reversePolNodeSlice(nexTops)
 	p.tops = nexTops
 
 	return nil
@@ -376,20 +379,21 @@ func (p *Pollard) swapNodes(r arrowh) error {
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 
-	a, err := p.grabPos(r.from)
+	a, asib, err := p.grabPos(r.from)
 	if err != nil {
 		return err
 	}
-	b, err := p.grabPos(r.to)
+	b, bsib, err := p.grabPos(r.to)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("swapNodes swapping %d %x with %d %x\n",
 		r.from, a.data[:4], r.to, b.data[:4])
-	a.swap(b)
 
-	return nil
+	fmt.Printf("swapNodes siblings of %x with %x\n",
+		asib.data[:4], bsib.data[:4])
+	return polSwap(a, asib, b, bsib)
 }
 
 // moveNode moves a node from one place to another.  Note that it leaves the
@@ -436,29 +440,28 @@ func (p *Pollard) swapNodesx(r arrowh) error {
 	return nil
 }
 
-// swap swaps the contents of two polNodes & leaves pointers to them intact
-func (n *polNode) swap(k *polNode) {
-	n.data, k.data = k.data, n.data
-	n.niece, k.niece = k.niece, n.niece
-}
-
-// grabPos is like descendToPos but simpler
-func (p *Pollard) grabPos(pos uint64) (*polNode, error) {
+// grabPos is like descendToPos but simpler.  Returns the thing you asked for,
+// as well as its sibling.  And an error if it can't get it.
+// NOTE errors are not exhaustive; could return garbage without an error
+func (p *Pollard) grabPos(pos uint64) (n, nsib *polNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	bits = ^bits
-	n := p.tops[tree]
+	n = p.tops[tree]
+	nsib = n
 	for h := branchLen - 1; h != 255; h-- {
 		lr := (bits >> h) & 1
 		if h == 0 {
-			return n.niece[lr^1], nil
+			n, nsib = n.niece[lr^1], n.niece[lr]
+			return
 		}
 		n = n.niece[lr]
 		if n == nil {
-			return nil, fmt.Errorf("grab %d nil neice at height %d", pos, h)
+			err = fmt.Errorf("grab %d nil neice at height %d", pos, h)
+			return
 		}
 	}
-	return n, nil // only happens when returning a top
+	return // only happens when returning a top
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
@@ -550,4 +553,25 @@ func (p *Pollard) toString() string {
 		return err.Error()
 	}
 	return f.toString()
+}
+
+// equalToForest checks if the pollard has the same leaves as the forest.
+// doesn't check tops and stuff
+func (p *Pollard) equalToForest(f *Forest) bool {
+	if p.numLeaves != f.numLeaves {
+		return false
+	}
+
+	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
+		n, _, err := p.grabPos(leafpos)
+		if err != nil {
+			return false
+		}
+		if n.data != f.forest[leafpos] {
+			fmt.Printf("leaf position %d pol %x != forest %x\n",
+				leafpos, n.data[:4], f.forest[leafpos][:4])
+			return false
+		}
+	}
+	return true
 }

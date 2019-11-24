@@ -1,5 +1,7 @@
 package utreexo
 
+import "fmt"
+
 // Pollard is the sparse representation of the utreexo forest, using
 // binary tree pointers instead of a hash map.
 
@@ -73,6 +75,18 @@ func (n *polNode) leafPrune() {
 		n.niece[0].deadEnd() && n.niece[1].deadEnd() {
 		n.chop()
 	}
+}
+
+// polSwap swaps the contents of two polNodes & leaves pointers to them intact
+// need their siblings so that the siblings' neices can swap.
+// for a top, just say the top's sibling is itself and it should work.
+func polSwap(a, asib, b, bsib *polNode) error {
+	if a == nil || asib == nil || b == nil || bsib == nil {
+		return fmt.Errorf("polSwap given nil node")
+	}
+	a.data, b.data = b.data, a.data
+	asib.niece, bsib.niece = bsib.niece, asib.niece
+	return nil
 }
 
 func (p *Pollard) height() uint8 { return treeHeight(p.numLeaves) }

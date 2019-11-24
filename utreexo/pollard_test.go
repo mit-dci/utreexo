@@ -34,7 +34,7 @@ func TestPollardFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(4)
+	err := fixedPollard(8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func fixedPollard(leaves int32) error {
 
 	leafCounter := uint64(0)
 
-	dels := []uint64{0}
+	dels := []uint64{2}
 
 	// they're all forgettable
 	adds := make([]LeafTXO, leaves)
@@ -175,6 +175,10 @@ func fixedPollard(leaves int32) error {
 	fmt.Printf("forest  post del %s", f.toString())
 
 	fmt.Printf("pollard post del %s", p.toString())
+
+	if !p.equalToForest(f) {
+		return fmt.Errorf("p != f (leaves)\n")
+	}
 
 	return nil
 }
