@@ -34,7 +34,7 @@ func TestPollardFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(8)
+	err := fixedPollard(16)
 	if err != nil {
 		t.Fatal(err)
 	}
