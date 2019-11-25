@@ -367,7 +367,8 @@ func reversePolNodeSlice(a []*polNode) {
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into
-// a signle sorted slice, discarding duplicates.
+// a signle sorted slice, discarding duplicates.  (but not detecting or discarding
+// duplicates within a signle slice)
 // (eg [1, 5, 8, 9], [2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6, 8, 9]
 func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 	maxa := len(a)

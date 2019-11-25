@@ -7,7 +7,7 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	rand.Seed(9)
+	rand.Seed(123)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -19,7 +19,7 @@ func TestPollardRand(t *testing.T) {
 	//	}
 
 	//	for z := 0; z < 100; z++ {
-	err := pollardRandomRemember(9)
+	err := pollardRandomRemember(123)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,36 +67,20 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		//		f2, err := p.toFull()
-		//		if err != nil {
-		//			return err
-		//		}
-		//		fmt.Printf("postingest %s", f2.ToString())
-		// fmt.Printf("forgetslice %v leaf %v\n", p.forget, p.rememberLeaf)
-
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("del %v\n", bp.Targets)
+
 		// apply adds / dels to pollard
 		err = p.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
 		}
 
-		f2, err := p.toFull()
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("pol postadd %s", f2.toString())
-		//		fmt.Printf("forgetslice %v\n", p.forget)
-		// if p.rememberLeaf {
-		//			return fmt.Errorf("nobody should be memorable")
-		// }
-		// check that tops are the same
+		fmt.Printf("pol postadd %s", p.toString())
 
 		fullTops := f.GetTops()
 		polTops := p.topHashesReverse()

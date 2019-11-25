@@ -126,15 +126,27 @@ func (p *Pollard) rem2(dels []uint64) error {
 	swapswithheight := remTrans2(dels, p.numLeaves, ph)
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
+	dirt := make([]uint64, 0, len(swapswithheight))
 
+	// swap all the nodes
 	for _, s := range swapswithheight {
 		err := p.swapNodes(s)
 		if err != nil {
 			return err
 		}
+		par := up1(s.to, ph)
+		if dirt[len(dirt)-1] != par {
+			dirt = append(dirt, par)
+		}
+
 	}
 
-	var err error
+	// hash up to the (old) tops
+	err := p.reHash(dirt)
+	if err != nil {
+		return err
+	}
+
 	var sib *polNode
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
@@ -154,6 +166,39 @@ func (p *Pollard) rem2(dels []uint64) error {
 	reversePolNodeSlice(nexTops)
 	p.tops = nexTops
 
+	return nil
+}
+
+// reHash hashes all specified locations (and their parents up to roots)
+func (p *Pollard) reHash(dirt []uint64) error {
+	ph := p.height()
+	tops, topHeights := getTopsReverse(p.numLeaves, p.height())
+
+	var nextRowDirt []uint64
+	var curRowTop uint64
+	for h := uint8(1); h < p.height(); h++ {
+		if topHeights[0] == h {
+			curRowTop = tops[0]
+			topHeights = topHeights[1:]
+			tops = tops[1:]
+		}
+		for pos := dirt[0]; detectHeight(pos, ph) == h; dirt = dirt[1:] {
+			err := p.reHashOne(pos)
+			if err != nil {
+				return fmt.Errorf("rem2 rehash %s", err.Error())
+			}
+			par := up1(pos, ph)
+			last := len(dirt) - 1
+			// add dirt unless:
+			// this node is a current top, or already in the dirt slice
+			if pos != curRowTop && (last == -1 || dirt[last] != par) {
+				fmt.Printf("pol h %d hash %d to nrDirt \n", h, par)
+				nextRowDirt = append(nextRowDirt, par)
+			}
+		}
+		dirt = append(nextRowDirt, dirt...)
+		nextRowDirt = []uint64{}
+	}
 	return nil
 }
 
