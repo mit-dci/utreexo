@@ -193,7 +193,7 @@ func swapIfDescendant(a, b arrowh, fh uint8) (subMask uint64) {
 // This list is "raw" and a higher level move *implies* moving the whole subtree.
 // to get to a direct from/to mapping on the whole tree level, you will need
 // to process the movePos
-func removeTransform(
+func removeTransformx(
 	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow) {
 
 	// note that RemoveTransform is still way sub-optimal in that I'm sure

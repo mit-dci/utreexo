@@ -4,7 +4,7 @@ import "fmt"
 
 // Modify is the main function that deletes then adds elements to the accumulator
 func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
-	err := p.rem(dels)
+	err := p.rem2(dels)
 	if err != nil {
 		return err
 	}
@@ -130,24 +130,27 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	// swap all the nodes
 	for _, s := range swapswithheight {
+		if s.from == s.to {
+			// TODO should get rid of these upstream
+			continue
+		}
 		err := p.swapNodes(s)
 		if err != nil {
 			return err
 		}
 		par := up1(s.to, ph)
-		if dirt[len(dirt)-1] != par {
+		if len(dirt) == 0 || dirt[len(dirt)-1] != par {
 			dirt = append(dirt, par)
 		}
 
 	}
 
-	// hash up to the (old) tops
-	err := p.reHash(dirt)
+	var sib *polNode
+	var err error
+	err = p.reHash(dirt)
 	if err != nil {
 		return err
 	}
-
-	var sib *polNode
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]*polNode, len(nextTopPoss))
@@ -156,8 +159,11 @@ func (p *Pollard) rem2(dels []uint64) error {
 		if err != nil {
 			return err
 		}
-		// set neices to sib's neices as tops neices are really children
-		nexTops[i].niece = sib.niece
+		if sib != nil {
+			// set neices to sib's neices as tops neices are really children
+			nexTops[i].niece = sib.niece
+		}
+
 		fmt.Printf("set nextTop %d to old %d %x\n",
 			i, nextTopPoss[i], nexTops[i].data)
 	}
@@ -165,35 +171,53 @@ func (p *Pollard) rem2(dels []uint64) error {
 	p.numLeaves = nextNumLeaves
 	reversePolNodeSlice(nexTops)
 	p.tops = nexTops
+	// hash up to the (old) tops
 
 	return nil
 }
 
 // reHash hashes all specified locations (and their parents up to roots)
+// TODO currently hashing up to old roots instead of new ones
 func (p *Pollard) reHash(dirt []uint64) error {
+	if len(dirt) == 0 {
+		return nil
+	}
+
 	ph := p.height()
 	tops, topHeights := getTopsReverse(p.numLeaves, p.height())
+
+	if topHeights[0] == 0 {
+		tops = tops[1:]
+		topHeights = topHeights[1:]
+	}
 
 	var nextRowDirt []uint64
 	var curRowTop uint64
 	for h := uint8(1); h < p.height(); h++ {
+		fmt.Printf("th %v tops %v\n", topHeights, tops)
 		if topHeights[0] == h {
 			curRowTop = tops[0]
 			topHeights = topHeights[1:]
 			tops = tops[1:]
 		}
-		for pos := dirt[0]; detectHeight(pos, ph) == h; dirt = dirt[1:] {
-			err := p.reHashOne(pos)
+		for len(dirt) > 0 && detectHeight(dirt[0], ph) == h {
+			fmt.Printf("dirtslice: %v\n", dirt)
+			err := p.reHashOne(dirt[0])
 			if err != nil {
-				return fmt.Errorf("rem2 rehash %s", err.Error())
+				return fmt.Errorf("rem2 rehash %d %s", dirt[0], err.Error())
 			}
-			par := up1(pos, ph)
-			last := len(dirt) - 1
+			par := up1(dirt[0], ph)
 			// add dirt unless:
-			// this node is a current top, or already in the dirt slice
-			if pos != curRowTop && (last == -1 || dirt[last] != par) {
-				fmt.Printf("pol h %d hash %d to nrDirt \n", h, par)
+			// this node is a current top, or already in the nextdirt slice
+			if dirt[0] != curRowTop &&
+				(len(nextRowDirt) == 0 || nextRowDirt[len(dirt)-1] != par) {
+				fmt.Printf("pol h %d add %d to nrDirt crt %d \n", h, par, curRowTop)
 				nextRowDirt = append(nextRowDirt, par)
+			}
+
+			dirt = dirt[1:]
+			if len(dirt) == 0 {
+				break
 			}
 		}
 		dirt = append(nextRowDirt, dirt...)
@@ -208,7 +232,7 @@ func (p *Pollard) reHash(dirt []uint64) error {
 // pruning?  seems that rehash and movenode do a lot of the same things.
 
 // rem deletes stuff from the pollard.  The hard part.
-func (p *Pollard) rem(dels []uint64) error {
+func (p *Pollard) remx(dels []uint64) error {
 
 	if len(dels) == 0 {
 		return nil // that was quick
@@ -225,7 +249,7 @@ func (p *Pollard) rem(dels []uint64) error {
 	oldTopIdx := len(p.tops) - 1
 	nexTopIdx := len(nexTops) - 1
 
-	stash, moves := removeTransform(dels, p.numLeaves, ph)
+	stash, moves := removeTransformx(dels, p.numLeaves, ph)
 
 	fmt.Printf("stash %v\n", stash)
 	// TODO how about instead of a slice of uint64s, you just
@@ -383,7 +407,6 @@ func (p *Pollard) moveNode(a arrow) error {
 
 // the Hash & trim function called by rem().  Not currently called on leaves
 func (p *Pollard) reHashOne(pos uint64) error {
-
 	pr, sib, err := p.descendToPos(pos)
 	if err != nil {
 		return err
@@ -405,8 +428,8 @@ func (p *Pollard) reHashOne(pos uint64) error {
 	}
 	p.hashesEver++
 	sib[0].data = pr[0].auntOp()
-	fmt.Printf("rehashone %x, %x -> %04x\n",
-		pr[0].niece[0].data[:4], pr[0].niece[1].data[:4], sib[0].data[:4])
+	fmt.Printf("rehashone pos %d %x, %x -> %x\n",
+		pos, pr[0].niece[0].data[:4], pr[0].niece[1].data[:4], sib[0].data[:4])
 	pr[0].prune()
 
 	return nil
@@ -432,7 +455,9 @@ func (p *Pollard) swapNodes(r arrowh) error {
 	if err != nil {
 		return err
 	}
-
+	if asib == nil || bsib == nil {
+		return fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
+	}
 	fmt.Printf("swapNodes swapping %d %x with %d %x\n",
 		r.from, a.data[:4], r.to, b.data[:4])
 

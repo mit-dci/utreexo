@@ -224,11 +224,10 @@ func inForest(pos, numLeaves uint64) bool {
 
 // given n leaves, how deep is the tree?
 // iterate shifting left until greater than n
-func treeHeight(n uint64) uint8 {
-	var e uint8
+func treeHeight(n uint64) (e uint8) {
 	for ; (1 << e) < n; e++ {
 	}
-	return e
+	return
 }
 
 // topPos: given a number of leaves and a height, find the position of the

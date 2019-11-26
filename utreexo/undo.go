@@ -57,7 +57,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 
 	// remove everything between prevNumLeaves and numLeaves from positionMap
 	for p := f.numLeaves; p < f.numLeaves+prevAdds; p++ {
-		fmt.Printf("remove %x@%d from map\n", f.forest[p][:4], f.positionMap[f.forest[p].Mini()])
+		fmt.Printf("remove %x@%d from map\n",
+			f.forest[p][:4], f.positionMap[f.forest[p].Mini()])
 		delete(f.positionMap, f.forest[p].Mini())
 	}
 
@@ -75,7 +76,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 
 	// go through swaps in reverse order
 	for i, a := range leafMoves {
-		fmt.Printf("swaped %d %x, %d %x\n", a.to, f.forest[a.to][:4], a.from, f.forest[a.from][:4])
+		fmt.Printf("swaped %d %x, %d %x\n",
+			a.to, f.forest[a.to][:4], a.from, f.forest[a.from][:4])
 		f.forest[a.from], f.forest[a.to] = f.forest[a.to], f.forest[a.from]
 		dirt[2*i] = a.to       // this is wrong, it way over hashes
 		dirt[(2*i)+1] = a.from // also should be parents
@@ -157,7 +159,8 @@ func (f *Forest) reHash(dirt []uint64) error {
 			h++
 		}
 		if h > f.height {
-			return fmt.Errorf("postion %d at height %d but forest only %d high", pos, h, f.height)
+			return fmt.Errorf("postion %d at height %d but forest only %d high",
+				pos, h, f.height)
 		}
 		// if bridgeVerbose {
 		// fmt.Printf("h %d\n", h)
