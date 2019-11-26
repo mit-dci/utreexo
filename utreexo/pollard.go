@@ -142,7 +142,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		if len(dirt) == 0 || dirt[len(dirt)-1] != par {
 			dirt = append(dirt, par)
 		}
-
+		//
 	}
 
 	var sib *polNode
@@ -210,8 +210,10 @@ func (p *Pollard) reHash(dirt []uint64) error {
 			// add dirt unless:
 			// this node is a current top, or already in the nextdirt slice
 			if dirt[0] != curRowTop &&
-				(len(nextRowDirt) == 0 || nextRowDirt[len(dirt)-1] != par) {
-				fmt.Printf("pol h %d add %d to nrDirt crt %d \n", h, par, curRowTop)
+				(len(nextRowDirt) == 0 || nextRowDirt[len(dirt)-1] != par) &&
+				(len(dirt) == 0 || dirt[len(dirt)-1] != par) {
+				fmt.Printf("pol h %d add %d to nrDirt %v crt %d\n",
+					h, par, nextRowDirt, curRowTop)
 				nextRowDirt = append(nextRowDirt, par)
 			}
 
@@ -437,7 +439,8 @@ func (p *Pollard) reHashOne(pos uint64) error {
 
 // swapNodes swaps the nodes at positions a and b.
 func (p *Pollard) swapNodes(r arrowh) error {
-	if !inForest(r.from, p.numLeaves) || !inForest(r.to, p.numLeaves) {
+	if !inForest(r.from, p.numLeaves, p.height()) ||
+		!inForest(r.to, p.numLeaves, p.height()) {
 		return fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)
 	}
 
@@ -544,7 +547,7 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
 	// need to figure out offsets for smaller trees.
 
-	if !inForest(pos, p.numLeaves) {
+	if !inForest(pos, p.numLeaves, p.height()) {
 		//	if pos >= (p.numLeaves*2)-1 {
 		return nil, nil,
 			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)

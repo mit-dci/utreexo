@@ -204,14 +204,14 @@ func cousin(position uint64) uint64 {
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves
 // (same as childmany)
-func inForest(pos, numLeaves uint64) bool {
+func inForest(pos, numLeaves uint64, forestHeight uint8) bool {
 	// quick yes:
 	if pos < numLeaves {
 		return true
 	}
 
-	h := treeHeight(numLeaves)
-	marker := uint64(1 << h)
+	// forestHeight := treeHeight(numLeaves)
+	marker := uint64(1 << forestHeight)
 	mask := (marker << 1) - 1
 	if pos >= mask {
 		return false

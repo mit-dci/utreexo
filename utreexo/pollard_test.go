@@ -7,7 +7,7 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	rand.Seed(123)
+	rand.Seed(13)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -94,6 +94,7 @@ func pollardRandomRemember(blocks int32) error {
 		for i, ft := range fullTops {
 			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
+				fmt.Printf("forrest %s", f.toString())
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
 					sn.blockHeight, i, ft, polTops[i])
 			}
