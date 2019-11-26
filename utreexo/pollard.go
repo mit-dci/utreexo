@@ -126,7 +126,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	swapswithheight := remTrans2(dels, p.numLeaves, ph)
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
-	dirt := make([]uint64, 0, len(swapswithheight))
+	hashdirt := make([]uint64, 0, len(swapswithheight))
 
 	// swap all the nodes
 	for _, s := range swapswithheight {
@@ -138,16 +138,24 @@ func (p *Pollard) rem2(dels []uint64) error {
 		if err != nil {
 			return err
 		}
+
 		par := up1(s.to, ph)
-		if len(dirt) == 0 || dirt[len(dirt)-1] != par {
-			dirt = append(dirt, par)
+		err = p.reHashOne(par)
+		if err != nil {
+			return err
 		}
-		//
+		parpar := up1(par, ph)
+
+		if inForest(parpar, nextNumLeaves, ph) &&
+			(len(hashdirt) == 0 || hashdirt[len(hashdirt)-1] != parpar) {
+			hashdirt = append(hashdirt, parpar)
+		}
+
 	}
 
 	var sib *polNode
 	var err error
-	err = p.reHash(dirt)
+	err = p.reHash(hashdirt)
 	if err != nil {
 		return err
 	}
