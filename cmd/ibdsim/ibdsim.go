@@ -21,9 +21,13 @@ var maxmalloc uint64
 // we get the new utxo info from the same txos text file
 // the deletion data and proofs though, we get from the leveldb
 // which was created by the bridge node.
-func RunIBD(ttlfn string, schedFileName string, sig chan bool) error {
+func RunIBD(isTestnet bool, ttlfn string, schedFileName string, sig chan bool) error {
 
 	go stopRunIBD(sig)
+
+	//Check if the ttlfn given is a testnet file
+	checkTestnet(isTestnet)
+
 	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
 	if err != nil {
 		return err
@@ -175,9 +179,12 @@ func RunIBD(ttlfn string, schedFileName string, sig chan bool) error {
 }
 
 // build the bridge node / proofs
-func BuildProofs(ttlfn string, sig chan bool) error {
+func BuildProofs(isTestnet bool, ttlfn string, sig chan bool) error {
 
 	go stopBuildProofs(sig)
+
+	//Check if the ttlfn given is a testnet file
+	checkTestnet(isTestnet)
 
 	fmt.Println(ttlfn)
 	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
@@ -204,6 +211,7 @@ func BuildProofs(ttlfn string, sig chan bool) error {
 	var blockAdds []utreexo.LeafTXO
 	var blockDels []utreexo.Hash
 
+	fmt.Println("Building Proofs...")
 	for scanner.Scan() {
 		switch scanner.Text()[0] {
 		case '-':
@@ -326,12 +334,31 @@ func MemStatString(fname string) string {
 	return s
 }
 
+func checkTestnet(isTestnet bool) {
+	if isTestnet == false {
+		f, err := os.Open("ttl.mainnet.txos")
+		if err != nil {
+			fmt.Println("ttl.mainnet.txos not present. Please check option -testnet=true is set if simulating testnet")
+			fmt.Println("Exiting...")
+			os.Exit(2)
+		}
+		f.Close()
+	} else {
+		f, err := os.Open("ttl.testnet.txos")
+		if err != nil {
+			fmt.Println("ttl.mainnet.txos not present. Please uncheck option -testnet=true is set if simulating mainnet")
+			fmt.Println("Exiting...")
+			os.Exit(2)
+		}
+		f.Close()
+	}
+}
+
 func stopRunIBD(sig chan bool) {
 	<-sig
 	fmt.Println("Exiting...")
 	os.Exit(1)
 }
-
 
 func stopBuildProofs(sig chan bool) {
 	<-sig

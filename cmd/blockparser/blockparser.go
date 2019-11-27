@@ -31,10 +31,10 @@ make a txo text file with the ttl times on each line
 //CurrentHeaderHash is the 80byte header double hashed
 //Prevhash is the 32 byte previous header included in the 80byte header.
 type RawHeaderData struct {
-	FileNum [4]byte
-	Offset [4]byte
 	CurrentHeaderHash [32]byte
-	Prevhash [32]byte
+	Prevhash          [32]byte
+	FileNum           [4]byte
+	Offset            [4]byte
 }
 
 //chainhash.Hash is just [32]byte
@@ -53,30 +53,48 @@ var testNet3GenHash = chainhash.Hash{
 }
 
 //Parser parses blocks from the .dat files bitcoin core provides
-func Parser(sig chan bool) error {
+func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig chan bool) error {
 
+	//Sometimes defer lvdb.Close() will not work so these channels
+	//are to break out of the main loop and wait for the waitgroup
+	//so leveldb can close gracefully if SIGINT, SIGTERM, SIGQUIT is given.
+
+	//Channel to alert stopParse() that buildOffsetFile() has been finished
 	offsetfinished := make(chan bool, 1)
 
+	//Channel to alert the main loop to break
+	stopGoing := make(chan bool, 1)
+
+	//Tell stopParse that the main loop is running
+	running := make(chan bool, 1)
+
+	//Tell stopParse that the main loop is ok to exit now
+	done := make(chan bool, 1)
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
-	go stopParse(sig, offsetfinished)
+	go stopParse(sig, offsetfinished, stopGoing, running, done, offsetfile)
+	//defaults to the testnet Gensis tip
+	tip := testNet3GenHash
+
+	//If given the option testnet=true, check if the blk00000.dat file
+	//in the directory is a testnet file. Vise-versa for mainnet
+	checkTestnet(isTestnet, tip)
 
 	var currentOffsetHeight int
 	tipnum := 0
-	tip := testNet3GenHash
 	nextMap := make(map[[32]byte]RawHeaderData)
 
 	//if there isn't an offset file, make one
-	if hasAccess("offsetfile") == false {
-		currentOffsetHeight, _ = buildOffsetFile(tip, tipnum, nextMap, offsetfinished)
-	//if there is a offset file, we should pass true to offsetfinished
-	//to let stopParse() know that it shouldn't delete offsetfile
+	if HasAccess(offsetfile) == false {
+		currentOffsetHeight, _ = buildOffsetFile(tip, tipnum, nextMap, offsetfile, offsetfinished)
 	} else {
+		//if there is a offset file, we should pass true to offsetfinished
+		//to let stopParse() know that it shouldn't delete offsetfile
 		offsetfinished <- true
 	}
 	//if there is a .txos file, get the tipnum from that
-	if hasAccess("testnet.txos") == true {
-		fmt.Println("Got tip number from .txos file")
-		tipnum, _ = getTipNum()
+	tipnum, err := GetTipNum(txos)
+	if err != nil {
+		panic(err)
 	}
 
 	//grab the last block height from currentoffsetheight
@@ -89,15 +107,15 @@ func Parser(sig chan bool) error {
 	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
 	currentOffsetHeight = int(BtU32(currentOffsetHeightByte[:]))
 
-	//append if testnet.txos exists. Create one if it doesn't exist
-	outfile, err := os.OpenFile("testnet.txos", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	//append if .txos exists. Create one if it doesn't exist
+	outfile, err := os.OpenFile(txos, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
 
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile("./ttldb", o)
+	lvdb, err := leveldb.OpenFile(ttldb, o)
 	if err != nil {
 		panic(err)
 	}
@@ -114,9 +132,16 @@ func Parser(sig chan bool) error {
 
 	fmt.Println("Building the .txos file...")
 	fmt.Println("Starting from block:", tipnum)
+
+	//bool to stop the main loop
+	var stop bool
+
+	//tell stopParse that the main loop is running
+	running <- true
+
 	//read off the offset file and start writing to the .txos file
-	for ; tipnum != currentOffsetHeight; tipnum++ {
-		offsetFile, err := os.Open("offsetfile")
+	for ; tipnum != currentOffsetHeight && stop != true; tipnum++ {
+		offsetFile, err := os.Open(offsetfile)
 		if err != nil {
 			panic(err)
 		}
@@ -124,35 +149,83 @@ func Parser(sig chan bool) error {
 		if err != nil {
 			panic(err)
 		}
+
 		//write to the .txos file
 		writeBlock(block, tipnum+1, outfile, batchan, &batchwg)
+
 		//Just something to let the user know that the program is still running
 		//The actual block the program is on is +1 of the printed number
-		if tipnum % 50000 == 0 {
+		if tipnum%50000 == 0 {
 			fmt.Println("On block :", tipnum)
+		}
+		select {
+		case stop = <-stopGoing:
+		default:
 		}
 	}
 	batchwg.Wait()
-	fmt.Println("Finished writing")
+	fmt.Println("Finished writing.")
+
+	//tell stopParse that it's ok to exit
+	done <- true
 	return nil
 }
 
+//Checks if the given .dat file is testnet or mainnet
+func checkTestnet(isTestnet bool, tip chainhash.Hash) {
+	if isTestnet == true {
+		//assign testnet hash as the genesis hash
+		tip = testNet3GenHash
+		f, err := os.Open("blk00000.dat")
+		if err != nil {
+			panic(err)
+		}
+		var magicbytes [4]byte
+		f.Read(magicbytes[:])
+
+		//Check if the magicbytes are for testnet
+		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} {
+			fmt.Println("Option -testnet=true given but .dat file is NOT a testnet file.")
+			fmt.Println("Exiting...")
+			os.Exit(2)
+		}
+		f.Close()
+	} else {
+		//assign mainnet hash as the genesis hash
+		tip = mainnetGenHash
+		f, err := os.Open("blk00000.dat")
+		if err != nil {
+			panic(err)
+		}
+		var magicbytes [4]byte
+		f.Read(magicbytes[:])
+
+		//Check if the magicbytes are for mainnet
+		if magicbytes != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} {
+			fmt.Println("Option -testnet=true not given but .dat file is a testnet file.")
+			fmt.Println("Exiting...")
+			os.Exit(2)
+		}
+		f.Close()
+	}
+}
+
 //Gets the latest tipnum from the .txos file
-func getTipNum() (int, error) {
+func GetTipNum(txos string) (int, error) {
 	//check if there is access to the .txos file
-	if hasAccess("testnet.txos") == false {
-		fmt.Println("No testnet.txos file found")
-		os.Exit(1)
+	if HasAccess(txos) == false {
+		fmt.Println("No .txos file found, Syncing from the genesis block...")
+		return 0, nil
 	}
 
-	f, err := os.Open("testnet.txos")
+	f, err := os.Open(txos)
 	if err != nil {
 		panic(err)
 	}
 
 	//check if the .txos file is empty
 	fstat, _ := f.Stat()
-	if fstat.Size() == 0 {
+	if fstat.Size() == 0 || fstat.Size() == 1 {
 		fmt.Println(".txos file is empty. Syncing from the genesis block...")
 		return 0, nil
 	}
@@ -163,7 +236,7 @@ func getTipNum() (int, error) {
 	var s string
 
 	//Reads backwards and appends the character read to `all` until we hit the character "h".
-	for s != "h" && x > -20 {//probably an empty/corrupted file if we loop more than 20 times
+	for s != "h" && x > -20 { //probably an empty/corrupted file if we loop more than 20 times
 		f.Seek(x, 2)
 		f.Read(buf)
 		s = fmt.Sprintf("%s", buf)
@@ -182,14 +255,15 @@ func getTipNum() (int, error) {
 	tipstring := fmt.Sprintf("%s", all)
 	num, err := strconv.Atoi(reverse(tipstring))
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
+	f.Close()
 	return num, nil
 }
 
 //Builds the offset file
-func buildOffsetFile(tip chainhash.Hash, tipnum int, nextMap map[[32]byte]RawHeaderData, offsetfinished chan bool) (int, error) {
-	offsetFile, err := os.OpenFile("offsetfile", os.O_CREATE|os.O_WRONLY, 0600)
+func buildOffsetFile(tip chainhash.Hash, tipnum int, nextMap map[[32]byte]RawHeaderData, offsetfile string, offsetfinished chan bool) (int, error) {
+	offsetFile, err := os.OpenFile(offsetfile, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -278,7 +352,7 @@ func readRawHeadersFromFile(fileNum uint32) ([]RawHeaderData, error) {
 		b.CurrentHeaderHash = sha256.Sum256(first[:])
 
 		//offset for the next block from the current position
-		loc, err = f.Seek(int64(LBtU32(size[:])) - 80, 1)
+		loc, err = f.Seek(int64(LBtU32(size[:]))-80, 1)
 		blockHeaders = append(blockHeaders, *b)
 		b = nil
 	}
@@ -287,15 +361,15 @@ func readRawHeadersFromFile(fileNum uint32) ([]RawHeaderData, error) {
 
 //Sorts and writes the block offset from the passed in blockHeaders.
 func writeBlockOffset(
-	blockHeaders []RawHeaderData,//        All headers from the select .dat file
-	nextMap map[[32]byte]RawHeaderData,//  Map to save the current block hash 
-	offsetFile *os.File,//                 File to save the sorted blocks and locations to
-	tipnum int,//                          Current block it's on
-	tip chainhash.Hash) (//                Current hash of the block it's on
-		chainhash.Hash, int, error) {
+	blockHeaders []RawHeaderData, //        All headers from the select .dat file
+	nextMap map[[32]byte]RawHeaderData, //  Map to save the current block hash
+	offsetFile *os.File, //                 File to save the sorted blocks and locations to
+	tipnum int, //                          Current block it's on
+	tip chainhash.Hash) ( //                Current hash of the block it's on
+	chainhash.Hash, int, error) {
 
 	for _, b := range blockHeaders {
-		if len(nextMap) > 10000 {//Just a random big number
+		if len(nextMap) > 10000 { //Just a random big number
 			fmt.Println("Dead end tip. Exiting...")
 			break
 		}
@@ -335,19 +409,20 @@ func getRawBlockFromFile(tipnum int, offsetFile *os.File) (wire.MsgBlock, error)
 
 	//offset file consists of 8 bytes per block
 	//tipnum * 8 gives us the correct position for that block
-	offsetFile.Seek(int64(8 * tipnum), 0)
+	offsetFile.Seek(int64(8*tipnum), 0)
 
 	//Read file and offset for the block
 	offsetFile.Read(datFile[:])
 	offsetFile.Read(offset[:])
 
 	fileName := fmt.Sprintf("blk%05d.dat", int(BtU32(datFile[:])))
+	//Channel to alert stopParse() that offset
 	f, err := os.Open(fileName)
 	if err != nil {
 		panic(err)
 	}
 	//+8 skips the 8 bytes of magicbytes and load size
-	f.Seek(int64(BtU32(offset[:]) + 8), 0)
+	f.Seek(int64(BtU32(offset[:])+8), 0)
 
 	b := new(wire.MsgBlock)
 	err = b.Deserialize(f)
@@ -364,7 +439,7 @@ func getRawBlockFromFile(tipnum int, offsetFile *os.File) (wire.MsgBlock, error)
 func writeBlock(b wire.MsgBlock, tipnum int, f *os.File,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
-	//s is the string that gets written to testnet.txos
+	//s is the string that gets written to .txos
 	var s string
 
 	blockBatch := new(leveldb.Batch)
@@ -392,9 +467,11 @@ func writeBlock(b wire.MsgBlock, tipnum int, f *os.File,
 
 	//fmt.Printf("--- sending off %d dels at tipnum %d\n", batch.Len(), tipnum)
 	wg.Add(1)
+	//sent to dbworker to be written to ttldb
 	batchan <- blockBatch
 
 	s += fmt.Sprintf("h: %d\n", tipnum)
+	//write to the .txos file
 	_, err := f.WriteString(s)
 	if err != nil {
 		panic(err)
@@ -419,14 +496,14 @@ func isUnspendable(o *wire.TxOut) bool {
 //Converts 4 byte Little Endian slices to uint32.
 //Returns ffffffff if something doesn't work.
 func LBtU32(b []byte) uint32 {
-        if len(b) != 4 {
-                fmt.Printf("Got %x to LBtU32 (%d bytes)\n", b, len(b))
-                return 0xffffffff
-        }
-        var i uint32
-        buf := bytes.NewBuffer(b)
-        binary.Read(buf, binary.LittleEndian, &i)
-        return i
+	if len(b) != 4 {
+		fmt.Printf("Got %x to LBtU32 (%d bytes)\n", b, len(b))
+		return 0xffffffff
+	}
+	var i uint32
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.LittleEndian, &i)
+	return i
 }
 
 //checkMagicByte checks for the Bitcoin magic bytes.
@@ -443,35 +520,47 @@ func checkMagicByte(bytesgiven [4]byte) bool {
 
 //StopParse receives and handles sig from the system.
 //Handles SIGTERM, SIGINT, and SIGQUIT.
-func stopParse(sig chan bool, offsetfinished chan bool) {
+func stopParse(sig chan bool, offsetfinished chan bool, stopGoing chan bool, running chan bool, done chan bool, offsetfile string) {
 	<-sig
+	stopGoing <- true
 	select {
 	//If offsetfile is there or was built, don't remove it
 	case <-offsetfinished:
-		os.Exit(1)
+		select {
+		case <-running:
+			<-done
+		default:
+		}
 	//If nothing is received, delete offsetfile and currentoffsetheight
 	default:
-		os.Remove("offsetfile")
-		os.Remove("currentoffsetheight")
-		fmt.Println("offsetfile incomplete, removing...")
+		select {
+		case <-running:
+			<-done
+		default:
+			os.Remove(offsetfile)
+			os.Remove("currentoffsetheight")
+			fmt.Println("offsetfile incomplete, removing...")
+		}
 	}
+
 	fmt.Println("Exiting...")
-	os.Exit(1)
+	os.Exit(0)
 }
 
 //Reverses the given string.
 //"asdf" becomes "fdsa".
 func reverse(s string) (result string) {
-	for _,v := range s {
+	for _, v := range s {
 		result = string(v) + result
 	}
 	return
 }
 
-//hasAccess reports whether we have acces to the named file.
+//HasAccess reports whether we have acces to the named file.
+//Returns true if HasAccess, false if it doesn't.
 //Does NOT tell us if the file exists or not.
 //File might exist but may not be available to us
-func hasAccess(fileName string) bool {
+func HasAccess(fileName string) bool {
 	if _, err := os.Stat(fileName); err != nil {
 		if os.IsNotExist(err) {
 			return false

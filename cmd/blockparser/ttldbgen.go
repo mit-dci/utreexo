@@ -27,6 +27,9 @@ func dbWorker(
 		wg.Done()
 	}
 }
+
+//HashFromString type casts the given string to []byte
+//and hashes it with sha256
 func HashFromString(s string) chainhash.Hash {
 	return sha256.Sum256([]byte(s))
 }
