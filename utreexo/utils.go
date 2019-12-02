@@ -105,6 +105,28 @@ func detectSubTreeHeight(
 	return
 }
 
+// TODO optimization if it's worth it --
+// in many cases detectHeight is called often and you're only looking for a
+// change in height.  So we could instead have a "higher" function
+// where it just looks for a different number of leading 0s.
+// Actually I will write that function here
+
+// higher returns how much higher position is than h.  if postion is at height
+// h, it returns 0.  if position is lower than h it's undefined (probably 0)
+// untested
+func higher(position uint64, h, forestHeight uint8) uint8 {
+	mask := uint64(2<<forestHeight) - 1
+	mask &= mask << h // puts 0s on the right
+	if position < mask {
+		return 0
+	}
+	marker := uint64(1 << forestHeight)
+	for ; position&marker != 0; h++ {
+		marker >>= 1
+	}
+	return h
+}
+
 // detectHeight finds the current height of your node given the node
 // position and the total forest height.. counts preceeding 1 bits.
 func detectHeight(position uint64, forestHeight uint8) uint8 {
@@ -359,6 +381,27 @@ func reversePolNodeSlice(a []*polNode) {
 	}
 }
 
+// topUp takes a slice of arrows (in order) and returns an expanded slice of
+// arrows that contains all the parents of the given slice up to roots
+func topUp(rows [][]uint64, fh uint8) {
+	// kindof inefficent since we actually start at row 1 and rows[0] is
+	// always empty when we call this... but mergeSortedSlices has the
+	// shortcut so shouldn't matter
+	nextrow := []uint64{}
+	for h := uint8(0); h <= fh; h++ { // go through each row
+		fmt.Printf("h %d merge %v and %v\n", h, rows[h], nextrow)
+		rows[h] = mergeSortedSlices(rows[h], nextrow)
+		nextrow = []uint64{} // clear nextrow
+		for i := 0; i < len(rows[h]); i++ {
+			nextrow = append(nextrow, up1(rows[h][i], fh))
+			// skip the next one if it's a sibling
+			if i+1 < len(rows[h]) && rows[h][i]|1 == rows[h][i+1] {
+				i++
+			}
+		}
+	}
+}
+
 // sortArrows sorts them by from
 // func sortArrows(s []arrow) {
 // 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
@@ -372,6 +415,14 @@ func reversePolNodeSlice(a []*polNode) {
 func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 	maxa := len(a)
 	maxb := len(b)
+
+	// shortcuts:
+	if maxa == 0 {
+		return b
+	}
+	if maxb == 0 {
+		return a
+	}
 
 	// make it (potentially) too long and truncate later
 	c = make([]uint64, maxa+maxb)

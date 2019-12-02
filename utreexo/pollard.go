@@ -123,11 +123,11 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 
 	// get all the swaps, then apply them all
-	swapswithheight := remTrans2(dels, p.numLeaves, ph)
+	swapswithheight, _ := remTrans2(dels, p.numLeaves, ph)
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
 	hashdirt := make([]uint64, 0, len(swapswithheight))
-
+	dirt := make([][]uint64, ph)
 	// swap all the nodes
 	for _, s := range swapswithheight {
 		if s.from == s.to {
@@ -138,6 +138,9 @@ func (p *Pollard) rem2(dels []uint64) error {
 		if err != nil {
 			return err
 		}
+		// if s.ht > 1 { // move lower dirt
+
+		// }
 
 		par := up1(s.to, ph)
 		err = p.reHashOne(par)
@@ -155,7 +158,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	var sib *polNode
 	var err error
-	err = p.reHash(hashdirt)
+	err = p.reHash(dirt)
 	if err != nil {
 		return err
 	}
@@ -186,7 +189,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 // reHash hashes all specified locations (and their parents up to roots)
 // TODO currently hashing up to old roots instead of new ones
-func (p *Pollard) reHash(dirt []uint64) error {
+func (p *Pollard) reHash(dirt [][]uint64) error {
 	if len(dirt) == 0 {
 		return nil
 	}
@@ -199,7 +202,7 @@ func (p *Pollard) reHash(dirt []uint64) error {
 		topHeights = topHeights[1:]
 	}
 
-	var nextRowDirt []uint64
+	var nextDirtRow []uint64
 	var curRowTop uint64
 	for h := uint8(1); h < p.height(); h++ {
 		fmt.Printf("th %v tops %v\n", topHeights, tops)
@@ -208,30 +211,31 @@ func (p *Pollard) reHash(dirt []uint64) error {
 			topHeights = topHeights[1:]
 			tops = tops[1:]
 		}
-		for len(dirt) > 0 && detectHeight(dirt[0], ph) == h {
-			fmt.Printf("dirtslice: %v\n", dirt)
-			err := p.reHashOne(dirt[0])
+		dirtrow := dirt[h]
+		for len(dirtrow) > 0 {
+			fmt.Printf("dirtslice: %v\n", dirtrow)
+			err := p.reHashOne(dirtrow[0])
 			if err != nil {
-				return fmt.Errorf("rem2 rehash %d %s", dirt[0], err.Error())
+				return fmt.Errorf("rem2 rehash %d %s", dirtrow[0], err.Error())
 			}
-			par := up1(dirt[0], ph)
+			par := up1(dirtrow[0], ph)
 			// add dirt unless:
 			// this node is a current top, or already in the nextdirt slice
-			if dirt[0] != curRowTop &&
-				(len(nextRowDirt) == 0 || nextRowDirt[len(dirt)-1] != par) &&
-				(len(dirt) == 0 || dirt[len(dirt)-1] != par) {
+			if dirtrow[0] != curRowTop &&
+				(len(nextDirtRow) == 0 || nextDirtRow[len(dirtrow)-1] != par) &&
+				(len(dirtrow) == 0 || dirtrow[len(dirtrow)-1] != par) {
 				fmt.Printf("pol h %d add %d to nrDirt %v crt %d\n",
-					h, par, nextRowDirt, curRowTop)
-				nextRowDirt = append(nextRowDirt, par)
+					h, par, nextDirtRow, curRowTop)
+				nextDirtRow = append(nextDirtRow, par)
 			}
 
-			dirt = dirt[1:]
-			if len(dirt) == 0 {
+			dirtrow = dirtrow[1:]
+			if len(dirtrow) == 0 {
 				break
 			}
 		}
-		dirt = append(nextRowDirt, dirt...)
-		nextRowDirt = []uint64{}
+		dirtrow = append(nextDirtRow, dirtrow...)
+		nextDirtRow = []uint64{}
 	}
 	return nil
 }

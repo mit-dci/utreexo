@@ -27,7 +27,10 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 
 // remTrans2 -- simpler and better -- lets see if it works!
 // returns a slice of swapswithHeight in bottom to top order
-func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
+// also returns all "dirty" positions which need to be hashed after the swaps
+
+func remTrans2(
+	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrowh, [][]uint64) {
 	nextNumLeaves := numLeaves - uint64(len(dels))
 	// fHeight := treeHeight(numLeaves)
 	var swaps, collapses []arrowh
@@ -90,13 +93,11 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 			swapNextDels = append(swapNextDels, up1(dels[0], fHeight))
 		}
 		// if neither haveDel nor rootPresent, nothing to do
-
 		// done with this row, move dels and proceed up to next row
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
 
 	swapCollapses(swaps, collapses, fHeight)
-
 	fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
 
 	// merge slice of collapses, placing the collapses at the end of the row
@@ -108,7 +109,8 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 		swaps = append(swaps[:si], append([]arrowh{c}, swaps[si:]...)...)
 	}
 
-	return swaps
+	// topUp(fHeight)
+	return swaps, nil
 }
 
 // swapCollapses modifies to field of arrows for root collapse
@@ -336,7 +338,7 @@ func removeTransformx(
 func floorTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
-	td := remTrans2(dels, numLeaves, fHeight)
+	td, _ := remTrans2(dels, numLeaves, fHeight)
 	fmt.Printf("td output %v\n", td)
 
 	var floor []arrow
