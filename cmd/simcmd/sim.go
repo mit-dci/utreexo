@@ -63,9 +63,9 @@ func main() {
 
 	switch os.Args[1] {
 	case "parseblock":
-		blockparser.Parser(*testnetCmd, *txos, *ttldb, *offsetfile, sig)
+		blockparser.Parser(*testnetCmd, *ttldb, *offsetfile, sig)
 	case "txottlgen":
-		txottl.ReadTTLdb(*testnetCmd, *txos, *ttldb, sig)
+		txottl.ReadTTLdb(*testnetCmd, *txos, *ttldb, *offsetfile, sig)
 	case "ibdsim":
 		optionCmd.Parse(os.Args[2:])
 		err := ibdsim.RunIBD(*testnetCmd, *ttlfn, *schedFileName, sig)
