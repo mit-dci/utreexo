@@ -1,14 +1,12 @@
 package txottl
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
-	"github.com/mit-dci/utreexo/cmd/blockparser"
+	"github.com/mit-dci/lit/wire"
+	"github.com/mit-dci/utreexo/cmd/utils"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -109,7 +107,7 @@ func lookerUpperWorker(
 }
 
 // read from the DB and tack on TTL values
-func ReadTTLdb(isTestnet bool, txos string, ttldb string, sig chan bool) error {
+func ReadTTLdb(isTestnet bool, txos string, ttldb string, offsetfile string, sig chan bool) error {
 
 	//Channel to alert the main loop to break
 	stopGoing := make(chan bool, 1)
@@ -122,7 +120,7 @@ func ReadTTLdb(isTestnet bool, txos string, ttldb string, sig chan bool) error {
 
 	//Check if -testnet=true is given and that the actual file
 	//is for testnet and vise versa
-	checkTestnet(isTestnet)
+	simutil.CheckTestnet(isTestnet)
 
 	// open database
 	o := new(opt.Options)
@@ -134,199 +132,156 @@ func ReadTTLdb(isTestnet bool, txos string, ttldb string, sig chan bool) error {
 	}
 	defer lvdb.Close()
 
-	//Open the *.txos file to read
-	txofile, err := os.OpenFile(txos, os.O_RDONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer txofile.Close()
 	//Make a ttl.*.txos file. Append if it exists
 	ttlfile, err := os.OpenFile("ttl."+txos, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	defer ttlfile.Close()
 
-	//position of where the bufio should read
-	var position int64
-
-	//If there is a saved position, read off that
-	//If there isn't, return 0
-	if blockparser.HasAccess("ttlfilelastposition") == true {
-		f, _ := os.Open("ttlfilelastposition")
-		var read [4]byte
-		f.Read(read[:])
-		position = int64(BtU32(read[:]))
-	} else {
-		position = 0
-	}
-
+	var tipnum int
 	//Get the tip number from the ttl.*.txos file
 	//Returns 0 if there isn't a ttl.*.txos file
-	tip, err := blockparser.GetTipNum("ttl." + txos)
+	if simutil.HasAccess("ttl." + txos) {
+		tipnum, err = simutil.GetTipNum("ttl." + txos)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	var currentOffsetHeight int
+	//grab the last block height from currentoffsetheight
+	//currentoffsetheight saves the last height from the offsetfile
+	var currentOffsetHeightByte [4]byte
+	currentOffsetHeightFile, err := os.Open("currentoffsetheight")
 	if err != nil {
 		panic(err)
 	}
+	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
+	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
 
-	height := uint32(tip)
-
-	// height starts at 1 because there are no transactions in block 0
-	height += 1
-
-	//Make a saved position file. Overwrites if there is one.
-	ttlfilesync, err := os.OpenFile("ttlfilelastposition", os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-	defer ttlfilesync.Close()
-
+	//allocate txotx to the heap and point to that
 	blocktxs := []*txotx{new(txotx)}
-	scanner := bufio.NewScanner(txofile)
 
 	//bool for stopping the scanner.Scan loop
 	var stop bool
 
+	offsetFile, err := os.Open(offsetfile)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Generating txo time to live...")
 
-	//skip the previous read lines
-	for i := 0; i < int(position); i++ {
-		scanner.Scan()
-	}
 	//stop only becomes true when the os gives SIGINT, SIGTERM, SIGQUIT
 	//AND the block that it was working on is written
-	for scanner.Scan() && stop != true {
-		//Update position per cycle
-		position++
+	for ; tipnum != currentOffsetHeight && stop != true; tipnum++ {
 
-		switch scanner.Text()[0] {
-		case '-':
-			// add it in to the last txotx
-			blocktxs[len(blocktxs)-1].txText += scanner.Text() + "\n"
+		block, err := simutil.GetRawBlockFromFile(tipnum, offsetFile)
+		if err != nil {
+			panic(err)
+		}
+		//write to the .txos file
+		err = writeTxos(block, blocktxs, tipnum+1, ttlfile, lvdb) //tipnum is +1 since we're skipping the genesis block
+		if err != nil {
+			panic(err)
+		}
 
-		case '+':
-			// add the whole line to inputBlob.  don't put a newline. do put
-			// an x.
-			blocktxs[len(blocktxs)-1].txText += scanner.Text() + "x"
+		//Just something to let the user know that the program is still running
+		//The actual block the program is on is +1 of the printed number
+		if tipnum%100 == 0 {
+			fmt.Println("On block :", tipnum)
+		}
 
-			// chop up string
-			parts := strings.Split(scanner.Text()[1:], ";")
-			txid := parts[0]
-			postsemicolon := parts[1]
+		// start next block
+		// wipe all block txs
+		blocktxs = []*txotx{new(txotx)}
 
-			txoIndicators := strings.Split(postsemicolon, "z")
-			numoutputs, err := strconv.Atoi(txoIndicators[0])
-			if err != nil {
-				return err
-			}
-
-			blocktxs[len(blocktxs)-1].outputtxid = txid
-			blocktxs[len(blocktxs)-1].deathHeights = make([]uint32, numoutputs)
-
-			// if len(blocktxs[len(blocktxs)-1].deathHeights) == 0 {
-			//	fmt.Printf("txid\n", txid)
-			//	panic("ded")
-			// }
-			// actually don't bother with unspendables, just look em up and they
-			// won't be there.  Whatever.
-			/*
-				// detect unspendables & don't look for when they're spent
-				unspendable := make(map[int]bool)
-				// I think this is overkill as there's only ever one unspendable
-				// output per tx.  but just in case. get em all.
-				if len(txoIndicators) > 1 {
-					unspendables := txoIndicators[1:]
-					for _, zstring := range unspendables {
-						n, err := strconv.Atoi(zstring)
-						if err != nil {
-							return err
-						}
-						unspendable[n] = true
-					}
-				}
-			*/
-
-			// done with this txotx, make the next one and append
-			blocktxs = append(blocktxs, new(txotx))
-
-		case 'h':
-			// we started a tx but shouldn't have
-			blocktxs = blocktxs[:len(blocktxs)-1]
-
-			// call function to make all the db lookups and find deathheights
-			// that part is in parallel.
-			lookupBlock(blocktxs, lvdb)
-
-			// write filled in txotx slice
-			for _, tx := range blocktxs {
-				// the txTest has all the inputs, and the output, and an x.
-				// we just have to stick the numbers and commas on here.
-				txstring := tx.txText
-				for _, deathheight := range tx.deathHeights {
-					if deathheight == 0 {
-						txstring += "s,"
-					} else {
-						txstring += fmt.Sprintf("%d,", deathheight-height)
-					}
-				}
-
-				_, err = ttlfile.WriteString(txstring + "\n")
-				if err != nil {
-					return err
-				}
-			}
-
-			_, err = ttlfile.WriteString(scanner.Text() + "\n")
-			if err != nil {
-				return err
-			}
-			fmt.Printf("done with height %d\n", height)
-
-			height++
-
-			// start next block
-			// wipe all block txs
-			blocktxs = []*txotx{new(txotx)}
-
-			//Check if stopSig is no longer false
-			//stop = true makes the loop exit
-			select {
-			case stop = <-stopGoing:
-			default:
-			}
-
+		//Check if stopSig is no longer false
+		//stop = true makes the loop exit
+		select {
+		case stop = <-stopGoing:
 		default:
-			panic("unknown string")
 		}
 
 	}
 	fmt.Println("Done Writing.")
-
-	//Only write where we left off after a block has been finished
-	ttlfilesync.WriteAt(U32tB(uint32(position))[:], 0)
 
 	//Tell stopTxottl that it's ok to quit now
 	done <- true
 	return nil
 }
 
-func checkTestnet(isTestnet bool) {
-	if isTestnet == false {
-		f, err := os.Open("mainnet.txos")
-		if err != nil {
-			fmt.Println("mainnet.txos not present. Please check option -testnet=true is set if simulating testnet")
-			fmt.Println("Exiting...")
-			os.Exit(2)
+//writeTxos writes to the .txos file.
+//Adds - for txinput, - for txoutput, z for unspenable txos, and the height number for that block.
+func writeTxos(b wire.MsgBlock, blocktxs []*txotx, tipnum int,
+	ttlfile *os.File, lvdb *leveldb.DB) error {
+
+	//s is the string that gets written to .txos
+	var s string
+
+	for blockindex, tx := range b.Transactions {
+		for _, in := range tx.TxIn {
+			if blockindex > 0 { // skip coinbase "spend"
+				//hashing because blockbatch wants a byte slice
+				opString := in.PreviousOutPoint.String()
+				blocktxs[len(blocktxs)-1].txText += "-" + opString + "\n"
+			}
 		}
-		f.Close()
-	} else {
-		f, err := os.Open("testnet.txos")
-		if err != nil {
-			fmt.Println("testnet.txos not present. Please uncheck option -testnet=true is set if simulating mainnet")
-			fmt.Println("Exiting...")
-			os.Exit(2)
+
+		//creates all txos up to index indicated
+		txhash := tx.TxHash()
+		numoutputs := uint32(len(tx.TxOut))
+		blocktxs[len(blocktxs)-1].txText += "+" + wire.OutPoint{txhash, numoutputs}.String()
+
+		//Adds z and index for all OP_RETURN transactions
+		//We don't keep track of the OP_RETURNS so probably can get rid of this
+		for i, out := range tx.TxOut {
+			if simutil.IsUnspendable(out) {
+				blocktxs[len(blocktxs)-1].txText += "z" + fmt.Sprintf("%d", i)
+			}
 		}
-		f.Close()
+		blocktxs[len(blocktxs)-1].txText += "x"
+		//txid := tx.TxHash().String()
+		blocktxs[len(blocktxs)-1].outputtxid = txhash.String()
+		blocktxs[len(blocktxs)-1].deathHeights = make([]uint32, numoutputs)
+
+		// done with this txotx, make the next one and append
+		blocktxs = append(blocktxs, new(txotx))
 	}
+
+	//TODO Get rid of this. This eats up cpu
+	//we started a tx but shouldn't have
+	blocktxs = blocktxs[:len(blocktxs)-1]
+
+	// call function to make all the db lookups and find deathheights
+	lookupBlock(blocktxs, lvdb)
+
+	// write filled in txotx slice
+	for _, tx := range blocktxs {
+		// the txTest has all the inputs, and the output, and an x.
+		// we just have to stick the numbers and commas on here.
+		txstring := tx.txText
+		for _, deathheight := range tx.deathHeights {
+			if deathheight == 0 {
+				txstring += "s,"
+			} else {
+				txstring += fmt.Sprintf("%d,", int(deathheight)-tipnum)
+			}
+		}
+
+		//add to s to be written to .txos file
+		s += fmt.Sprintf(txstring + "\n")
+	}
+
+	s += fmt.Sprintf("h: %d\n", tipnum)
+
+	//write to the .txos file
+	_, err := ttlfile.WriteString(s)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 //stopTxottl receives and handles sig from the system

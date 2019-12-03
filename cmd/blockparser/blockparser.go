@@ -1,17 +1,14 @@
 package blockparser
 
 import (
-	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 
 	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
+	"github.com/mit-dci/utreexo/cmd/utils"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -53,7 +50,7 @@ var testNet3GenHash = chainhash.Hash{
 }
 
 //Parser parses blocks from the .dat files bitcoin core provides
-func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig chan bool) error {
+func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) error {
 
 	//Sometimes defer lvdb.Close() will not work so these channels
 	//are to break out of the main loop and wait for the waitgroup
@@ -77,14 +74,14 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 
 	//If given the option testnet=true, check if the blk00000.dat file
 	//in the directory is a testnet file. Vise-versa for mainnet
-	checkTestnet(isTestnet, tip)
+	simutil.CheckTestnet(isTestnet)
 
 	var currentOffsetHeight int
 	tipnum := 0
 	nextMap := make(map[[32]byte]RawHeaderData)
 
 	//if there isn't an offset file, make one
-	if HasAccess(offsetfile) == false {
+	if simutil.HasAccess(offsetfile) == false {
 		currentOffsetHeight, _ = buildOffsetFile(tip, tipnum, nextMap, offsetfile, offsetfinished)
 	} else {
 		//if there is a offset file, we should pass true to offsetfinished
@@ -92,7 +89,17 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 		offsetfinished <- true
 	}
 	//if there is a .txos file, get the tipnum from that
-	tipnum, err := GetTipNum(txos)
+	var t [4]byte
+	if simutil.HasAccess("tipfile") {
+		tf, err := os.Open("tipfile")
+		if err != nil {
+			panic(err)
+		}
+		tf.Read(t[:])
+		tipnum = int(simutil.BtU32(t[:]))
+	}
+
+	tipFile, err := os.OpenFile("tipfile", os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -105,13 +112,7 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 		panic(err)
 	}
 	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
-	currentOffsetHeight = int(BtU32(currentOffsetHeightByte[:]))
-
-	//append if .txos exists. Create one if it doesn't exist
-	outfile, err := os.OpenFile(txos, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
+	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
 
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
@@ -130,7 +131,7 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 		go dbWorker(batchan, lvdb, &batchwg)
 	}
 
-	fmt.Println("Building the .txos file...")
+	fmt.Println("Building ttldb...")
 	fmt.Println("Starting from block:", tipnum)
 
 	//bool to stop the main loop
@@ -139,19 +140,20 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 	//tell stopParse that the main loop is running
 	running <- true
 
+	offsetFile, err := os.Open(offsetfile)
+	if err != nil {
+		panic(err)
+	}
 	//read off the offset file and start writing to the .txos file
 	for ; tipnum != currentOffsetHeight && stop != true; tipnum++ {
-		offsetFile, err := os.Open(offsetfile)
-		if err != nil {
-			panic(err)
-		}
-		block, err := getRawBlockFromFile(tipnum, offsetFile)
+
+		block, err := simutil.GetRawBlockFromFile(tipnum, offsetFile)
 		if err != nil {
 			panic(err)
 		}
 
 		//write to the .txos file
-		writeBlock(block, tipnum+1, outfile, batchan, &batchwg)
+		writeBlock(block, tipnum+1, tipFile, batchan, &batchwg) //tipnum is +1 since we're skipping the genesis block
 
 		//Just something to let the user know that the program is still running
 		//The actual block the program is on is +1 of the printed number
@@ -169,96 +171,6 @@ func Parser(isTestnet bool, txos string, ttldb string, offsetfile string, sig ch
 	//tell stopParse that it's ok to exit
 	done <- true
 	return nil
-}
-
-//Checks if the given .dat file is testnet or mainnet
-func checkTestnet(isTestnet bool, tip chainhash.Hash) {
-	if isTestnet == true {
-		//assign testnet hash as the genesis hash
-		tip = testNet3GenHash
-		f, err := os.Open("blk00000.dat")
-		if err != nil {
-			panic(err)
-		}
-		var magicbytes [4]byte
-		f.Read(magicbytes[:])
-
-		//Check if the magicbytes are for testnet
-		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} {
-			fmt.Println("Option -testnet=true given but .dat file is NOT a testnet file.")
-			fmt.Println("Exiting...")
-			os.Exit(2)
-		}
-		f.Close()
-	} else {
-		//assign mainnet hash as the genesis hash
-		tip = mainnetGenHash
-		f, err := os.Open("blk00000.dat")
-		if err != nil {
-			panic(err)
-		}
-		var magicbytes [4]byte
-		f.Read(magicbytes[:])
-
-		//Check if the magicbytes are for mainnet
-		if magicbytes != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} {
-			fmt.Println("Option -testnet=true not given but .dat file is a testnet file.")
-			fmt.Println("Exiting...")
-			os.Exit(2)
-		}
-		f.Close()
-	}
-}
-
-//Gets the latest tipnum from the .txos file
-func GetTipNum(txos string) (int, error) {
-	//check if there is access to the .txos file
-	if HasAccess(txos) == false {
-		fmt.Println("No .txos file found, Syncing from the genesis block...")
-		return 0, nil
-	}
-
-	f, err := os.Open(txos)
-	if err != nil {
-		panic(err)
-	}
-
-	//check if the .txos file is empty
-	fstat, _ := f.Stat()
-	if fstat.Size() == 0 || fstat.Size() == 1 {
-		fmt.Println(".txos file is empty. Syncing from the genesis block...")
-		return 0, nil
-	}
-
-	var all []byte
-	buf := make([]byte, 1)
-	var x int64
-	var s string
-
-	//Reads backwards and appends the character read to `all` until we hit the character "h".
-	for s != "h" && x > -20 { //probably an empty/corrupted file if we loop more than 20 times
-		f.Seek(x, 2)
-		f.Read(buf)
-		s = fmt.Sprintf("%s", buf)
-		//Don't append any of these ascii characters
-		if s != "\n" && s != " " && s != "" && s != "\x00" && s != ":" && s != "h" {
-			all = append(all, buf...)
-		}
-		x--
-	}
-
-	//return error if we loop more than 20 times. Normally "h" should be found soon
-	err1 := errors.New("Couldn't find the tipnum in .txos file")
-	if x <= -20 {
-		return 0, err1
-	}
-	tipstring := fmt.Sprintf("%s", all)
-	num, err := strconv.Atoi(reverse(tipstring))
-	if err != nil {
-		return 0, err
-	}
-	f.Close()
-	return num, nil
 }
 
 //Builds the offset file
@@ -292,7 +204,7 @@ func buildOffsetFile(tip chainhash.Hash, tipnum int, nextMap map[[32]byte]RawHea
 	if err != nil {
 		panic(err)
 	}
-	currentOffsetHeightFile.Write(U32tB(uint32(tipnum))[:])
+	currentOffsetHeightFile.Write(simutil.U32tB(uint32(tipnum))[:])
 	currentOffsetHeightFile.Close()
 
 	//pass true to let stopParse() know we're finished
@@ -325,13 +237,13 @@ func readRawHeadersFromFile(fileNum uint32) ([]RawHeaderData, error) {
 	//until offset is at the end of the file
 	for loc != fstat.Size() {
 		b := new(RawHeaderData)
-		copy(b.FileNum[:], U32tB(fileNum))
-		copy(b.Offset[:], U32tB(offset))
+		copy(b.FileNum[:], simutil.U32tB(fileNum))
+		copy(b.Offset[:], simutil.U32tB(offset))
 
 		//check if Bitcoin magic bytes were read
 		var magicbytes [4]byte
 		f.Read(magicbytes[:])
-		if checkMagicByte(magicbytes) == false {
+		if simutil.CheckMagicByte(magicbytes) == false {
 			break
 		}
 
@@ -340,7 +252,7 @@ func readRawHeadersFromFile(fileNum uint32) ([]RawHeaderData, error) {
 		f.Read(size[:])
 
 		//add 8bytes for the magic bytes (4bytes) and size (4bytes)
-		offset = offset + LBtU32(size[:]) + uint32(8)
+		offset = offset + simutil.LBtU32(size[:]) + uint32(8)
 
 		var blockheader [80]byte
 		f.Read(blockheader[:])
@@ -352,7 +264,7 @@ func readRawHeadersFromFile(fileNum uint32) ([]RawHeaderData, error) {
 		b.CurrentHeaderHash = sha256.Sum256(first[:])
 
 		//offset for the next block from the current position
-		loc, err = f.Seek(int64(LBtU32(size[:]))-80, 1)
+		loc, err = f.Seek(int64(simutil.LBtU32(size[:]))-80, 1)
 		blockHeaders = append(blockHeaders, *b)
 		b = nil
 	}
@@ -401,78 +313,49 @@ func writeBlockOffset(
 	return tip, tipnum, nil
 }
 
-//readRawBlocksFromFile reads the blocks from the given .dat file and
-//returns those blocks.
-func getRawBlockFromFile(tipnum int, offsetFile *os.File) (wire.MsgBlock, error) {
-	var datFile [4]byte
-	var offset [4]byte
-
-	//offset file consists of 8 bytes per block
-	//tipnum * 8 gives us the correct position for that block
-	offsetFile.Seek(int64(8*tipnum), 0)
-
-	//Read file and offset for the block
-	offsetFile.Read(datFile[:])
-	offsetFile.Read(offset[:])
-
-	fileName := fmt.Sprintf("blk%05d.dat", int(BtU32(datFile[:])))
-	//Channel to alert stopParse() that offset
-	f, err := os.Open(fileName)
-	if err != nil {
-		panic(err)
-	}
-	//+8 skips the 8 bytes of magicbytes and load size
-	f.Seek(int64(BtU32(offset[:])+8), 0)
-
-	b := new(wire.MsgBlock)
-	err = b.Deserialize(f)
-	if err != nil {
-		panic(err)
-	}
-	offsetFile.Close()
-	f.Close()
-	return *b, nil
-}
-
 //writeBlock writes to the .txos file.
 //Adds - for txinput, - for txoutput, z for unspenable txos, and the height number for that block.
 func writeBlock(b wire.MsgBlock, tipnum int, f *os.File,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
 	//s is the string that gets written to .txos
-	var s string
+	//var s string
 
 	blockBatch := new(leveldb.Batch)
 
 	for blockindex, tx := range b.Transactions {
 		for _, in := range tx.TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
+				//hashing because blockbatch wants a byte slice
 				opString := in.PreviousOutPoint.String()
-				s += "-" + opString + "\n"
-				h := HashFromString(opString)
-				blockBatch.Put(h[:], U32tB(uint32(tipnum)))
+				h := simutil.HashFromString(opString)
+				//s += "-" + opString + "\n"
+				//fmt.Println("just txin:", in.PreviousOutPoint)
+				//fmt.Println("hight:", tipnum)
+				blockBatch.Put(h[:], simutil.U32tB(uint32(tipnum)))
 			}
 		}
 
 		// creates all txos up to index indicated
-		s += "+" + wire.OutPoint{tx.TxHash(), uint32(len(tx.TxOut))}.String()
+		//s += "+" + wire.OutPoint{tx.TxHash(), uint32(len(tx.TxOut))}.String()
 
-		for i, out := range tx.TxOut {
-			if isUnspendable(out) {
-				s += "z" + fmt.Sprintf("%d", i)
-			}
-		}
-		s += "\n"
+		//for i, out := range tx.TxOut {
+		//	if isUnspendable(out) {
+		//		s += "z" + fmt.Sprintf("%d", i)
+		//	}
+		//}
+		//s += "\n"
 	}
 
 	//fmt.Printf("--- sending off %d dels at tipnum %d\n", batch.Len(), tipnum)
 	wg.Add(1)
-	//sent to dbworker to be written to ttldb
+	//sent to dbworker to be written to ttldb asynchronously
 	batchan <- blockBatch
 
-	s += fmt.Sprintf("h: %d\n", tipnum)
+	//s += fmt.Sprintf("h: %d\n", tipnum)
 	//write to the .txos file
-	_, err := f.WriteString(s)
+	//_, err := f.WriteAt(simutil.U32tB(uint32(tipnum))[:], 0)
+	_, err := f.WriteAt(simutil.U32tB(uint32(tipnum)), 0)
 	if err != nil {
 		panic(err)
 	}
@@ -480,41 +363,20 @@ func writeBlock(b wire.MsgBlock, tipnum int, f *os.File,
 	return nil
 }
 
-//isUnspendable determines whether a tx is spenable or not.
-//returns true if spendable, false if unspenable.
-func isUnspendable(o *wire.TxOut) bool {
-	switch {
-	case len(o.PkScript) > 10000: //len 0 is OK, spendable
-		return true
-	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: //OP_RETURN is 0x6a
-		return true
-	default:
-		return false
-	}
-}
+// dbWorker writes everything to the db. It's it's own goroutine so it
+// can work at the same time that the reads are happening
+func dbWorker(
+	bChan chan *leveldb.Batch, lvdb *leveldb.DB, wg *sync.WaitGroup) {
 
-//Converts 4 byte Little Endian slices to uint32.
-//Returns ffffffff if something doesn't work.
-func LBtU32(b []byte) uint32 {
-	if len(b) != 4 {
-		fmt.Printf("Got %x to LBtU32 (%d bytes)\n", b, len(b))
-		return 0xffffffff
-	}
-	var i uint32
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.LittleEndian, &i)
-	return i
-}
-
-//checkMagicByte checks for the Bitcoin magic bytes.
-//returns false if it didn't read the Bitcoin magic bytes.
-func checkMagicByte(bytesgiven [4]byte) bool {
-	if bytesgiven != [4]byte{0x0b, 0x11, 0x09, 0x07} && //testnet
-		bytesgiven != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} { // mainnet
-		fmt.Printf("got non magic bytes %x, finishing\n", bytesgiven)
-		return false
-	} else {
-		return true
+	for {
+		b := <-bChan
+		//		fmt.Printf("--- writing batch %d dels\n", b.Len())
+		err := lvdb.Write(b, nil)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		//		fmt.Printf("wrote %d deletions to leveldb\n", b.Len())
+		wg.Done()
 	}
 }
 
@@ -545,26 +407,4 @@ func stopParse(sig chan bool, offsetfinished chan bool, stopGoing chan bool, run
 
 	fmt.Println("Exiting...")
 	os.Exit(0)
-}
-
-//Reverses the given string.
-//"asdf" becomes "fdsa".
-func reverse(s string) (result string) {
-	for _, v := range s {
-		result = string(v) + result
-	}
-	return
-}
-
-//HasAccess reports whether we have acces to the named file.
-//Returns true if HasAccess, false if it doesn't.
-//Does NOT tell us if the file exists or not.
-//File might exist but may not be available to us
-func HasAccess(fileName string) bool {
-	if _, err := os.Stat(fileName); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
 }
