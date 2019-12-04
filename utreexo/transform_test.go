@@ -160,9 +160,9 @@ func TestTopUp(t *testing.T) {
 	fmt.Printf(BinString(15))
 
 	rows := make([][]uint64, 5)
-	// rows[0] = []uint64{0, 1, 2, 3}
-	rows[1] = []uint64{16, 17, 21}
-	rows[2] = []uint64{23}
+	rows[0] = []uint64{12}
+	rows[1] = []uint64{21}
+	// rows[2] = []uint64{23}
 	topUp(rows, 4)
 
 	fmt.Printf("%v\n", rows)

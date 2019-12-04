@@ -126,50 +126,52 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 
 	// get all the swaps, then apply them all
-	swapswithheight := remTrans2(dels, p.numLeaves, ph)
+	swaprows := remTrans2(dels, p.numLeaves, ph)
 
 	var wg sync.WaitGroup
 	// I dunno 10K is more than you ever hash on 1 row right?
 	hashchan := make(chan hashableNode, 10000)
-	hi := make(chan bool)
-	go hasher(hashchan, hi, wg)
+	sameHeight := make(chan bool)
+	go hasher(hashchan, sameHeight, wg)
+
+	// var h uint8
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
-	hashdirt := make([]uint64, 0, len(swapswithheight))
-	dirt := make([][]uint64, ph)
+	// hashdirt := make([]uint64, 0, len(swapswithheight))
+
 	// swap all the nodes
-	for _, s := range swapswithheight {
-		if s.from == s.to {
-			// TODO should get rid of these upstream
-			continue
-		}
-		hn, err := p.swapNodes(s)
-		if err != nil {
-			return err
+	for _, row := range swaprows {
+		for _, s := range row {
+			if s.from == s.to {
+				// TODO should get rid of these upstream
+				continue
+			}
+
+			hn, err := p.swapNodes(s)
+			if err != nil {
+				return err
+			}
+
+			// if h == s.ht {
+			// 	sameHeight <- true
+			// } else {
+			// 	// got to new height; send remaining dirt
+
+			// 	h = s.ht
+			// }
+
+			hashchan <- *hn
 		}
 
-		hashchan <- *hn
-
-		par := up1(s.to, ph)
-		err = p.reHashOne(par)
-		if err != nil {
-			return err
-		}
-		parpar := up1(par, ph)
-
-		if inForest(parpar, nextNumLeaves, ph) &&
-			(len(hashdirt) == 0 || hashdirt[len(hashdirt)-1] != parpar) {
-			hashdirt = append(hashdirt, parpar)
-		}
+		// if inForest(parpar, nextNumLeaves, ph) &&
+		// (len(hashdirt) == 0 || hashdirt[len(hashdirt)-1] != parpar) {
+		// hashdirt = append(hashdirt, parpar)
+		// }
 
 	}
 
 	var sib *polNode
 	var err error
-	err = p.reHash(dirt)
-	if err != nil {
-		return err
-	}
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]*polNode, len(nextTopPoss))
@@ -458,7 +460,7 @@ func (p *Pollard) reHashOne(pos uint64) error {
 }
 
 // swapNodes swaps the nodes at positions a and b.
-func (p *Pollard) swapNodes(r arrowh) (*hashableNode, error) {
+func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if !inForest(r.from, p.numLeaves, p.height()) ||
 		!inForest(r.to, p.numLeaves, p.height()) {
 		return nil, fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)

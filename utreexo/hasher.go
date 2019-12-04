@@ -29,21 +29,18 @@ to tick between rows.  Wait on the extrnal one to make sure everything's done.
 
 // hasher is the routine that accepts hashableNodeWithHeights and does em all
 // It doesn't give an indication that it's finished, but if you've sent
-func hasher(hashChan chan hashableNode, higher chan bool, extWg sync.WaitGroup) {
+func hasher(hashChan chan hashableNode, same chan bool, extWg sync.WaitGroup) {
 	var rowWg sync.WaitGroup
 	for {
-
-		incoming := <-hashChan
-
-		rowWg.Add(1)
-		go incoming.run(rowWg, extWg)
-
 		select {
-		case <-higher:
-			rowWg.Wait()
+		case <-same:
 		default:
+			rowWg.Wait()
 		}
 
+		incoming := <-hashChan
+		rowWg.Add(1)
+		go incoming.run(rowWg, extWg)
 	}
 }
 

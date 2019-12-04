@@ -329,14 +329,14 @@ func subTreeLeafRange(
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrowh) toLeaves(forestHeight uint8) []arrow {
-	if a.ht == 0 {
-		return []arrow{arrow{from: a.from, to: a.to}}
+func (a *arrow) toLeaves(h, forestHeight uint8) []arrow {
+	if h == 0 {
+		return []arrow{*a}
 	}
 
-	run := uint64(1 << a.ht)
-	fromStart := childMany(a.from, a.ht, forestHeight)
-	toStart := childMany(a.to, a.ht, forestHeight)
+	run := uint64(1 << h)
+	fromStart := childMany(a.from, h, forestHeight)
+	toStart := childMany(a.to, h, forestHeight)
 
 	leaves := make([]arrow, run)
 	for i := uint64(0); i < run; i++ {
