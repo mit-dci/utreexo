@@ -29,24 +29,32 @@ to tick between rows.  Wait on the extrnal one to make sure everything's done.
 
 // hasher is the routine that accepts hashableNodeWithHeights and does em all
 // It doesn't give an indication that it's finished, but if you've sent
-func hasher(hashChan chan hashableNode, same chan bool, extWg sync.WaitGroup) {
+func hasher(hashChan chan hashableNode, hold chan bool, extWg sync.WaitGroup) {
 	var rowWg sync.WaitGroup
 	for {
+
+		incoming := <-hashChan        // grab hashable
+		rowWg.Add(1)                  // add to row waitgroup
+		go incoming.run(rowWg, extWg) // hand off to hashing
+
 		select {
-		case <-same:
+		case <-hold: // if we get a hold signal
+			rowWg.Wait() // wait until row is finished before continuing
 		default:
-			rowWg.Wait()
 		}
 
-		incoming := <-hashChan
-		rowWg.Add(1)
-		go incoming.run(rowWg, extWg)
 	}
 }
 
+// hashableNode is the data needed to perform a hash
 type hashableNode struct {
 	l, r, p *Hash
 }
+
+// this should work, right?  like the pointeryness?  Because swapnodes doesn't
+// change pointers.  Well it changes niece pointers, but the data itself changes
+// so the data is "there" in a static structure so I can use pointers to it
+// and it won't move around.  hopefully.
 
 func (n *hashableNode) run(wga, wgb sync.WaitGroup) {
 	*n.p = Parent(*n.l, *n.r)

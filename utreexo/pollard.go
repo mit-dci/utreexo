@@ -131,17 +131,15 @@ func (p *Pollard) rem2(dels []uint64) error {
 	var wg sync.WaitGroup
 	// I dunno 10K is more than you ever hash on 1 row right?
 	hashchan := make(chan hashableNode, 10000)
-	sameHeight := make(chan bool)
-	go hasher(hashchan, sameHeight, wg)
-
-	// var h uint8
+	hold := make(chan bool)
+	go hasher(hashchan, hold, wg)
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
-	// hashdirt := make([]uint64, 0, len(swapswithheight))
+	var hashdirt []uint64
 
 	// swap all the nodes
-	for _, row := range swaprows {
-		for _, s := range row {
+	for h := uint8(0); h < ph; h++ {
+		for _, s := range swaprows[h] {
 			if s.from == s.to {
 				// TODO should get rid of these upstream
 				continue
@@ -152,23 +150,44 @@ func (p *Pollard) rem2(dels []uint64) error {
 				return err
 			}
 
-			// if h == s.ht {
-			// 	sameHeight <- true
-			// } else {
-			// 	// got to new height; send remaining dirt
+			// TODO some of these hashes are useless as they end up outside
+			// the forest.  Example, leaves 0...7, delete 4,5,6.  7 moves
+			// to 4, and 10 gets hashed but discarded.  maybe this only happens
+			// when something is moving TO a new top location?  If it is, that's
+			// easy enough to check and skip the hashing.
 
-			// 	h = s.ht
-			// }
-
+			// aside from TODO above, always hash the parent of swap "to"
+			// note that we never have two siblings receiving "tos"
+			// oh but we might get multiple copies of the same to...? nah
 			hashchan <- *hn
+
+			// par := up1(s.to, ph)
+			// we just sent work for position par, so remove that from hashdirt
+			// if it's in there [how?]
+			// TODO
+
+			// is parent's parent in forest?
+			parpar := upMany(s.to, 2, ph)
+			if inForest(parpar, p.numLeaves, ph) {
+				// if so, and it's not already in hashdirt, add it
+				if len(hashdirt) == 0 || hashdirt[len(hashdirt)-1] != s.to {
+					hashdirt = append(hashdirt, parpar)
+				}
+			}
+
+		}
+		// done with swaps for this row, now hashdirt
+
+		// send hold signal at the end of the row
+		hold <- true
+
+		// build hashable nodes from hashdirt
+		for _, hd := range hashdirt {
+			p.grabPos(hd)
 		}
 
-		// if inForest(parpar, nextNumLeaves, ph) &&
-		// (len(hashdirt) == 0 || hashdirt[len(hashdirt)-1] != parpar) {
-		// hashdirt = append(hashdirt, parpar)
-		// }
-
 	}
+	wg.Wait() // wait for all hashing to finish
 
 	var sib *polNode
 	var err error
@@ -490,6 +509,17 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	fmt.Printf("swapNodes siblings of %x with %x\n",
 		asib.data[:4], bsib.data[:4])
 
+	// do the actual swap here
+	err = polSwap(a, asib, b, bsib)
+	if err != nil {
+		return nil, err
+	}
+
+	// if there is no parent, we're swapping something in to an
+	if par == nil {
+		return nil, nil
+	}
+
 	hn := new(hashableNode)
 	hn.p = &par.data
 	if r.to&1 == 0 { // if to is even, it's on the left
@@ -498,7 +528,7 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 		hn.l, hn.r = &bsib.data, &b.data
 	}
 
-	return hn, polSwap(a, asib, b, bsib)
+	return hn, nil
 }
 
 // moveNode moves a node from one place to another.  Note that it leaves the
@@ -557,17 +587,19 @@ func (p *Pollard) grabPos(pos uint64) (n, nsib, npar *polNode, err error) {
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := (bits >> h) & 1
 		if h == 0 { // if at bottom, done
+			npar = nsib
 			n, nsib = n.niece[lr^1], n.niece[lr]
 			return
 		}
-		npar = n
 		n = n.niece[lr]
+		nsib = n.niece[lr^1]
 		if n == nil {
 			err = fmt.Errorf("grab %d nil neice at height %d", pos, h)
 			return
 		}
 	}
 	return // only happens when returning a top
+	// in which case npar will be nil
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
