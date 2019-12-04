@@ -30,7 +30,7 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 // also returns all "dirty" positions which need to be hashed after the swaps
 
 func remTrans2(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrowh, [][]uint64) {
+	dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 	nextNumLeaves := numLeaves - uint64(len(dels))
 	// fHeight := treeHeight(numLeaves)
 	var swaps, collapses []arrowh
@@ -110,7 +110,7 @@ func remTrans2(
 	}
 
 	// topUp(fHeight)
-	return swaps, nil
+	return swaps
 }
 
 // swapCollapses modifies to field of arrows for root collapse
@@ -338,7 +338,7 @@ func removeTransformx(
 func floorTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
-	td, _ := remTrans2(dels, numLeaves, fHeight)
+	td := remTrans2(dels, numLeaves, fHeight)
 	fmt.Printf("td output %v\n", td)
 
 	var floor []arrow

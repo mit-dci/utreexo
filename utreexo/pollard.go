@@ -1,6 +1,9 @@
 package utreexo
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 // Modify is the main function that deletes then adds elements to the accumulator
 func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
@@ -123,7 +126,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 
 	// get all the swaps, then apply them all
-	swapswithheight, _ := remTrans2(dels, p.numLeaves, ph)
+	swapswithheight := remTrans2(dels, p.numLeaves, ph)
+
+	var wg sync.WaitGroup
+	// I dunno 10K is more than you ever hash on 1 row right?
+	hashchan := make(chan hashableNode, 10000)
+	hi := make(chan bool)
+	go hasher(hashchan, hi, wg)
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
 	hashdirt := make([]uint64, 0, len(swapswithheight))
@@ -134,13 +143,12 @@ func (p *Pollard) rem2(dels []uint64) error {
 			// TODO should get rid of these upstream
 			continue
 		}
-		err := p.swapNodes(s)
+		hn, err := p.swapNodes(s)
 		if err != nil {
 			return err
 		}
-		// if s.ht > 1 { // move lower dirt
 
-		// }
+		hashchan <- *hn
 
 		par := up1(s.to, ph)
 		err = p.reHashOne(par)
@@ -166,7 +174,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]*polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		nexTops[i], sib, err = p.grabPos(nextTopPoss[i])
+		nexTops[i], sib, _, err = p.grabPos(nextTopPoss[i])
 		if err != nil {
 			return err
 		}
@@ -450,35 +458,45 @@ func (p *Pollard) reHashOne(pos uint64) error {
 }
 
 // swapNodes swaps the nodes at positions a and b.
-func (p *Pollard) swapNodes(r arrowh) error {
+func (p *Pollard) swapNodes(r arrowh) (*hashableNode, error) {
 	if !inForest(r.from, p.numLeaves, p.height()) ||
 		!inForest(r.to, p.numLeaves, p.height()) {
-		return fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)
+		return nil, fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)
 	}
 
-	// what to do: swap a & b.  To do that, you need to get the thing that
-	// points to a & b, so the pointer to the pointer.
+	// currently swaps the "values" instead of changing what parents point
+	// to.  Seems easier to reason about but maybe slower?  But probably
+	// doesn't matter that much because it's changing 8 bytes vs 30-something
 
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 
-	a, asib, err := p.grabPos(r.from)
+	a, asib, _, err := p.grabPos(r.from)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	b, bsib, err := p.grabPos(r.to)
+	b, bsib, par, err := p.grabPos(r.to)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if asib == nil || bsib == nil {
-		return fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
+		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
 	}
 	fmt.Printf("swapNodes swapping %d %x with %d %x\n",
 		r.from, a.data[:4], r.to, b.data[:4])
 
 	fmt.Printf("swapNodes siblings of %x with %x\n",
 		asib.data[:4], bsib.data[:4])
-	return polSwap(a, asib, b, bsib)
+
+	hn := new(hashableNode)
+	hn.p = &par.data
+	if r.to&1 == 0 { // if to is even, it's on the left
+		hn.l, hn.r = &b.data, &bsib.data
+	} else { // otherwise it's on the right
+		hn.l, hn.r = &bsib.data, &b.data
+	}
+
+	return hn, polSwap(a, asib, b, bsib)
 }
 
 // moveNode moves a node from one place to another.  Note that it leaves the
@@ -528,18 +546,19 @@ func (p *Pollard) swapNodesx(r arrowh) error {
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
 // as well as its sibling.  And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
-func (p *Pollard) grabPos(pos uint64) (n, nsib *polNode, err error) {
+func (p *Pollard) grabPos(pos uint64) (n, nsib, npar *polNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	bits = ^bits
 	n = p.tops[tree]
 	nsib = n
-	for h := branchLen - 1; h != 255; h-- {
+	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := (bits >> h) & 1
-		if h == 0 {
+		if h == 0 { // if at bottom, done
 			n, nsib = n.niece[lr^1], n.niece[lr]
 			return
 		}
+		npar = n
 		n = n.niece[lr]
 		if n == nil {
 			err = fmt.Errorf("grab %d nil neice at height %d", pos, h)
@@ -648,7 +667,7 @@ func (p *Pollard) equalToForest(f *Forest) bool {
 	}
 
 	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
-		n, _, err := p.grabPos(leafpos)
+		n, _, _, err := p.grabPos(leafpos)
 		if err != nil {
 			return false
 		}
