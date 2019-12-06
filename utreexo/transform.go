@@ -1,9 +1,5 @@
 package utreexo
 
-import (
-	"fmt"
-)
-
 /*
 The transform operations can probably be moved into a different package even.
 They're some of the tricky parts of utreexo, on how to rearrange the forest nodes
@@ -117,7 +113,7 @@ func swapCollapses(swaps, collapses []arrowh, fh uint8) {
 	if len(collapses) == 0 {
 		return
 	}
-	fmt.Printf("swapCollapses on swaps %v collapses %v\n", swaps, collapses)
+	// fmt.Printf("swapCollapses on swaps %v collapses %v\n", swaps, collapses)
 
 	// si, ci are indexes for swaps and collapses
 	si, ci := len(swaps)-1, len(collapses)-1
@@ -125,18 +121,18 @@ func swapCollapses(swaps, collapses []arrowh, fh uint8) {
 	// go down from fh.  swaps at h0 can't modify anything so stop at 1
 	// if si or ci get to -1 the
 	for h := fh; h > 0; h-- {
-		fmt.Printf("swapCol h %d\n", h)
+		// fmt.Printf("swapCol h %d\n", h)
 		// tick through swaps at this height
 		for si >= 0 && swaps[si].ht == h {
 			// do swap on lower collapses
 			for i, c := range collapses {
-				fmt.Printf("swap %v on col %v\n", swaps[si], c)
+				// fmt.Printf("swap %v on col %v\n", swaps[si], c)
 				if c.ht < h {
 					mask := swapIfDescendant(swaps[si], c, fh)
 					if mask != 0 {
-						fmt.Printf("****col %v becomes ", c)
+						// fmt.Printf("****col %v becomes ", c)
 						collapses[i].to ^= mask
-						fmt.Printf("%v due to %v\n", c, collapses[ci])
+						// fmt.Printf("%v due to %v\n", c, collapses[ci])
 					}
 				}
 			}
@@ -145,13 +141,13 @@ func swapCollapses(swaps, collapses []arrowh, fh uint8) {
 		if ci >= 0 && collapses[ci].ht == h {
 			// do collapse on lower collapses
 			for i, c := range collapses {
-				fmt.Printf("col %v on col %v\n", collapses[ci], c)
+				// fmt.Printf("col %v on col %v\n", collapses[ci], c)
 				if c.ht < h {
 					mask := swapIfDescendant(collapses[ci], c, fh)
 					if mask != 0 {
-						fmt.Printf("****col %v becomes ", c)
+						// fmt.Printf("****col %v becomes ", c)
 						collapses[i].to ^= mask
-						fmt.Printf("%v due to %v\n", c, collapses[ci])
+						// fmt.Printf("%v due to %v\n", c, collapses[ci])
 					}
 				}
 			}
@@ -176,8 +172,8 @@ func swapIfDescendant(a, b arrowh, fh uint8) (subMask uint64) {
 		// b.to is below one but not both, swap it
 		topMask := a.from ^ a.to
 		subMask = topMask << hdiff
-		fmt.Printf("collapse %d->%d to %d->%d because of %v\n",
-			b.from, b.to, b.from, b.to^subMask, a)
+		// fmt.Printf("collapse %d->%d to %d->%d because of %v\n",
+		// b.from, b.to, b.from, b.to^subMask, a)
 
 	}
 	return subMask
@@ -281,7 +277,7 @@ func removeTransform(
 			delPos = dels[0]
 			haveDel = true
 		}
-		fmt.Printf("h %d haveDel %v rootpresent %v\n", h, haveDel, rootPresent)
+		// fmt.Printf("h %d haveDel %v rootpresent %v\n", h, haveDel, rootPresent)
 
 		if haveDel && rootPresent {
 			// deroot, move to sibling
@@ -316,8 +312,8 @@ func removeTransform(
 		up1DelSlice = []uint64{}
 	}
 	if len(dels) != 0 {
-		fmt.Printf("finished deletion climb but %d deletion left %v",
-			len(dels), dels)
+		// fmt.Printf("finished deletion climb but %d deletion left %v",
+		// len(dels), dels)
 		return nil, nil
 	}
 
