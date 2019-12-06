@@ -142,7 +142,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 		return nil
 	}
 	tops, topheights := getTopsReverse(f.numLeaves, f.height)
-	fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
+	// fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
 
 	dirty2d := make([][]uint64, f.height)
 	h := uint8(0)
@@ -157,7 +157,8 @@ func (f *Forest) reHash(dirt []uint64) error {
 			h++
 		}
 		if h > f.height {
-			return fmt.Errorf("postion %d at height %d but forest only %d high", pos, h, f.height)
+			return fmt.Errorf("postion %d at height %d but forest only %d high",
+				pos, h, f.height)
 		}
 		// if bridgeVerbose {
 		// fmt.Printf("h %d\n", h)

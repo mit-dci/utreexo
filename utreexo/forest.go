@@ -81,7 +81,7 @@ func NewForest() *Forest {
 }
 
 const sibSwap = false
-const bridgeVerbose = true
+const bridgeVerbose = false
 
 // empty is needed for detection (to find errors) but I'm not sure it's needed
 // for deletion.  I think you can just leave garbage around, as it'll either
@@ -123,9 +123,9 @@ func (f *Forest) removev3(dels []uint64) error {
 
 	var dirt []uint64
 
-	fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
+	// fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
 	swaps := floorTransform(dels, f.numLeaves, f.height)
-	fmt.Printf("v3 got swaps: %v\n", swaps)
+	// fmt.Printf("v3 got swaps: %v\n", swaps)
 
 	// TODO definitely not how to do this, way inefficient
 	// dirt should be on the top, this is redundant
@@ -146,7 +146,7 @@ func (f *Forest) removev3(dels []uint64) error {
 		m := f.forest[d].Mini()
 		oldpos := f.positionMap[m]
 		if oldpos != d {
-			fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
+			// fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
 			delete(f.positionMap, m)
 			f.positionMap[m] = d
 		}
@@ -155,10 +155,10 @@ func (f *Forest) removev3(dels []uint64) error {
 	f.numLeaves = nextNumLeaves
 	// f.cleanup()
 
-	err := f.sanity()
-	if err != nil {
-		return err
-	}
+	// err := f.sanity()
+	// if err != nil {
+	// 	return err
+	// }
 	return f.reHash(dirt)
 }
 
@@ -223,8 +223,8 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	delta := numadds - numdels // watch 32/64 bit
 	// remap to expand the forest if needed
 	for f.numLeaves+delta > 1<<f.height {
-		fmt.Printf("current cap %d need %d\n",
-			1<<f.height, f.numLeaves+delta)
+		// fmt.Printf("current cap %d need %d\n",
+		// 1<<f.height, f.numLeaves+delta)
 		err := f.reMap(f.height + 1)
 		if err != nil {
 			return nil, err
@@ -245,13 +245,13 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 
 	f.addv2(adds)
 
-	fmt.Printf("done modifying block, added %d\n", len(adds))
+	// fmt.Printf("done modifying block, added %d\n", len(adds))
 	// fmt.Printf("post add %s\n", f.ToString())
 	// for m, p := range f.positionMap {
 	// 	fmt.Printf("%x @%d\t", m[:4], p)
 	// }
 	// fmt.Printf("\n")
-	err = f.sanity()
+	// err = f.sanity()
 	return ub, err
 }
 

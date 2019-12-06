@@ -30,10 +30,10 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 	nextNumLeaves := numLeaves - uint64(len(dels))
 	// fHeight := treeHeight(numLeaves)
 	var swaps, collapses []arrowh
-	fmt.Printf("rt2 on %v\n", dels)
+	// fmt.Printf("rt2 on %v\n", dels)
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h < fHeight; h++ {
-		fmt.Printf("h %d del %v col %v\n", h, dels, collapses)
+		// fmt.Printf("h %d del %v col %v\n", h, dels, collapses)
 		if len(dels) == 0 { // if there's nothing to delete, we're done
 			break
 		}
@@ -45,7 +45,7 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 		// TODO would be more elegant not to have this here.  But
 		// easier to just delete the root first...
 		if rootPresent && dels[len(dels)-1] == rootPos {
-			fmt.Printf("deleting root %d\n", rootPos)
+			// fmt.Printf("deleting root %d\n", rootPos)
 			dels = dels[:len(dels)-1] // pop off the last del
 			rootPresent = false
 		}
@@ -76,7 +76,7 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 			rootDest := topPos(nextNumLeaves, h, fHeight)
 			collapses = append(collapses,
 				arrowh{from: rootSrc, to: rootDest, ht: h})
-			fmt.Printf("%d root, collapse to %d\n", rootSrc, rootDest)
+			// fmt.Printf("%d root, collapse to %d\n", rootSrc, rootDest)
 		}
 		// no root but 1 del: sibling becomes root & collapses
 		// in this case, mark as deleted
@@ -85,7 +85,7 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 			rootDest := topPos(nextNumLeaves, h, fHeight)
 			collapses = append(collapses,
 				arrowh{from: rootSrc, to: rootDest, ht: h})
-			fmt.Printf("%d promote to root, collapse to %d\n", rootSrc, rootDest)
+			// fmt.Printf("%d promote to root, collapse to %d\n", rootSrc, rootDest)
 			swapNextDels = append(swapNextDels, up1(dels[0], fHeight))
 		}
 		// if neither haveDel nor rootPresent, nothing to do
@@ -96,7 +96,7 @@ func remTrans2(dels []uint64, numLeaves uint64, fHeight uint8) []arrowh {
 
 	swapCollapses(swaps, collapses, fHeight)
 
-	fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
+	// fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
 
 	// merge slice of collapses, placing the collapses at the end of the row
 	si := 0
@@ -338,26 +338,26 @@ func reverseArrowSlice(as []arrow) {
 // floorTransform calles remTrans2 and expands it to give all leaf swaps
 func floorTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
-	fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
+	// fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
 	td := remTrans2(dels, numLeaves, fHeight)
-	fmt.Printf("td output %v\n", td)
+	// fmt.Printf("td output %v\n", td)
 
 	var floor []arrow
 
-	fmt.Printf("raw: ")
+	// fmt.Printf("raw: ")
 	for _, a := range td {
-		fmt.Printf("%d -> %d\t", a.from, a.to)
+		// fmt.Printf("%d -> %d\t", a.from, a.to)
 		if a.from == a.to {
-			fmt.Printf("omitting ################# %d -> %d\n", a.to, a.to)
+			// fmt.Printf("omitting ################# %d -> %d\n", a.to, a.to)
 			continue
 			// TODO: why do these even exist?  get rid of them from
 			// removeTransform output?
 		}
 		leaves := a.toLeaves(fHeight)
-		fmt.Printf(" leaf: ")
+		// fmt.Printf(" leaf: ")
 
 		for _, l := range leaves {
-			fmt.Printf("%d -> %d\t", l.from, l.to)
+			// fmt.Printf("%d -> %d\t", l.from, l.to)
 			floor = append(floor, l)
 			// can cutthrough work..?
 
@@ -370,10 +370,10 @@ func floorTransform(
 			// arMap[l.from] = l.to
 			// }
 		}
-		fmt.Printf("\n")
+		// fmt.Printf("\n")
 	}
 
-	fmt.Printf("floor: %v\n", floor)
+	// fmt.Printf("floor: %v\n", floor)
 
 	return floor
 }
