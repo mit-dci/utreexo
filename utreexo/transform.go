@@ -111,8 +111,9 @@ func remTrans2(
 }
 
 func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
-	for h := uint8(len(collapses) - 1); h > 0; h-- {
+	for h := uint8(len(collapses)) - 1; h != 255; h-- {
 		// go through through swaps at this height
+		fmt.Printf("h %d swaps %v\n", h, swaps)
 		for _, s := range swaps[h] {
 			for ch := uint8(0); ch < h; ch++ {
 				c := collapses[ch]

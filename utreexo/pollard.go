@@ -128,17 +128,19 @@ func (p *Pollard) rem2(dels []uint64) error {
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
 
-	var wg sync.WaitGroup
+	xwg := new(sync.WaitGroup)
 	// I dunno 10K is more than you ever hash on 1 row right?
 	hashchan := make(chan hashableNode, 10000)
-	hold := make(chan bool)
-	go hasher(hashchan, hold, wg)
+	hold := make(chan bool, 64) // can't have more than 64 holds..
+	go hasher(hashchan, hold, xwg)
 
 	fmt.Printf(" @@@@@@ rem2 rem %v\n", dels)
 	var hashdirt []uint64
 
 	// swap all the nodes
 	for h := uint8(0); h < ph; h++ {
+		// send hold signal at the beginning of the row
+		hold <- true
 		for _, s := range swaprows[h] {
 			if s.from == s.to {
 				// TODO should get rid of these upstream
@@ -159,6 +161,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 			// aside from TODO above, always hash the parent of swap "to"
 			// note that we never have two siblings receiving "tos"
 			// oh but we might get multiple copies of the same to...? nah
+			xwg.Add(1)
+			fmt.Printf("send %d to hasher\n", up1(s.to, ph))
 			hashchan <- *hn
 
 			// par := up1(s.to, ph)
@@ -174,12 +178,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 					hashdirt = append(hashdirt, parpar)
 				}
 			}
-
 		}
 		// done with swaps for this row, now hashdirt
-
-		// send hold signal at the end of the row
-		hold <- true
 
 		// build hashable nodes from hashdirt
 		for _, hd := range hashdirt {
@@ -187,7 +187,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		}
 
 	}
-	wg.Wait() // wait for all hashing to finish
+	xwg.Wait() // wait for all hashing to finish
 
 	var sib *polNode
 	var err error
@@ -503,11 +503,11 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if asib == nil || bsib == nil {
 		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
 	}
-	fmt.Printf("swapNodes swapping %d %x with %d %x\n",
-		r.from, a.data[:4], r.to, b.data[:4])
+	// fmt.Printf("swapNodes swapping %d %x with %d %x\n",
+	// 	r.from, a.data[:4], r.to, b.data[:4])
 
-	fmt.Printf("swapNodes siblings of %x with %x\n",
-		asib.data[:4], bsib.data[:4])
+	// fmt.Printf("swapNodes siblings of %x with %x\n",
+	// 	asib.data[:4], bsib.data[:4])
 
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
@@ -527,7 +527,7 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	} else { // otherwise it's on the right
 		hn.l, hn.r = &bsib.data, &b.data
 	}
-
+	fmt.Printf("swap %v made hn %x %x %x\n", r, hn.l[:4], hn.r[:4], hn.p[:4])
 	return hn, nil
 }
 
@@ -580,19 +580,23 @@ func (p *Pollard) swapNodesx(r arrowh) error {
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(pos uint64) (n, nsib, npar *polNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
-	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	bits = ^bits
-	n = p.tops[tree]
-	nsib = n
+	n, nsib = p.tops[tree], p.tops[tree]
+	// nsib, npar = n, n
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := (bits >> h) & 1
 		if h == 0 { // if at bottom, done
 			npar = nsib
 			n, nsib = n.niece[lr^1], n.niece[lr]
+			// fmt.Printf("h%d n %x nsib %x npar %x\n",
+			// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
 			return
 		}
-		n = n.niece[lr]
-		nsib = n.niece[lr^1]
+		npar = n
+		n, nsib = n.niece[lr], n.niece[lr^1]
+		// fmt.Printf("h%d n %x nsib %x npar %x\n",
+		// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
 		if n == nil {
 			err = fmt.Errorf("grab %d nil neice at height %d", pos, h)
 			return
