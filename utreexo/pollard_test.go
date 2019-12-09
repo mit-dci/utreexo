@@ -7,7 +7,7 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	rand.Seed(1)
+	rand.Seed(3)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
@@ -97,7 +97,7 @@ func pollardRandomRemember(blocks int32) error {
 			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
-					sn.blockHeight, i, ft, polTops[i])
+					sn.blockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
 		fmt.Printf("\n")
