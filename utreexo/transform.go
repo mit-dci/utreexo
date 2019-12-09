@@ -121,7 +121,7 @@ func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
 				if mask != 0 {
 					fmt.Printf("****col %v becomes ", c)
 					collapses[ch].to ^= mask
-					fmt.Printf("%v due to %v\n", collapses[ch].to, s)
+					fmt.Printf("%v due to %v\n", collapses[ch], s)
 				}
 			}
 		}

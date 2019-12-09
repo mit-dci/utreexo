@@ -13,7 +13,7 @@ import "fmt"
 type Pollard struct {
 	numLeaves uint64 // number of leaves in the pollard forest
 
-	tops []*polNode // slice of the tree tops, which are polNodes.
+	tops []polNode // slice of the tree tops, which are polNodes.
 	// tops are in big to small order
 	// BUT THEY'RE WEIRD!  The left / right children are actual children,
 	// not neices as they are in every lower level.
@@ -54,6 +54,26 @@ func (n *polNode) deadEnd() bool {
 func (n *polNode) chop() {
 	n.niece[0] = nil
 	n.niece[1] = nil
+}
+
+//  printout printfs the node
+func (n *polNode) printout() {
+	if n == nil {
+		fmt.Printf("nil node\n")
+		return
+	}
+	fmt.Printf("Node %x ", n.data[:4])
+	if n.niece[0] == nil {
+		fmt.Printf("l nil ")
+	} else {
+		fmt.Printf("l %x ", n.niece[0].data[:4])
+	}
+	if n.niece[1] == nil {
+		fmt.Printf("r nil\n")
+	} else {
+		fmt.Printf("r %x\n", n.niece[1].data[:4])
+	}
+	return
 }
 
 // prune prunes deadend children.

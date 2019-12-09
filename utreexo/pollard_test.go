@@ -28,13 +28,13 @@ func TestPollardRand(t *testing.T) {
 }
 
 func TestPollardFixed(t *testing.T) {
-	rand.Seed(9)
+	rand.Seed(2)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(16)
+	err := fixedPollard(11)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,6 +82,8 @@ func pollardRandomRemember(blocks int32) error {
 
 		fmt.Printf("pol postadd %s", p.toString())
 
+		fmt.Printf("frs postadd %s", f.toString())
+
 		fullTops := f.GetTops()
 		polTops := p.topHashesReverse()
 
@@ -94,7 +96,6 @@ func pollardRandomRemember(blocks int32) error {
 		for i, ft := range fullTops {
 			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
-				fmt.Printf("forrest %s", f.toString())
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
 					sn.blockHeight, i, ft, polTops[i])
 			}
@@ -112,7 +113,7 @@ func fixedPollard(leaves int32) error {
 
 	leafCounter := uint64(0)
 
-	dels := []uint64{2}
+	dels := []uint64{2, 5, 6}
 
 	// they're all forgettable
 	adds := make([]LeafTXO, leaves)

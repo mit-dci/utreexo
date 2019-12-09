@@ -85,22 +85,22 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// the first 0 you find you're going to turn into a 1.
 
 	// make the new leaf & populate it with the actual data you're trying to add
-	n := new(polNode)
+	var n polNode
 	n.data = add
 	if remember {
 		// flag this leaf as memorable via it's left pointer
-		n.niece[0] = n // points to itself (mind blown)
+		n.niece[0] = &n // points to itself (mind blown)
 	}
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
 	// loop until we find a zero; destroy tops until you make one
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
-		leftTop := p.tops[len(p.tops)-1]                          // grab
-		p.tops = p.tops[:len(p.tops)-1]                           // pop
-		leftTop.niece, n.niece = n.niece, leftTop.niece           // swap
-		nHash := Parent(leftTop.data, n.data)                     // hash
-		n = &polNode{data: nHash, niece: [2]*polNode{leftTop, n}} // new
+		leftTop := p.tops[len(p.tops)-1]                           // grab
+		p.tops = p.tops[:len(p.tops)-1]                            // pop
+		leftTop.niece, n.niece = n.niece, leftTop.niece            // swap
+		nHash := Parent(leftTop.data, n.data)                      // hash
+		n = polNode{data: nHash, niece: [2]*polNode{&leftTop, &n}} // new
 		p.hashesEver++
 
 		n.prune()
@@ -130,7 +130,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	xwg := new(sync.WaitGroup)
 	// I dunno 10K is more than you ever hash on 1 row right?
-	hashchan := make(chan hashableNode, 10000)
+	hashchan := make(chan *hashableNode, 10000)
 	hold := make(chan bool, 64) // can't have more than 64 holds..
 	go hasher(hashchan, hold, xwg)
 
@@ -163,7 +163,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 			// oh but we might get multiple copies of the same to...? nah
 			xwg.Add(1)
 			fmt.Printf("send %d to hasher\n", up1(s.to, ph))
-			hashchan <- *hn
+			hashchan <- hn
 
 			// par := up1(s.to, ph)
 			// we just sent work for position par, so remove that from hashdirt
@@ -189,23 +189,27 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 	xwg.Wait() // wait for all hashing to finish
 
-	var sib *polNode
-	var err error
+	// var sib *polNode
+
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
-	nexTops := make([]*polNode, len(nextTopPoss))
+	nexTops := make([]polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		nexTops[i], sib, _, err = p.grabPos(nextTopPoss[i])
+		nti, _, _, _, err := p.grabPos(nextTopPoss[i])
 		if err != nil {
 			return err
 		}
-		if sib != nil {
-			// set neices to sib's neices as tops neices are really children
-			nexTops[i].niece = sib.niece
+		if nti == nil {
+			return fmt.Errorf("want top %d at %d but nil", i, nextTopPoss[i])
 		}
+		nexTops[i] = *nti
+		// if sib != nil {
+		// set neices to sib's neices as tops neices are really children
+		// nexTops[i].niece = sib.niece
+		// }
 
-		fmt.Printf("set nextTop %d to old %d %x\n",
-			i, nextTopPoss[i], nexTops[i].data)
+		// fmt.Printf("set nextTop %d to old %d %x\n",
+		// i, nextTopPoss[i], nexTops[i].data)
 	}
 
 	p.numLeaves = nextNumLeaves
@@ -285,7 +289,7 @@ func (p *Pollard) remx(dels []uint64) error {
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 	overlap := p.numLeaves & nextNumLeaves
 	// remove tops and add empty tops based just on popcount
-	nexTops := make([]*polNode, PopCount(nextNumLeaves))
+	nexTops := make([]polNode, PopCount(nextNumLeaves))
 	// keeping track of these separately is annoying.  I'm sure there's a
 	// clever bit shifty way to not need to do this.  It doesn't actually
 	// take any cpu time or ram though.
@@ -346,7 +350,7 @@ func (p *Pollard) remx(dels []uint64) error {
 		fmt.Printf("this row top %d\n", curRowTop)
 		// go through moves for this height
 		for len(moves) > 0 && detectHeight(moves[0].to, ph) == h {
-			if len(p.tops) == 0 || p.tops[0] == nil {
+			if len(p.tops) == 0 {
 				return fmt.Errorf("no tops")
 			}
 			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
@@ -388,7 +392,7 @@ func (p *Pollard) remx(dels []uint64) error {
 				sibs[0].chop()
 			}
 
-			nexTops[nexTopIdx] = sibs[0]
+			nexTops[nexTopIdx] = *sibs[0]
 			stash = stash[1:]
 		}
 
@@ -479,6 +483,7 @@ func (p *Pollard) reHashOne(pos uint64) error {
 }
 
 // swapNodes swaps the nodes at positions a and b.
+// returns a hashable node with b, bsib, and bpar
 func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if !inForest(r.from, p.numLeaves, p.height()) ||
 		!inForest(r.to, p.numLeaves, p.height()) {
@@ -492,11 +497,11 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 
-	a, asib, _, err := p.grabPos(r.from)
+	a, asib, apar, alr, err := p.grabPos(r.from)
 	if err != nil {
 		return nil, err
 	}
-	b, bsib, par, err := p.grabPos(r.to)
+	b, bsib, bpar, blr, err := p.grabPos(r.to)
 	if err != nil {
 		return nil, err
 	}
@@ -508,20 +513,35 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 
 	// fmt.Printf("swapNodes siblings of %x with %x\n",
 	// 	asib.data[:4], bsib.data[:4])
+	alr ^= 1
+	blr ^= 1
+
+	apar.printout()
+	bpar.printout()
 
 	// do the actual swap here
-	err = polSwap(a, asib, b, bsib)
-	if err != nil {
-		return nil, err
+	// if a parent is nil, that's OK; the non-parent is being deleted
+	if apar == nil {
+		bpar.niece[blr] = a
+	} else if bpar == nil { // bpar should never be nil?
+		panic("bpar should never be nil?")
+		apar.niece[blr] = b
+	} else {
+		apar.niece[alr], bpar.niece[blr] = bpar.niece[blr], apar.niece[alr]
 	}
 
-	// if there is no parent, we're swapping something in to an
-	if par == nil {
+	// err = polSwap(a, asib, b, bsib)
+	// if err != nil {
+	// return nil, err
+	// }
+
+	// if there is no parent, we're swapping something in to a root
+	if bpar == nil {
 		return nil, nil
 	}
 
 	hn := new(hashableNode)
-	hn.p = &par.data
+	hn.p = &bpar.data
 	if r.to&1 == 0 { // if to is even, it's on the left
 		hn.l, hn.r = &b.data, &bsib.data
 	} else { // otherwise it's on the right
@@ -531,61 +551,18 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	return hn, nil
 }
 
-// moveNode moves a node from one place to another.  Note that it leaves the
-// node in the "from" place to be dealt with some other way.
-// Also it hashes new parents so the hashes & pointers are consistent.
-func (p *Pollard) swapNodesx(r arrowh) error {
-
-	pra, siba, err := p.descendToPos(r.from)
-	if err != nil {
-		return fmt.Errorf("from %s", err.Error())
-	}
-
-	prb, sibb, err := p.descendToPos(r.to)
-	if err != nil {
-		return fmt.Errorf("to %s", err.Error())
-	}
-
-	// build out full branch to target if it's not populated
-	// I think this efficient / never creates usless nodes but not sure..?
-	for i := range sibb {
-		tgtLR := (r.to >> uint8(i)) & 1
-		if sibb[i] == nil {
-			sibb[i] = new(polNode)
-		}
-		if len(prb) > i+1 && prb[i+1] != nil {
-			prb[i+1].niece[tgtLR] = sibb[i]
-		}
-	}
-
-	// this works even if moving from a top, because sibfrom[0] and prfrom[0]
-	// will be the same
-	// gotta move the data, but move nieces if you can.  If you can't move the
-	// nieces you have to delete the destination nieces!
-	//	fmt.Printf("move %04x over %04x prfromnil %v\n",
-	//		sibfrom[0].data[:4], sibto[0].data[:4], prfrom[0] == nil)
-	sibb[0].data, siba[0].data = siba[0].data, sibb[0].data
-	pra[0].niece = prb[0].niece
-
-	if pra[0] != nil {
-		prb[0].niece = pra[0].niece
-	} else {
-		prb[0].chop() // need this
-	}
-	return nil
-}
-
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
 // as well as its sibling.  And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
-func (p *Pollard) grabPos(pos uint64) (n, nsib, npar *polNode, err error) {
+func (p *Pollard) grabPos(
+	pos uint64) (n, nsib, npar *polNode, lr uint8, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	bits = ^bits
-	n, nsib = p.tops[tree], p.tops[tree]
+	n, nsib = &p.tops[tree], &p.tops[tree]
 	// nsib, npar = n, n
 	for h := branchLen - 1; h != 255; h-- { // go through branch
-		lr := (bits >> h) & 1
+		lr = uint8(bits>>h) & 1
 		if h == 0 { // if at bottom, done
 			npar = nsib
 			n, nsib = n.niece[lr^1], n.niece[lr]
@@ -594,10 +571,15 @@ func (p *Pollard) grabPos(pos uint64) (n, nsib, npar *polNode, err error) {
 			return
 		}
 		npar = n
+		// if a sib doesn't exist, need to create it and hook it in
+		if n.niece[lr^1] == nil {
+			n.niece[lr^1] = new(polNode)
+		}
 		n, nsib = n.niece[lr], n.niece[lr^1]
 		// fmt.Printf("h%d n %x nsib %x npar %x\n",
 		// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
 		if n == nil {
+			// if a node doesn't exist, crash
 			err = fmt.Errorf("grab %d nil neice at height %d", pos, h)
 			return
 		}
@@ -625,8 +607,8 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// first find which tree we're in
 	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
 	//	fmt.Printf("DO pos %d top %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
-	n := p.tops[tNum]
-	if n == nil || branchLen > 64 {
+	n := &p.tops[tNum]
+	if branchLen > 64 {
 		return nil, nil, fmt.Errorf("dtp top %d is nil", tNum)
 	}
 
@@ -705,7 +687,7 @@ func (p *Pollard) equalToForest(f *Forest) bool {
 	}
 
 	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
-		n, _, _, err := p.grabPos(leafpos)
+		n, _, _, _, err := p.grabPos(leafpos)
 		if err != nil {
 			return false
 		}

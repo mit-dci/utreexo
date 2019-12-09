@@ -23,7 +23,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 			// if there's no branch (1-tree) nothing to prove
 			continue
 		}
-		node := p.tops[tNum]
+		node := &p.tops[tNum]
 		h := branchLen - 1
 		bits = ^bits                                 // flip bits for proof descent
 		pos := upMany(target, branchLen, p.height()) // this works but...
