@@ -85,11 +85,11 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// the first 0 you find you're going to turn into a 1.
 
 	// make the new leaf & populate it with the actual data you're trying to add
-	var n polNode
+	n := new(polNode)
 	n.data = add
 	if remember {
 		// flag this leaf as memorable via it's left pointer
-		n.niece[0] = &n // points to itself (mind blown)
+		n.niece[0] = n // points to itself (mind blown)
 	}
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
@@ -100,7 +100,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		p.tops = p.tops[:len(p.tops)-1]                            // pop
 		leftTop.niece, n.niece = n.niece, leftTop.niece            // swap
 		nHash := Parent(leftTop.data, n.data)                      // hash
-		n = polNode{data: nHash, niece: [2]*polNode{&leftTop, &n}} // new
+		n = &polNode{data: nHash, niece: [2]*polNode{&leftTop, n}} // new
 		p.hashesEver++
 
 		n.prune()
@@ -111,7 +111,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// we got to.  We've already deleted all the lower tops, so append the new
 	// one we just made onto the end.
 
-	p.tops = append(p.tops, n)
+	p.tops = append(p.tops, *n)
 
 	p.numLeaves++
 	return nil
@@ -178,10 +178,11 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// done with swaps for this row, now hashdirt
 
 		// build hashable nodes from hashdirt
-		for _, hd := range hashdirt {
-			p.grabPos(hd)
-		}
+		// for _, hd := range hashdirt {
+		// p.grabPos(hd)
+		// }
 		wg.Wait() // wait for all hashing to finish at end of each row
+		fmt.Printf("done with row %d\n", h)
 	}
 
 	// var sib *polNode
@@ -503,8 +504,8 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if asib == nil || bsib == nil {
 		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
 	}
-	// fmt.Printf("swapNodes swapping %d %x with %d %x\n",
-	// 	r.from, a.data[:4], r.to, b.data[:4])
+	fmt.Printf("swapNodes swapping %d %x with %d %x\n",
+		r.from, a.data[:4], r.to, b.data[:4])
 
 	// fmt.Printf("swapNodes siblings of %x with %x\n",
 	// 	asib.data[:4], bsib.data[:4])
