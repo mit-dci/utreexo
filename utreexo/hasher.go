@@ -28,25 +28,6 @@ to tick between rows.  Wait on the extrnal one to make sure everything's done.
 
 */
 
-// hasher is the routine that accepts hashableNodeWithHeights and does em all
-// It doesn't give an indication that it's finished, but if you've sent
-func hasher(hashChan chan *hashableNode, hold chan bool, extWg *sync.WaitGroup) {
-	rowWg := new(sync.WaitGroup)
-	for {
-		select {
-		case <-hold: // if we get a hold signal
-			fmt.Printf("waiting on row... ")
-			rowWg.Wait() // wait until prev row is finished before continuing
-			fmt.Printf("clear\n")
-		default:
-		}
-
-		incoming := <-hashChan        // grab hashable
-		rowWg.Add(1)                  // add to row waitgroup
-		go incoming.run(rowWg, extWg) // hand off to hashing
-	}
-}
-
 // hashableNode is the data needed to perform a hash
 type hashableNode struct {
 	l, r, p *Hash
@@ -57,9 +38,8 @@ type hashableNode struct {
 // so the data is "there" in a static structure so I can use pointers to it
 // and it won't move around.  hopefully.
 
-func (n *hashableNode) run(rwg, xwg *sync.WaitGroup) {
+func (n *hashableNode) run(wg *sync.WaitGroup) {
 	*n.p = Parent(*n.l, *n.r)
 	fmt.Printf("hasher finished %x %x %x\n", n.l[:4], n.r[:4], n.p[:4])
-	rwg.Done()
-	xwg.Done()
+	wg.Done()
 }
