@@ -84,6 +84,11 @@ func pollardRandomRemember(blocks int32) error {
 
 		fmt.Printf("frs postadd %s", f.toString())
 
+		// check all leaves match
+		if !p.equalToForestIfThere(f) {
+			return fmt.Errorf("pollard and forest leaves differ")
+		}
+
 		fullTops := f.GetTops()
 		polTops := p.topHashesReverse()
 

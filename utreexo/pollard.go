@@ -149,8 +149,12 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 			// chop off first rowdirt (current row) if it's getting hashed
 			// by the swap
-			if len(rowdirt) != 0 && rowdirt[0] == s.to {
+			if len(rowdirt) != 0 &&
+				(rowdirt[0] == s.to || rowdirt[0] == s.to^1) {
+				fmt.Printf("%d in rowdirt, already got to from swap\n", s.to)
 				rowdirt = rowdirt[1:]
+			} else {
+				fmt.Printf("rowdirt %v no match %d\n", rowdirt, s.to)
 			}
 
 			// TODO some of these hashes are useless as they end up outside
@@ -163,20 +167,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 			// note that we never have two siblings receiving "tos"
 			// oh but we might get multiple copies of the same to...? nah
 
-			fmt.Printf("send %d to hasher\n", up1(s.to, ph))
 			wg.Add(1)
 			go hn.run(wg)
 
-			// is parent's parent in forest? if so, add *parent* to dirt
-			parpar := upMany(s.to, 2, ph)
-			if inForest(parpar, p.numLeaves, ph) {
-				par := up1(s.to, ph)
-				fmt.Printf("ph %d nl %d %d parpar %d is in forest\n", ph, p.numLeaves, s.to, parpar)
-				// if so, and it's not already in hashdirt, add it
-				if len(hashdirt) == 0 || hashdirt[len(hashdirt)-1] != s.to {
-					hashdirt = append(hashdirt, par)
-				}
-			}
+			hashdirt = dirtify(hashdirt, s.to, p.numLeaves, ph)
 		}
 		// done with swaps for this row, now hashdirt
 		// build hashable nodes from hashdirt
@@ -191,6 +185,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 			}
 			wg.Add(1)
 			go hn.run(wg)
+			hashdirt = dirtify(hashdirt, d, p.numLeaves, ph)
+
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row
 		fmt.Printf("done with row %d\n", h)
@@ -213,6 +209,24 @@ func (p *Pollard) rem2(dels []uint64) error {
 	reversePolNodeSlice(nexTops)
 	p.tops = nexTops
 	return nil
+}
+
+func dirtify(dirt []uint64, pos, nl uint64, ph uint8) []uint64 {
+	// is parent's parent in forest? if so, add *parent* to dirt
+	parpar := upMany(pos, 2, ph)
+	if inForest(parpar, nl, ph) {
+		par := up1(pos, ph)
+		if len(dirt) != 0 &&
+			(dirt[len(dirt)-1] != pos || dirt[len(dirt)-1] != pos^1) {
+			return dirt
+		}
+		dirt = append(dirt, par)
+		fmt.Printf("ph %d nl %d %d parpar %d is in forest, add %d\n",
+			ph, nl, pos, parpar, par)
+		// if so, and it's not already in hashdirt, add it
+
+	}
+	return dirt
 }
 
 // reHash hashes all specified locations (and their parents up to roots)
@@ -533,6 +547,9 @@ func (p *Pollard) grabPos(
 			hn = new(hashableNode)
 			hn.p = &nsib.data
 			n, nsib = n.niece[lr^1], n.niece[lr]
+			if nsib == nil || n == nil {
+				return // give up and don't make hashable node
+			}
 			if lr&1 == 1 { // if to is even, it's on the left
 				hn.l, hn.r = &n.data, &nsib.data
 			} else { // otherwise it's on the right
@@ -662,6 +679,28 @@ func (p *Pollard) equalToForest(f *Forest) bool {
 		n, _, _, err := p.grabPos(leafpos)
 		if err != nil {
 			return false
+		}
+		if n.data != f.forest[leafpos] {
+			fmt.Printf("leaf position %d pol %x != forest %x\n",
+				leafpos, n.data[:4], f.forest[leafpos][:4])
+			return false
+		}
+	}
+	return true
+}
+
+// equalToForestIfThere checks if the pollard has the same leaves as the forest.
+// it's OK though for a leaf not to be there; only it can't exist and have
+// a different value than one in the forest
+func (p *Pollard) equalToForestIfThere(f *Forest) bool {
+	if p.numLeaves != f.numLeaves {
+		return false
+	}
+
+	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
+		n, _, _, err := p.grabPos(leafpos)
+		if err != nil || n == nil {
+			continue // ignore grabPos errors / nils
 		}
 		if n.data != f.forest[leafpos] {
 			fmt.Printf("leaf position %d pol %x != forest %x\n",
