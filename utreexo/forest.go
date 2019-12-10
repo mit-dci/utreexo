@@ -25,10 +25,12 @@ type Forest struct {
 
 	// height of the forest.  NON INTUITIVE!
 	// When there is only 1 tree in the forest, it is equal to the height of
-	// that tree (2**n nodes).  If there are multiple trees, fullHeight will
+	// that tree (2**h nodes).  If there are multiple trees, fullHeight will
 	// be 1 higher than the highest tree in the forest.
-	// also, note that this is always round-up 2**numleaves.... so we don't
-	// really need it.
+	// While you could just run treeHeight(numLeaves), and pollard does just this,
+	// here it incurs the cost of a reMap when you cross a power of 2 boundary.
+	// So right now it reMaps on the way up, but NOT on the way down, so the
+	// height can sometimes be higher than it would be as treeHeight(numLeaves)
 	height uint8
 
 	// moving to slice based forest.  more efficient, can be moved to
