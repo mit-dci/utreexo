@@ -11,7 +11,7 @@ func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("pol pre add %s", p.toString())
+	// fmt.Printf("pol pre add %s", p.toString())
 	err = p.add(adds)
 	if err != nil {
 		return err
@@ -156,16 +156,11 @@ func (p *Pollard) rem2(dels []uint64) error {
 			} else {
 				fmt.Printf("rowdirt %v no match %d\n", rowdirt, s.to)
 			}
+			fmt.Printf("giving hasher %d %x %x\n", s.to, hn.l[:4], hn.r[:4])
 
 			// TODO some of these hashes are useless as they end up outside
-			// the forest.  Example, leaves 0...7, delete 4,5,6.  7 moves
-			// to 4, and 10 gets hashed but discarded.  maybe this only happens
-			// when something is moving TO a new top location?  If it is, that's
-			// easy enough to check and skip the hashing.
-
+			// the forest.
 			// aside from TODO above, always hash the parent of swap "to"
-			// note that we never have two siblings receiving "tos"
-			// oh but we might get multiple copies of the same to...? nah
 
 			wg.Add(1)
 			go hn.run(wg)
@@ -208,7 +203,6 @@ func (p *Pollard) rem2(dels []uint64) error {
 		} else {
 			nt.niece = ntsib.niece
 		}
-
 		nexTops[i] = *nt
 	}
 
@@ -392,21 +386,21 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
 		r.from, a.data[:4], r.to, b.data[:4])
 
-	fmt.Printf("swapNodes neices: asib ")
-	if asib.niece[0] != nil {
-		fmt.Printf("l %x ", asib.niece[0].data[:4])
-	}
-	if asib.niece[1] != nil {
-		fmt.Printf("r %x ", asib.niece[1].data[:4])
-	}
-	fmt.Printf("bsib ")
-	if bsib.niece[0] != nil {
-		fmt.Printf("l %x ", bsib.niece[0].data[:4])
-	}
-	if bsib.niece[1] != nil {
-		fmt.Printf("r %x ", bsib.niece[1].data[:4])
-	}
-	fmt.Printf("\n")
+	// fmt.Printf("swapNodes neices: asib ")
+	// if asib.niece[0] != nil {
+	// 	fmt.Printf("l %x ", asib.niece[0].data[:4])
+	// }
+	// if asib.niece[1] != nil {
+	// 	fmt.Printf("r %x ", asib.niece[1].data[:4])
+	// }
+	// fmt.Printf("bsib ")
+	// if bsib.niece[0] != nil {
+	// 	fmt.Printf("l %x ", bsib.niece[0].data[:4])
+	// }
+	// if bsib.niece[1] != nil {
+	// 	fmt.Printf("r %x ", bsib.niece[1].data[:4])
+	// }
+	// fmt.Printf("\n")
 
 	// fmt.Printf("swapNodes siblings of %x with %x\n",
 	// asib.data[:4], bsib.data[:4])
