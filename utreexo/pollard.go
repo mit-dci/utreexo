@@ -196,18 +196,26 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		nti, _, _, err := p.grabPos(nextTopPoss[i])
+		nt, ntsib, _, err := p.grabPos(nextTopPoss[i])
 		if err != nil {
 			return err
 		}
-		if nti == nil {
+		if nt == nil {
 			return fmt.Errorf("want top %d at %d but nil", i, nextTopPoss[i])
 		}
-		nexTops[i] = *nti
+		if ntsib == nil {
+			nt.chop()
+		} else {
+			nt.niece = ntsib.niece
+		}
+
+		nexTops[i] = *nt
 	}
+
 	p.numLeaves = nextNumLeaves
 	reversePolNodeSlice(nexTops)
 	p.tops = nexTops
+
 	return nil
 }
 
@@ -279,143 +287,6 @@ func (p *Pollard) reHash(dirt [][]uint64) error {
 		dirtrow = append(nextDirtRow, dirtrow...)
 		nextDirtRow = []uint64{}
 	}
-	return nil
-}
-
-// TODO for rem:
-// get rid of dirtymap and rehash entirely?  Not sure if we can
-// if not then make it so only rehash hashes, and movenode doesn't.  same with
-// pruning?  seems that rehash and movenode do a lot of the same things.
-
-// rem deletes stuff from the pollard.  The hard part.
-func (p *Pollard) remx(dels []uint64) error {
-
-	if len(dels) == 0 {
-		return nil // that was quick
-	}
-
-	ph := p.height() // height of pollard
-	nextNumLeaves := p.numLeaves - uint64(len(dels))
-	overlap := p.numLeaves & nextNumLeaves
-	// remove tops and add empty tops based just on popcount
-	nexTops := make([]polNode, PopCount(nextNumLeaves))
-	// keeping track of these separately is annoying.  I'm sure there's a
-	// clever bit shifty way to not need to do this.  It doesn't actually
-	// take any cpu time or ram though.
-	oldTopIdx := len(p.tops) - 1
-	nexTopIdx := len(nexTops) - 1
-
-	stash, moves := removeTransformx(dels, p.numLeaves, ph)
-
-	fmt.Printf("stash %v\n", stash)
-	// TODO how about instead of a slice of uint64s, you just
-	// have a slice of pointers?  Then less descent.
-	var moveDirt []uint64
-	var hashDirt []uint64
-
-	tops, topHeights := getTopsReverse(p.numLeaves, ph)
-	var curRowTop uint64
-
-	//	fmt.Printf("p.h %d nl %d rem %d nnl %d stashes %d moves %d\n",
-	//		ph, p.numLeaves, len(dels), nextNumLeaves, len(rawStash), len(rawMoves))
-	for h := uint8(0); h < ph; h++ {
-		// copy the top over directly if there's a bit overlap
-		// fmt.Printf("h %d topIdx %d overlap %b\n", h, nexTopIdx, overlap)
-		if (1<<h)&overlap != 0 {
-			// fmt.Printf("topidx %d nexTops %d ptops %d\n",
-			// topIdx, len(nexTops), len(p.tops))
-			nexTops[nexTopIdx] = p.tops[oldTopIdx]
-		}
-
-		if topHeights[0] == h {
-			curRowTop = tops[0]
-			topHeights = topHeights[1:]
-			tops = tops[1:]
-		} else {
-			curRowTop = 0
-		}
-
-		// hash first
-		curDirt := mergeSortedSlices(moveDirt, hashDirt)
-		moveDirt, hashDirt = []uint64{}, []uint64{}
-		// if there's curDirt, hash
-		fmt.Printf("h %d curDirt %v\n", h, curDirt)
-		for _, pos := range curDirt {
-			err := p.reHashOne(pos)
-			if err != nil {
-				return fmt.Errorf("rem rehash %s", err.Error())
-			}
-			parPos := up1(pos, ph)
-			lhd := len(hashDirt)
-			// add dirt unless:
-			// this node is a current top, or already in the dirt slice
-			if pos != curRowTop &&
-				(lhd == 0 || hashDirt[lhd-1] != parPos) {
-				fmt.Printf("pol h %d hash %d to hashDirt \n", h, parPos)
-				hashDirt = append(hashDirt, parPos)
-			}
-		}
-
-		fmt.Printf("this row top %d\n", curRowTop)
-		// go through moves for this height
-		for len(moves) > 0 && detectHeight(moves[0].to, ph) == h {
-			if len(p.tops) == 0 {
-				return fmt.Errorf("no tops")
-			}
-			fmt.Printf("mv %d -> %d\n", moves[0].from, moves[0].to)
-			err := p.moveNode(moves[0])
-			if err != nil {
-				return err
-			}
-			dirt := up1(moves[0].to, ph)
-			lmvd := len(moveDirt)
-			// the dirt returned by moveNode is always a parent
-			if lmvd == 0 || moveDirt[lmvd-1] != dirt {
-				fmt.Printf("h %d mv %d to moveDirt \n", h, dirt)
-				moveDirt = append(moveDirt, dirt)
-			} else {
-				fmt.Printf("pol skip %d  \n", dirt)
-			}
-			moves = moves[1:]
-		}
-
-		// then the stash on this height.  (There can be only 1)
-		for len(stash) > 0 &&
-			detectHeight(stash[0].to, ph) == h {
-			// populate top; stashes always become tops
-			fmt.Printf("stash %d -> %d\n", stash[0].from, stash[0].to)
-			pr, sibs, err := p.descendToPos(stash[0].from)
-			if err != nil {
-				return fmt.Errorf("rem stash %s", err.Error())
-			}
-
-			if sibs[0] == nil {
-				return fmt.Errorf("got nil sib[0] stashing")
-			}
-			// make new top if sibling nieces are known
-			// otherwise need to delete the neices (same thing really,
-			// just doesn't crash)
-			if pr[0] != nil {
-				sibs[0].niece = pr[0].niece
-			} else {
-				sibs[0].chop()
-			}
-
-			nexTops[nexTopIdx] = *sibs[0]
-			stash = stash[1:]
-		}
-
-		// if there's a 1 in the nextNum, decrement top number
-		if (1<<h)&nextNumLeaves != 0 {
-			nexTopIdx--
-		}
-		if (1<<h)&p.numLeaves != 0 {
-			oldTopIdx--
-		}
-
-	}
-	p.numLeaves = nextNumLeaves
-	p.tops = nexTops
 	return nil
 }
 
@@ -517,11 +388,28 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if asib == nil || bsib == nil {
 		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
 	}
-	// fmt.Printf("swapNodes swapping %d %x with %d %x\n",
-	// 	r.from, a.data[:4], r.to, b.data[:4])
+
+	fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
+		r.from, a.data[:4], r.to, b.data[:4])
+
+	fmt.Printf("swapNodes neices: asib ")
+	if asib.niece[0] != nil {
+		fmt.Printf("l %x ", asib.niece[0].data[:4])
+	}
+	if asib.niece[1] != nil {
+		fmt.Printf("r %x ", asib.niece[1].data[:4])
+	}
+	fmt.Printf("bsib ")
+	if bsib.niece[0] != nil {
+		fmt.Printf("l %x ", bsib.niece[0].data[:4])
+	}
+	if bsib.niece[1] != nil {
+		fmt.Printf("r %x ", bsib.niece[1].data[:4])
+	}
+	fmt.Printf("\n")
 
 	// fmt.Printf("swapNodes siblings of %x with %x\n",
-	// 	asib.data[:4], bsib.data[:4])
+	// asib.data[:4], bsib.data[:4])
 
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
