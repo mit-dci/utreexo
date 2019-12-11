@@ -7,7 +7,7 @@ import (
 
 // hashableNode is the data needed to perform a hash
 type hashableNode struct {
-	l, r, p *Hash
+	sib, dest *polNode
 }
 
 // this should work, right?  like the pointeryness?  Because swapnodes doesn't
@@ -16,7 +16,8 @@ type hashableNode struct {
 // and it won't move around.  hopefully.
 
 func (n *hashableNode) run(wg *sync.WaitGroup) {
-	*n.p = Parent(*n.l, *n.r)
-	fmt.Printf("hasher finished %x %x %x\n", n.l[:4], n.r[:4], n.p[:4])
+	n.dest.data = n.sib.auntOp()
+	fmt.Printf("hasher finished %x %x -> %x\n",
+		n.sib.niece[0].data[:4], n.sib.niece[1].data[:4], n.dest.data[:4])
 	wg.Done()
 }

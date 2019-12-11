@@ -156,7 +156,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 			} else {
 				fmt.Printf("rowdirt %v no match %d\n", rowdirt, s.to)
 			}
-			fmt.Printf("giving hasher %d %x %x\n", s.to, hn.l[:4], hn.r[:4])
+			fmt.Printf("giving hasher %d %x %x\n",
+				s.to, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 
 			// TODO some of these hashes are useless as they end up outside
 			// the forest.
@@ -427,17 +428,12 @@ func (p *Pollard) grabPos(
 		lr := uint8(bits>>h) & 1
 		if h == 0 { // if at bottom, done
 			hn = new(hashableNode)
-			hn.p = &nsib.data
+			hn.dest = nsib // this is kind of confusing eh?
+			hn.sib = n     // but yeah, switch siblingness
 			n, nsib = n.niece[lr^1], n.niece[lr]
 			if nsib == nil || n == nil {
 				return // give up and don't make hashable node
 			}
-			if lr&1 == 1 { // if to is even, it's on the left
-				hn.l, hn.r = &n.data, &nsib.data
-			} else { // otherwise it's on the right
-				hn.l, hn.r = &nsib.data, &n.data
-			}
-
 			// fmt.Printf("h%d n %x nsib %x npar %x\n",
 			// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
 			return
