@@ -383,6 +383,9 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if asib == nil || bsib == nil {
 		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
 	}
+	if a == nil || b == nil {
+		return nil, fmt.Errorf("swapNodes %d:%d node not found", r.from, r.to)
+	}
 
 	fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
 		r.from, a.data[:4], r.to, b.data[:4])

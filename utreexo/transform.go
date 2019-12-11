@@ -110,8 +110,9 @@ func remTrans2(
 	return swaps
 }
 
+// swapCollapses applies all swaps to lower collapses.
 func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
-	for h := uint8(len(collapses)) - 1; h != 255; h-- {
+	for h := uint8(len(collapses)) - 1; h != 0; h-- {
 		// go through through swaps at this height
 		// fmt.Printf("h %d swaps %v\n", h, swaps)
 		for _, s := range swaps[h] {
@@ -126,17 +127,21 @@ func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
 			}
 		}
 
-		if collapses[h].to != collapses[h].from { // exists / non-nil
-			rowcol := collapses[h]
-			// do collapse on lower collapses
-			for ch := uint8(0); ch < h; ch++ {
-				c := collapses[ch]
-				mask := swapIfDescendant(rowcol, c, h, ch, fh)
-				if mask != 0 {
-					// fmt.Printf("****col %v becomes ", c)
-					collapses[ch].to ^= mask
-					// fmt.Printf("%v due to %v\n", c, collapses[ch])
-				}
+		if collapses[h].to == collapses[h].from {
+			continue
+		} // exists / non-nil; affect lower collapses
+		rowcol := collapses[h]
+		// do collapse on lower collapses
+		for ch := uint8(0); ch < h; ch++ {
+			c := collapses[ch]
+			if c.from == c.to {
+				continue
+			}
+			mask := swapIfDescendant(rowcol, c, h, ch, fh)
+			if mask != 0 {
+				fmt.Printf("****col %v becomes ", collapses[ch])
+				collapses[ch].to ^= mask
+				fmt.Printf("%v due to %v\n", collapses[ch], rowcol)
 			}
 		}
 	}
