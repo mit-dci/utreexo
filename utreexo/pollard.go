@@ -156,16 +156,16 @@ func (p *Pollard) rem2(dels []uint64) error {
 			} else {
 				fmt.Printf("rowdirt %v no match %d\n", rowdirt, s.to)
 			}
-			fmt.Printf("giving hasher %d %x %x\n",
-				s.to, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 
-			// TODO some of these hashes are useless as they end up outside
-			// the forest.
-			// aside from TODO above, always hash the parent of swap "to"
-
-			wg.Add(1)
-			go hn.run(wg)
-
+			if hn != nil {
+				fmt.Printf("giving hasher %d %x %x\n",
+					s.to, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
+				// TODO some of these hashes are useless as they end up outside
+				// the forest.
+				// aside from TODO above, always hash the parent of swap "to"
+				wg.Add(1)
+				go hn.run(wg)
+			}
 			hashdirt = dirtify(hashdirt, s.to, p.numLeaves, ph)
 		}
 		// done with swaps for this row, now hashdirt
@@ -410,6 +410,10 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	err = polSwap(a, asib, b, bsib)
 	if err != nil {
 		return nil, err
+	}
+
+	if bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
+		bhn = nil // we can't perform this hash as we don't know the children
 	}
 
 	return bhn, nil

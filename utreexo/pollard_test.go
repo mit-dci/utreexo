@@ -7,7 +7,7 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	rand.Seed(33)
+	rand.Seed(112)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
