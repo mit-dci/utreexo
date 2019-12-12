@@ -202,6 +202,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 			return fmt.Errorf("want top %d at %d but nil", i, nextTopPoss[i])
 		}
 		if ntsib == nil {
+			// when turning a node into a top, it's "nieces" are really children,
+			// so should become it's sibling's nieces.
 			nt.chop()
 		} else {
 			nt.niece = ntsib.niece

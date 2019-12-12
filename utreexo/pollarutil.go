@@ -50,7 +50,7 @@ func (n *polNode) deadEnd() bool {
 	return n.niece[0] == nil && n.niece[1] == nil
 }
 
-// chop turns a node into a deadEnd
+// chop turns a node into a deadEnd by setting both nieces to nil.
 func (n *polNode) chop() {
 	n.niece[0] = nil
 	n.niece[1] = nil
@@ -104,6 +104,12 @@ func polSwap(a, asib, b, bsib *polNode) error {
 	if a == nil || asib == nil || b == nil || bsib == nil {
 		return fmt.Errorf("polSwap given nil node")
 	}
+
+	av := *a
+	bv := *b
+
+	&bv = &av
+
 	a.data, b.data = b.data, a.data
 	asib.niece, bsib.niece = bsib.niece, asib.niece
 	return nil
