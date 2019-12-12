@@ -121,6 +121,9 @@ func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
 		for _, s := range swaps[h] {
 			for ch := uint8(0); ch < h; ch++ {
 				c := collapses[ch]
+				if c.from == c.to {
+					continue //
+				}
 				mask := swapIfDescendant(s, c, h, ch, fh)
 				if mask != 0 {
 					// fmt.Printf("****col %v becomes ", c)
