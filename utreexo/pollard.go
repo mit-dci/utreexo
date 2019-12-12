@@ -166,7 +166,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				wg.Add(1)
 				go hn.run(wg)
 			}
-			hashdirt = dirtify(hashdirt, s.to, p.numLeaves, ph)
+			hashdirt = dirtify(hashdirt, swaprows, s.to, nextNumLeaves, h+2, ph)
 		}
 		// done with swaps for this row, now hashdirt
 		// build hashable nodes from hashdirt
@@ -179,9 +179,11 @@ func (p *Pollard) rem2(dels []uint64) error {
 				fmt.Printf("hn is nil at pos %d\n", d)
 				continue
 			}
+			fmt.Printf("drting hasher %d %x %x\n",
+				d, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			wg.Add(1)
 			go hn.run(wg)
-			hashdirt = dirtify(hashdirt, d, p.numLeaves, ph)
+			hashdirt = dirtify(hashdirt, swaprows, d, nextNumLeaves, h+2, ph)
 
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row
@@ -214,22 +216,49 @@ func (p *Pollard) rem2(dels []uint64) error {
 	return nil
 }
 
-func dirtify(dirt []uint64, pos, nl uint64, ph uint8) []uint64 {
+// dirtify adds to the next dirt row
+func dirtify(dirt []uint64, swaps [][]arrow, pos, nl uint64, up2h, ph uint8) []uint64 {
 	// is parent's parent in forest? if so, add *parent* to dirt
 	parpar := upMany(pos, 2, ph)
-	if inForest(parpar, nl, ph) {
-		par := up1(pos, ph)
-		if len(dirt) != 0 &&
-			(dirt[len(dirt)-1] != pos || dirt[len(dirt)-1] != pos^1) {
+	if !inForest(parpar, nl, ph) {
+		// skip, UNLESS it moves to somewhere inside the forest range
+		// due to the swaps in the next row up
+		// TODO this is bad and inefficient as it may result in checking through
+		// a LOT of a stuff for no reason.  Also, do I have to check ALL higher
+		// rows instead of just the immediate higher row???  Fix / remove this
+		// if possible.  Or at least profile to see how bad it is in practice;
+		// maybe OOF parpars happen very rarely
+
+		if up2h >= uint8(len(swaps)) {
+			// fmt.Printf("%d parpar %d not in forest and no more swaps\n", pos, parpar)
 			return dirt
 		}
-		dirt = append(dirt, par)
-		fmt.Printf("ph %d nl %d %d parpar %d is in forest, add %d\n",
-			ph, nl, pos, parpar, par)
-		// if so, and it's not already in hashdirt, add it
+
+		var moves bool
+		for _, a := range swaps[up2h] {
+			if parpar == a.from {
+				moves = true
+				break
+			}
+		}
+		if !moves {
+			// fmt.Printf("%d parpar %d outside up2row %v\n", pos, parpar, swaps[up2h])
+			return dirt
+		}
+		// fmt.Printf("%d parpar %d returns up2row %v\n", pos, parpar, swaps[up2h])
 
 	}
+	par := up1(pos, ph)
+	if len(dirt) != 0 &&
+		(dirt[len(dirt)-1] != pos || dirt[len(dirt)-1] != pos^1) {
+		return dirt
+	}
+
+	dirt = append(dirt, par)
+	fmt.Printf("ph %d nl %d %d parpar %d is in* forest, add %d\n",
+		ph, nl, pos, parpar, par)
 	return dirt
+
 }
 
 // swapNodes swaps the nodes at positions a and b.
