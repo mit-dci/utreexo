@@ -193,8 +193,9 @@ func (p *Pollard) rem2(dels []uint64) error {
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row
 		fmt.Printf("done with row %d\n", h)
+		fmt.Printf(p.toString())
 	}
-	fmt.Printf(p.toString())
+
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
@@ -311,11 +312,11 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	if apar == nil { // a is a top, has no parent
 		fmt.Printf("top swap\t %x %x\n",
 			p.tops[alr].data[:4], bparsib.niece[blr].data[:4])
-		// OH YOU CAN'T DO THIS...???
-		p.tops[alr], bparsib.niece[blr] = *bparsib.niece[blr], &p.tops[alr]
 
-		fmt.Printf("top swap\t %x %x\n",
-			p.tops[alr].data[:4], bparsib.niece[blr].data[:4])
+		stashtop := p.tops[alr]
+		p.tops[alr], bparsib.niece[blr] = *bparsib.niece[blr], &stashtop
+		p.tops[alr].niece, bparsib.niece[blr^1].niece =
+			bparsib.niece[blr^1].niece, p.tops[alr].niece
 
 	} else if bpar == nil { // b is a top (can this happen...?)
 		// TODO I don't think this happens
