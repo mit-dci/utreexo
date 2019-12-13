@@ -16,7 +16,6 @@ type hashableNode struct {
 // and it won't move around.  hopefully.
 
 func (n *hashableNode) run(wg *sync.WaitGroup) {
-
 	fmt.Printf("hasher about to replace %x\n", n.dest.data[:4])
 	n.dest.data = n.sib.auntOp()
 	fmt.Printf("hasher finished %x %x -> %x\n",

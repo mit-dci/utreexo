@@ -25,7 +25,6 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 		}
 		node := &p.tops[tNum]
 		h := branchLen - 1
-		bits = ^bits                                 // flip bits for proof descent
 		pos := upMany(target, branchLen, p.height()) // this works but...
 		// we should have a way to get the top positions from just p.tops
 
@@ -39,9 +38,11 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 			if node.niece[lr] == nil {
 				node.niece[lr] = new(polNode)
 				node.niece[lr].data = proofMap[pos]
+				// fmt.Printf("wrote %x at %d\n", proofMap[pos], pos)
 				if node.niece[lr].data == empty {
-					return fmt.Errorf("Wrote an empty hash h %d under %04x %d.niece[%d]",
-						h, node.data[:4], pos, lr)
+					return fmt.Errorf(
+						"h %d wrote empty hash at pos %d %04x.niece[%d]",
+						h, pos, node.data[:4], lr)
 				}
 				// fmt.Printf("h %d wrote %04x to %d\n", h, node.niece[lr].data[:4], pos)
 				p.overWire++
