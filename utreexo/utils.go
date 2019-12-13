@@ -141,6 +141,7 @@ func detectHeight(position uint64, forestHeight uint8) uint8 {
 // detectOffset takes a node position and number of leaves in forest, and
 // returns: which subtree a node is in, the L/R bitfield to descend to the node,
 // and the height from node to its tree top (which is the bitfield length).
+// we return the opposite of bits, because we always invert em...
 func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// TODO replace ?
 	// similarities to detectSubTreeHeight() with more features
@@ -186,7 +187,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 			biggerTrees++
 		}
 	}
-	return biggerTrees, th - nh, position
+	return biggerTrees, th - nh, ^position
 }
 
 // child gives you the left child (LSB will be 0)

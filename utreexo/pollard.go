@@ -328,6 +328,34 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	return bhn, nil
 }
 
+// grabPos2 is like grabPos2 but simpler...?  Returns the PARENT of the thing
+// you asked for, as well as the 0/1 uint8 of which it is (which is obvious
+// as it's just pos &1.  BUT if the thing you asked for is a top, then it
+// returns nil n as there is no parent, and the uint8 it returns is WHICH
+// top it is.  So no error and nil n means get your own top
+func (p *Pollard) grabPos2(pos uint64) (n, nsib *polNode, lr uint8, err error) {
+	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
+	if (tree) >= uint8(len(p.tops)) {
+		err = fmt.Errorf("%d not in forest", pos)
+		return
+	}
+	if branchLen == 0 { // can't return a top's parent, so return which parent
+		lr = tree
+		return
+	}
+	n, nsib = &p.tops[tree], &p.tops[tree]
+	for h := branchLen - 1; h != 0; h-- { // go through branch
+		lr = uint8(bits>>h) & 1
+		n, nsib = n.niece[lr], n.niece[lr^1]
+		if n == nil {
+			err = fmt.Errorf("can't grab %d nil neice at height %d", pos, h)
+			return
+		}
+	}
+	lr = uint8(pos & 1) // kindof pointless but
+	return
+}
+
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
 // as well as its sibling.  And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
@@ -335,7 +363,6 @@ func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
-	bits = ^bits
 	n, nsib = &p.tops[tree], &p.tops[tree]
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
@@ -392,7 +419,6 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 		return nil, nil, fmt.Errorf("dtp top %d is nil", tNum)
 	}
 
-	bits = ^bits // just flip all the bits...
 	proofs := make([]*polNode, branchLen+1)
 	sibs := make([]*polNode, branchLen+1)
 	// at the top of the branch, the proof and sib are the same

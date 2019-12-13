@@ -104,12 +104,6 @@ func polSwap(a, asib, b, bsib *polNode) error {
 	if a == nil || asib == nil || b == nil || bsib == nil {
 		return fmt.Errorf("polSwap given nil node")
 	}
-
-	av := *a
-	bv := *b
-
-	&bv = &av
-
 	a.data, b.data = b.data, a.data
 	asib.niece, bsib.niece = bsib.niece, asib.niece
 	return nil
