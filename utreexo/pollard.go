@@ -134,7 +134,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashdirt []uint64
-
+	fmt.Printf(p.toString())
 	// swap all the nodes
 	for h := uint8(0); h < ph; h++ {
 		rowdirt := hashdirt
@@ -303,17 +303,27 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 		return nil, err
 	}
 
+	// if aparsib == nil {
+	// 	return nil, fmt.Errorf("swapNodes %v a nil parsib", r)
+	// }
+	// if bparsib == nil {
+	// 	return nil, fmt.Errorf("swapNodes %v b nil parsib", r)
+	// }
+
 	// fmt.Printf("aparsib %x bparsib %x\n", aparsib.data[:4], bparsib.data[:4])
 
 	hn := new(hashableNode)
 
 	if apar == nil { // a is a top, has no parent
-		// if bparsib != nil && bparsib.niece[blr] != nil {
-		fmt.Printf("top swap\t %x %x\n",
-			p.tops[alr].data[:4], bparsib.niece[blr].data[:4])
-		// }
-		stashtop := p.tops[alr]
-		p.tops[alr], bparsib.niece[blr] = *bparsib.niece[blr], &stashtop
+		fmt.Printf("bpar %x\n", bpar.data[:4])
+		fmt.Printf("bparsib %x\n", bparsib.data[:4])
+		fmt.Printf("bparsib.[%d] %x\n", blr^1, bparsib.niece[blr^1].data[:4])
+		if bparsib != nil && bparsib.niece[blr] != nil {
+			fmt.Printf("top swap\t %x %x\n",
+				p.tops[alr].data[:4], bparsib.niece[blr].data[:4])
+		}
+		atop := p.tops[alr]
+		p.tops[alr], bparsib.niece[blr] = *bparsib.niece[blr], &atop
 		p.tops[alr].niece, bparsib.niece[blr^1].niece =
 			bparsib.niece[blr^1].niece, p.tops[alr].niece
 
@@ -349,10 +359,11 @@ func (p *Pollard) grabPos2(pos uint64) (par, parsib *polNode, lr uint8, err erro
 		return
 	}
 	if branchLen == 0 { // can't return a top's parent, so return which parent
+		fmt.Printf("grab %d, is top. tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 		lr = tree
 		return
 	}
-	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	par, parsib = &p.tops[tree], &p.tops[tree]
 	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr = uint8(bits>>h) & 1
