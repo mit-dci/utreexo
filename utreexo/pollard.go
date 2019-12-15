@@ -144,12 +144,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// TODO should get rid of these upstream
 				continue
 			}
-
 			hn, err := p.swapNodes(s)
 			if err != nil {
 				return err
 			}
-
 			// chop off first rowdirt (current row) if it's getting hashed
 			// by the swap
 			if len(rowdirt) != 0 &&
@@ -178,35 +176,34 @@ func (p *Pollard) rem2(dels []uint64) error {
 			if err != nil {
 				return err
 			}
-
 			if hn == nil { // if d is a top
 				fmt.Printf("hn is nil at pos %d\n", d)
 				continue
 			}
-
 			fmt.Printf("drting hasher %d %x %x\n",
 				d, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			wg.Add(1)
 			go hn.run(wg)
 			hashdirt = dirtify(hashdirt, swaprows, d, nextNumLeaves, h+2, ph)
-
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row
-		fmt.Printf("done with row %d\n", h)
-		fmt.Printf(p.toString())
+		// fmt.Printf("done with row %d\n", h)
+		// fmt.Printf(p.toString())
 	}
 
+	fmt.Printf(p.toString())
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
-		fmt.Printf("ntp grab %d\n", nextTopPoss[i])
+		fmt.Printf("ntp grab top %d pos %d\n", i, nextTopPoss[i])
 		ntpar, ntparsib, lr, err := p.grabPos2(nextTopPoss[i])
 		if err != nil {
 			return err
 		}
 
 		if ntpar == nil { // was already a top / overlap
+			fmt.Printf("grabbed nil ntpar\n")
 			nexTops[i] = p.tops[lr]
 		} else { // node becoming a top
 			fmt.Printf("non nil grabbed par %x parsib %x\n",
@@ -215,9 +212,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 			if ntparsib == nil {
 				nexTops[i].chop()
 			} else {
-				nexTops[i].niece = ntparsib.niece
+				nexTops[i].niece = ntparsib.niece[lr^1].niece
 			}
 		}
+		fmt.Printf("grab done %d %x\n", nextTopPoss[i], nexTops[i].data[:4])
 	}
 
 	p.numLeaves = nextNumLeaves
@@ -310,9 +308,10 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	hn := new(hashableNode)
 
 	if apar == nil { // a is a top, has no parent
+		// if bparsib != nil && bparsib.niece[blr] != nil {
 		fmt.Printf("top swap\t %x %x\n",
 			p.tops[alr].data[:4], bparsib.niece[blr].data[:4])
-
+		// }
 		stashtop := p.tops[alr]
 		p.tops[alr], bparsib.niece[blr] = *bparsib.niece[blr], &stashtop
 		p.tops[alr].niece, bparsib.niece[blr^1].niece =
@@ -357,14 +356,14 @@ func (p *Pollard) grabPos2(pos uint64) (par, parsib *polNode, lr uint8, err erro
 	par, parsib = &p.tops[tree], &p.tops[tree]
 	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr = uint8(bits>>h) & 1
-		fmt.Printf("parsib %x lr %d\n", parsib.data[:4], lr)
+		fmt.Printf("h %d parsib %x lr %d\n", h, parsib.data[:4], lr)
 		// if a sib doesn't exist, need to create it and hook it in
 		if parsib.niece[lr^1] == nil {
 			fmt.Printf("%x.niece[%d] not there, making\n", parsib.data[:4], lr^1)
 			parsib.niece[lr^1] = new(polNode)
 		}
 		par, parsib = parsib.niece[lr^1], parsib.niece[lr]
-		fmt.Printf("now parsib %x\n", parsib.data[:4])
+		fmt.Printf("h %d now parsib %x\n", h, parsib.data[:4])
 		if par == nil {
 			err = fmt.Errorf("can't grab %d nil neice at height %d", pos, h)
 			return
