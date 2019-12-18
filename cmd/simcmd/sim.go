@@ -65,7 +65,7 @@ func main() {
 		}
 	case "genproofs":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.BuildProofs(*testnetCmd, *offsetfile, sig)
+		err := ibdsim.BuildProofs(*testnetCmd, *ttldb, *offsetfile, sig)
 		if err != nil {
 			panic(err)
 		}
