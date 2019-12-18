@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mit-dci/utreexo/cmd/blockparser"
 	"github.com/mit-dci/utreexo/cmd/ibdsim"
 )
 
@@ -16,7 +15,6 @@ Usage: simcmd COMMAND [OPTION]
 A dynamic hash based accumulator designed for the Bitcoin UTXO set
 
 Commands:
-  parseblock     parses the blockdata in blocks/ and index/ directory. Outputs testnet.txos file and ttldb/
   ibdsim         simulates an initial block download with ttl.testnet.txos as an input
   genproofs      generates proofs from the ttl.testnet.txos file
   genhist        generates a histogram from the ttl.testnet.txos file
@@ -26,7 +24,6 @@ OPTIONS:
 
 //commands
 var parseblockCmd = flag.Bool("parseblock", false, "Parse the blockdata in blocks/ and index/ directory. Outputs testnet.txos file and ttldb/")
-var ibdsimCmd = flag.NewFlagSet("ibdsim", flag.ExitOnError)
 var genproofsCmd = flag.NewFlagSet("genproofs", flag.ExitOnError)
 var genhistCmd = flag.NewFlagSet("genhist", flag.ExitOnError)
 
@@ -55,8 +52,6 @@ func main() {
 	handleIntSig(sig)
 
 	switch os.Args[1] {
-	case "parseblock":
-		blockparser.Parser(*testnetCmd, *ttldb, *offsetfile, sig)
 	case "ibdsim":
 		optionCmd.Parse(os.Args[2:])
 		err := ibdsim.RunIBD(*testnetCmd, *offsetfile, *ttldb, sig)
