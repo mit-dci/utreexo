@@ -68,13 +68,13 @@ func main() {
 		txottl.ReadTTLdb(*testnetCmd, *txos, *ttldb, *offsetfile, sig)
 	case "ibdsim":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.RunIBD(*testnetCmd, *ttlfn, *schedFileName, sig)
+		err := ibdsim.RunIBD(*testnetCmd, *offsetfile, *ttldb, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genproofs":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.BuildProofs(*testnetCmd, *ttlfn, sig)
+		err := ibdsim.BuildProofs(*testnetCmd, *offsetfile, sig)
 		if err != nil {
 			panic(err)
 		}

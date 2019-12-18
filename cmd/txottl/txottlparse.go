@@ -1,21 +1,15 @@
 package txottl
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"os"
+	//"time"
 
 	"github.com/mit-dci/lit/wire"
 	"github.com/mit-dci/utreexo/cmd/utils"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
-
-type Hash [32]byte
-
-func HashFromString(s string) Hash {
-	return sha256.Sum256([]byte(s))
-}
 
 // for parallel txofile building we need to have a buffer
 type txotx struct {
@@ -83,7 +77,7 @@ func lookerUpperWorker(
 
 	// build string and hash it (nice that this in parallel too)
 	utxostring := fmt.Sprintf("%s;%d", txid, txPos)
-	opHash := HashFromString(utxostring)
+	opHash := simutil.HashFromString(utxostring)
 
 	// make DB lookup
 	ttlbytes, err := db.Get(opHash[:], nil)
@@ -99,7 +93,7 @@ func lookerUpperWorker(
 		panic("ded")
 	}
 
-	di.deathHeight = BtU32(ttlbytes)
+	di.deathHeight = simutil.BtU32(ttlbytes)
 	// send back to the channel and this output is done
 	infoChan <- di
 
@@ -176,15 +170,21 @@ func ReadTTLdb(isTestnet bool, txos string, ttldb string, offsetfile string, sig
 	//AND the block that it was working on is written
 	for ; tipnum != currentOffsetHeight && stop != true; tipnum++ {
 
+		//rawblocktime := time.Now()
 		block, err := simutil.GetRawBlockFromFile(tipnum, offsetFile)
 		if err != nil {
 			panic(err)
 		}
+		//donerawblocktime := time.Now()
+		//fmt.Println("rawblock took:", donerawblocktime.Sub(rawblocktime))
+		//writetxostime := time.Now()
 		//write to the .txos file
 		err = writeTxos(block, blocktxs, tipnum+1, ttlfile, lvdb) //tipnum is +1 since we're skipping the genesis block
 		if err != nil {
 			panic(err)
 		}
+		//donewritetxostime := time.Now()
+		//fmt.Println("writeTxos took:", donewritetxostime.Sub(writetxostime))
 
 		//Just something to let the user know that the program is still running
 		//The actual block the program is on is +1 of the printed number
@@ -212,14 +212,14 @@ func ReadTTLdb(isTestnet bool, txos string, ttldb string, offsetfile string, sig
 }
 
 //writeTxos writes to the .txos file.
-//Adds - for txinput, - for txoutput, z for unspenable txos, and the height number for that block.
-func writeTxos(b wire.MsgBlock, blocktxs []*txotx, tipnum int,
+//Adds '+' for txinput, '-' for txoutput, 'z' for unspenable txos, and the height number for that block.
+func writeTxos(tx []*wire.MsgTx, blocktxs []*txotx, tipnum int,
 	ttlfile *os.File, lvdb *leveldb.DB) error {
 
 	//s is the string that gets written to .txos
 	var s string
 
-	for blockindex, tx := range b.Transactions {
+	for blockindex, tx := range tx {
 		for _, in := range tx.TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
 				//hashing because blockbatch wants a byte slice

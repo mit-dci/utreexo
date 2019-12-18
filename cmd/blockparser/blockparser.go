@@ -6,7 +6,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/mit-dci/lit/btcutil/chaincfg/chainhash"
 	"github.com/mit-dci/lit/wire"
 	"github.com/mit-dci/utreexo/cmd/utils"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -34,15 +33,15 @@ type RawHeaderData struct {
 	Offset            [4]byte
 }
 
-//chainhash.Hash is just [32]byte
-var mainnetGenHash = chainhash.Hash{
+//simutil.Hash is just [32]byte
+var mainnetGenHash = simutil.Hash{
 	0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72,
 	0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
 	0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c,
 	0x68, 0xd6, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00,
 }
 
-var testNet3GenHash = chainhash.Hash{
+var testNet3GenHash = simutil.Hash{
 	0x43, 0x49, 0x7f, 0xd7, 0xf8, 0x26, 0x95, 0x71,
 	0x08, 0xf4, 0xa3, 0x0f, 0xd9, 0xce, 0xc3, 0xae,
 	0xba, 0x79, 0x97, 0x20, 0x84, 0xe9, 0x0e, 0xad,
@@ -67,14 +66,20 @@ func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) erro
 
 	//Tell stopParse that the main loop is ok to exit now
 	done := make(chan bool, 1)
+
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	go stopParse(sig, offsetfinished, stopGoing, running, done, offsetfile)
+
 	//defaults to the testnet Gensis tip
 	tip := testNet3GenHash
 
 	//If given the option testnet=true, check if the blk00000.dat file
 	//in the directory is a testnet file. Vise-versa for mainnet
 	simutil.CheckTestnet(isTestnet)
+
+	if isTestnet != true {
+		tip = mainnetGenHash
+	}
 
 	var currentOffsetHeight int
 	tipnum := 0
@@ -88,7 +93,7 @@ func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) erro
 		//to let stopParse() know that it shouldn't delete offsetfile
 		offsetfinished <- true
 	}
-	//if there is a .txos file, get the tipnum from that
+	//if there is a tipfile, get the tipnum from that
 	var t [4]byte
 	if simutil.HasAccess("tipfile") {
 		tf, err := os.Open("tipfile")
@@ -99,6 +104,7 @@ func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) erro
 		tipnum = int(simutil.BtU32(t[:]))
 	}
 
+	//tipfile saves the last block that was written to ttldb
 	tipFile, err := os.OpenFile("tipfile", os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
@@ -144,6 +150,7 @@ func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) erro
 	if err != nil {
 		panic(err)
 	}
+	defer offsetFile.Close()
 	//read off the offset file and start writing to the .txos file
 	for ; tipnum != currentOffsetHeight && stop != true; tipnum++ {
 
@@ -165,6 +172,9 @@ func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) erro
 		default:
 		}
 	}
+
+	//wait until dbWorker() has written to the ttldb file
+	//allows leveldb to close gracefully
 	batchwg.Wait()
 	fmt.Println("Finished writing.")
 
@@ -174,7 +184,7 @@ func Parser(isTestnet bool, ttldb string, offsetfile string, sig chan bool) erro
 }
 
 //Builds the offset file
-func buildOffsetFile(tip chainhash.Hash, tipnum int, nextMap map[[32]byte]RawHeaderData, offsetfile string, offsetfinished chan bool) (int, error) {
+func buildOffsetFile(tip simutil.Hash, tipnum int, nextMap map[[32]byte]RawHeaderData, offsetfile string, offsetfinished chan bool) (int, error) {
 	offsetFile, err := os.OpenFile(offsetfile, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
@@ -190,6 +200,7 @@ func buildOffsetFile(tip chainhash.Hash, tipnum int, nextMap map[[32]byte]RawHea
 			fmt.Printf("%s doesn't exist; done building\n", fileName)
 			break
 		}
+		//grab headers from the .dat file as RawHeaderData type
 		rawheaders, err := readRawHeadersFromFile(uint32(fileNum))
 		if err != nil {
 			panic(err)
@@ -229,10 +240,8 @@ func readRawHeadersFromFile(fileNum uint32) ([]RawHeaderData, error) {
 	}
 
 	defer f.Close()
-	//skip genesis block
 	loc := int64(0)
-	//where the block is located from the beginning of the file
-	offset := uint32(0)
+	offset := uint32(0) //where the block is located from the beginning of the file
 
 	//until offset is at the end of the file
 	for loc != fstat.Size() {
@@ -277,8 +286,8 @@ func writeBlockOffset(
 	nextMap map[[32]byte]RawHeaderData, //  Map to save the current block hash
 	offsetFile *os.File, //                 File to save the sorted blocks and locations to
 	tipnum int, //                          Current block it's on
-	tip chainhash.Hash) ( //                Current hash of the block it's on
-	chainhash.Hash, int, error) {
+	tip simutil.Hash) ( //                Current hash of the block it's on
+	simutil.Hash, int, error) {
 
 	for _, b := range blockHeaders {
 		if len(nextMap) > 10000 { //Just a random big number
@@ -286,76 +295,75 @@ func writeBlockOffset(
 			break
 		}
 
-		//not in line, add to map
+		//The block's Prevhash doesn't match the
+
+		//previous block header. Add to map.
+		//Searches until it finds a hash that does.
 		if b.Prevhash != tip {
 			nextMap[b.Prevhash] = b
 			continue
 		}
 
-		tip = b.CurrentHeaderHash
-		tipnum++
-
+		//Write the .dat file name and the
+		//offset the block can be found at
 		offsetFile.Write(b.FileNum[:])
 		offsetFile.Write(b.Offset[:])
 
+		//set the tip to current block's hash
+		tip = b.CurrentHeaderHash
+		tipnum++
+
 		//check for next blocks in map
+		//same thing but with the stored blocks
+		//that we skipped over
 		stashedBlock, ok := nextMap[tip]
 		for ok {
+			//Write the .dat file name and the
+			//offset the block can be found at
+			offsetFile.Write(stashedBlock.FileNum[:])
+			offsetFile.Write(stashedBlock.Offset[:])
+
+			//set the tip to current block's hash
 			tip = stashedBlock.CurrentHeaderHash
 			tipnum++
 
-			offsetFile.Write(stashedBlock.FileNum[:])
-			offsetFile.Write(stashedBlock.Offset[:])
+			//remove the written current block
 			delete(nextMap, stashedBlock.Prevhash)
+
+			//move to the next block
 			stashedBlock, ok = nextMap[tip]
 		}
 	}
 	return tip, tipnum, nil
 }
 
-//writeBlock writes to the .txos file.
-//Adds - for txinput, - for txoutput, z for unspenable txos, and the height number for that block.
-func writeBlock(b wire.MsgBlock, tipnum int, f *os.File,
+//writeBlock sends off ttl info to dbWorker to be written to ttldb
+func writeBlock(tx []*wire.MsgTx, tipnum int, tipFile *os.File,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
-
-	//s is the string that gets written to .txos
-	//var s string
 
 	blockBatch := new(leveldb.Batch)
 
-	for blockindex, tx := range b.Transactions {
+	for blockindex, tx := range tx {
 		for _, in := range tx.TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
 				//hashing because blockbatch wants a byte slice
+				//TODO Maybe don't convert to a string?
+				//Perhaps converting to bytes can work?
 				opString := in.PreviousOutPoint.String()
 				h := simutil.HashFromString(opString)
-				//s += "-" + opString + "\n"
-				//fmt.Println("just txin:", in.PreviousOutPoint)
-				//fmt.Println("hight:", tipnum)
 				blockBatch.Put(h[:], simutil.U32tB(uint32(tipnum)))
 			}
 		}
-
-		// creates all txos up to index indicated
-		//s += "+" + wire.OutPoint{tx.TxHash(), uint32(len(tx.TxOut))}.String()
-
-		//for i, out := range tx.TxOut {
-		//	if isUnspendable(out) {
-		//		s += "z" + fmt.Sprintf("%d", i)
-		//	}
-		//}
-		//s += "\n"
 	}
 
 	//fmt.Printf("--- sending off %d dels at tipnum %d\n", batch.Len(), tipnum)
 	wg.Add(1)
+
 	//sent to dbworker to be written to ttldb asynchronously
 	batchan <- blockBatch
 
-	//s += fmt.Sprintf("h: %d\n", tipnum)
 	//write to the .txos file
-	//_, err := f.WriteAt(simutil.U32tB(uint32(tipnum))[:], 0)
-	_, err := f.WriteAt(simutil.U32tB(uint32(tipnum)), 0)
+	_, err := tipFile.WriteAt(simutil.U32tB(uint32(tipnum)), 0)
 	if err != nil {
 		panic(err)
 	}
@@ -365,6 +373,7 @@ func writeBlock(b wire.MsgBlock, tipnum int, f *os.File,
 
 // dbWorker writes everything to the db. It's it's own goroutine so it
 // can work at the same time that the reads are happening
+// receives from writeBlock
 func dbWorker(
 	bChan chan *leveldb.Batch, lvdb *leveldb.DB, wg *sync.WaitGroup) {
 
