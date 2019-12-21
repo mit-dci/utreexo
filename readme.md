@@ -48,38 +48,22 @@ This will give you simcmd binary.
 
 simcmd contains various commands that go from organizing the .dat files from Bitcoin Core to actually doing a Utreexo simulation. To view all the available commands and flags, just run './simcmd' by itself.
 
-First we need to organize the blocks in .dat file and build a giant ascii file of all transactions and record how long each transaction lasts until it is spent. 
-```
-$ cd ~/go/src/github.com/mit-dci/utreexo/cmd/simcmd/
-$ go build
-$ cp simcmd ~/.bitcoin/testnet3/blocks
-$ cd ~/.bitcoin/testnet3/blocks
-$ ./simcmd parseblock
-[... takes some time, builds testnet.txos file and ttldb/ folder]
-```
+First we need to organize the blocks in .dat file, build a proof file and a db keeping record how long each transaction lasts until it is spent. 
 
-* Now there's testnet.txos, which is all the txs, and ttldb, which is the lifetimes of all utxos.  Now use txottlgen command to combine them into a single text file with txo lifetimes.
+First, the "genproofs" command builds all the block proofs for the blockchain and the db for keeping how long a transaction lasts.
 
 ```
 $ cd ~/.bitcoin/testnet3/blocks
-$ ./simcmd txottlgen
-[...takes time again]
-```
-
-* Now there's a ttl.testnet.txos file, which has everything we need.  At this point you can delete everything else (ttldb, testnet.txos, heck the whole blocks folder if you want).  Now you can run ibdsim to test utreexo sync performance.  First, the "genproofs" command builds all the block proofs for the blockchain.
-
-```
-$ cd ~/.bitcoin/testnet3/blocks
-$ ./simcmd genproofs -ttlfn=ttl.testnet.txos // ttlfn flag is required for testnet
+$ ./simcmd genproofs -testnet=1 // -testnet=1 flag needed for testnet. Leave empty for mainnet
 [... takes time and builds block proofs]
 ```
 
-* "genproofs" should take a few hours as it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk.  This is what the bridge node and archive node would do in a real node.  Next, you can run 'simcmd ibdsim -ttlfn=ttl.testnet.txos'; it will perform IBD as a compact node which maintains only a reduced state, and accepts proofs (which are created in the `proofdb` folder during the previous step)
+* "genproofs" should take a few hours as it does two things. First, it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk. Second, it saves each TXO and height with leveldb to make a TXO time to live (bascially how long each txo lasts until it is spent) for caching purposes. This is what the bridge node and archive node would do in a real node.  Next, you can run 'simcmd ibdsim -testnet=1'; it will perform IBD as a compact node which maintains only a reduced state, and accepts proofs (which are created in the proof.dat file during the previous step)
 
 
 ```
 $ cd ~/.bitcoin/testnet3/blocks
-$ ./simcmd ibdsim -ttlfn=ttl.testnet.txos // ttlfn flag is required for testnet
+$ ./simcmd ibdsim -testnet=1 // -testnet=1 flag needed fro testnet. Leave empty for mainnet
 [... takes time and does utreexo sync simulation]
 ```
 
