@@ -62,39 +62,57 @@ func CheckTestnet(isTestnet bool) {
 	}
 }
 
-//GetRawBlocksFromFile reads the blocks from the given .dat file and
-//returns those blocks.
-//Skips the genesis block. If you search for block 0, it will give you
-//block 1.
-func GetRawBlockFromFile(tipnum int, offsetFile *os.File) ([]*wire.MsgTx, error) {
+func BlockReader(bchan chan BlockToWrite, currentOffsetHeight int, height int, offsetfile string) {
+	for height != currentOffsetHeight {
+		block, err := GetRawBlockFromFile(height, offsetfile)
+		if err != nil {
+			panic(err)
+		}
+		b := BlockToWrite{Txs: block, Height: height}
+		bchan <- b
+		height++
+	}
+}
+
+// GetRawBlocksFromFile reads the blocks from the given .dat file and
+// returns those blocks.
+// Skips the genesis block. If you search for block 0, it will give you
+// block 1.
+func GetRawBlockFromFile(tipnum int, offsetFileName string) ([]*wire.MsgTx, error) {
 	var datFile [4]byte
 	var offset [4]byte
 
-	//offset file consists of 8 bytes per block
-	//tipnum * 8 gives us the correct position for that block
+	offsetFile, err := os.Open(offsetFileName)
+	if err != nil {
+		panic(err)
+	}
+
+	// offset file consists of 8 bytes per block
+	// tipnum * 8 gives us the correct position for that block
 	offsetFile.Seek(int64(8*tipnum), 0)
 
-	//Read file and offset for the block
+	// Read file and offset for the block
 	offsetFile.Read(datFile[:])
 	offsetFile.Read(offset[:])
 
 	fileName := fmt.Sprintf("blk%05d.dat", int(BtU32(datFile[:])))
-	//Channel to alert stopParse() that offset
+	// Channel to alert stopParse() that offset
 	f, err := os.Open(fileName)
 	if err != nil {
 		panic(err)
 	}
-	//+8 skips the 8 bytes of magicbytes and load size
+	// +8 skips the 8 bytes of magicbytes and load size
 	f.Seek(int64(BtU32(offset[:])+8), 0)
 
-	//TODO this is probably expensive. fix
+	// TODO this is probably expensive. fix
 	b := new(wire.MsgBlock)
 	err = b.Deserialize(f)
 	if err != nil {
 		panic(err)
 	}
 	f.Close()
-	//offsetFile.Close()
+	offsetFile.Close()
+
 	return b.Transactions, nil
 }
 
@@ -105,7 +123,7 @@ func U32tB(i uint32) []byte {
 	return buf.Bytes()
 }
 
-//TODO make actual error return here
+// TODO make actual error return here
 // 4 byte Big Endian slice to uint32.  Returns ffffffff if something doesn't work.
 func BtU32(b []byte) uint32 {
 	if len(b) != 4 {
