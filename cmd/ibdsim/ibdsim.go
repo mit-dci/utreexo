@@ -43,11 +43,6 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 	}
 	defer lvdb.Close()
 
-	offsetFile, err := os.Open(offsetfile)
-	if err != nil {
-		panic(err)
-	}
-
 	pFile, err := os.OpenFile("proof.dat", os.O_RDONLY, 0400)
 	if err != nil {
 		return err
@@ -69,7 +64,7 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
 	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
 
-	var height uint32
+	var height int
 
 	var plustime time.Duration
 	starttime := time.Now()
@@ -87,13 +82,17 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 	//bool for stopping the scanner.Scan loop
 	var stop bool
 
-	for ; int(height) != currentOffsetHeight && stop != true; height++ {
-		tx, err := simutil.GetRawBlockFromFile(int(height), offsetFile)
-		if err != nil {
-			panic(err)
-		}
+	// To send/receive blocks from blockreader()
+	bchan := make(chan simutil.BlockToWrite, 10)
 
-		err = genPollard(tx, int(height), &totalTXOAdded,
+	// Reads block asynchronously from .dat files
+	go simutil.BlockReader(bchan, currentOffsetHeight, height, offsetfile)
+
+	for ; height != currentOffsetHeight && stop != true; height++ {
+
+		b := <-bchan
+
+		err = genPollard(b.Txs, b.Height, &totalTXOAdded,
 			lookahead, &totalDels, plustime, pFile, pOffsetFile, lvdb, &p)
 		if err != nil {
 			panic(err)
@@ -106,7 +105,7 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 		//		totalProofNodes)
 		//}
 
-		if height+1%100 == 0 {
+		if height%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 				height, totalTXOAdded, totalDels, p.Stats(),
 				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
@@ -124,6 +123,10 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 		default:
 		}
 	}
+
+	fmt.Println("Done Writing")
+
+	done <- true
 
 	return nil
 }
@@ -219,17 +222,10 @@ func genPollard(
 	// totalTXOAdded += len(blockAdds)
 	*totalDels += len(bp.Targets)
 
-	//fmt.Println("bp after:", bp)
-	//fmt.Println("BlockAdds:", blockAdds)
-	//fmt.Println("Bp Targets:", bp.Targets)
 	err = p.Modify(blockAdds, bp.Targets)
 	if err != nil {
 		return err
 	}
-	//fmt.Println("Pollard:", p)
-	//fmt.Println("Modified Pollard", p)
-	//empty the blockAdds and blockDels that were written
-	//blockAdds = []utreexo.LeafTXO{}
 	return nil
 }
 
@@ -251,8 +247,6 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	var compare1 [4]byte
 	copy(compare1[:], utreexo.U32tB(height))
 	//check if height matches
-	//fmt.Printf("%x\n", compare0)
-	//fmt.Printf("%x\n", compare1)
 	if compare0 != compare1 {
 		return nil, fmt.Errorf("Corrupted proofoffset file\n")
 	}
@@ -260,10 +254,8 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	var proofsize [4]byte
 	pFile.Read(proofsize[:])
 
-	//fmt.Printf("%x\n", int(simutil.BtU32(proofsize[:])))
 	proof := make([]byte, int(simutil.BtU32(proofsize[:])))
 	pFile.Read(proof[:])
-	//fmt.Printf("%x\n", proof)
 
 	return proof, nil
 

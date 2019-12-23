@@ -16,17 +16,20 @@ import (
 // build the bridge node / proofs
 func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool) error {
 
-	//Channel to alert the main loop to break
+	// Channel to alert the main loop to break
 	stopGoing := make(chan bool, 1)
 
-	//Channel to alert stopTxottl it's ok to exit
+	// Channel to alert stopTxottl it's ok to exit
 	done := make(chan bool, 1)
 
-	//Channel to alert stopBuildProofs() that buildOffsetFile() has been finished
+	// Channel to alert stopBuildProofs() that buildOffsetFile() has been finished
 	offsetfinished := make(chan bool, 1)
 
+	// Channel for stopBuildProofs() to wait
+	finish := make(chan bool, 1)
+
 	// Handle user interruptions
-	go stopBuildProofs(sig, offsetfinished, stopGoing, done, offsetfile)
+	go stopBuildProofs(sig, offsetfinished, stopGoing, done, finish, offsetfile)
 
 	//defaults to the testnet Gensis tip
 	tip := simutil.TestNet3GenHash
@@ -43,13 +46,13 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 	height := 0
 	nextMap := make(map[[32]byte]simutil.RawHeaderData)
 
-	//if there isn't an offset file, make one
+	// if there isn't an offset file, make one
 	if simutil.HasAccess(offsetfile) == false {
 		fmt.Println("offsetfile not present. Building...")
 		currentOffsetHeight, _ = buildOffsetFile(tip, height, nextMap, offsetfile, offsetfinished)
 	} else {
-		//if there is a offset file, we should pass true to offsetfinished
-		//to let stopParse() know that it shouldn't delete offsetfile
+		// if there is a offset file, we should pass true to offsetfinished
+		// to let stopParse() know that it shouldn't delete offsetfile
 		offsetfinished <- true
 	}
 
@@ -113,13 +116,6 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 	}
 	defer pOffsetFile.Close()
 
-	// Index for where the blocks are in the .dat files from bitcoin core
-	offsetFile, err := os.Open(offsetfile)
-	if err != nil {
-		panic(err)
-	}
-	defer offsetFile.Close()
-
 	newForest := utreexo.NewForest()
 	var totalProofNodes int
 	var pOffset uint32
@@ -127,59 +123,54 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 	//bool for stopping the main loop
 	var stop bool
 
+	// To send/receive blocks from blockreader()
+	bchan := make(chan simutil.BlockToWrite, 10)
+
 	fmt.Println("Building Proofs and ttldb...")
 
-	for ; int(height) != currentOffsetHeight && stop != true; height++ {
-		block, err := simutil.GetRawBlockFromFile(int(height), offsetFile)
+	// Reads block asynchronously from .dat files
+	go simutil.BlockReader(bchan, currentOffsetHeight, height, offsetfile)
+
+	for ; height != currentOffsetHeight && stop != true; height++ {
+
+		b := <-bchan
+
+		err := writeProofs(b.Txs, b.Height, pFile, pOffsetFile, newForest, totalProofNodes, &pOffset)
 		if err != nil {
 			panic(err)
 		}
 
-		err = writeProofs(block, int(height), pFile, pOffsetFile,
-			newForest, totalProofNodes, &pOffset)
+		err = writeBlock(b.Txs, b.Height+1, batchan, &batchwg)
 		if err != nil {
 			panic(err)
 		}
 
-		// write to the .txos file
-		// tipnum is +1 since we're skipping the genesis block
-		// Ok so this is kinda dumb but when we ask for block 1, we need
-		// to go to offset 0 so we need to give it a 0
-		// But at offset 0, you'll find block 1
-		// So to ask for block 1, you need to give it a 0
-		// If you ask for block 1 and give it a 1, you'll get block 2
-		// TODO Maybe fix this? It'll throw people off
-		writeBlock(block, int(height+1), tipFile, batchan, &batchwg)
-
-		//if height%10000 == 0 {
-		//	fmt.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
-		//		height, newForest.Stats(),
-		//		plustime.Seconds(), time.Now().Sub(starttime).Seconds(),
-		//		totalProofNodes)
-		//}
-
-		//Just something to let the user know that the program is still running
-		//The actual block the program is on is +1 of the printed number
-		if height%10000 == 0 {
-			fmt.Println("On block :", height+1)
+		if b.Height%10000 == 0 {
+			fmt.Println("On block :", b.Height)
 		}
 
-		//Check if stopSig is no longer false
-		//stop = true makes the loop exit
+		// Check if stopSig is no longer false
+		// stop = true makes the loop exit
 		select {
 		case stop = <-done:
 		default:
 		}
-
 	}
-	//wait until dbWorker() has written to the ttldb file
-	//allows leveldb to close gracefully
+
+	// write to the tipfile
+	_, err = tipFile.WriteAt(simutil.U32tB(uint32(height+1)), 0)
+	if err != nil {
+		panic(err)
+	}
+
+	// wait until dbWorker() has written to the ttldb file
+	// allows leveldb to close gracefully
 	batchwg.Wait()
 
 	fmt.Println("Done writing")
 
 	// Tell stopBuildProofs that it's ok to exit
-	done <- true
+	finish <- true
 	return nil
 
 }
@@ -265,26 +256,26 @@ func writeProofs(
 
 	totalProofNodes += len(blockProof.Proof)
 
-	//U32tB always returns 4 bytes
-	//Later this could also be changed to magic bytes
+	// U32tB always returns 4 bytes
+	// Later this could also be changed to magic bytes
 	_, err = pFile.Write(utreexo.U32tB(uint32(height)))
 	if err != nil {
 		return err
 	}
 	p := blockProof.ToBytes()
 
-	//write the offset for a block
+	// write the offset for a block
 	_, err = pOffsetFile.Write(utreexo.U32tB(*pOffset))
 	if err != nil {
 		return err
 	}
-	*pOffset += uint32(len(p)) + uint32(8) // add 4 for height bytes
-	//write the size of the proof
+	*pOffset += uint32(len(p)) + uint32(8) // add 8 for height bytes and load size
+	// write the size of the proof
 	_, err = pFile.Write(utreexo.U32tB(uint32(len(p))))
 	if err != nil {
 		return err
 	}
-	//Write the actual proof
+	// Write the actual proof
 	_, err = pFile.Write(p)
 	if err != nil {
 		return err
@@ -293,7 +284,7 @@ func writeProofs(
 	if err != nil {
 		return err
 	}
-	//empty the blockAdds and blockDels that were written
+	// empty the blockAdds and blockDels that were written
 	blockAdds = []utreexo.LeafTXO{}
 	blockDels = []utreexo.Hash{}
 
@@ -313,7 +304,7 @@ func hashgen(tx *simutil.Txotx) ([]utreexo.LeafTXO, error) {
 	return adds, nil
 }
 
-func stopBuildProofs(sig chan bool, offsetfinished chan bool, stopGoing chan bool, done chan bool, offsetfile string) {
+func stopBuildProofs(sig chan bool, offsetfinished chan bool, stopGoing chan bool, done chan bool, finish chan bool, offsetfile string) {
 	<-sig
 
 	//Tell BuildProofs to finish the block it's working on
@@ -335,6 +326,9 @@ func stopBuildProofs(sig chan bool, offsetfinished chan bool, stopGoing chan boo
 			done <- true
 		}
 	}
+
+	// Wait until BuildProofs() says it's ok to exit
+	<-finish
 
 	fmt.Println("Exiting...")
 	os.Exit(0)

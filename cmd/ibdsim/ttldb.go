@@ -2,7 +2,6 @@ package ibdsim
 
 import (
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/mit-dci/lit/wire"
@@ -11,7 +10,7 @@ import (
 )
 
 //writeBlock sends off ttl info to dbWorker to be written to ttldb
-func writeBlock(tx []*wire.MsgTx, tipnum int, tipFile *os.File,
+func writeBlock(tx []*wire.MsgTx, tipnum int,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
 	blockBatch := new(leveldb.Batch)
@@ -34,12 +33,6 @@ func writeBlock(tx []*wire.MsgTx, tipnum int, tipFile *os.File,
 
 	//sent to dbworker to be written to ttldb asynchronously
 	batchan <- blockBatch
-
-	//write to the .txos file
-	_, err := tipFile.WriteAt(simutil.U32tB(uint32(tipnum)), 0)
-	if err != nil {
-		panic(err)
-	}
 
 	return nil
 }

@@ -2,6 +2,8 @@ package simutil
 
 import (
 	"crypto/sha256"
+
+	"github.com/mit-dci/lit/wire"
 )
 
 type Hash [32]byte
@@ -48,4 +50,9 @@ type RawHeaderData struct {
 	Prevhash          [32]byte
 	FileNum           [4]byte
 	Offset            [4]byte
+}
+
+type BlockToWrite struct {
+	Txs    []*wire.MsgTx
+	Height int
 }
