@@ -134,7 +134,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashdirt []uint64
-	fmt.Printf(p.toString())
+	fmt.Printf("start rem %s", p.toString())
 	// swap all the nodes
 	for h := uint8(0); h < ph; h++ {
 		rowdirt := hashdirt
@@ -187,11 +187,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 			hashdirt = dirtify(hashdirt, swaprows, d, nextNumLeaves, h+2, ph)
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row
-		// fmt.Printf("done with row %d\n", h)
-		// fmt.Printf(p.toString())
+		fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
-	fmt.Printf(p.toString())
+	fmt.Printf("pretop %s", p.toString())
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
@@ -205,13 +204,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 		if ntpar == nil { // was already a top / overlap
 			fmt.Printf("grabbed nil ntpar\n")
 			nexTops[i] = p.tops[lr]
-		} else { // node becoming a top
+		} else { // node becoming a top, ntpar exists
 			fmt.Printf("non nil grabbed par %x parsib %x\n",
 				ntpar.data[:4], ntparsib.data[:4])
 			nexTops[i] = *ntparsib.niece[lr]
 			if ntparsib == nil {
 				nexTops[i].chop()
-			} else {
+			} else if ntparsib.niece[lr^1] != nil {
 				nexTops[i].niece = ntparsib.niece[lr^1].niece
 			}
 		}
@@ -312,28 +311,50 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 
 	// fmt.Printf("aparsib %x bparsib %x\n", aparsib.data[:4], bparsib.data[:4])
 
+	if bpar == nil { // b is a top (can this happen...?)
+		// TODO I don't think this can happen
+		panic("why yes it can")
+		// apar.niece[alr], p.tops[blr] = &p.tops[blr], *apar.niece[alr]
+	}
+
 	hn := new(hashableNode)
+	// a is aparsib.niece[alr], a's sibling is aparsib.niece[alr^1]
+	// b is bparsib.niece[blr], b's sibling is bparsib.niece[blr^1]
 
 	if apar == nil { // a is a top, has no parent
 		fmt.Printf("bpar %x\n", bpar.data[:4])
 		fmt.Printf("bparsib %x\n", bparsib.data[:4])
 		fmt.Printf("bparsib.[%d] %x\n", blr^1, bparsib.niece[blr^1].data[:4])
+		fmt.Printf("p.tops[alr] %x\n", p.tops[alr].data[:4])
+
 		if bparsib != nil && bparsib.niece[blr] != nil {
-			fmt.Printf("top swap\t %x %x\n",
+			fmt.Printf("\ttop swap\t %x %x\n",
 				p.tops[alr].data[:4], bparsib.niece[blr].data[:4])
 		}
-		atop := p.tops[alr]
-		p.tops[alr], bparsib.niece[blr] = *bparsib.niece[blr], &atop
-		p.tops[alr].niece, bparsib.niece[blr^1].niece =
-			bparsib.niece[blr^1].niece, p.tops[alr].niece
 
-	} else if bpar == nil { // b is a top (can this happen...?)
-		// TODO I don't think this happens
-		apar.niece[alr], p.tops[blr] = &p.tops[blr], *apar.niece[alr]
-		panic("why yes it can")
+		// ugh this is really weird an unintuitve
+		bparsib.niece[blr].niece,
+			bparsib.niece[blr^1].niece,
+			p.tops[alr].niece =
+			bparsib.niece[blr^1].niece,
+			p.tops[alr].niece,
+			bparsib.niece[blr].niece
+
+		// why do you have to stash? something pointery...
+		// yeah this works but direct swap doesn't because of something
+		// involving pointers I bet.
+		stash := p.tops[alr]
+		p.tops[alr] = *bparsib.niece[blr]
+		bparsib.niece[blr] = &stash
 	} else { // normal swap, neither is a top
 		fmt.Printf("normal swap\t")
-		aparsib.niece[alr], bparsib.niece[blr] = bparsib.niece[blr], aparsib.niece[alr]
+		if r.from != r.to^1 {
+			// swap sibling nieces if not siblings
+			aparsib.niece[alr^1].niece, bparsib.niece[blr^1].niece =
+				bparsib.niece[blr^1].niece, aparsib.niece[alr^1].niece
+		}
+		aparsib.niece[alr], bparsib.niece[blr] =
+			bparsib.niece[blr], aparsib.niece[alr]
 	}
 
 	hn.dest = bpar

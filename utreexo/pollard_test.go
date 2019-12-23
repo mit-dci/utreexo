@@ -8,10 +8,10 @@ import (
 
 func TestPollardRand(t *testing.T) {
 	// for z := 0; z < 10000; z++ {
-	z := 4
+	z := 339
 	rand.Seed(int64(z))
 	fmt.Printf("randseed %d\n", z)
-	err := pollardRandomRemember(6)
+	err := pollardRandomRemember(4)
 	if err != nil {
 		fmt.Printf("randseed %d\n", z)
 		t.Fatal(err)
@@ -112,9 +112,9 @@ func pollardRandomRemember(blocks int32) error {
 		fmt.Printf("frs postadd %s", f.toString())
 
 		// check all leaves match
-		// if !p.equalToForestIfThere(f) {
-		// 	return fmt.Errorf("pollard and forest leaves differ")
-		// }
+		if !p.equalToForestIfThere(f) {
+			return fmt.Errorf("pollard and forest leaves differ")
+		}
 
 		fullTops := f.GetTops()
 		polTops := p.topHashesReverse()
