@@ -1,16 +1,19 @@
-package main
+package clair
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/mit-dci/lit/wire"
+	"github.com/mit-dci/utreexo/cmd/ibdsim"
+	"github.com/mit-dci/utreexo/cmd/utils"
+	//"github.com/mit-dci/utreexo/utreexo"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 /* idea here:
@@ -70,27 +73,20 @@ func SplitAfter(s sortableTxoSlice, h uint32) (top, bottom sortableTxoSlice) {
 	return
 }
 
-func main() {
-	fmt.Printf("clair - builds clairvoyant caching schedule\n")
-	err := clairvoy()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("done\n")
+func Clairvoy(ttldb string, offsetfile string, mem string, sig chan bool) error {
+	fmt.Printf("genclair - builds clairvoyant caching schedule\n")
 
-}
+	//Channel to alert the main loop to break
+	stopGoing := make(chan bool, 1)
 
-func clairvoy() error {
-	txofile, err := os.OpenFile("ttl.mainnet.txos", os.O_RDONLY, 0600)
-	if err != nil {
-		return err
-	}
+	//Channel to alert stopTxottl it's ok to exit
+	done := make(chan bool, 1)
+
+	go stopClairvoy(sig, stopGoing, done)
 
 	scheduleSlice := make([]byte, 125000000)
 
 	// scheduleFile, err := os.Create("schedule.clr")
-	// if err != nil {
-	// 	return err
 	// }
 	// we should know how many utxos there are before starting this, and allocate
 	// (truncate!? weird) that many bits (/8 for bytes)
@@ -106,137 +102,78 @@ func clairvoy() error {
 	// 	return err
 	// }
 
-	defer txofile.Close()
 	// defer scheduleFile.Close()
 
-	scanner := bufio.NewScanner(txofile)
-	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
-
-	var sortTime time.Duration
-	startTime := time.Now()
-	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
+	// open ttl database
+	o := new(opt.Options)
+	o.CompactionTableSizeMultiplier = 8
+	o.ReadOnly = true
+	lvdb, err := leveldb.OpenFile(ttldb, o)
+	if err != nil {
+		panic(err)
 	}
-	maxmem, err := strconv.Atoi(os.Args[1])
+	defer lvdb.Close()
+
+	var currentOffsetHeight int
+	//grab the last block height from currentoffsetheight
+	//currentoffsetheight saves the last height from the offsetfile
+	var currentOffsetHeightByte [4]byte
+	currentOffsetHeightFile, err := os.Open("currentoffsetheight")
+	if err != nil {
+		panic(err)
+	}
+	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
+	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
+
+	maxmem, err := strconv.Atoi(mem)
 	if err != nil || maxmem == 0 {
 		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
 
 	}
-	var blockEnds sortableTxoSlice
-
-	var clairSlice, remembers sortableTxoSlice
 
 	var utxoCounter uint32
-	var height uint32
-	height = 1
+	var height int
+	var clairSlice, remembers sortableTxoSlice
 	// _, err = indexFile.WriteAt(U32tB(0), 0) // first 0 bytes because blocks start at 1
 	// if err != nil {
 	// 	return err
 	// }
 
-	for scanner.Scan() {
-		switch scanner.Text()[0] {
-		case '-':
-			// do nothing?
-		case '+':
+	// To send/receive blocks from blockreader()
+	bchan := make(chan simutil.BlockToWrite, 20)
 
-			endHeights, err := plusLine(scanner.Text())
-			if err != nil {
-				return err
-			}
-			for _, eh := range endHeights {
-				if eh != 0 {
-					var nxo txoEnd
-					nxo.txoIdx = utxoCounter
-					utxoCounter++
-					nxo.end = height + eh
-					blockEnds = append(blockEnds, nxo)
-				}
-			}
+	//bool for stopping the scanner.Scan loop
+	var stop bool
 
-		case 'h':
+	// Reads block asynchronously from .dat files
+	go simutil.BlockReader(bchan, currentOffsetHeight, height, offsetfile)
 
-			// txosThisBlock := uint32(len(blockEnds))
+	for ; height != currentOffsetHeight && stop != true; height++ {
 
-			// append & sort
-			sortStart := time.Now()
-			// presort the smaller slice
-			sort.Sort(blockEnds)
-			// merge sorted
-			clairSlice = mergeSortedSlices(clairSlice, blockEnds)
-			sortTime += time.Now().Sub(sortStart)
+		b := <-bchan
 
-			// clear blockEnds
-			blockEnds = sortableTxoSlice{}
-
-			// chop off the beginning: that's the stuff that's memorable
-			preLen := len(clairSlice)
-			remembers, clairSlice = SplitAfter(clairSlice, height)
-			postLen := len(clairSlice)
-			if preLen != len(remembers)+postLen {
-				return fmt.Errorf("h %d preLen %d remembers %d postlen %d\n",
-					height, preLen, len(remembers), postLen)
-			}
-
-			// chop off the end, that's stuff that is forgettable
-			if len(clairSlice) > maxmem {
-				//				forgets := clairSlice[maxmem:]
-				// fmt.Printf("\tblock %d forget %d\n",
-				// height, len(clairSlice)-maxmem)
-				clairSlice = clairSlice[:maxmem]
-
-				//				for _, f := range forgets {
-				//					fmt.Printf("%d ", f.txoIdx)
-				//				}
-				//				fmt.Printf("\n")
-			}
-
-			// expand index file and schedule file (with lots of 0s)
-			// _, err := indexFile.WriteAt(
-			// 	U32tB(utxoCounter-txosThisBlock), int64(height)*4)
-			// if err != nil {
-			// 	return err
-			// }
-
-			// writing remembers is trickier; check in
-			if len(remembers) > 0 {
-				for _, r := range remembers {
-					assertBitInRam(r.txoIdx, scheduleSlice)
-					// err = assertBitInFile(r.txoIdx, scheduleFile)
-					// if err != nil {
-					// 	fmt.Printf("assertBitInFile error\n")
-					// 	return err
-					// }
-				}
-
-			}
-
-			height++
-			if height%1000 == 0 {
-				fmt.Printf("all %.2f sort %.2f ",
-					time.Now().Sub(startTime).Seconds(),
-					sortTime.Seconds())
-				fmt.Printf("h %d txo %d clairSlice %d ",
-					height, utxoCounter, len(clairSlice))
-				if len(clairSlice) > 0 {
-					fmt.Printf("first %d:%d last %d:%d\n",
-						clairSlice[0].txoIdx,
-						clairSlice[0].end,
-						clairSlice[len(clairSlice)-1].txoIdx,
-						clairSlice[len(clairSlice)-1].end)
-				} else {
-					fmt.Printf("\n")
-				}
-			}
+		scheduleSlice, clairSlice, remembers, err = genClair(b.Txs, uint32(b.Height),
+			&utxoCounter, maxmem, scheduleSlice, clairSlice, remembers, lvdb)
+		if err != nil {
+			panic(err)
+		}
+		//if height%1000 == 0 {
+		//	fmt.Println("On height:", height+1)
+		//}
+		//Check if stopSig is no longer false
+		//stop = true makes the loop exit
+		select {
+		case stop = <-stopGoing:
 		default:
-			panic("unknown string")
 		}
 	}
+	fmt.Printf("done\n")
 
-	// return nil
 	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
-	return ioutil.WriteFile(fileString, scheduleSlice, 0644)
-
+	ioutil.WriteFile(fileString, scheduleSlice, 0644)
+	fmt.Println("utxoCounter", utxoCounter)
+	done <- true
+	return nil
 }
 
 // basically flips bit n of a big file to 1.
@@ -258,72 +195,168 @@ func assertBitInRam(txoIdx uint32, scheduleSlice []byte) {
 	scheduleSlice[offset] |= 1 << (7 - (txoIdx % 8))
 }
 
-// like the plusline in ibdsim.  Should merge with that.
-// this one only returns a slice of the expiry times for the txos, but no other
-// txo info.
-func plusLine(s string) ([]uint32, error) {
-	//	fmt.Printf("%s\n", s)
-	parts := strings.Split(s[1:], ";")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("line %s has no ; in it", s)
-	}
-	postsemicolon := parts[1]
+//genClair generates the clair caching schedule
+func genClair(
+	tx []*wire.MsgTx,
+	height uint32,
+	utxoCounter *uint32,
+	maxmem int,
+	scheduleSlice []byte,
+	clairSlice sortableTxoSlice,
+	remembers sortableTxoSlice,
+	lvdb *leveldb.DB) ([]byte, sortableTxoSlice, sortableTxoSlice, error) {
 
-	indicatorHalves := strings.Split(postsemicolon, "x")
-	ttldata := indicatorHalves[1]
-	ttlascii := strings.Split(ttldata, ",")
-	// the last one is always empty as there's a trailing ,
-	ttlval := make([]uint32, len(ttlascii)-1)
-	for i, _ := range ttlval {
-		if ttlascii[i] == "s" {
-			//	ttlval[i] = 0
-			// 0 means don't remember it! so 1 million blocks later
-			ttlval[i] = 1 << 30
-			continue
-		}
+	blocktxs := []*simutil.Txotx{new(simutil.Txotx)}
+	var blockEnds sortableTxoSlice
+	var sortTime time.Duration
+	startTime := time.Now()
 
-		val, err := strconv.Atoi(ttlascii[i])
-		if err != nil {
-			return nil, err
-		}
-		ttlval[i] = uint32(val)
-	}
+	for _, tx := range tx {
+		//creates all txos up to index indicated
+		txhash := tx.TxHash()
+		//fmt.Println(txhash.String())
+		numoutputs := uint32(len(tx.TxOut))
 
-	txoIndicators := strings.Split(indicatorHalves[0], "z")
-
-	numoutputs, err := strconv.Atoi(txoIndicators[0])
-	if err != nil {
-		return nil, err
-	}
-	if numoutputs != len(ttlval) {
-		return nil, fmt.Errorf("%d outputs but %d ttl indicators",
-			numoutputs, len(ttlval))
-	}
-
-	// numoutputs++ // for testnet3.txos
-
-	unspend := make(map[int]bool)
-
-	if len(txoIndicators) > 1 {
-		unspendables := txoIndicators[1:]
-		for _, zstring := range unspendables {
-			n, err := strconv.Atoi(zstring)
-			if err != nil {
-				return nil, err
+		blocktxs[len(blocktxs)-1].Unspendable = make([]bool, numoutputs)
+		//Adds z and index for all OP_RETURN transactions
+		//We don't keep track of the OP_RETURNS so probably can get rid of this
+		for i, out := range tx.TxOut {
+			if simutil.IsUnspendable(out) {
+				// mark all unspendables true
+				blocktxs[len(blocktxs)-1].Unspendable[i] = true
+			} else {
+				//txid := tx.TxHash().String()
+				blocktxs[len(blocktxs)-1].Outputtxid = txhash.String()
+				blocktxs[len(blocktxs)-1].DeathHeights = make([]uint32, numoutputs)
 			}
-			unspend[n] = true
 		}
+
+		// done with this Txotx, make the next one and append
+		blocktxs = append(blocktxs, new(simutil.Txotx))
+
 	}
-	var ends []uint32
-	for i := 0; i < numoutputs; i++ {
-		if unspend[i] {
-			continue
+	//TODO Get rid of this. This eats up cpu
+	//we started a tx but shouldn't have
+	blocktxs = blocktxs[:len(blocktxs)-1]
+	// call function to make all the db lookups and find deathheights
+	ibdsim.LookupBlock(blocktxs, lvdb)
+
+	for _, blocktx := range blocktxs {
+		// genTXOEndHeight appends to blockEnds
+		ends, err := genTXOEndHeight(blocktx, utxoCounter, height+1)
+		if err != nil {
+			panic(err)
 		}
-		ends = append(ends, ttlval[i])
-		// fmt.Printf("expire in\t%d remember %v\n", ttlval[i], addData.Remember)
+		for _, end := range ends {
+			blockEnds = append(blockEnds, end)
+		}
+
 	}
 
-	return ends, nil
+	// append & sort
+	sortStart := time.Now()
+	// presort the smaller slice
+	sort.Sort(blockEnds)
+	// merge sorted
+	clairSlice = mergeSortedSlices(clairSlice, blockEnds)
+	sortTime += time.Now().Sub(sortStart)
+
+	// clear blockEnds
+	//blockEnds = sortableTxoSlice{}
+
+	// chop off the beginning: that's the stuff that's memorable
+	preLen := len(clairSlice)
+	remembers, clairSlice = SplitAfter(clairSlice, height+1)
+	postLen := len(clairSlice)
+	if preLen != len(remembers)+postLen {
+		return nil, nil, nil, fmt.Errorf("h %d preLen %d remembers %d postlen %d\n",
+			height+1, preLen, len(remembers), postLen)
+	}
+
+	// chop off the end, that's stuff that is forgettable
+	if len(clairSlice) > maxmem {
+		//				forgets := clairSlice[maxmem:]
+		// fmt.Printf("\tblock %d forget %d\n",
+		// height, len(clairSlice)-maxmem)
+		clairSlice = clairSlice[:maxmem]
+
+		//				for _, f := range forgets {
+		//					fmt.Printf("%d ", f.txoIdx)
+		//				}
+		//				fmt.Printf("\n")
+	}
+
+	// expand index file and schedule file (with lots of 0s)
+	// _, err := indexFile.WriteAt(
+	// 	U32tB(utxoCounter-txosThisBlock), int64(height)*4)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// writing remembers is trickier; check in
+	if len(remembers) > 0 {
+		for _, r := range remembers {
+			assertBitInRam(r.txoIdx, scheduleSlice)
+			// err = assertBitInFile(r.txoIdx, scheduleFile)
+			// if err != nil {
+			// 	fmt.Printf("assertBitInFile error\n")
+			// 	return err
+			// }
+		}
+
+	}
+
+	if height%10 == 0 {
+		fmt.Printf("all %.2f sort %.2f ",
+			time.Now().Sub(startTime).Seconds(),
+			sortTime.Seconds())
+		fmt.Printf("h %d txo %d clairSlice %d ",
+			height+1, *utxoCounter, len(clairSlice))
+		if len(clairSlice) > 0 {
+			fmt.Printf("first %d:%d last %d:%d\n",
+				clairSlice[0].txoIdx,
+				clairSlice[0].end,
+				clairSlice[len(clairSlice)-1].txoIdx,
+				clairSlice[len(clairSlice)-1].end)
+		} else {
+			fmt.Printf("\n")
+		}
+	}
+	return scheduleSlice, clairSlice, remembers, nil
+}
+
+// plusLine reads in a line of text, generates a utxo leaf, and determines
+// if this is a leaf to remember or not.
+// Modifies the blockEnds var that was passed in
+func genTXOEndHeight(tx *simutil.Txotx, utxoCounter *uint32, height uint32) (sortableTxoSlice, error) {
+	blockEnds := sortableTxoSlice{}
+	for i := 0; i < len(tx.DeathHeights); i++ {
+		if tx.Unspendable[i] == true {
+			continue
+		}
+		// Skip all the same block spends
+		if tx.DeathHeights[i]-height == 0 {
+			continue
+		}
+		// Deatheight 0 means it's a UTXO. Don't remember UTXOs.
+		if tx.DeathHeights[i] == 0 {
+			e := txoEnd{
+				txoIdx: *utxoCounter,
+				end:    uint32(1 << 30),
+			}
+			*utxoCounter++
+			blockEnds = append(blockEnds, e)
+		} else {
+			e := txoEnd{
+				txoIdx: *utxoCounter,
+				end:    tx.DeathHeights[i],
+			}
+			*utxoCounter++
+			blockEnds = append(blockEnds, e)
+		}
+
+	}
+	return blockEnds, nil
 }
 
 // This is copied from utreexo utils, and in this cases there will be no
@@ -368,21 +401,14 @@ func mergeSortedSlices(a sortableTxoSlice, b sortableTxoSlice) (c sortableTxoSli
 	return
 }
 
-// uint32 to 4 bytes.  Always works.
-func U32tB(i uint32) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
+func stopClairvoy(sig chan bool, stopGoing chan bool, done chan bool) {
+	<-sig
+	fmt.Println("Exiting...")
 
-// 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
-func BtU32(b []byte) uint32 {
-	if len(b) != 4 {
-		fmt.Printf("Got %x to BtU32 (%d bytes)\n", b, len(b))
-		return 0xffffffff
-	}
-	var i uint32
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
+	//Tell Runibd() to finish the block it's working on
+	stopGoing <- true
+
+	//Wait Runidb() says it's ok to quit
+	<-done
+	os.Exit(0)
 }
