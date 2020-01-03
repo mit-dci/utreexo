@@ -148,6 +148,15 @@ func (p *Pollard) rem2(dels []uint64) error {
 			if err != nil {
 				return err
 			}
+
+			if hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
+				fmt.Printf("swap %v hn empty data in sibling\n", s)
+				// if the data's not there, that means we don't actually need
+				// to hash it... (assuming that everything else is working
+				// correctly)
+				continue
+			}
+
 			// chop off first rowdirt (current row) if it's getting hashed
 			// by the swap
 			if len(rowdirt) != 0 &&
@@ -180,7 +189,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				fmt.Printf("hn is nil at pos %d\n", d)
 				continue
 			}
-			fmt.Printf("drting hasher %d %x %x\n",
+			fmt.Printf("dirting hasher %d %x %x\n",
 				d, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			wg.Add(1)
 			go hn.run(wg)
