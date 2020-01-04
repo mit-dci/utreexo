@@ -32,41 +32,6 @@ func TestPollardFixed(t *testing.T) {
 	}
 }
 
-func TestPollardGrab(t *testing.T) {
-
-	var p Pollard
-	// they're all forgettable
-	adds := make([]LeafTXO, 15)
-	for j, _ := range adds {
-		adds[j].Hash[0] = uint8(j)
-		adds[j].Hash[2] = uint8(0xff)
-		adds[j].Remember = true
-	}
-
-	// apply adds and deletes to the bridge node (could do this whenever)
-	err := p.Modify(adds, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Printf(p.toString())
-
-	for i := uint64(0); i < 29; i++ {
-		par, parsib, lr, err := p.grabPos2(i)
-		if err != nil {
-			fmt.Println(err.Error())
-			continue
-		}
-		if par == nil {
-			fmt.Printf("pos %d n lr %d which is %x\n",
-				i, lr, p.tops[lr].data[:4])
-
-		} else {
-			fmt.Printf("pos %d n %x nsib %x lr %d\n",
-				i, par.data[:4], parsib.data[:4], lr)
-		}
-	}
-}
-
 func pollardRandomRemember(blocks int32) error {
 	f := NewForest()
 
