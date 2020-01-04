@@ -148,8 +148,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 			if err != nil {
 				return err
 			}
-
-			if hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
+			if hn == nil ||
+				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
 				fmt.Printf("swap %v hn empty data in sibling\n", s)
 				// if the data's not there, that means we don't actually need
 				// to hash it... (assuming that everything else is working
@@ -200,7 +200,6 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 
 	fmt.Printf("pretop %s", p.toString())
-	// set new tops
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
