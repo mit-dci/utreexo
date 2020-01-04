@@ -44,10 +44,6 @@ type Forest struct {
 	// basically modify and all sub-functions.  Not for prove/verify
 	// though.  But those are super simple.
 
-	// TODO can probably get rid of a map here and make it a slice
-	// only odd nodes should ever get dirty
-	dirtyMap map[uint64]bool
-
 	// -------------------- following are just for testing / benchmarking
 	// how many hashes this forest has computed
 	HistoricHashes uint64
@@ -75,7 +71,6 @@ func NewForest() *Forest {
 	f.forest = make([]Hash, 1) // height 0 forest has 1 node
 	//	f.forestMapx = make(map[uint64]Hash)
 	f.positionMap = make(map[MiniHash]uint64)
-	f.dirtyMap = make(map[uint64]bool)
 
 	return f
 }

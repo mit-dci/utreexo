@@ -214,12 +214,17 @@ func (p *Pollard) rem2(dels []uint64) error {
 			fmt.Printf("grabbed nil ntpar\n")
 			nexTops[i] = p.tops[lr]
 		} else { // node becoming a top, ntpar exists
+			if ntparsib == nil {
+				return fmt.Errorf("nexTops nil ntparsib")
+				// nexTops[i].chop()
+			}
+			if ntparsib.niece[lr] == nil {
+				return fmt.Errorf("nexTops nil ntparsib niece[%d]", lr)
+			}
 			fmt.Printf("non nil grabbed par %x parsib %x\n",
 				ntpar.data[:4], ntparsib.data[:4])
 			nexTops[i] = *ntparsib.niece[lr]
-			if ntparsib == nil {
-				nexTops[i].chop()
-			} else if ntparsib.niece[lr^1] != nil {
+			if ntparsib.niece[lr^1] != nil {
 				nexTops[i].niece = ntparsib.niece[lr^1].niece
 			}
 		}
@@ -358,6 +363,8 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	} else { // normal swap, neither is a top
 		fmt.Printf("normal swap\t")
 		if r.from != r.to^1 {
+			fmt.Printf("swap %x niece w %x niece\n",
+				aparsib.niece[alr^1].data[:4], bparsib.niece[blr^1].data[:4])
 			// swap sibling nieces if not siblings
 			aparsib.niece[alr^1].niece, bparsib.niece[blr^1].niece =
 				bparsib.niece[blr^1].niece, aparsib.niece[alr^1].niece
@@ -385,15 +392,15 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 func (p *Pollard) grabPos2(pos uint64) (par, parsib *polNode, lr uint8, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	if (tree) >= uint8(len(p.tops)) {
-		err = fmt.Errorf("%d not in forest", pos)
+		err = fmt.Errorf("grab2 %d not in forest", pos)
 		return
 	}
 	if branchLen == 0 { // can't return a top's parent, so return which parent
-		fmt.Printf("grab %d, is top. tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+		fmt.Printf("grab2 %d, is top. tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 		lr = tree
 		return
 	}
-	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	fmt.Printf("grab2 %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	par, parsib = &p.tops[tree], &p.tops[tree]
 	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr = uint8(bits>>h) & 1
@@ -404,9 +411,9 @@ func (p *Pollard) grabPos2(pos uint64) (par, parsib *polNode, lr uint8, err erro
 			parsib.niece[lr^1] = new(polNode)
 		}
 		par, parsib = parsib.niece[lr^1], parsib.niece[lr]
-		fmt.Printf("h %d now parsib %x\n", h, parsib.data[:4])
+		fmt.Printf("grab2 h %d now parsib %x\n", h, parsib.data[:4])
 		if par == nil {
-			err = fmt.Errorf("can't grab %d nil neice at height %d", pos, h)
+			err = fmt.Errorf("grab2 can't grab %d nil neice at height %d", pos, h)
 			return
 		}
 	}

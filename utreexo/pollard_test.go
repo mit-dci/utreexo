@@ -8,7 +8,7 @@ import (
 
 func TestPollardRand(t *testing.T) {
 	// for z := 0; z < 10000; z++ {
-	z := 339
+	z := 2687
 	rand.Seed(int64(z))
 	fmt.Printf("randseed %d\n", z)
 	err := pollardRandomRemember(4)
