@@ -147,25 +147,25 @@ func (p *Pollard) rem2(dels []uint64) error {
 	fmt.Printf("start rem %s", p.toString())
 	// swap & hash all the nodes
 	for h := uint8(0); h < ph; h++ {
+		var hnslice []*hashableNode
+		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
+		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
 		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
-			var hnpos uint64
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
 			if len(swaprows[h]) == 0 ||
 				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
 				// re-descending here which isn't great
-				hnpos = hashDirt[0]
-				fmt.Printf("hashing from dirt %d\n", hnpos)
-				hn, err = p.HnFromPos(hnpos)
+				fmt.Printf("hashing from dirt %d\n", hashDirt[0])
+				hn, err = p.HnFromPos(hashDirt[0])
 				if err != nil {
 					return err
 				}
 				hashDirt = hashDirt[1:]
 			} else { // swapping
 				fmt.Printf("swapping %v\n", swaprows[h][0])
-				hnpos = up1(swaprows[h][0].to, ph)
 				if swaprows[h][0].from == swaprows[h][0].to {
 					// TODO should get rid of these upstream
 					swaprows[h] = swaprows[h][1:]
@@ -177,38 +177,46 @@ func (p *Pollard) rem2(dels []uint64) error {
 				}
 				swaprows[h] = swaprows[h][1:]
 			}
-			if hn == nil ||
-				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
-				// if the data's not there, we don't need to hash it...
-				// TODO when is hn nil?  is this OK?
-				fmt.Printf("nil hn at %d\n", hnpos)
+			if hn == nil {
 				continue
 			}
-			if hnpos == prevHash { // we just did this
-				fmt.Printf("already did %d\n", prevHash)
-				continue // TODO does this always work to skip redundant hashes?
-				// TODO does this ever happen?
+			if hn.position == prevHash { // we just did this
+				fmt.Printf("just did %d\n", prevHash)
+				continue // TODO this doesn't cover eveything
 			}
-			fmt.Printf("giving hasher %d %x %x\n",
-				hnpos, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
-			wg.Add(1)
-			go hn.run(wg)
-			prevHash = hnpos
-			savedirt := up1(hnpos, ph) // dirt appears above that (row h+2)
+			hnslice = append(hnslice, hn)
+			prevHash = hn.position
+			// savedirt := up1(hnpos, ph) // dirt appears above that (row h+2)
 			if len(nextHashDirt) == 0 ||
-				(nextHashDirt[len(nextHashDirt)-1] != savedirt) {
+				(nextHashDirt[len(nextHashDirt)-1] != hn.position) {
 				// skip if already on end of slice
-				nextHashDirt = append(nextHashDirt, savedirt)
+				nextHashDirt = append(nextHashDirt, hn.position)
 			}
 		}
-
 		hashDirt = nextHashDirt
 		nextHashDirt = []uint64{}
+		// do all the hashes at once at the end
+		wg.Add(len(hnslice))
+		for _, hn := range hnslice {
+			// skip hashes we can't compute
+			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
+				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
+				// TODO when is hn nil?  is this OK?
+				// it'd be better to avoid this and not create hns that aren't
+				// supposed to exist.
+				fmt.Printf("hn %d nil or uncomputable\n", hn.position)
+				wg.Done()
+				continue
+			}
+			fmt.Printf("giving hasher %d %x %x\n",
+				hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
+			go hn.run(wg)
+		}
 		wg.Wait() // wait for all hashing to finish at end of each row
-		fmt.Printf("done with row %d %s\n", h, p.toString())
+		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
-	fmt.Printf("pretop %s", p.toString())
+	// fmt.Printf("pretop %s", p.toString())
 	// set new tops
 	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
@@ -229,11 +237,9 @@ func (p *Pollard) rem2(dels []uint64) error {
 		}
 		nexTops[i] = *nt
 	}
-
 	p.numLeaves = nextNumLeaves
 	reversePolNodeSlice(nexTops)
 	p.tops = nexTops
-
 	return nil
 }
 
@@ -242,56 +248,12 @@ func (p *Pollard) HnFromPos(pos uint64) (*hashableNode, error) {
 		fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
-	_, _, hn, err := p.grabPos(child(pos, p.height()))
+	_, _, hn, err := p.grabPos(pos)
 	if err != nil {
 		return nil, err
 	}
+	hn.position = up1(pos, p.height())
 	return hn, nil
-}
-
-// dirtify adds to the next dirt row
-func dirtify(dirt []uint64, swaps [][]arrow, pos, nl uint64, up2h, ph uint8) []uint64 {
-	// is parent's parent in forest? if so, add *parent* to dirt
-	parpar := upMany(pos, 2, ph)
-	if !inForest(parpar, nl, ph) {
-		// skip, UNLESS it moves to somewhere inside the forest range
-		// due to the swaps in the next row up
-		// TODO this is bad and inefficient as it may result in checking through
-		// a LOT of a stuff for no reason.  Also, do I have to check ALL higher
-		// rows instead of just the immediate higher row???  Fix / remove this
-		// if possible.  Or at least profile to see how bad it is in practice;
-		// maybe OOF parpars happen very rarely
-
-		if up2h >= uint8(len(swaps)) {
-			// fmt.Printf("%d parpar %d not in forest and no more swaps\n", pos, parpar)
-			return dirt
-		}
-
-		var moves bool
-		for _, a := range swaps[up2h] {
-			if parpar == a.from {
-				moves = true
-				break
-			}
-		}
-		if !moves {
-			// fmt.Printf("%d parpar %d outside up2row %v\n", pos, parpar, swaps[up2h])
-			return dirt
-		}
-		// fmt.Printf("%d parpar %d returns up2row %v\n", pos, parpar, swaps[up2h])
-
-	}
-	par := up1(pos, ph)
-	if len(dirt) != 0 &&
-		(dirt[len(dirt)-1] != pos || dirt[len(dirt)-1] != pos^1) {
-		return dirt
-	}
-
-	dirt = append(dirt, par)
-	fmt.Printf("ph %d nl %d %d parpar %d is in* forest, add %d\n",
-		ph, nl, pos, parpar, par)
-	return dirt
-
 }
 
 // swapNodes swaps the nodes at positions a and b.
@@ -326,17 +288,15 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 
 	fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
 		r.from, a.data[:4], r.to, b.data[:4])
-
+	bhn.position = up1(r.to, p.height())
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
 	if err != nil {
 		return nil, err
 	}
-
 	if bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
 		bhn = nil // we can't perform this hash as we don't know the children
 	}
-
 	return bhn, nil
 }
 

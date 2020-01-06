@@ -8,6 +8,7 @@ import (
 // hashableNode is the data needed to perform a hash
 type hashableNode struct {
 	sib, dest *polNode
+	position  uint64 // doesn't really need to be there, but convenient for debugging
 }
 
 // this should work, right?  like the pointeryness?  Because swapnodes doesn't

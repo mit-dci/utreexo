@@ -227,13 +227,12 @@ func cousin(position uint64) uint64 {
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves
 // (same as childmany)
+// TODO fix.  says 14 is inforest with 5 leaves...
 func inForest(pos, numLeaves uint64, forestHeight uint8) bool {
 	// quick yes:
 	if pos < numLeaves {
 		return true
 	}
-
-	// forestHeight := treeHeight(numLeaves)
 	marker := uint64(1 << forestHeight)
 	mask := (marker << 1) - 1
 	if pos >= mask {
@@ -458,6 +457,35 @@ func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 		}
 	}
 	return
+}
+
+// kindof like mergeSortedSlices.  Takes 2 sorted slices a, b and removes
+// all elements of b from a and returns a.
+// in this case b is arrow.to
+func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
+	maxa := len(a)
+	maxb := len(b)
+	var c []uint64
+	// shortcuts:
+	if maxa == 0 || maxb == 0 {
+		return a
+	}
+	idxb := 0
+	for j := 0; j < maxa; j++ {
+		// skip over swap destinations less than current dirt
+		for idxb < maxb && a[j] < b[idxb].to {
+			idxb++
+		}
+		if idxb == maxb { // done
+			c = append(c, a[j:]...)
+			break
+		}
+		if a[j] != b[idxb].to {
+			c = append(c, a[j])
+		}
+	}
+
+	return c
 }
 
 // BinString prints out the whole thing.  Only viable for small forests
