@@ -186,10 +186,9 @@ func (p *Pollard) rem2(dels []uint64) error {
 			}
 			hnslice = append(hnslice, hn)
 			prevHash = hn.position
-			// savedirt := up1(hnpos, ph) // dirt appears above that (row h+2)
 			if len(nextHashDirt) == 0 ||
 				(nextHashDirt[len(nextHashDirt)-1] != hn.position) {
-				// skip if already on end of slice
+				// skip if already on end of slice. redundant?
 				nextHashDirt = append(nextHashDirt, hn.position)
 			}
 		}

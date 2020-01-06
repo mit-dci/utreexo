@@ -148,12 +148,7 @@ func (f *Forest) removev3(dels []uint64) error {
 	}
 
 	f.numLeaves = nextNumLeaves
-	// f.cleanup()
 
-	err := f.sanity()
-	if err != nil {
-		return err
-	}
 	return f.reHash(dirt)
 }
 
@@ -231,7 +226,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	// 	fmt.Printf("%x @%d\t", m[:4], p)
 	// }
 	// fmt.Printf("\n")
-	err = f.sanity()
+
 	return ub, err
 }
 
