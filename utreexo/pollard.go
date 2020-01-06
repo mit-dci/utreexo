@@ -119,6 +119,17 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 // Hash and swap.  "grabPos" in rowdirt / hashdirt is inefficient because you
 // descend to the place you already just decended to perfom swapNodes.
 
+// rem2 outline:
+// perform swaps & hash, then select new tops.
+
+// swap & hash is row based.  Swaps on row 0 cause hashing on row 1.
+// So the sequence is: Swap row 0, hash row 1, swap row 1, hash row 2,
+// swap row 2... etc.
+// The tricky part is that we have a big for loop with h being the current
+// height.  When h=0 and we're swapping things on the bottom, we can hash
+// things at row 1 (h+1).  Before we start swapping row 1, we need to be sure
+// that all hashing for row 1 has finished.
+
 // rem2 deletes stuff from the pollard, using remtrans2
 func (p *Pollard) rem2(dels []uint64) error {
 	if len(dels) == 0 {
@@ -126,75 +137,73 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
-
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
-
 	wg := new(sync.WaitGroup)
-
 	fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
-	var hashdirt []uint64
+	var hashDirt, nextHashDirt []uint64
+	var prevHash uint64
+	var err error
 	fmt.Printf("start rem %s", p.toString())
-	// swap all the nodes
+	// swap & hash all the nodes
 	for h := uint8(0); h < ph; h++ {
-		rowdirt := hashdirt
-		hashdirt = []uint64{}
-		for _, s := range swaprows[h] {
-			if s.from == s.to {
-				// TODO should get rid of these upstream
-				continue
-			}
-			hn, err := p.swapNodes(s)
-			if err != nil {
-				return err
+		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
+		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
+			var hn *hashableNode
+			var hnpos uint64
+			// check if doing dirt. if not dirt, swap.
+			// (maybe a little clever here...)
+			if len(swaprows[h]) == 0 ||
+				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
+				// re-descending here which isn't great
+				hnpos = hashDirt[0]
+				fmt.Printf("hashing from dirt %d\n", hnpos)
+				hn, err = p.HnFromPos(hnpos)
+				if err != nil {
+					return err
+				}
+				hashDirt = hashDirt[1:]
+			} else { // swapping
+				fmt.Printf("swapping %v\n", swaprows[h][0])
+				hnpos = up1(swaprows[h][0].to, ph)
+				if swaprows[h][0].from == swaprows[h][0].to {
+					// TODO should get rid of these upstream
+					swaprows[h] = swaprows[h][1:]
+					continue
+				}
+				hn, err = p.swapNodes(swaprows[h][0])
+				if err != nil {
+					return err
+				}
+				swaprows[h] = swaprows[h][1:]
 			}
 			if hn == nil ||
 				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
-				fmt.Printf("swap %v hn empty data in sibling\n", s)
-				// if the data's not there, that means we don't actually need
-				// to hash it... (assuming that everything else is working
-				// correctly)
+				// if the data's not there, we don't need to hash it...
+				// TODO when is hn nil?  is this OK?
+				fmt.Printf("nil hn at %d\n", hnpos)
 				continue
 			}
-
-			// chop off first rowdirt (current row) if it's getting hashed
-			// by the swap
-			if len(rowdirt) != 0 &&
-				(rowdirt[0] == s.to || rowdirt[0] == s.to^1) {
-				fmt.Printf("%d in rowdirt, already got to from swap\n", s.to)
-				rowdirt = rowdirt[1:]
-			} else {
-				fmt.Printf("rowdirt %v no match %d\n", rowdirt, s.to)
+			if hnpos == prevHash { // we just did this
+				fmt.Printf("already did %d\n", prevHash)
+				continue // TODO does this always work to skip redundant hashes?
+				// TODO does this ever happen?
 			}
-
-			if hn != nil {
-				fmt.Printf("giving hasher %d %x %x\n",
-					s.to, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
-				// TODO some of these hashes are useless as they end up outside
-				// the forest.
-				// aside from TODO above, always hash the parent of swap "to"
-				wg.Add(1)
-				go hn.run(wg)
-			}
-			hashdirt = dirtify(hashdirt, swaprows, s.to, nextNumLeaves, h+2, ph)
-		}
-		// done with swaps for this row, now hashdirt
-		// build hashable nodes from hashdirt
-		for _, d := range rowdirt {
-			hn, err := p.HnFromPos(d)
-			if err != nil {
-				return err
-			}
-			if hn == nil { // if d is a top
-				fmt.Printf("hn is nil at pos %d\n", d)
-				continue
-			}
-			fmt.Printf("dirting hasher %d %x %x\n",
-				d, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
+			fmt.Printf("giving hasher %d %x %x\n",
+				hnpos, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			wg.Add(1)
 			go hn.run(wg)
-			hashdirt = dirtify(hashdirt, swaprows, d, nextNumLeaves, h+2, ph)
+			prevHash = hnpos
+			savedirt := up1(hnpos, ph) // dirt appears above that (row h+2)
+			if len(nextHashDirt) == 0 ||
+				(nextHashDirt[len(nextHashDirt)-1] != savedirt) {
+				// skip if already on end of slice
+				nextHashDirt = append(nextHashDirt, savedirt)
+			}
 		}
+
+		hashDirt = nextHashDirt
+		nextHashDirt = []uint64{}
 		wg.Wait() // wait for all hashing to finish at end of each row
 		fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
@@ -229,6 +238,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 }
 
 func (p *Pollard) HnFromPos(pos uint64) (*hashableNode, error) {
+	if !inForest(pos, p.numLeaves, p.height()) {
+		fmt.Printf("HnFromPos %d out of forest\n", pos)
+		return nil, nil
+	}
 	_, _, hn, err := p.grabPos(pos)
 	if err != nil {
 		return nil, err
@@ -335,18 +348,17 @@ func (p *Pollard) grabPos(
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	n, nsib = &p.tops[tree], &p.tops[tree]
+	hn = &hashableNode{dest: n, sib: nsib}
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
 		if h == 0 { // if at bottom, done
-			hn = new(hashableNode)
 			hn.dest = nsib // this is kind of confusing eh?
 			hn.sib = n     // but yeah, switch siblingness
 			n, nsib = n.niece[lr^1], n.niece[lr]
 			if nsib == nil || n == nil {
 				return // give up and don't make hashable node
 			}
-			// fmt.Printf("h%d n %x nsib %x npar %x\n",
-			// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
+			// fmt.Printf("h%d n %x nsib %x\n", h, n.data[:4], nsib.data[:4])
 			return
 		}
 		// if a sib doesn't exist, need to create it and hook it in
@@ -363,7 +375,6 @@ func (p *Pollard) grabPos(
 		}
 	}
 	return // only happens when returning a top
-	// in which case npar will be nil
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
