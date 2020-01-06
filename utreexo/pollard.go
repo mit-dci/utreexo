@@ -242,7 +242,7 @@ func (p *Pollard) HnFromPos(pos uint64) (*hashableNode, error) {
 		fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
-	_, _, hn, err := p.grabPos(pos)
+	_, _, hn, err := p.grabPos(child(pos, p.height()))
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +341,8 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 }
 
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
-// as well as its sibling.  And an error if it can't get it.
+// as well as its sibling.  And a hashable node for the position ABOVE pos.
+// And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
