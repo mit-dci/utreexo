@@ -7,11 +7,11 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	// for z := 0; z < 300; z++ {
-	z := 87
+	// for z := 0; z < 30000; z++ {
+	z := 8083
 	rand.Seed(int64(z))
 	fmt.Printf("randseed %d\n", z)
-	err := pollardRandomRemember(100)
+	err := pollardRandomRemember(30)
 	if err != nil {
 		fmt.Printf("randseed %d\n", z)
 		t.Fatal(err)
@@ -86,9 +86,9 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		fmt.Printf("pol postadd %s", p.toString())
+		// fmt.Printf("pol postadd %s", p.toString())
 
-		fmt.Printf("frs postadd %s", f.toString())
+		// fmt.Printf("frs postadd %s", f.toString())
 
 		// check all leaves match
 		if !p.equalToForestIfThere(f) {

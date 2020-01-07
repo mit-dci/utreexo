@@ -177,7 +177,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		}
 
 		if adds[j].Duration != 0 {
-			fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].Duration-1)
+			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].Duration-1)
 			s.ttlSlices[adds[j].Duration-1] =
 				append(s.ttlSlices[adds[j].Duration-1], adds[j].Hash)
 		}

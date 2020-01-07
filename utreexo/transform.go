@@ -36,7 +36,7 @@ func remTrans2(
 	// var swaps, collapses []arrowh
 	swaps := make([][]arrow, fHeight)
 	collapses := make([]arrow, fHeight)
-	fmt.Printf("rt2 on %v\n", dels)
+	// fmt.Printf("rt2 on %v\n", dels)
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h < fHeight; h++ {
 		// fmt.Printf("h %d del %v col %v\n", h, dels, collapses)
@@ -363,7 +363,7 @@ func floorTransform(
 		}
 	}
 
-	fmt.Printf("floor: %v\n", floor)
+	// fmt.Printf("floor: %v\n", floor)
 
 	return floor
 }

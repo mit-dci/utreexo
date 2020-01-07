@@ -144,13 +144,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
-	fmt.Printf("start rem %s", p.toString())
+	// fmt.Printf("start rem %s", p.toString())
 	// swap & hash all the nodes
 	for h := uint8(0); h < ph; h++ {
 		var hnslice []*hashableNode
-		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
+		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
-		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
+		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
 			// check if doing dirt. if not dirt, swap.
@@ -158,14 +158,14 @@ func (p *Pollard) rem2(dels []uint64) error {
 			if len(swaprows[h]) == 0 ||
 				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
 				// re-descending here which isn't great
-				fmt.Printf("hashing from dirt %d\n", hashDirt[0])
+				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
 				hn, err = p.HnFromPos(hashDirt[0])
 				if err != nil {
 					return err
 				}
 				hashDirt = hashDirt[1:]
 			} else { // swapping
-				fmt.Printf("swapping %v\n", swaprows[h][0])
+				// fmt.Printf("swapping %v\n", swaprows[h][0])
 				if swaprows[h][0].from == swaprows[h][0].to {
 					// TODO should get rid of these upstream
 					swaprows[h] = swaprows[h][1:]
@@ -181,7 +181,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				continue
 			}
 			if hn.position == prevHash { // we just did this
-				fmt.Printf("just did %d\n", prevHash)
+				// fmt.Printf("just did %d\n", prevHash)
 				continue // TODO this doesn't cover eveything
 			}
 			hnslice = append(hnslice, hn)
@@ -207,8 +207,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 				wg.Done()
 				continue
 			}
-			fmt.Printf("giving hasher %d %x %x\n",
-				hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
+			// fmt.Printf("giving hasher %d %x %x\n",
+			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			go hn.run(wg)
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row
@@ -244,7 +244,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 func (p *Pollard) HnFromPos(pos uint64) (*hashableNode, error) {
 	if !inForest(pos, p.numLeaves, p.height()) {
-		fmt.Printf("HnFromPos %d out of forest\n", pos)
+		// fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
 	_, _, hn, err := p.grabPos(pos)
@@ -285,8 +285,8 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 		return nil, fmt.Errorf("swapNodes %d:%d node not found", r.from, r.to)
 	}
 
-	fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
-		r.from, a.data[:4], r.to, b.data[:4])
+	// fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
+	// r.from, a.data[:4], r.to, b.data[:4])
 	bhn.position = up1(r.to, p.height())
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
