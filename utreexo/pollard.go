@@ -382,7 +382,8 @@ func (p *Pollard) toFull() (*Forest, error) {
 	ff := NewForest()
 	ff.height = p.height()
 	ff.numLeaves = p.numLeaves
-	ff.forest = make([]Hash, 2<<ff.height)
+	ff.data = new(ramForestData)
+	ff.data.resize(2 << ff.height)
 	if p.numLeaves == 0 {
 		return ff, nil
 	}
@@ -397,7 +398,7 @@ func (p *Pollard) toFull() (*Forest, error) {
 			//			return nil, err
 		}
 		if sib[0] != nil {
-			ff.forest[i] = sib[0].data
+			ff.data.write(i, sib[0].data)
 			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
 		}
 

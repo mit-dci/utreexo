@@ -57,8 +57,9 @@ func (f *Forest) Undo(ub undoBlock) error {
 
 	// remove everything between prevNumLeaves and numLeaves from positionMap
 	for p := f.numLeaves; p < f.numLeaves+prevAdds; p++ {
-		fmt.Printf("remove %x@%d from map\n", f.forest[p][:4], f.positionMap[f.forest[p].Mini()])
-		delete(f.positionMap, f.forest[p].Mini())
+		fmt.Printf("remove %x@%d from map\n",
+			f.data.read(p).Prefix(), f.positionMap[f.data.read(p).Mini()])
+		delete(f.positionMap, f.data.read(p).Mini())
 	}
 
 	// also add everything past numleaves and prevnumleaves to dirt
@@ -69,14 +70,15 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// place hashes starting at old post-remove numLeaves.  they're off the
 	// forest bounds to the right; they will be shuffled in to the left.
 	for i, h := range ub.hashes {
-		f.forest[f.numLeaves+uint64(i)] = h
+		f.data.write(f.numLeaves+uint64(i), h)
 		dirt = append(dirt, f.numLeaves+uint64(i))
 	}
 
 	// go through swaps in reverse order
 	for i, a := range leafMoves {
-		fmt.Printf("swaped %d %x, %d %x\n", a.to, f.forest[a.to][:4], a.from, f.forest[a.from][:4])
-		f.forest[a.from], f.forest[a.to] = f.forest[a.to], f.forest[a.from]
+		fmt.Printf("swaped %d %x, %d %x\n", a.to,
+			f.data.read(a.to).Prefix(), a.from, f.data.read(a.from).Prefix())
+		f.data.swapHash(a.from, a.to)
 		dirt[2*i] = a.to       // this is wrong, it way over hashes
 		dirt[(2*i)+1] = a.from // also should be parents
 	}
@@ -84,17 +86,17 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// update positionMap.  The stuff we do want has been moved in to the forest,
 	// the stuff we don't want has been moved to the right past the edge
 	for p := f.numLeaves; p < prevNumLeaves; p++ {
-		fmt.Printf("put back edge %x@%d from map\n", f.forest[p][:4], p)
-		f.positionMap[f.forest[p].Mini()] = p
+		fmt.Printf("put back edge %x@%d from map\n", f.data.read(p).Prefix(), p)
+		f.positionMap[f.data.read(p).Mini()] = p
 	}
 	for _, p := range ub.positions {
-		fmt.Printf("put back internal %x@%d in map\n", f.forest[p][:4], p)
-		f.positionMap[f.forest[p].Mini()] = p
+		fmt.Printf("put back internal %x@%d in map\n", f.data.read(p).Prefix(), p)
+		f.positionMap[f.data.read(p).Mini()] = p
 	}
 	for _, d := range dirt {
 		// everything that moved needs to have its position updated in the map
 		// TODO does it..?
-		m := f.forest[d].Mini()
+		m := f.data.read(d).Mini()
 		oldpos := f.positionMap[m]
 		if oldpos != d {
 			fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
@@ -126,7 +128,7 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
 
 	// populate all the hashes from the left edge of the forest
 	for i, _ := range ub.positions {
-		ub.hashes[i] = f.forest[f.numLeaves+uint64(i)]
+		ub.hashes[i] = f.data.read(f.numLeaves + uint64(i))
 	}
 
 	return ub
@@ -212,12 +214,12 @@ func (f *Forest) reHash(dirt []uint64) error {
 
 			//				fmt.Printf("bridge hash %d %04x, %d %04x -> %d\n",
 			//					left, leftHash[:4], right, rightHash[:4], parpos)
-			if f.forest[left] == empty || f.forest[right] == empty {
-				f.forest[parpos] = empty
+			if f.data.read(left) == empty || f.data.read(right) == empty {
+				f.data.write(parpos, empty)
 			} else {
-				par := Parent(f.forest[left], f.forest[right])
+				par := Parent(f.data.read(left), f.data.read(right))
 				f.HistoricHashes++
-				f.forest[parpos] = par
+				f.data.write(parpos, par)
 			}
 			nextRow = append(nextRow, parpos)
 		}

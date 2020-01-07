@@ -37,7 +37,7 @@ type Forest struct {
 	// an on-disk file more easily (the subtree stuff should be changed
 	// at that point to do runs of i/o).  Not sure about "deleting" as it
 	// might not be needed at all with a slice.
-	forest []Hash
+	data forestData
 
 	positionMap map[MiniHash]uint64 // map from hashes to positions.
 	// Inverse of forestMap for leaves.
@@ -45,10 +45,6 @@ type Forest struct {
 	// ----- it's kind of ugly to put this here but a bunch of places need it;
 	// basically modify and all sub-functions.  Not for prove/verify
 	// though.  But those are super simple.
-
-	// TODO can probably get rid of a map here and make it a slice
-	// only odd nodes should ever get dirty
-	dirtyMap map[uint64]bool
 
 	// -------------------- following are just for testing / benchmarking
 	// how many hashes this forest has computed
@@ -74,10 +70,10 @@ func NewForest() *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
 	f.height = 0
-	f.forest = make([]Hash, 1) // height 0 forest has 1 node
-	//	f.forestMapx = make(map[uint64]Hash)
+	f.data = new(ramForestData)
+	f.data.resize(1)
+	// f.forest = make([]Hash, 1) // height 0 forest has 1 node
 	f.positionMap = make(map[MiniHash]uint64)
-	f.dirtyMap = make(map[uint64]bool)
 
 	return f
 }
@@ -120,7 +116,8 @@ func (f *Forest) removev3(dels []uint64) error {
 		}
 		// clear all entries from positionMap as they won't be needed any more
 		// fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
-		delete(f.positionMap, f.forest[dpos].Mini())
+		delete(f.positionMap, f.data.read(dpos).Mini())
+
 	}
 
 	var dirt []uint64
@@ -132,7 +129,7 @@ func (f *Forest) removev3(dels []uint64) error {
 	// TODO definitely not how to do this, way inefficient
 	// dirt should be on the top, this is redundant
 	for _, s := range swaps {
-		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
+		f.data.swapHash(s.from, s.to)
 		if s.to < nextNumLeaves {
 			// from as well?
 			dirt = append(dirt, s.to)
@@ -145,7 +142,7 @@ func (f *Forest) removev3(dels []uint64) error {
 	for _, d := range dirt {
 		// everything that moved needs to have its position updated in the map
 		// TODO does it..?
-		m := f.forest[d].Mini()
+		m := f.data.read(d).Mini()
 		oldpos := f.positionMap[m]
 		if oldpos != d {
 			// fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
@@ -167,7 +164,7 @@ func (f *Forest) removev3(dels []uint64) error {
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
 func (f *Forest) cleanup() {
 	for p := f.numLeaves; p < 1<<f.height; p++ {
-		f.forest[p] = empty
+		f.data.write(p, empty)
 	}
 }
 
@@ -201,14 +198,14 @@ func (f *Forest) addv2(adds []LeafTXO) {
 		tops, _ := getTopsReverse(f.numLeaves, f.height)
 		pos := f.numLeaves
 		n := add.Hash
-		f.forest[pos] = n // write leaf
+		f.data.write(pos, n)
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
 			// grab, pop, swap, hash, new
-			top := f.forest[tops[h]] // grab
+			top := f.data.read(tops[h]) // grab
 			//			fmt.Printf("grabbed %x from %d\n", top[:12], tops[h])
 			n = Parent(top, n)       // hash
 			pos = up1(pos, f.height) // rise
-			f.forest[pos] = n        // write
+			f.data.write(pos, n)     // write
 			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
 		}
 		f.numLeaves++
@@ -279,8 +276,7 @@ func (f *Forest) reMap(destHeight uint8) error {
 	// matter.  Something to program someday if you feel like it for fun.
 
 	// height increase
-
-	f.forest = append(f.forest, make([]Hash, 1<<destHeight)...)
+	f.data.resize(1 << destHeight)
 
 	pos := uint64(1 << destHeight) // leftmost position of row 1
 	reach := pos >> 1              // how much to next row up
@@ -289,11 +285,12 @@ func (f *Forest) reMap(destHeight uint8) error {
 		runLength := reach >> 1
 		for x := uint64(0); x < runLength; x++ {
 			// ok if source position is non-empty
-			ok := len(f.forest) > int((pos>>1)+x) &&
-				f.forest[(pos>>1)+x] != empty
-			src := f.forest[(pos>>1)+x]
+			ok := f.data.size() > (pos>>1)+x &&
+				f.data.read((pos>>1)+x) != empty
+			src := f.data.read((pos >> 1) + x)
 			if ok {
-				f.forest[pos+x] = src
+				f.data.write(pos+x, src)
+				// f.forest[pos+x] = src
 			}
 		}
 		pos += reach
@@ -305,7 +302,7 @@ func (f *Forest) reMap(destHeight uint8) error {
 	for x := uint64(1 << f.height); x < 1<<destHeight; x++ {
 		// here you may actually need / want to delete?  but numleaves
 		// should still ensure that you're not reading over the edge...
-		f.forest[x] = empty
+		f.data.write(x, empty)
 	}
 
 	f.height = destHeight
@@ -334,7 +331,7 @@ func (f *Forest) sanity() error {
 	}
 	tops, _ := getTopsReverse(f.numLeaves, f.height)
 	for _, t := range tops {
-		if f.forest[t] == empty {
+		if f.data.read(t) == empty {
 			return fmt.Errorf("Forest has %d leaves %d tops, but top @%d is empty",
 				f.numLeaves, len(tops), t)
 		}
@@ -350,9 +347,9 @@ func (f *Forest) sanity() error {
 // PosMapSanity is costly / slow: check that everything in posMap is correct
 func (f *Forest) PosMapSanity() error {
 	for i := uint64(0); i < f.numLeaves; i++ {
-		if f.positionMap[f.forest[i].Mini()] != i {
+		if f.positionMap[f.data.read(i).Mini()] != i {
 			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
-				f.forest[i][:4], f.positionMap[f.forest[i].Mini()], i)
+				f.data.read(i).Prefix(), f.positionMap[f.data.read(i).Mini()], i)
 		}
 	}
 	return nil
@@ -365,7 +362,7 @@ func (f *Forest) GetTops() []Hash {
 	tops := make([]Hash, len(topposs))
 
 	for i := range tops {
-		tops[i] = f.forest[topposs[i]]
+		tops[i] = f.data.read(topposs[i])
 	}
 
 	return tops
@@ -375,7 +372,7 @@ func (f *Forest) GetTops() []Hash {
 func (f *Forest) Stats() string {
 
 	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
-		f.numLeaves, f.HistoricHashes, len(f.positionMap), len(f.forest))
+		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
 
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
@@ -399,9 +396,9 @@ func (f *Forest) ToString() string {
 
 		for j := uint8(0); j < rowlen; j++ {
 			var valstring string
-			ok := len(f.forest) >= int(pos)
+			ok := f.data.size() >= uint64(pos)
 			if ok {
-				val := f.forest[uint64(pos)]
+				val := f.data.read(uint64(pos))
 				if val != empty {
 					valstring = fmt.Sprintf("%x", val[:2])
 				}

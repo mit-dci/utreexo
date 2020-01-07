@@ -33,7 +33,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	// build empty proof branch slice of siblings
 	// not full height -- need to figure out which subtree it's in!
 	pr.Siblings = make([]Hash, detectSubTreeHeight(pos, f.numLeaves, f.height))
-	pr.Payload = f.forest[pos]
+	pr.Payload = f.data.read(pos)
 	if pr.Payload != wanted {
 		return pr, fmt.Errorf(
 			"prove: forest and position map conflict. want %x got %x at pos %d",
@@ -45,7 +45,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	// go up and populate the siblings
 	for h := range pr.Siblings {
 
-		pr.Siblings[h] = f.forest[pos^1]
+		pr.Siblings[h] = f.data.read(pos ^ 1)
 		if pr.Siblings[h] == empty {
 			fmt.Printf(f.ToString())
 			return pr, fmt.Errorf(
@@ -107,11 +107,11 @@ func (f *Forest) Verify(p Proof) bool {
 
 	subTreeRootPos := upMany(p.Position, subTreeHeight, f.height)
 
-	if int(subTreeRootPos) >= len(f.forest) {
+	if subTreeRootPos >= f.data.size() {
 		fmt.Printf("ERROR don't have root at %d\n", subTreeRootPos)
 		return false
 	}
-	subRoot := f.forest[subTreeRootPos]
+	subRoot := f.data.read(subTreeRootPos)
 
 	if n != subRoot {
 		fmt.Printf("got %04x subroot %04x\n", n[:4], subRoot[:4])
@@ -141,7 +141,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	if len(hs) == 0 {
 		return bp, nil
 	}
-	if len(f.forest) < 2 {
+	if f.data.size() < 2 {
 		return bp, nil
 	}
 
@@ -197,15 +197,15 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 		// TODO change this for the real thing; no need to prove 0-tree root.
 		// but we still need to verify it and tag it as a target.
 		if pos == f.numLeaves-1 && pos&1 == 0 {
-			proofTree[pos] = f.forest[pos]
+			proofTree[pos] = f.data.read(pos)
 			//			fmt.Printf("%d add as root\n", pos)
 			continue
 		}
 
 		// always put in both siblings when on the bottom row
 		// this can be out of order but it will be sorted later
-		proofTree[pos] = f.forest[pos]
-		proofTree[pos^1] = f.forest[pos^1]
+		proofTree[pos] = f.data.read(pos)
+		proofTree[pos^1] = f.data.read(pos ^ 1)
 		//		fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
 		treeTop := detectSubTreeHeight(pos, f.numLeaves, f.height)
@@ -236,7 +236,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 				break
 			}
 			//			fmt.Printf("add proof from pos %d\n", pos^1)
-			proofTree[pos^1] = f.forest[pos^1]
+			proofTree[pos^1] = f.data.read(pos ^ 1)
 			pos = up1(pos, f.height)
 		}
 	}
