@@ -67,14 +67,21 @@ type Forest struct {
 
 // NewForest :
 func NewForest() *Forest {
+	var err error
 	f := new(Forest)
 	f.numLeaves = 0
 	f.height = 0
-	f.data = new(ramForestData)
-	f.data.resize(1)
-	// f.forest = make([]Hash, 1) // height 0 forest has 1 node
-	f.positionMap = make(map[MiniHash]uint64)
 
+	// for on-disk
+	f.data, err = diskForestOpen("forestFile")
+	if err != nil {
+		panic(err)
+	}
+	// for in-ram
+	// f.data = new(ramForestData)
+
+	f.data.resize(1)
+	f.positionMap = make(map[MiniHash]uint64)
 	return f
 }
 
