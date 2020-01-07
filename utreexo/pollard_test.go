@@ -8,10 +8,10 @@ import (
 
 func TestPollardRand(t *testing.T) {
 	// for z := 0; z < 30000; z++ {
-	z := 8083
+	z := 10641
 	rand.Seed(int64(z))
 	fmt.Printf("randseed %d\n", z)
-	err := pollardRandomRemember(30)
+	err := pollardRandomRemember(20)
 	if err != nil {
 		fmt.Printf("randseed %d\n", z)
 		t.Fatal(err)
@@ -70,16 +70,16 @@ func pollardRandomRemember(blocks int32) error {
 		// any more will be stuck in the positionMap.  Wastes a bit of memory
 		// and seems to happen when there are moves to and from a location
 		// Should fix but can leave it for now.
-		/*
-			err = f.sanity()
-			if err != nil {
-				fmt.Printf("frs broke %s", f.toString())
-				for h, p := range f.positionMap {
-					fmt.Printf("%x@%d ", h[:4], p)
-				}
-				return err
+
+		err = f.sanity()
+		if err != nil {
+			fmt.Printf("frs broke %s", f.toString())
+			for h, p := range f.positionMap {
+				fmt.Printf("%x@%d ", h[:4], p)
 			}
-		*/
+			return err
+		}
+
 		// apply adds / dels to pollard
 		err = p.Modify(adds, bp.Targets)
 		if err != nil {
@@ -88,7 +88,7 @@ func pollardRandomRemember(blocks int32) error {
 
 		// fmt.Printf("pol postadd %s", p.toString())
 
-		// fmt.Printf("frs postadd %s", f.toString())
+		fmt.Printf("frs postadd %s", f.toString())
 
 		// check all leaves match
 		if !p.equalToForestIfThere(f) {

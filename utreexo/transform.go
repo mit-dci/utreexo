@@ -329,41 +329,19 @@ func floorTransform(
 	// fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
 	swaprows := remTrans2(dels, numLeaves, fHeight)
 	// fmt.Printf("td output %v\n", swaprows)
-
 	var floor []arrow
-
-	// fmt.Printf("raw: ")
 	for h, row := range swaprows {
 		for _, a := range row {
-			// fmt.Printf("%d -> %d\t", a.from, a.to)
 			if a.from == a.to {
-				// fmt.Printf("omitting ################# %d -> %d\n", a.to, a.to)
 				continue
 				// TODO: why do these even exist?  get rid of them from
 				// removeTransform output?
 			}
 			leaves := a.toLeaves(uint8(h), fHeight)
-			// fmt.Printf(" leaf: ")
-
 			for _, l := range leaves {
-				// fmt.Printf("%d -> %d\t", l.from, l.to)
 				floor = append(floor, l)
-				// can cutthrough work..?
-
-				// prevTo, ok := arMap[l.to]
-				// if  ok {
-				// fmt.Printf("%d in map\n", l.to)
-				// arMap[l.from] = prevTo
-				// delete(arMap, l.to)
-				// } else {
-				// arMap[l.from] = l.to
-				// }
 			}
-			// fmt.Printf("\n")
 		}
 	}
-
-	// fmt.Printf("floor: %v\n", floor)
-
 	return floor
 }

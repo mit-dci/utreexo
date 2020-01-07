@@ -120,10 +120,11 @@ func (f *Forest) removev3(dels []uint64) error {
 
 	// fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
 	swaps := floorTransform(dels, f.numLeaves, f.height)
-	// fmt.Printf("v3 got swaps: %v\n", swaps)
+	// TODO really really shouldn't use floor transform here.
+	// In fact I'm not sure floor transform should even exist.
 
 	// TODO definitely not how to do this, way inefficient
-	// dirt should be on the top, this is redundant
+	// don't even use dirt, do it like in pollard
 	for _, s := range swaps {
 		f.forest[s.from], f.forest[s.to] = f.forest[s.to], f.forest[s.from]
 		if s.to < nextNumLeaves {
@@ -133,18 +134,10 @@ func (f *Forest) removev3(dels []uint64) error {
 				dirt = append(dirt, s.from)
 			}
 		}
-	}
-	// go through dirt and update map
-	for _, d := range dirt {
-		// everything that moved needs to have its position updated in the map
-		// TODO does it..?
-		m := f.forest[d].Mini()
-		oldpos := f.positionMap[m]
-		if oldpos != d {
-			// fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
-			delete(f.positionMap, m)
-			f.positionMap[m] = d
-		}
+		// OK well while we're using floortransform, EVERY swap is at
+		// height 0 so just change position map here...
+		f.positionMap[f.forest[s.to].Mini()] = s.to
+		f.positionMap[f.forest[s.from].Mini()] = s.from
 	}
 
 	f.numLeaves = nextNumLeaves
@@ -155,7 +148,8 @@ func (f *Forest) removev3(dels []uint64) error {
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
 func (f *Forest) cleanup() {
 	for p := f.numLeaves; p < 1<<f.height; p++ {
-		f.forest[p] = empty
+		delete(f.positionMap, f.forest[p].Mini()) // clear position map
+		f.forest[p] = empty                       // clear forest
 	}
 }
 
@@ -211,6 +205,8 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
+	f.cleanup()
+
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
 	// BuildUndoData takes all the stuff swapped to the right by removev3
