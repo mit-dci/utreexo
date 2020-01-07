@@ -39,7 +39,9 @@ func remTrans2(
 	// fmt.Printf("rt2 on %v\n", dels)
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h < fHeight; h++ {
-		// fmt.Printf("h %d del %v col %v\n", h, dels, collapses)
+		// start with nil swap slice, not a single {0, 0}
+		swaps[h] = nil
+		// fmt.Printf("del %v col %v h %d\n", dels, collapses, h)
 		if len(dels) == 0 { // if there's nothing to delete, we're done
 			break
 		}
@@ -59,7 +61,7 @@ func remTrans2(
 
 		// *** dedupe
 		twinNextDels, dels = ExTwin2(dels, fHeight)
-
+		// fmt.Printf("tnd %v dels %v\n", twinNextDels, dels)
 		// *** swap
 		for len(dels) > 1 {
 			swaps[h] = append(swaps[h],
@@ -106,6 +108,7 @@ func remTrans2(
 		swaps[i] = append(swaps[i], c)
 	}
 
+	fmt.Printf("returning %v\n", swaps)
 	// topUp(fHeight)
 	return swaps
 }
@@ -121,8 +124,10 @@ func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
 		for _, s := range swaps[h] {
 			for ch := uint8(0); ch < h; ch++ {
 				c := collapses[ch]
-				if c.from == c.to {
-					continue //
+				if c.from == 0 && c.to == 0 {
+					continue
+					// TODO really need to fix this; need a nil arrow, not
+					// just 0,0 acting as nil
 				}
 				mask := swapIfDescendant(s, c, h, ch, fh)
 				if mask != 0 {
@@ -145,9 +150,9 @@ func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
 			}
 			mask := swapIfDescendant(rowcol, c, h, ch, fh)
 			if mask != 0 {
-				fmt.Printf("****col %v becomes ", collapses[ch])
+				// fmt.Printf("****col %v becomes ", collapses[ch])
 				collapses[ch].to ^= mask
-				fmt.Printf("%v due to %v\n", collapses[ch], rowcol)
+				// fmt.Printf("%v due to %v\n", collapses[ch], rowcol)
 			}
 		}
 	}
@@ -168,8 +173,8 @@ func swapIfDescendant(a, b arrow, ah, bh, fh uint8) (subMask uint64) {
 		// b.to is below one but not both, swap it
 		topMask := a.from ^ a.to
 		subMask = topMask << hdiff
-		fmt.Printf("collapse %d->%d to %d->%d because of %v\n",
-			b.from, b.to, b.from, b.to^subMask, a)
+		// fmt.Printf("collapse %d->%d to %d->%d because of %v\n",
+		// b.from, b.to, b.from, b.to^subMask, a)
 
 	}
 	return subMask

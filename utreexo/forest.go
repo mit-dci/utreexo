@@ -105,20 +105,17 @@ func (f *Forest) removev3(dels []uint64) error {
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
-	// check that all dels are there & mark for deletion
+	// check that all dels are there
 	for _, dpos := range dels {
 		if dpos > f.numLeaves {
 			return fmt.Errorf(
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
-		// clear all entries from positionMap as they won't be needed any more
-		// fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
-		delete(f.positionMap, f.forest[dpos].Mini())
 	}
 
 	var dirt []uint64
 
-	// fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
+	fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
 	swaps := floorTransform(dels, f.numLeaves, f.height)
 	// TODO really really shouldn't use floor transform here.
 	// In fact I'm not sure floor transform should even exist.

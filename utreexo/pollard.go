@@ -140,7 +140,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
 	wg := new(sync.WaitGroup)
-	fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
+	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
@@ -150,7 +150,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		var hnslice []*hashableNode
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
-		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
+		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
 			// check if doing dirt. if not dirt, swap.
@@ -282,7 +282,7 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
 	}
 	if a == nil || b == nil {
-		return nil, fmt.Errorf("swapNodes %d:%d node not found", r.from, r.to)
+		return nil, fmt.Errorf("swapNodes %d %d node not found", r.from, r.to)
 	}
 
 	// fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",

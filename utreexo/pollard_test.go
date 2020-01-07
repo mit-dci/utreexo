@@ -8,10 +8,10 @@ import (
 
 func TestPollardRand(t *testing.T) {
 	// for z := 0; z < 30000; z++ {
-	z := 10641
+	z := 11221
 	rand.Seed(int64(z))
 	fmt.Printf("randseed %d\n", z)
-	err := pollardRandomRemember(20)
+	err := pollardRandomRemember(8)
 	if err != nil {
 		fmt.Printf("randseed %d\n", z)
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func pollardRandomRemember(blocks int32) error {
 	sn := NewSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x05)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
@@ -86,7 +86,7 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		// fmt.Printf("pol postadd %s", p.toString())
+		fmt.Printf("pol postadd %s", p.toString())
 
 		fmt.Printf("frs postadd %s", f.toString())
 
