@@ -168,6 +168,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// fmt.Printf("swapping %v\n", swaprows[h][0])
 				if swaprows[h][0].from == swaprows[h][0].to {
 					// TODO should get rid of these upstream
+					// panic("got non-moving swap")
 					swaprows[h] = swaprows[h][1:]
 					continue
 				}

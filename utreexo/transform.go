@@ -35,7 +35,8 @@ func remTrans2(
 	// fHeight := treeHeight(numLeaves)
 	// var swaps, collapses []arrowh
 	swaps := make([][]arrow, fHeight)
-	collapses := make([]arrow, fHeight)
+	// a bit ugly: collapses also [][], but only have 1 or 0 things per row
+	collapses := make([][]arrow, fHeight)
 	// fmt.Printf("rt2 on %v\n", dels)
 	// per row: sort / extract / swap / root / promote
 	for h := uint8(0); h < fHeight; h++ {
@@ -72,7 +73,7 @@ func remTrans2(
 		}
 
 		// *** root
-		if rootPresent && delRemains { // root to del, no stash / upper del
+		if rootPresent && delRemains { // root to del, no collapse / upper del
 			swaps[h] = append(swaps[h], arrow{from: rootPos, to: dels[0]})
 		}
 
@@ -82,7 +83,7 @@ func remTrans2(
 		if rootPresent && !delRemains { // stash root (collapses)
 			rootSrc := topPos(numLeaves, h, fHeight)
 			rootDest := topPos(nextNumLeaves, h, fHeight)
-			collapses[h] = arrow{from: rootSrc, to: rootDest}
+			collapses[h] = []arrow{arrow{from: rootSrc, to: rootDest}}
 			// fmt.Printf("%d root, collapse to %d\n", rootSrc, rootDest)
 		}
 		// no root but 1 del: sibling becomes root & collapses
@@ -90,31 +91,32 @@ func remTrans2(
 		if !rootPresent && delRemains {
 			rootSrc := dels[0] ^ 1
 			rootDest := topPos(nextNumLeaves, h, fHeight)
-			collapses[h] = arrow{from: rootSrc, to: rootDest}
+			collapses[h] = []arrow{arrow{from: rootSrc, to: rootDest}}
 			// fmt.Printf("%d promote to root, collapse to %d\n", rootSrc, rootDest)
 			swapNextDels = append(swapNextDels, up1(dels[0], fHeight))
 		}
-		// if neither haveDel nor rootPresent, nothing to do
+
+		// if neither haveDel nor rootPresent, nothing to do.
 		// done with this row, move dels and proceed up to next row
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
-
+	fmt.Printf("collapses: %v\n", collapses)
 	swapCollapses(swaps, collapses, fHeight)
 	// fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
 
 	// merge slice of collapses, placing the collapses at the end of the row
 	// ... is that the right place to put them....?
 	for i, c := range collapses {
-		swaps[i] = append(swaps[i], c)
+		if len(c) == 1 {
+			swaps[i] = append(swaps[i], c[0])
+		}
 	}
-
-	fmt.Printf("returning %v\n", swaps)
 	// topUp(fHeight)
 	return swaps
 }
 
 // swapCollapses applies all swaps to lower collapses.
-func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
+func swapCollapses(swaps, collapses [][]arrow, fh uint8) {
 	if len(collapses) == 0 {
 		return
 	}
@@ -123,35 +125,34 @@ func swapCollapses(swaps [][]arrow, collapses []arrow, fh uint8) {
 		// fmt.Printf("h %d swaps %v\n", h, swaps)
 		for _, s := range swaps[h] {
 			for ch := uint8(0); ch < h; ch++ {
-				c := collapses[ch]
-				if c.from == 0 && c.to == 0 {
+				if len(collapses[ch]) == 0 {
 					continue
-					// TODO really need to fix this; need a nil arrow, not
-					// just 0,0 acting as nil
 				}
+				c := collapses[ch][0]
 				mask := swapIfDescendant(s, c, h, ch, fh)
 				if mask != 0 {
 					// fmt.Printf("****col %v becomes ", c)
-					collapses[ch].to ^= mask
+					collapses[ch][0].to ^= mask
 					// fmt.Printf("%v due to %v\n", collapses[ch], s)
 				}
 			}
 		}
 
-		if collapses[h].to == collapses[h].from {
+		if len(collapses[h]) == 0 {
 			continue
-		} // exists / non-nil; affect lower collapses
-		rowcol := collapses[h]
+		}
+		// exists / non-nil; affect lower collapses
+		rowcol := collapses[h][0]
 		// do collapse on lower collapses
 		for ch := uint8(0); ch < h; ch++ {
-			c := collapses[ch]
-			if c.from == c.to {
+			if len(collapses[ch]) == 0 {
 				continue
 			}
+			c := collapses[ch][0]
 			mask := swapIfDescendant(rowcol, c, h, ch, fh)
 			if mask != 0 {
 				// fmt.Printf("****col %v becomes ", collapses[ch])
-				collapses[ch].to ^= mask
+				c.to ^= mask
 				// fmt.Printf("%v due to %v\n", collapses[ch], rowcol)
 			}
 		}
@@ -178,151 +179,6 @@ func swapIfDescendant(a, b arrow, ah, bh, fh uint8) (subMask uint64) {
 
 	}
 	return subMask
-}
-
-// RemoveTransform takes in the positions of the leaves to be deleted, as well
-// as the number of leaves and height of the forest (semi redundant).  It returns
-// 2 slices of movePos which is a sequential list of from/to move pairs.
-
-// Stashes always move to roots; for pollard this can move directly to a root.
-
-// This list is "raw" and a higher level move *implies* moving the whole subtree.
-// to get to a direct from/to mapping on the whole tree level, you will need
-// to process the movePos
-func removeTransformx(
-	dels []uint64, numLeaves uint64, fHeight uint8) ([]arrow, []arrow) {
-
-	// note that RemoveTransform is still way sub-optimal in that I'm sure
-	// you can do this directly without the n*log(n) subtree moving...
-
-	topPoss, _ := getTopsReverse(numLeaves, fHeight)
-	nextTopPoss, _ := getTopsReverse(numLeaves-uint64(len(dels)), fHeight)
-
-	// m is the main list of arrows
-	var a, stash []arrow
-	// stash is a list of nodes to move later.  They end up as tops.
-	// stash := make([]move, len(nextTopPoss))
-	// for i, _ := range stash {
-	// 	stash[i].to = nextTopPoss[i]
-	// }
-
-	var up1DelSlice []uint64 // the next ds, one row up (in construction)
-
-	// the main floor loop.
-	// per row: sort / extract / swap / root / promote
-	for h := uint8(0); h <= fHeight; h++ {
-		if len(dels) == 0 {
-			break
-		}
-
-		// *** sort.  Probably pointless on upper floors..?
-		// apparently it's not pointless at all which is somewhat surprising.
-		// maybe I should figure out why, or change the appending so that
-		// everything put in is already sorted...
-		sortUint64s(dels)
-
-		// check for root deletion (it can only be the last one)
-		// there should always be a topPoss remaining...
-		if len(topPoss) > 0 && topPoss[0] == dels[len(dels)-1] {
-			dels = dels[:len(dels)-1] // pop off the end
-			topPoss = topPoss[1:]     // pop off the top
-		}
-
-		// *** extract / dedupe
-		var twins []uint64
-		twins, dels = ExtractTwins(dels)
-		// run through the slice of deletions, and 'dedupe' by eliminating siblings
-		for _, sib := range twins {
-			up1DelSlice = append(up1DelSlice, up1(sib, fHeight))
-		}
-
-		// *** swap
-		for len(dels) > 1 {
-
-			if sibSwap && dels[0]&1 == 0 { // if destination is even (left)
-				a = append(a, arrow{from: dels[0] ^ 1, to: dels[0]})
-				// fmt.Printf("swap %d -> %d\n", m[len(m)-1].from, m[len(m)-1].to)
-				// set destination to newly vacated right sibling
-				dels[0] = dels[0] ^ 1
-			}
-
-			a = append(a, arrow{from: dels[1] ^ 1, to: dels[0]})
-			// fmt.Printf("swap %d -> %d\n", m[len(m)-1].from, m[len(m)-1].to)
-
-			// deletion promotes to next row
-			up1DelSlice = append(up1DelSlice, up1(dels[1], fHeight))
-			dels = dels[2:]
-		}
-
-		// *** root
-		// If we're deleting it, delete it now; its presence is important for
-		// subsequent swaps
-		// scenarios: deletion is present / absent, and root is present / absent
-		var rootPos uint64
-		var rootPresent bool
-		// check if a top is present on this floor
-		if len(topPoss) > 0 && detectHeight(topPoss[0], fHeight) == h {
-			rootPos = topPoss[0]
-			rootPresent = true
-			// if it was present, pop it off
-			topPoss = topPoss[1:]
-		}
-
-		// the last remaining deletion (if exists) can swap with the root
-
-		// weve already deleted roots either in the delete phase, so there can't
-		// be a root here that we are deleting.
-		var delPos uint64
-		var haveDel bool
-		if len(dels) == 1 {
-			delPos = dels[0]
-			haveDel = true
-		}
-		fmt.Printf("h %d haveDel %v rootpresent %v\n", h, haveDel, rootPresent)
-
-		if haveDel && rootPresent {
-			// deroot, move to sibling
-			if sibSwap && delPos&1 == 0 { // if destination is even (left)
-				a = append(a, arrow{from: delPos ^ 1, to: delPos})
-				// set destinationg to newly vacated right sibling
-				delPos = delPos ^ 1 // |1 should also work
-			}
-			a = append(a, arrow{from: rootPos, to: delPos})
-		}
-
-		if haveDel != rootPresent && len(nextTopPoss) == 0 {
-			panic("nextTopPos nil")
-		}
-
-		if haveDel && !rootPresent {
-			// stash sibling
-			// if delPos^1 != nextTopPoss[0] {
-			stash = append(stash, arrow{from: delPos ^ 1, to: nextTopPoss[0]})
-			// }
-
-			nextTopPoss = nextTopPoss[1:]
-			// mark parent for deletion. this happens even if the node
-			// being promoted to root doesn't move
-			up1DelSlice = append(up1DelSlice, up1(delPos, fHeight))
-		}
-
-		if !haveDel && rootPresent {
-			//  stash existing root (it will collapse left later)
-			stash = append(stash, arrow{from: rootPos, to: nextTopPoss[0]})
-			nextTopPoss = nextTopPoss[1:]
-		}
-
-		// done with one row, set ds to the next slice (promote)
-		dels = up1DelSlice
-		up1DelSlice = []uint64{}
-	}
-	if len(dels) != 0 {
-		fmt.Printf("finished deletion climb but %d deletion left %v",
-			len(dels), dels)
-		return nil, nil
-	}
-
-	return stash, a
 }
 
 // TODO optimization: if children move, parents don't need to move.
