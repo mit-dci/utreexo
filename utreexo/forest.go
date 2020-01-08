@@ -2,6 +2,7 @@ package utreexo
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -36,7 +37,11 @@ type Forest struct {
 	// "data" (not the best name but) is an interface to storing the forest
 	// hashes.  There's ram based and disk based for now, maybe if one
 	// is clearly better can go back to non-interface.
-	data forestData
+	data ForestData
+	// moving to slice based forest.  more efficient, can be moved to
+	// an on-disk file more easily (the subtree stuff should be changed
+	// at that point to do runs of i/o).  Not sure about "deleting" as it
+	// might not be needed at all with a slice.
 
 	positionMap map[MiniHash]uint64 // map from hashes to positions.
 	// Inverse of forestMap for leaves.
@@ -61,21 +66,20 @@ type Forest struct {
 }
 
 // NewForest :
-func NewForest() *Forest {
+//func NewForest() *Forest {
+func NewForest(forestFile *os.File) *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
 	f.height = 0
 
 	// for on-disk
-	// var err error
-	// f.data, err = diskForestOpen("forestFile")
-	// if err != nil {
-	// panic(err)
-	// }
+	d := new(diskForestData)
+	d.f = forestFile
+	f.data = d
 	// for in-ram
-	f.data = new(ramForestData)
+	//f.data = new(ramForestData)
 
-	f.data.resize(1)
+	//f.data.resize(1)
 	f.positionMap = make(map[MiniHash]uint64)
 	return f
 }
@@ -413,6 +417,74 @@ func (f *Forest) PosMapSanity() error {
 			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
 				f.data.read(i).Prefix(), f.positionMap[f.data.read(i).Mini()], i)
 		}
+	}
+	return nil
+}
+
+// RestoreForest restores the forest on restart. Needed when resuming after exiting.
+// miscForestFile is where numLeaves and height is stored
+func (f *Forest) RestoreForest(miscForestFile *os.File, forestFile *os.File) error {
+
+	// This restores the numLeaves
+	var byteLeaves [8]byte
+	_, err := miscForestFile.Read(byteLeaves[:])
+	if err != nil {
+		return err
+	}
+	f.numLeaves = BtU64(byteLeaves[:])
+	fmt.Println("Forest leaves:", f.numLeaves)
+
+	// This restores the positionMap
+	var i uint64
+	for i = uint64(0); i < f.numLeaves; i++ {
+		f.positionMap[f.data.read(i).Mini()] = i
+	}
+	if f.positionMap == nil {
+		return fmt.Errorf("Generated positionMap is nil")
+	}
+	var s string
+	for m, pos := range f.positionMap {
+		s += fmt.Sprintf("pos %d, leaf %x\n", pos, m)
+	}
+	lol, err := os.OpenFile("generatedpositionmap", os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
+	}
+	_, err = lol.WriteString(s)
+	if err != nil {
+		panic(err)
+	}
+
+	// This restores the height
+	var byteHeight [1]byte
+	_, err = miscForestFile.Read(byteHeight[:])
+	if err != nil {
+		return err
+	}
+	f.height = BtU8(byteHeight[:])
+	fmt.Println("Forest height:", f.height)
+
+	return nil
+}
+
+func (f *Forest) PrintPositionMap(file *os.File) {
+	var s string
+	for m, pos := range f.positionMap {
+		s += fmt.Sprintf("pos %d, leaf %x\n", pos, m)
+	}
+	_, err := file.WriteString(s)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// WriteForest writes the numLeaves and height to miscForestFile
+func (f *Forest) WriteForest(miscForestFile *os.File) error {
+	fmt.Println("numLeaves=", f.numLeaves)
+	fmt.Println("f.height=", f.height)
+	_, err := miscForestFile.WriteAt(append(U64tB(f.numLeaves), U8tB(f.height)...), 0)
+	if err != nil {
+		return err
 	}
 	return nil
 }

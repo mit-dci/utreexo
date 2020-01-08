@@ -5,11 +5,13 @@ import (
 	"os"
 )
 
+// leafSize is a [32]byte hash (sha256).
+// Length is alwasy 32.
 const leafSize = 32
 
 // A forestData is the thing that holds all the hashes in the forest.  Could
 // be in a file, or in ram, or maybe something else.
-type forestData interface {
+type ForestData interface {
 	read(pos uint64) Hash
 	write(pos uint64, h Hash)
 	swapHash(a, b uint64)
@@ -54,13 +56,6 @@ type diskForestData struct {
 	f *os.File
 }
 
-func diskForestOpen(fn string) (*diskForestData, error) {
-	d := new(diskForestData)
-	var err error
-	d.f, err = os.OpenFile(fn, os.O_CREATE|os.O_RDWR, 0600)
-	return d, err
-}
-
 // read ignores errors. Probably get an empty hash if it doesn't work
 func (d *diskForestData) read(pos uint64) Hash {
 	var h Hash
@@ -91,6 +86,7 @@ func (d *diskForestData) swapHash(a, b uint64) {
 func (d *diskForestData) size() uint64 {
 	s, err := d.f.Stat()
 	if err != nil {
+		fmt.Errorf("\tWARNING: %s. Returning 0", err.Error())
 		return 0
 	}
 	return uint64(s.Size())
@@ -99,12 +95,4 @@ func (d *diskForestData) size() uint64 {
 // resize makes the forest bigger (never gets smaller so don't try)
 func (d *diskForestData) resize(moreSize uint64) {
 	d.f.Truncate(int64(d.size() + moreSize))
-}
-
-// closes file
-func (d *diskForestData) close() {
-	err := d.f.Close()
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
 }
