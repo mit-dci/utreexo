@@ -73,12 +73,13 @@ func NewForest() *Forest {
 	f.height = 0
 
 	// for on-disk
-	f.data, err = diskForestOpen("forestFile")
-	if err != nil {
-		panic(err)
-	}
+	// var err error
+	// f.data, err = diskForestOpen("forestFile")
+	// if err != nil {
+	// panic(err)
+	// }
 	// for in-ram
-	// f.data = new(ramForestData)
+	f.data = new(ramForestData)
 
 	f.data.resize(1)
 	f.positionMap = make(map[MiniHash]uint64)
@@ -115,26 +116,23 @@ func (f *Forest) removev3(dels []uint64) error {
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
-	// check that all dels are there & mark for deletion
+	// check that all dels are there
 	for _, dpos := range dels {
 		if dpos > f.numLeaves {
 			return fmt.Errorf(
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
-		// clear all entries from positionMap as they won't be needed any more
-		// fmt.Printf(" deleted %d %x from positionMap\n", dpos, f.forest[dpos][:4])
-		delete(f.positionMap, f.data.read(dpos).Mini())
-
 	}
 
 	var dirt []uint64
 
 	// fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
 	swaps := floorTransform(dels, f.numLeaves, f.height)
-	// fmt.Printf("v3 got swaps: %v\n", swaps)
+	// TODO really really shouldn't use floor transform here.
+	// In fact I'm not sure floor transform should even exist.
 
 	// TODO definitely not how to do this, way inefficient
-	// dirt should be on the top, this is redundant
+	// don't even use dirt, do it like in pollard
 	for _, s := range swaps {
 		f.data.swapHash(s.from, s.to)
 		if s.to < nextNumLeaves {
@@ -144,50 +142,123 @@ func (f *Forest) removev3(dels []uint64) error {
 				dirt = append(dirt, s.from)
 			}
 		}
-	}
-	// go through dirt and update map
-	for _, d := range dirt {
-		// everything that moved needs to have its position updated in the map
-		// TODO does it..?
-		m := f.data.read(d).Mini()
-		oldpos := f.positionMap[m]
-		if oldpos != d {
-			// fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
-			delete(f.positionMap, m)
-			f.positionMap[m] = d
-		}
+		// OK well while we're using floortransform, EVERY swap is at
+		// height 0 so just change position map here...
+		f.positionMap[f.data.read(s.to).Mini()] = s.to
+		f.positionMap[f.data.read(s.from).Mini()] = s.from
 	}
 
 	f.numLeaves = nextNumLeaves
-	// f.cleanup()
 
-	// err := f.sanity()
-	// if err != nil {
-	// 	return err
-	// }
 	return f.reHash(dirt)
+}
+
+// reHash hashes new data in the forest based on dirty positions.
+// right now it seems "dirty" means the node itself moved, not that the
+// parent has changed children.
+// TODO: switch the meaning of "dirt" to mean parents with changed children;
+// this will probably make it a lot simpler.
+func (f *Forest) reHash(dirt []uint64) error {
+	if f.height == 0 || len(dirt) == 0 { // nothing to hash
+		return nil
+	}
+	tops, topheights := getTopsReverse(f.numLeaves, f.height)
+	// fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
+
+	dirty2d := make([][]uint64, f.height)
+	h := uint8(0)
+	dirtyRemaining := 0
+	for _, pos := range dirt {
+		if pos > f.numLeaves {
+			return fmt.Errorf("Dirt %d exceeds numleaves %d", pos, f.numLeaves)
+		}
+		dHeight := detectHeight(pos, f.height)
+		// increase height if needed
+		for h < dHeight {
+			h++
+		}
+		if h > f.height {
+			return fmt.Errorf("postion %d at height %d but forest only %d high",
+				pos, h, f.height)
+		}
+		// if bridgeVerbose {
+		// fmt.Printf("h %d\n", h)
+		// }
+		dirty2d[h] = append(dirty2d[h], pos)
+		dirtyRemaining++
+	}
+
+	// this is basically the same as VerifyBlockProof.  Could maybe split
+	// it to a separate function to reduce redundant code..?
+	// nah but pretty different beacuse the dirtyMap has stuff that appears
+	// halfway up...
+
+	var currentRow, nextRow []uint64
+
+	// floor by floor
+	for h = uint8(0); h < f.height; h++ {
+		if bridgeVerbose {
+			fmt.Printf("dirty %v\ncurrentRow %v\n", dirty2d[h], currentRow)
+		}
+
+		// merge nextRow and the dirtySlice.  They're both sorted so this
+		// should be quick.  Seems like a CS class kindof algo but who knows.
+		// Should be O(n) anyway.
+
+		currentRow = mergeSortedSlices(currentRow, dirty2d[h])
+		dirtyRemaining -= len(dirty2d[h])
+		if dirtyRemaining == 0 && len(currentRow) == 0 {
+			// done hashing early
+			break
+		}
+
+		for i, pos := range currentRow {
+			// skip if next is sibling
+			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
+				continue
+			}
+			if len(tops) == 0 {
+				return fmt.Errorf(
+					"currentRow %v no tops remaining, this shouldn't happen",
+					currentRow)
+			}
+			// also skip if this is a top
+			if pos == tops[0] {
+				continue
+			}
+
+			right := pos | 1
+			left := right ^ 1
+			parpos := up1(left, f.height)
+
+			//				fmt.Printf("bridge hash %d %04x, %d %04x -> %d\n",
+			//					left, leftHash[:4], right, rightHash[:4], parpos)
+			if f.data.read(left) == empty || f.data.read(right) == empty {
+				f.data.write(parpos, empty)
+			} else {
+				par := Parent(f.data.read(left), f.data.read(right))
+				f.HistoricHashes++
+				f.data.write(parpos, par)
+			}
+			nextRow = append(nextRow, parpos)
+		}
+		if topheights[0] == h {
+			tops = tops[1:]
+			topheights = topheights[1:]
+		}
+		currentRow = nextRow
+		nextRow = []uint64{}
+	}
+
+	return nil
 }
 
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
 func (f *Forest) cleanup() {
 	for p := f.numLeaves; p < 1<<f.height; p++ {
-		f.data.write(p, empty)
+		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
+		f.data.write(p, empty)                       // clear forest
 	}
-}
-
-type rootStash struct {
-	vals  []Hash
-	dirts []int // I know, I know, it's ugly but it's for slice indexes...
-}
-
-func (r *rootStash) toTStash(to uint64) tStash {
-	return tStash{vals: r.vals, dest: to}
-}
-
-// tStash is a stash used with removeTransform
-type tStash struct {
-	vals []Hash
-	dest uint64
 }
 
 // Add adds leaves to the forest.  This is the easy part.
@@ -242,6 +313,8 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
+	f.cleanup()
+
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
 	// BuildUndoData takes all the stuff swapped to the right by removev3
@@ -257,7 +330,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	// 	fmt.Printf("%x @%d\t", m[:4], p)
 	// }
 	// fmt.Printf("\n")
-	// err = f.sanity()
+
 	return ub, err
 }
 
@@ -315,18 +388,6 @@ func (f *Forest) reMap(destHeight uint8) error {
 	f.height = destHeight
 	return nil
 }
-
-/*
-
-For re-arranging sub-trees in the full tree mode.
-Usually you move things left, by subtracting from their position.
-eg 27 moves to 24.  If that's at height 2, the nodes below at heights 1, 0 also
-move.  The way they move: take the initial movement at the top (height 2),
-in this case 2 (27-24 = 3)  At height 1, they will move -6 (-3 << 1) and at
-height 0 they move -12 (-3 << 2).  Can't really do signed shifts but can subtract;
-in the cases when subtrees move right, add instead.  Moving right is rare though.
-
-*/
 
 // sanity checks forest sanity: does numleaves make sense, and are the tops
 // populated?

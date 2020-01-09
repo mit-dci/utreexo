@@ -6,25 +6,31 @@ import (
 	"testing"
 )
 
-func TestRandPollard(t *testing.T) {
-	rand.Seed(9)
+func TestPollardRand(t *testing.T) {
+	for z := 0; z < 30000; z++ {
+		// z := 11221
+		// z := 16
+		rand.Seed(int64(z))
+		fmt.Printf("randseed %d\n", z)
+		err := pollardRandomRemember(2000)
+		if err != nil {
+			fmt.Printf("randseed %d\n", z)
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestPollardFixed(t *testing.T) {
+	rand.Seed(2)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	//	err := fixedPollard(15)
-	//	if err != nil {
-	//		t.Fatal(err)
-	//	}
-
-	//	for z := 0; z < 100; z++ {
-	err := pollardRandomRemember(9)
+	err := fixedPollard(11)
 	if err != nil {
 		t.Fatal(err)
 	}
-	//	}
-
 }
 
 func pollardRandomRemember(blocks int32) error {
@@ -37,7 +43,7 @@ func pollardRandomRemember(blocks int32) error {
 	sn := NewSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
@@ -53,37 +59,42 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-
-		//		f2, err := p.toFull()
-		//		if err != nil {
-		//			return err
-		//		}
-		//		fmt.Printf("postingest %s", f2.ToString())
-		// fmt.Printf("forgetslice %v leaf %v\n", p.forget, p.rememberLeaf)
+		fmt.Printf("del %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("del %v\n", bp.Targets)
+		// TODO fix: there is a leak in forest.Modify where sometimes
+		// the position map doesn't clear out and a hash that doesn't exist
+		// any more will be stuck in the positionMap.  Wastes a bit of memory
+		// and seems to happen when there are moves to and from a location
+		// Should fix but can leave it for now.
+
+		err = f.sanity()
+		if err != nil {
+			fmt.Printf("frs broke %s", f.ToString())
+			for h, p := range f.positionMap {
+				fmt.Printf("%x@%d ", h[:4], p)
+			}
+			return err
+		}
+
 		// apply adds / dels to pollard
 		err = p.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
 		}
 
-		f2, err := p.toFull()
-		if err != nil {
-			return err
-		}
+		// fmt.Printf("pol postadd %s", p.toString())
 
-		fmt.Printf("pol postadd %s", f2.ToString())
-		//		fmt.Printf("forgetslice %v\n", p.forget)
-		// if p.rememberLeaf {
-		//			return fmt.Errorf("nobody should be memorable")
-		// }
-		// check that tops are the same
+		// fmt.Printf("frs postadd %s", f.toString())
+
+		// check all leaves match
+		if !p.equalToForestIfThere(f) {
+			return fmt.Errorf("pollard and forest leaves differ")
+		}
 
 		fullTops := f.GetTops()
 		polTops := p.topHashesReverse()
@@ -98,7 +109,7 @@ func pollardRandomRemember(blocks int32) error {
 			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
-					sn.blockHeight, i, ft, polTops[i])
+					sn.blockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
 		fmt.Printf("\n")
@@ -114,14 +125,14 @@ func fixedPollard(leaves int32) error {
 
 	leafCounter := uint64(0)
 
-	dels := []uint64{0, 1, 7, 8, 10}
+	dels := []uint64{2, 5, 6}
 
 	// they're all forgettable
 	adds := make([]LeafTXO, leaves)
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
-	for j := range adds {
+	for j, _ := range adds {
 		adds[j].Hash[1] = uint8(leafCounter)
 		adds[j].Hash[2] = uint8(leafCounter >> 8)
 		adds[j].Hash[3] = uint8(leafCounter >> 16)
@@ -130,7 +141,7 @@ func fixedPollard(leaves int32) error {
 
 		// the first utxo addded lives forever.
 		// (prevents leaves from goign to 0 which is buggy)
-
+		adds[j].Remember = true
 		leafCounter++
 	}
 
@@ -139,7 +150,7 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
+	fmt.Printf("forest  post del %s", f.ToString())
 
 	var p Pollard
 
@@ -148,13 +159,9 @@ func fixedPollard(leaves int32) error {
 		return err
 	}
 
-	f2, err := p.toFull()
-	if err != nil {
-		return err
-	}
-	fmt.Printf(f2.ToString())
+	fmt.Printf("pollard post add %s", p.ToString())
 
-	err = p.rem(dels)
+	err = p.rem2(dels)
 	if err != nil {
 		return err
 	}
@@ -163,13 +170,13 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
+	fmt.Printf("forest  post del %s", f.ToString())
 
-	f2, err = p.toFull()
-	if err != nil {
-		return err
+	fmt.Printf("pollard post del %s", p.ToString())
+
+	if !p.equalToForest(f) {
+		return fmt.Errorf("p != f (leaves)\n")
 	}
-	fmt.Printf(f2.ToString())
 
 	return nil
 }

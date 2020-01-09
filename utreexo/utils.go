@@ -45,7 +45,7 @@ func DedupeHashSlices(as *[]LeafTXO, bs *[]Hash) {
 // PopCount returns the number of 1 bits in a uint64
 func PopCount(i uint64) uint8 {
 	var count uint8
-	for j := 0; j < 64; j++ {
+	for i != 0 {
 		if i&1 == 1 {
 			count++
 		}
@@ -105,6 +105,28 @@ func detectSubTreeHeight(
 	return
 }
 
+// TODO optimization if it's worth it --
+// in many cases detectHeight is called often and you're only looking for a
+// change in height.  So we could instead have a "higher" function
+// where it just looks for a different number of leading 0s.
+// Actually I will write that function here
+
+// higher returns how much higher position is than h.  if postion is at height
+// h, it returns 0.  if position is lower than h it's undefined (probably 0)
+// untested
+func higher(position uint64, h, forestHeight uint8) uint8 {
+	mask := uint64(2<<forestHeight) - 1
+	mask &= mask << h // puts 0s on the right
+	if position < mask {
+		return 0
+	}
+	marker := uint64(1 << forestHeight)
+	for ; position&marker != 0; h++ {
+		marker >>= 1
+	}
+	return h
+}
+
 // detectHeight finds the current height of your node given the node
 // position and the total forest height.. counts preceeding 1 bits.
 func detectHeight(position uint64, forestHeight uint8) uint8 {
@@ -119,6 +141,7 @@ func detectHeight(position uint64, forestHeight uint8) uint8 {
 // detectOffset takes a node position and number of leaves in forest, and
 // returns: which subtree a node is in, the L/R bitfield to descend to the node,
 // and the height from node to its tree top (which is the bitfield length).
+// we return the opposite of bits, because we always invert em...
 func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// TODO replace ?
 	// similarities to detectSubTreeHeight() with more features
@@ -142,7 +165,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// B: mask
 	// C: 1<<th & numleaves (treeSize)
 	// The predicate is then if (A&B >= C)
-	// A is position up shifted by the height of the node we're targeting.
+	// A is position up-shifted by the height of the node we're targeting.
 	// B is the "mask" we use in other functions; a bunch of 0s at the MSB side
 	// and then a bunch of 1s on the LSB side, such that we can use bitwise AND
 	// to discard high bits.  Together, A&B is shifting position up by nh bits,
@@ -164,7 +187,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 			biggerTrees++
 		}
 	}
-	return biggerTrees, th - nh, position
+	return biggerTrees, th - nh, ^position
 }
 
 // child gives you the left child (LSB will be 0)
@@ -204,14 +227,13 @@ func cousin(position uint64) uint64 {
 // check if a node is in a forest based on number of leaves.
 // go down and right until reaching the bottom, then check if over numleaves
 // (same as childmany)
-func inForest(pos, numLeaves uint64) bool {
+// TODO fix.  says 14 is inforest with 5 leaves...
+func inForest(pos, numLeaves uint64, forestHeight uint8) bool {
 	// quick yes:
 	if pos < numLeaves {
 		return true
 	}
-
-	h := treeHeight(numLeaves)
-	marker := uint64(1 << h)
+	marker := uint64(1 << forestHeight)
 	mask := (marker << 1) - 1
 	if pos >= mask {
 		return false
@@ -224,11 +246,10 @@ func inForest(pos, numLeaves uint64) bool {
 
 // given n leaves, how deep is the tree?
 // iterate shifting left until greater than n
-func treeHeight(n uint64) uint8 {
-	var e uint8
+func treeHeight(n uint64) (e uint8) {
 	for ; (1 << e) < n; e++ {
 	}
-	return e
+	return
 }
 
 // topPos: given a number of leaves and a height, find the position of the
@@ -308,14 +329,14 @@ func subTreeLeafRange(
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrowh) toLeaves(forestHeight uint8) []arrow {
-	if a.ht == 0 {
-		return []arrow{arrow{from: a.from, to: a.to}}
+func (a *arrow) toLeaves(h, forestHeight uint8) []arrow {
+	if h == 0 {
+		return []arrow{*a}
 	}
 
-	run := uint64(1 << a.ht)
-	fromStart := childMany(a.from, a.ht, forestHeight)
-	toStart := childMany(a.to, a.ht, forestHeight)
+	run := uint64(1 << h)
+	fromStart := childMany(a.from, h, forestHeight)
+	toStart := childMany(a.to, h, forestHeight)
 
 	leaves := make([]arrow, run)
 	for i := uint64(0); i < run; i++ {
@@ -334,6 +355,53 @@ func sortNodeSlice(s []Node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
+// TODO is there really no way to just... reverse any slice?  Like with
+// interface or something?  it's just pointers and never touches the actual
+// type...
+
+// reverseArrowSlice does what it says.  Maybe can get rid of if we return
+// the slice top-down instead of bottom-up
+func reverseArrowSlice(a []arrow) {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
+	}
+}
+
+// exact same code twice, couldn't you have a reverse *any* slice func...?
+// but maybe that's generics or something
+func reverseUint64Slice(a []uint64) {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
+	}
+}
+
+func reversePolNodeSlice(a []polNode) {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
+	}
+}
+
+// topUp takes a slice of arrows (in order) and returns an expanded slice of
+// arrows that contains all the parents of the given slice up to roots
+func topUp(rows [][]uint64, fh uint8) {
+	// kindof inefficent since we actually start at row 1 and rows[0] is
+	// always empty when we call this... but mergeSortedSlices has the
+	// shortcut so shouldn't matter
+	nextrow := []uint64{}
+	for h := uint8(0); h <= fh; h++ { // go through each row
+		fmt.Printf("h %d merge %v and %v\n", h, rows[h], nextrow)
+		rows[h] = mergeSortedSlices(rows[h], nextrow)
+		nextrow = []uint64{} // clear nextrow
+		for i := 0; i < len(rows[h]); i++ {
+			nextrow = append(nextrow, up1(rows[h][i], fh))
+			// skip the next one if it's a sibling
+			if i+1 < len(rows[h]) && rows[h][i]|1 == rows[h][i+1] {
+				i++
+			}
+		}
+	}
+}
+
 // sortArrows sorts them by from
 // func sortArrows(s []arrow) {
 // 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
@@ -341,11 +409,20 @@ func sortNodeSlice(s []Node) {
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into
-// a signle sorted slice, discarding duplicates.
+// a signle sorted slice, discarding duplicates.  (but not detecting or discarding
+// duplicates within a signle slice)
 // (eg [1, 5, 8, 9], [2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6, 8, 9]
 func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 	maxa := len(a)
 	maxb := len(b)
+
+	// shortcuts:
+	if maxa == 0 {
+		return b
+	}
+	if maxb == 0 {
+		return a
+	}
 
 	// make it (potentially) too long and truncate later
 	c = make([]uint64, maxa+maxb)
@@ -380,6 +457,35 @@ func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 		}
 	}
 	return
+}
+
+// kindof like mergeSortedSlices.  Takes 2 sorted slices a, b and removes
+// all elements of b from a and returns a.
+// in this case b is arrow.to
+func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
+	maxa := len(a)
+	maxb := len(b)
+	var c []uint64
+	// shortcuts:
+	if maxa == 0 || maxb == 0 {
+		return a
+	}
+	idxb := 0
+	for j := 0; j < maxa; j++ {
+		// skip over swap destinations less than current dirt
+		for idxb < maxb && a[j] < b[idxb].to {
+			idxb++
+		}
+		if idxb == maxb { // done
+			c = append(c, a[j:]...)
+			break
+		}
+		if a[j] != b[idxb].to {
+			c = append(c, a[j])
+		}
+	}
+
+	return c
 }
 
 // BinString prints out the whole thing.  Only viable for small forests

@@ -162,9 +162,9 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		adds[j].Hash[0] = uint8(s.leafCounter)
 		adds[j].Hash[1] = uint8(s.leafCounter >> 8)
 		adds[j].Hash[2] = uint8(s.leafCounter >> 16)
-		adds[j].Hash[3] = uint8(s.leafCounter >> 24)
-		adds[j].Hash[4] = uint8(s.leafCounter >> 32)
-		adds[j].Hash[5] = 0xff
+		adds[j].Hash[3] = 0xff
+		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
+		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
 
 		adds[j].Duration = int32(rand.Uint32() & s.durationMask)
 		// with "+1", the duration is 1 to 256, so the forest never gets
@@ -174,7 +174,6 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 
 		// the first utxo addded lives forever.
 		// (prevents leaves from goign to 0 which is buggy)
-
 		if s.blockHeight == 0 {
 			adds[j].Duration = 0
 		}
@@ -184,7 +183,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		}
 
 		if adds[j].Duration != 0 {
-			fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].Duration-1)
+			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].Duration-1)
 			s.ttlSlices[adds[j].Duration-1] =
 				append(s.ttlSlices[adds[j].Duration-1], adds[j].Hash)
 		}
