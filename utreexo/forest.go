@@ -67,6 +67,7 @@ type Forest struct {
 
 // NewForest :
 func NewForest() *Forest {
+	var err error
 	f := new(Forest)
 	f.numLeaves = 0
 	f.height = 0
@@ -299,8 +300,8 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	delta := numadds - numdels // watch 32/64 bit
 	// remap to expand the forest if needed
 	for f.numLeaves+delta > 1<<f.height {
-		fmt.Printf("current cap %d need %d\n",
-			1<<f.height, f.numLeaves+delta)
+		// fmt.Printf("current cap %d need %d\n",
+		// 1<<f.height, f.numLeaves+delta)
 		err := f.reMap(f.height + 1)
 		if err != nil {
 			return nil, err
