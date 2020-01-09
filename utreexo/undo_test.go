@@ -58,7 +58,7 @@ func undoOnceRandom(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf(f.toString())
+		fmt.Printf(f.ToString())
 		fmt.Printf(sc.ttlString())
 		for h, p := range f.positionMap {
 			fmt.Printf("%x@%d ", h[:4], p)
@@ -97,7 +97,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.toString())
+	fmt.Printf(f.ToString())
 	beforeTops := f.GetTops()
 	for i, h := range beforeTops {
 		fmt.Printf("beforeTops %d %x\n", i, h)
@@ -122,7 +122,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.toString())
+	fmt.Printf(f.ToString())
 	fmt.Printf(ub.ToString())
 	afterTops := f.GetTops()
 	for i, h := range afterTops {

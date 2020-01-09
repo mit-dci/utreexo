@@ -38,7 +38,7 @@ func TestTopDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	//initial state
-	fmt.Printf(fup.toString())
+	fmt.Printf(fup.ToString())
 
 	dels := []uint64{12}
 
@@ -55,8 +55,8 @@ func TestTopDown(t *testing.T) {
 	upTops := fup.GetTops()
 	downTops := fdown.GetTops()
 
-	fmt.Printf("up nl %d %s", fup.numLeaves, fup.toString())
-	fmt.Printf("down nl %d %s", fdown.numLeaves, fdown.toString())
+	fmt.Printf("up nl %d %s", fup.numLeaves, fup.ToString())
+	fmt.Printf("down nl %d %s", fdown.numLeaves, fdown.ToString())
 
 	if len(upTops) != len(downTops) {
 		t.Fatalf("tops mismatch up %d down %d\n", len(upTops), len(downTops))
@@ -104,7 +104,7 @@ func TestRandTopDown(t *testing.T) {
 		}
 
 		//initial state
-		fmt.Printf(fup.toString())
+		fmt.Printf(fup.ToString())
 
 		var k int
 		dels := make([]uint64, numDels)
@@ -128,8 +128,8 @@ func TestRandTopDown(t *testing.T) {
 		upTops := fup.GetTops()
 		downTops := fdown.GetTops()
 
-		fmt.Printf("up nl %d %s", fup.numLeaves, fup.toString())
-		fmt.Printf("down nl %d %s", fdown.numLeaves, fdown.toString())
+		fmt.Printf("up nl %d %s", fup.numLeaves, fup.ToString())
+		fmt.Printf("down nl %d %s", fdown.numLeaves, fdown.ToString())
 
 		if len(upTops) != len(downTops) {
 			t.Fatalf("tops mismatch up %d down %d\n", len(upTops), len(downTops))

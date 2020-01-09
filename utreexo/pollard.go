@@ -396,7 +396,8 @@ func (p *Pollard) toFull() (*Forest, error) {
 	ff := NewForest()
 	ff.height = p.height()
 	ff.numLeaves = p.numLeaves
-	ff.forest = make([]Hash, 2<<ff.height)
+	ff.data = new(ramForestData)
+	ff.data.resize(2 << ff.height)
 	if p.numLeaves == 0 {
 		return ff, nil
 	}
@@ -411,7 +412,7 @@ func (p *Pollard) toFull() (*Forest, error) {
 			//			return nil, err
 		}
 		if sib[0] != nil {
-			ff.forest[i] = sib[0].data
+			ff.data.write(i, sib[0].data)
 			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
 		}
 
@@ -420,12 +421,12 @@ func (p *Pollard) toFull() (*Forest, error) {
 	return ff, nil
 }
 
-func (p *Pollard) toString() string {
+func (p *Pollard) ToString() string {
 	f, err := p.toFull()
 	if err != nil {
 		return err.Error()
 	}
-	return f.toString()
+	return f.ToString()
 }
 
 // equalToForest checks if the pollard has the same leaves as the forest.
@@ -440,9 +441,9 @@ func (p *Pollard) equalToForest(f *Forest) bool {
 		if err != nil {
 			return false
 		}
-		if n.data != f.forest[leafpos] {
+		if n.data != f.data.read(leafpos) {
 			fmt.Printf("leaf position %d pol %x != forest %x\n",
-				leafpos, n.data[:4], f.forest[leafpos][:4])
+				leafpos, n.data[:4], f.data.read(leafpos).Prefix())
 			return false
 		}
 	}
@@ -462,9 +463,9 @@ func (p *Pollard) equalToForestIfThere(f *Forest) bool {
 		if err != nil || n == nil {
 			continue // ignore grabPos errors / nils
 		}
-		if n.data != f.forest[leafpos] {
+		if n.data != f.data.read(leafpos) {
 			fmt.Printf("leaf position %d pol %x != forest %x\n",
-				leafpos, n.data[:4], f.forest[leafpos][:4])
+				leafpos, n.data[:4], f.data.read(leafpos).Prefix())
 			return false
 		}
 	}

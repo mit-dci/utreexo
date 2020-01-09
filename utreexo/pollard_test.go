@@ -74,7 +74,7 @@ func pollardRandomRemember(blocks int32) error {
 
 		err = f.sanity()
 		if err != nil {
-			fmt.Printf("frs broke %s", f.toString())
+			fmt.Printf("frs broke %s", f.ToString())
 			for h, p := range f.positionMap {
 				fmt.Printf("%x@%d ", h[:4], p)
 			}
@@ -150,7 +150,7 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("forest  post del %s", f.toString())
+	fmt.Printf("forest  post del %s", f.ToString())
 
 	var p Pollard
 
@@ -159,7 +159,7 @@ func fixedPollard(leaves int32) error {
 		return err
 	}
 
-	fmt.Printf("pollard post add %s", p.toString())
+	fmt.Printf("pollard post add %s", p.ToString())
 
 	err = p.rem2(dels)
 	if err != nil {
@@ -170,9 +170,9 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("forest  post del %s", f.toString())
+	fmt.Printf("forest  post del %s", f.ToString())
 
-	fmt.Printf("pollard post del %s", p.toString())
+	fmt.Printf("pollard post del %s", p.ToString())
 
 	if !p.equalToForest(f) {
 		return fmt.Errorf("p != f (leaves)\n")

@@ -9,6 +9,11 @@ import (
 // Hash :
 type Hash [32]byte
 
+// Prefix, for printfs
+func (h Hash) Prefix() []byte {
+	return h[:4]
+}
+
 // Mini :
 func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])

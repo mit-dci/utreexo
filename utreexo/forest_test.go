@@ -42,7 +42,7 @@ func TestForestAddDel(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fmt.Printf("nl %d %s", f.numLeaves, f.toString())
+		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
 	}
 }
 
@@ -74,7 +74,7 @@ func Test2Fwd1Back(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		s := f.toString()
+		s := f.ToString()
 		fmt.Printf(s)
 
 		// get proof for the first
