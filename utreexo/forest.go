@@ -125,7 +125,7 @@ func (f *Forest) removev3(dels []uint64) error {
 
 	var dirt []uint64
 
-	fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
+	// fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
 	swaps := floorTransform(dels, f.numLeaves, f.height)
 	// TODO really really shouldn't use floor transform here.
 	// In fact I'm not sure floor transform should even exist.
