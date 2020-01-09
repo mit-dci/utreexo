@@ -167,7 +167,6 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 
 		// the first utxo addded lives forever.
 		// (prevents leaves from goign to 0 which is buggy)
-
 		if s.blockHeight == 0 {
 			adds[j].Duration = 0
 		}

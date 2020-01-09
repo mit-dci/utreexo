@@ -1,9 +1,5 @@
 package utreexo
 
-import (
-	"fmt"
-)
-
 /*
 The transform operations can probably be moved into a different package even.
 They're some of the tricky parts of utreexo, on how to rearrange the forest nodes
@@ -100,14 +96,15 @@ func remTrans2(
 		// done with this row, move dels and proceed up to next row
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
-	fmt.Printf("collapses: %v\n", collapses)
+	// fmt.Printf("swaps %v\n", swaps)
+	// fmt.Printf("collapses: %v\n", collapses)
 	swapCollapses(swaps, collapses, fHeight)
 	// fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
 
 	// merge slice of collapses, placing the collapses at the end of the row
 	// ... is that the right place to put them....?
 	for i, c := range collapses {
-		if len(c) == 1 {
+		if len(c) == 1 && c[0].from != c[0].to {
 			swaps[i] = append(swaps[i], c[0])
 		}
 	}
@@ -128,8 +125,7 @@ func swapCollapses(swaps, collapses [][]arrow, fh uint8) {
 				if len(collapses[ch]) == 0 {
 					continue
 				}
-				c := collapses[ch][0]
-				mask := swapIfDescendant(s, c, h, ch, fh)
+				mask := swapIfDescendant(s, collapses[ch][0], h, ch, fh)
 				if mask != 0 {
 					// fmt.Printf("****col %v becomes ", c)
 					collapses[ch][0].to ^= mask
@@ -148,11 +144,10 @@ func swapCollapses(swaps, collapses [][]arrow, fh uint8) {
 			if len(collapses[ch]) == 0 {
 				continue
 			}
-			c := collapses[ch][0]
-			mask := swapIfDescendant(rowcol, c, h, ch, fh)
+			mask := swapIfDescendant(rowcol, collapses[ch][0], h, ch, fh)
 			if mask != 0 {
 				// fmt.Printf("****col %v becomes ", collapses[ch])
-				c.to ^= mask
+				collapses[ch][0].to ^= mask
 				// fmt.Printf("%v due to %v\n", collapses[ch], rowcol)
 			}
 		}

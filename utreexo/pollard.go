@@ -150,7 +150,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		var hnslice []*hashableNode
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
-		fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
+		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
 			// check if doing dirt. if not dirt, swap.
