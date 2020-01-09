@@ -3,13 +3,12 @@
 package ibdsim
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"runtime"
-	"runtime/pprof"
 	"time"
 
+	"github.com/mit-dci/lit/wire"
+	"github.com/mit-dci/utreexo/cmd/utils"
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -21,32 +20,51 @@ var maxmalloc uint64
 // we get the new utxo info from the same txos text file
 // the deletion data and proofs though, we get from the leveldb
 // which was created by the bridge node.
-func RunIBD(ttlfn string, schedFileName string) error {
-	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
+func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) error {
+
+	//Channel to alert the main loop to break
+	stopGoing := make(chan bool, 1)
+
+	//Channel to alert stopTxottl it's ok to exit
+	done := make(chan bool, 1)
+
+	go stopRunIBD(sig, stopGoing, done)
+
+	//Check if the ttlfn given is a testnet file
+	simutil.CheckTestnet(isTestnet)
+
+	// open database
+	o := new(opt.Options)
+	o.CompactionTableSizeMultiplier = 8
+	o.ReadOnly = true
+	lvdb, err := leveldb.OpenFile(ttldb, o)
+	if err != nil {
+		panic(err)
+	}
+	defer lvdb.Close()
+
+	pFile, err := os.OpenFile("proof.dat", os.O_RDONLY, 0400)
 	if err != nil {
 		return err
 	}
 
-	defer txofile.Close()
-
-	// scheduleFile, err := os.OpenFile(*schedFileName, os.O_RDONLY, 0600)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer scheduleFile.Close()
-
-	proofDB, err := leveldb.OpenFile("./proofdb", &opt.Options{ReadOnly: true})
+	pOffsetFile, err := os.OpenFile("proofoffset.dat", os.O_RDONLY, 0400)
 	if err != nil {
 		return err
 	}
 
-	scanner := bufio.NewScanner(txofile)
-	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
+	var currentOffsetHeight int
+	//grab the last block height from currentoffsetheight
+	//currentoffsetheight saves the last height from the offsetfile
+	var currentOffsetHeightByte [4]byte
+	currentOffsetHeightFile, err := os.Open("currentoffsetheight")
+	if err != nil {
+		panic(err)
+	}
+	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
+	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
 
-	// var scheduleBuffer []byte
-
-	var height uint32
-	height = 1
+	var height int
 
 	var plustime time.Duration
 	starttime := time.Now()
@@ -54,247 +72,215 @@ func RunIBD(ttlfn string, schedFileName string) error {
 	totalTXOAdded := 0
 	totalDels := 0
 
-	var blockAdds []utreexo.LeafTXO
-	var blockDels []utreexo.Hash
-
 	var p utreexo.Pollard
 
 	//	p.Minleaves = 1 << 30
 	// p.Lookahead = 1000
+
 	lookahead := int32(1000) // keep txos that last less than this many blocks
 
-	fname := fmt.Sprintf("mem%s", schedFileName)
+	//bool for stopping the scanner.Scan loop
+	var stop bool
 
-	for scanner.Scan() {
-		// keep schedule buffer full, 100KB chunks at a time
-		/* for clair schedule file
-		if len(scheduleBuffer) < 100000 {
-			nextBuf := make([]byte, 100000)
-			_, err = scheduleFile.Read(nextBuf)
-			if err != nil { // will error on EOF, deal w that
-				return err
-			}
-			scheduleBuffer = append(scheduleBuffer, nextBuf...)
-		}*/
+	// To send/receive blocks from blockreader()
+	bchan := make(chan simutil.BlockToWrite, 10)
 
-		switch scanner.Text()[0] {
-		case '-':
-			// blarg, still need to read these for the dedupe part
-			h := utreexo.HashFromString(scanner.Text()[1:])
-			blockDels = append(blockDels, h)
+	// Reads block asynchronously from .dat files
+	go simutil.BlockReader(bchan, currentOffsetHeight, height, offsetfile)
 
-		case '+':
-			plusstart := time.Now()
+	for ; height != currentOffsetHeight && stop != true; height++ {
 
-			adds, err := plusLine(scanner.Text())
-			if err != nil {
-				return err
-			}
-			// read from the schedule to see if it's memorable
-			for _, a := range adds {
+		b := <-bchan
 
-				if a.Duration == 0 {
-					continue
-				}
-				a.Remember = a.Duration < lookahead
-				// scheduleBuffer[0]&(1<<(7-uint8(totalTXOAdded%8))) != 0
+		err = genPollard(b.Txs, b.Height, &totalTXOAdded,
+			lookahead, &totalDels, plustime, pFile, pOffsetFile, lvdb, &p)
+		if err != nil {
+			panic(err)
+		}
 
-				totalTXOAdded++
-				// if totalTXOAdded%8 == 0 {
-				// after every 8 reads, pop the first byte off the front
-				// scheduleBuffer = scheduleBuffer[1:]
-				// }
-				blockAdds = append(blockAdds, a)
-			}
+		//if height%10000 == 0 {
+		//	fmt.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
+		//		height, newForest.Stats(),
+		//		plustime.Seconds(), time.Now().Sub(starttime).Seconds(),
+		//		totalProofNodes)
+		//}
 
-			donetime := time.Now()
-			plustime += donetime.Sub(plusstart)
-
-		case 'h':
-			// dedupe, though in this case we don't care about dels,
-			// just don't want to add stuff that shouldn't be there
-			// utreexo.DedupeHashSlices(&blockAdds, &blockDels)
-
-			// no longer need dedupe as 0-duration is filtered out before
-			// right after plusLine
-
-			// read a block proof from the db
-			bpBytes, err := proofDB.Get(utreexo.U32tB(height), nil)
-			if err != nil {
-				return err
-			}
-
-			bp, err := utreexo.FromBytesBlockProof(bpBytes)
-			if err != nil {
-				return err
-			}
-			if len(bp.Targets) > 0 {
-				fmt.Printf("block proof for block %d targets: %v\n", height, bp.Targets)
-			}
-			err = p.IngestBlockProof(bp)
-			if err != nil {
-				return err
-			}
-
-			// totalTXOAdded += len(blockAdds)
-			totalDels += len(bp.Targets)
-
-			err = p.Modify(blockAdds, bp.Targets)
-			if err != nil {
-				return err
-			}
-
-			if height%100 == 0 {
-				fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
-					height, totalTXOAdded, totalDels, p.Stats(),
-					plustime.Seconds(), time.Now().Sub(starttime).Seconds())
-			}
-			if height%1000 == 0 {
+		if height%10000 == 0 {
+			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
+				height, totalTXOAdded, totalDels, p.Stats(),
+				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
+		}
+		/*
+			if height%100000 == 0 {
 				fmt.Printf(MemStatString(fname))
 			}
+		*/
 
-			blockAdds = []utreexo.LeafTXO{}
-			blockDels = []utreexo.Hash{}
-			height++
+		//Check if stopSig is no longer false
+		//stop = true makes the loop exit
+		select {
+		case stop = <-stopGoing:
 		default:
-			panic("unknown string")
 		}
 	}
 
-	err = proofDB.Close()
-	if err != nil {
-		return err
-	}
+	fmt.Println("Done Writing")
 
-	return scanner.Err()
+	done <- true
 
 	return nil
 }
 
-// build the bridge node / proofs
-func BuildProofs(ttlfn string) error {
-
-	fmt.Println(ttlfn)
-	txofile, err := os.OpenFile(ttlfn, os.O_RDONLY, 0600)
-	if err != nil {
-		return err
-	}
-
-	proofDB, err := leveldb.OpenFile("./proofdb", nil)
-	if err != nil {
-		return err
-	}
-
-	f := utreexo.NewForest()
-
-	scanner := bufio.NewScanner(txofile)
-
-	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1MB should be enough?
-
-	var height uint32
-	var totalProofNodes int
-	var plustime time.Duration
-	starttime := time.Now()
+//Here we write proofs for all the txs.
+//All the inputs are saved as 32byte sha256 hashes.
+//All the outputs are saved as LeafTXO type.
+func genPollard(
+	tx []*wire.MsgTx,
+	height int,
+	totalTXOAdded *int,
+	lookahead int32,
+	totalDels *int,
+	plustime time.Duration,
+	pFile *os.File,
+	pOffsetFile *os.File,
+	lvdb *leveldb.DB,
+	p *utreexo.Pollard) error {
 
 	var blockAdds []utreexo.LeafTXO
-	var blockDels []utreexo.Hash
+	blocktxs := []*simutil.Txotx{new(simutil.Txotx)}
+	plusstart := time.Now()
 
-	for scanner.Scan() {
-		switch scanner.Text()[0] {
-		case '-':
-			h := utreexo.HashFromString(scanner.Text()[1:])
-			//			fmt.Printf("%s -> %x\n", scanner.Text(), h)
-			blockDels = append(blockDels, h)
+	for _, tx := range tx {
 
-		case '+':
-			plusstart := time.Now()
+		//creates all txos up to index indicated
+		txhash := tx.TxHash()
+		//fmt.Println(txhash.String())
+		numoutputs := uint32(len(tx.TxOut))
 
-			lineAdds, err := plusLine(scanner.Text())
-			if err != nil {
-				return err
+		blocktxs[len(blocktxs)-1].Unspendable = make([]bool, numoutputs)
+		//Adds z and index for all OP_RETURN transactions
+		//We don't keep track of the OP_RETURNS so probably can get rid of this
+		for i, out := range tx.TxOut {
+			if simutil.IsUnspendable(out) {
+				// Skip all the unspendables
+				blocktxs[len(blocktxs)-1].Unspendable[i] = true
+			} else {
+				//txid := tx.TxHash().String()
+				blocktxs[len(blocktxs)-1].Outputtxid = txhash.String()
+				blocktxs[len(blocktxs)-1].DeathHeights = make([]uint32, numoutputs)
 			}
-
-			blockAdds = append(blockAdds, lineAdds...)
-
-			donetime := time.Now()
-			plustime += donetime.Sub(plusstart)
-
-		case 'h':
-
-			utreexo.DedupeHashSlices(&blockAdds, &blockDels)
-
-			height++
-
-			// get set of currently known hashes here
-
-			blockProof, err := f.ProveBlock(blockDels)
-			if err != nil {
-				return fmt.Errorf("block %d %s %s", height, f.Stats(), err.Error())
-			}
-
-			ok := f.VerifyBlockProof(blockProof)
-			if !ok {
-				return fmt.Errorf("VerifyBlockProof failed at block %d", height)
-			}
-
-			totalProofNodes += len(blockProof.Proof)
-			err = proofDB.Put(
-				utreexo.U32tB(uint32(height)), blockProof.ToBytes(), nil)
-			if err != nil {
-				return err
-			}
-
-			//			for _, p := range proofs {
-			//				ok := f.Verify(p)
-			//				if !ok {
-			//					return fmt.Errorf("proof position %p failed", p.Position)
-			//				}
-			//				fmt.Printf("proof %d: pos %d %d sibs %v\n",
-			//					i, p.Position, len(p.Siblings), ok)
-
-			//			}
-
-			//			err := doReads(dels)
-			//			if err != nil {
-			//				return err
-			//			}
-
-			//			fmt.Printf("----------------------- call modify for block %d\n", height)
-
-			err = f.Modify(blockAdds, blockProof.Targets)
-			if err != nil {
-				return err
-			}
-
-			// evict hashes from hashStash if they've been deleted
-			//			for _, d := range dels {
-			//				delete(hashStash, d)
-			//			}
-
-			blockAdds = []utreexo.LeafTXO{}
-			blockDels = []utreexo.Hash{}
-			//			fmt.Printf("done with block %d\n", height)
-
-			if height%100 == 0 {
-				fmt.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
-					height, f.Stats(),
-					plustime.Seconds(), time.Now().Sub(starttime).Seconds(),
-					totalProofNodes)
-			}
-
-		default:
-			panic("unknown string")
 		}
 
+		// done with this txotx, make the next one and append
+		blocktxs = append(blocktxs, new(simutil.Txotx))
+
 	}
-	err = proofDB.Close()
+	//TODO Get rid of this. This eats up cpu
+	//we started a tx but shouldn't have
+	blocktxs = blocktxs[:len(blocktxs)-1]
+	// call function to make all the db lookups and find deathheights
+	lookupBlock(blocktxs, lvdb)
+
+	for _, blocktx := range blocktxs {
+		adds, err := genLeafTXO(blocktx, uint32(height+1))
+		if err != nil {
+			return err
+		}
+		for _, a := range adds {
+
+			if a.Duration == 0 {
+				continue
+			}
+			//fmt.Println("lookahead: ", lookahead)
+			a.Remember = a.Duration < lookahead
+			//fmt.Println("Remember", a.Remember)
+
+			*totalTXOAdded++
+
+			blockAdds = append(blockAdds, a)
+			//fmt.Println("adds:", blockAdds)
+		}
+	}
+	donetime := time.Now()
+	plustime += donetime.Sub(plusstart)
+	bpBytes, err := getProof(uint32(height), pFile, pOffsetFile)
 	if err != nil {
 		return err
 	}
-	return scanner.Err()
+	bp, err := utreexo.FromBytesBlockProof(bpBytes)
+	if err != nil {
+		return err
+	}
+	if len(bp.Targets) > 0 {
+		fmt.Printf("block proof for block %d targets: %v\n", height+1, bp.Targets)
+	}
+	err = p.IngestBlockProof(bp)
+	if err != nil {
+		return err
+	}
+
+	// totalTXOAdded += len(blockAdds)
+	*totalDels += len(bp.Targets)
+
+	err = p.Modify(blockAdds, bp.Targets)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Gets the proof for a given block height
+func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, error) {
+
+	var offset [4]byte
+	pOffsetFile.Seek(int64(height*4), 0)
+	pOffsetFile.Read(offset[:])
+
+	pFile.Seek(int64(simutil.BtU32(offset[:])), 0)
+
+	var heightbytes [4]byte
+	pFile.Read(heightbytes[:])
+
+	var compare0 [4]byte
+	copy(compare0[:], heightbytes[:])
+
+	var compare1 [4]byte
+	copy(compare1[:], utreexo.U32tB(height))
+	//check if height matches
+	if compare0 != compare1 {
+		return nil, fmt.Errorf("Corrupted proofoffset file\n")
+	}
+
+	var proofsize [4]byte
+	pFile.Read(proofsize[:])
+
+	proof := make([]byte, int(simutil.BtU32(proofsize[:])))
+	pFile.Read(proof[:])
+
+	return proof, nil
 
 }
 
+// plusLine reads in a line of text, generates a utxo leaf, and determines
+// if this is a leaf to remember or not.
+func genLeafTXO(tx *simutil.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
+	//fmt.Println("DeathHeights len:", len(tx.deathHeights))
+	adds := []utreexo.LeafTXO{}
+	for i := 0; i < len(tx.DeathHeights); i++ {
+		if tx.Unspendable[i] == true {
+			continue
+		}
+		utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
+		addData := utreexo.LeafTXO{
+			Hash:     utreexo.HashFromString(utxostring),
+			Duration: int32(tx.DeathHeights[i] - height)}
+		adds = append(adds, addData)
+		// fmt.Printf("expire in\t%d remember %v\n", ttlval[i], addData.Remember)
+	}
+	return adds, nil
+}
+
+/*
 func MemStatString(fname string) string {
 	var s string
 	var m runtime.MemStats
@@ -318,4 +304,17 @@ func MemStatString(fname string) string {
 	s += fmt.Sprintf("\tsys %d MB", m.Sys>>20)
 	s += fmt.Sprintf("\tnumGC %d\n", m.NumGC)
 	return s
+}
+*/
+
+func stopRunIBD(sig chan bool, stopGoing chan bool, done chan bool) {
+	<-sig
+	fmt.Println("Exiting...")
+
+	//Tell Runibd() to finish the block it's working on
+	stopGoing <- true
+
+	//Wait Runidb() says it's ok to quit
+	<-done
+	os.Exit(0)
 }
