@@ -20,31 +20,26 @@ There might be a better / optimal way to do this but it seems OK for now.
 // Forest :
 type Forest struct {
 	numLeaves uint64 // number of leaves in the forest (bottom row)
-	// the full tree doesn't store the top roots as it has everything.  Can be
-	// calculated from the forestMap.
 
 	// height of the forest.  NON INTUITIVE!
 	// When there is only 1 tree in the forest, it is equal to the height of
-	// that tree (2**h nodes).  If there are multiple trees, fullHeight will
+	// that tree (2**h nodes).  If there are multiple trees, height will
 	// be 1 higher than the highest tree in the forest.
 	// While you could just run treeHeight(numLeaves), and pollard does just this,
 	// here it incurs the cost of a reMap when you cross a power of 2 boundary.
 	// So right now it reMaps on the way up, but NOT on the way down, so the
 	// height can sometimes be higher than it would be as treeHeight(numLeaves)
+	// A little weird; could remove this, but likely would have a performance
+	// penalty if the set dances right above / below a power of 2 leaves.
 	height uint8
 
-	// moving to slice based forest.  more efficient, can be moved to
-	// an on-disk file more easily (the subtree stuff should be changed
-	// at that point to do runs of i/o).  Not sure about "deleting" as it
-	// might not be needed at all with a slice.
+	// "data" (not the best name but) is an interface to storing the forest
+	// hashes.  There's ram based and disk based for now, maybe if one
+	// is clearly better can go back to non-interface.
 	data forestData
 
 	positionMap map[MiniHash]uint64 // map from hashes to positions.
 	// Inverse of forestMap for leaves.
-
-	// ----- it's kind of ugly to put this here but a bunch of places need it;
-	// basically modify and all sub-functions.  Not for prove/verify
-	// though.  But those are super simple.
 
 	// -------------------- following are just for testing / benchmarking
 	// how many hashes this forest has computed
@@ -67,7 +62,6 @@ type Forest struct {
 
 // NewForest :
 func NewForest() *Forest {
-	var err error
 	f := new(Forest)
 	f.numLeaves = 0
 	f.height = 0
