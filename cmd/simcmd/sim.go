@@ -23,7 +23,8 @@ OPTIONS:
 `
 
 //commands
-var parseblockCmd = flag.Bool("parseblock", false, "Parse the blockdata in blocks/ and index/ directory. Outputs testnet.txos file and ttldb/")
+var parseblockCmd = flag.Bool("parseblock", false,
+	"Parse the blockdata in blocks/ and index/ directory. Outputs testnet.txos file and ttldb/")
 var genproofsCmd = flag.NewFlagSet("genproofs", flag.ExitOnError)
 var genhistCmd = flag.NewFlagSet("genhist", flag.ExitOnError)
 
@@ -31,10 +32,14 @@ var genhistCmd = flag.NewFlagSet("genhist", flag.ExitOnError)
 
 //bit of a hack. Stdandard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
-var testnetCmd = optionCmd.Bool("testnet", false, "Target testnet instead of mainnet. Usage: testnet=true")
-var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr", "assign a scheduled file to use. Usage: 'schedFileName=filename'")
-var ttldb = optionCmd.String("ttldb", "ttldb", "assign a ttldb/ name to use. Usage: 'ttldb=dirname'")
-var offsetfile = optionCmd.String("offsetfile", "offsetfile", "assign a offsetfile name to use. Usage: 'offsetfile=dirname'")
+var testnetCmd = optionCmd.Bool("testnet", false,
+	"Target testnet instead of mainnet. Usage: testnet=true")
+var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr",
+	"assign a scheduled file to use. Usage: 'schedFileName=filename'")
+var ttldb = optionCmd.String("ttldb", "ttldb",
+	"assign a ttldb/ name to use. Usage: 'ttldb=dirname'")
+var offsetfile = optionCmd.String("offsetfile", "offsetfile",
+	"assign a offsetfile name to use. Usage: 'offsetfile=dirname'")
 
 func main() {
 	//check if enough arguments were given

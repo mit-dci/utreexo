@@ -62,7 +62,8 @@ func CheckTestnet(isTestnet bool) {
 	}
 }
 
-func BlockReader(bchan chan BlockToWrite, currentOffsetHeight int, height int, offsetfile string) {
+func BlockReader(
+	bchan chan BlockToWrite, currentOffsetHeight, height int, offsetfile string) {
 	for height != currentOffsetHeight {
 		block, err := GetRawBlockFromFile(height, offsetfile)
 		if err != nil {
@@ -222,7 +223,8 @@ func GetTipNum(txos string) (int, error) {
 	var s string
 
 	//Reads backwards and appends the character read to `all` until we hit the character "h".
-	for s != "h" && x > -20 { //probably an empty/corrupted file if we loop more than 20 times
+	//probably an empty/corrupted file if we loop more than 20 times
+	for s != "h" && x > -20 {
 		f.Seek(x, 2)
 		f.Read(buf)
 		s = fmt.Sprintf("%s", buf)

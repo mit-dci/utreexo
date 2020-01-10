@@ -7,14 +7,15 @@ import (
 	"time"
 
 	"github.com/mit-dci/lit/wire"
-	"github.com/mit-dci/utreexo/cmd/utils"
+	simutil "github.com/mit-dci/utreexo/cmd/utils"
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // build the bridge node / proofs
-func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool) error {
+func BuildProofs(
+	isTestnet bool, ttldb string, offsetfile string, sig chan bool) error {
 
 	// Channel to alert the main loop to break
 	stopGoing := make(chan bool, 1)
@@ -49,7 +50,8 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 	// if there isn't an offset file, make one
 	if simutil.HasAccess(offsetfile) == false {
 		fmt.Println("offsetfile not present. Building...")
-		currentOffsetHeight, _ = buildOffsetFile(tip, height, nextMap, offsetfile, offsetfinished)
+		currentOffsetHeight, _ = buildOffsetFile(
+			tip, height, nextMap, offsetfile, offsetfinished)
 	} else {
 		// if there is a offset file, we should pass true to offsetfinished
 		// to let stopParse() know that it shouldn't delete offsetfile
@@ -102,7 +104,8 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 	}
 
 	// Where the proofs for txs exist
-	pFile, err := os.OpenFile("proof.dat", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	pFile, err := os.OpenFile(
+		"proof.dat", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -110,7 +113,8 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 
 	// Gives the location of where a particular block height's proofs are
 	// Basically an index
-	pOffsetFile, err := os.OpenFile("proofoffset.dat", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	pOffsetFile, err := os.OpenFile(
+		"proofoffset.dat", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -135,7 +139,9 @@ func BuildProofs(isTestnet bool, ttldb string, offsetfile string, sig chan bool)
 
 		b := <-bchan
 
-		err := writeProofs(b.Txs, b.Height, pFile, pOffsetFile, newForest, totalProofNodes, &pOffset)
+		err := writeProofs(
+			b.Txs, b.Height, pFile, pOffsetFile,
+			newForest, totalProofNodes, &pOffset)
 		if err != nil {
 			panic(err)
 		}
@@ -304,7 +310,9 @@ func hashgen(tx *simutil.Txotx) ([]utreexo.LeafTXO, error) {
 	return adds, nil
 }
 
-func stopBuildProofs(sig chan bool, offsetfinished chan bool, stopGoing chan bool, done chan bool, finish chan bool, offsetfile string) {
+func stopBuildProofs(
+	sig, offsetfinished, stopGoing, done, finish chan bool, offsetfile string) {
+
 	<-sig
 
 	//Tell BuildProofs to finish the block it's working on

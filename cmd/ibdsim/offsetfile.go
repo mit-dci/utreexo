@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/utreexo/cmd/utils"
+	simutil "github.com/mit-dci/utreexo/cmd/utils"
 )
 
 //Builds the offset file
-func buildOffsetFile(tip simutil.Hash, tipnum int, nextMap map[[32]byte]simutil.RawHeaderData, offsetfile string, offsetfinished chan bool) (int, error) {
+func buildOffsetFile(
+	tip simutil.Hash, tipnum int, nextMap map[[32]byte]simutil.RawHeaderData,
+	offsetfile string, offsetfinished chan bool) (int, error) {
 	offsetFile, err := os.OpenFile(offsetfile, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
@@ -30,13 +32,15 @@ func buildOffsetFile(tip simutil.Hash, tipnum int, nextMap map[[32]byte]simutil.
 		if err != nil {
 			panic(err)
 		}
-		tip, tipnum, err = writeBlockOffset(rawheaders, nextMap, offsetFile, tipnum, tip)
+		tip, tipnum, err = writeBlockOffset(
+			rawheaders, nextMap, offsetFile, tipnum, tip)
 		if err != nil {
 			panic(err)
 		}
 	}
 	//write the last height of the offsetfile
-	currentOffsetHeightFile, err := os.OpenFile("currentoffsetheight", os.O_CREATE|os.O_WRONLY, 0600)
+	currentOffsetHeightFile, err := os.OpenFile(
+		"currentoffsetheight", os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
