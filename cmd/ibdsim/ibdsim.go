@@ -43,12 +43,12 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 	}
 	defer lvdb.Close()
 
-	pFile, err := os.OpenFile("proof.dat", os.O_RDONLY, 0400)
+	pFile, err := os.OpenFile(simutil.PFilePath, os.O_RDONLY, 0400)
 	if err != nil {
 		return err
 	}
 
-	pOffsetFile, err := os.OpenFile("proofoffset.dat", os.O_RDONLY, 0400)
+	pOffsetFile, err := os.OpenFile(simutil.POffsetFilePath, os.O_RDONLY, 0400)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 	//grab the last block height from currentoffsetheight
 	//currentoffsetheight saves the last height from the offsetfile
 	var currentOffsetHeightByte [4]byte
-	currentOffsetHeightFile, err := os.Open("currentoffsetheight")
+	currentOffsetHeightFile, err := os.Open(simutil.CurrentOffsetFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +86,7 @@ func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) erro
 	bchan := make(chan simutil.BlockToWrite, 10)
 
 	// Reads block asynchronously from .dat files
-	go simutil.BlockReader(bchan, currentOffsetHeight, height, offsetfile)
+	go simutil.BlockReader(bchan, currentOffsetHeight, height, simutil.OffsetFilePath)
 
 	for ; height != currentOffsetHeight && stop != true; height++ {
 

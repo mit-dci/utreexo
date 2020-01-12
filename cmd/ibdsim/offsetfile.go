@@ -11,8 +11,9 @@ import (
 //Builds the offset file
 func buildOffsetFile(
 	tip simutil.Hash, tipnum int, nextMap map[[32]byte]simutil.RawHeaderData,
-	offsetfile string, offsetfinished chan bool) (int, error) {
-	offsetFile, err := os.OpenFile(offsetfile, os.O_CREATE|os.O_WRONLY, 0600)
+	offsetFilePath string, currentOffsetHeightFilePath string,
+	offsetfinished chan bool) (int, error) {
+	offsetFile, err := os.OpenFile(offsetFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -38,9 +39,9 @@ func buildOffsetFile(
 			panic(err)
 		}
 	}
-	//write the last height of the offsetfile
+	// write the last height of the offsetfile
 	currentOffsetHeightFile, err := os.OpenFile(
-		"currentoffsetheight", os.O_CREATE|os.O_WRONLY, 0600)
+		currentOffsetHeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
