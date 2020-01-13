@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/mit-dci/lit/wire"
-	simutil "github.com/mit-dci/utreexo/cmd/utils"
+	"github.com/mit-dci/utreexo/cmd/simutil"
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"

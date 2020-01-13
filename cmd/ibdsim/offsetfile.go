@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	simutil "github.com/mit-dci/utreexo/cmd/utils"
+	"github.com/mit-dci/utreexo/cmd/simutil"
 )
 
 //Builds the offset file

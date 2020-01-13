@@ -3,7 +3,7 @@ package ibdsim
 import (
 	"fmt"
 
-	"github.com/mit-dci/utreexo/cmd/utils"
+	"github.com/mit-dci/utreexo/cmd/simutil"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

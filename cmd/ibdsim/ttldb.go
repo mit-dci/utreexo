@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/mit-dci/lit/wire"
-	"github.com/mit-dci/utreexo/cmd/utils"
+	"github.com/mit-dci/utreexo/cmd/simutil"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
