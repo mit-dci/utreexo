@@ -575,3 +575,22 @@ func U64tB(i uint64) []byte {
 	binary.Write(&buf, binary.BigEndian, i)
 	return buf.Bytes()
 }
+
+// BtU8 : 1 byte to uint8.  returns ffff. if it doesn't work.
+func BtU8(b []byte) uint8 {
+	if len(b) != 1 {
+		fmt.Printf("Got %x to BtU8 (%d bytes)\n", b, len(b))
+		return 0xff
+	}
+	var i uint8
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, &i)
+	return i
+}
+
+// U8tB : uint8 to a byte.  Always works.
+func U8tB(i uint8) []byte {
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, i)
+	return buf.Bytes()
+}
