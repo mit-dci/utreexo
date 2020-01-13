@@ -43,15 +43,12 @@ func BuildProofs(
 		tip = simutil.MainnetGenHash
 	}
 
-	// Creates all the paths needed for simcmd
-	simutil.MakePaths()
-
 	var currentOffsetHeight int
 	height := 0
 	nextMap := make(map[[32]byte]simutil.RawHeaderData)
 
 	// if there isn't an offset file, make one
-	if simutil.HasAccess(simutil.OffsetFilePath) == false {
+	if simutil.HasAccess(offsetfile) == false {
 		fmt.Println("offsetfile not present. Building...")
 		currentOffsetHeight, _ = buildOffsetFile(
 			tip, height, nextMap, offsetfile, offsetfinished)
@@ -61,10 +58,10 @@ func BuildProofs(
 		offsetfinished <- true
 	}
 
-	//if there is a heightfile, get the height from that
+	//if there is a tipfile, get the height from that
 	var t [4]byte
-	if simutil.HasAccess(simutil.HeightFilePath) {
-		tf, err := os.Open(simutil.HeightFilePath)
+	if simutil.HasAccess("heightfile") {
+		tf, err := os.Open("heightfile")
 		if err != nil {
 			panic(err)
 		}
@@ -72,20 +69,16 @@ func BuildProofs(
 		height = int(simutil.BtU32(t[:]))
 	}
 
-	// heightFile saves the last block that was written to ttldb
-	heightFile, err := os.OpenFile(simutil.HeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
+	//tipfile saves the last block that was written to ttldb
+	tipFile, err := os.OpenFile("heightfile", os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
 
-	// grab the last block height from currentoffsetheight
-	// currentoffsetheight saves the last height from the offsetfile
+	//grab the last block height from currentoffsetheight
+	//currentoffsetheight saves the last height from the offsetfile
 	var currentOffsetHeightByte [4]byte
-	currentOffsetHeightFile, err := os.OpenFile(simutil.CurrentOffsetFilePath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		panic(err)
-	}
-	_, err = currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
+	currentOffsetHeightFile, err := os.Open("currentoffsetheight")
 	if err != nil {
 		panic(err)
 	}
@@ -112,7 +105,7 @@ func BuildProofs(
 
 	// Where the proofs for txs exist
 	pFile, err := os.OpenFile(
-		simutil.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		"proof.dat", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -121,7 +114,7 @@ func BuildProofs(
 	// Gives the location of where a particular block height's proofs are
 	// Basically an index
 	pOffsetFile, err := os.OpenFile(
-		simutil.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		"proofoffset.dat", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -140,8 +133,7 @@ func BuildProofs(
 	fmt.Println("Building Proofs and ttldb...")
 
 	// Reads block asynchronously from .dat files
-	go simutil.BlockReader(
-		bchan, currentOffsetHeight, height, simutil.OffsetFilePath)
+	go simutil.BlockReader(bchan, currentOffsetHeight, height, offsetfile)
 
 	for ; height != currentOffsetHeight && stop != true; height++ {
 
@@ -171,12 +163,11 @@ func BuildProofs(
 		}
 	}
 
-	// write to the heightfile
-	_, err = heightFile.WriteAt(simutil.U32tB(uint32(height+1)), 0)
+	// write to the tipfile
+	_, err = tipFile.WriteAt(simutil.U32tB(uint32(height+1)), 0)
 	if err != nil {
 		panic(err)
 	}
-	heightFile.Close()
 
 	// wait until dbWorker() has written to the ttldb file
 	// allows leveldb to close gracefully
