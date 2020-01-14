@@ -115,6 +115,9 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	var offset [4]byte
 	pOffsetFile.Seek(int64(height*4), 0)
 	pOffsetFile.Read(offset[:])
+	if offset == [4]byte{} && height != uint32(0) {
+		panic(fmt.Errorf("offset returned nil"))
+	}
 
 	pFile.Seek(int64(simutil.BtU32(offset[:])), 0)
 
@@ -128,6 +131,7 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	copy(compare1[:], utreexo.U32tB(height))
 	//check if height matches
 	if compare0 != compare1 {
+		fmt.Println("read:, given:", compare0, compare1)
 		return nil, fmt.Errorf("Corrupted proofoffset file\n")
 	}
 

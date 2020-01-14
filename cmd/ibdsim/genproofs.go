@@ -71,7 +71,6 @@ func BuildProofs(
 		tf.Read(t[:])
 		height = int(simutil.BtU32(t[:]))
 	}
-	fmt.Println("height is", height)
 
 	// heightFile saves the last block that was written to ttldb
 	heightFile, err := os.OpenFile(
@@ -229,7 +228,8 @@ func BuildProofs(
 
 	fmt.Println("At height:", height-1)
 	// write to the heightfile
-	_, err = heightFile.WriteAt(simutil.U32tB(uint32(height)), 0)
+	// height was ++ by the for loop when it shouldn't have
+	_, err = heightFile.WriteAt(simutil.U32tB(uint32(height-1)), 0)
 	if err != nil {
 		panic(err)
 	}
