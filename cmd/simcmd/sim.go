@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/mit-dci/utreexo/cmd/ibdsim"
+	"github.com/pkg/profile"
 )
 
 var msg = `
@@ -42,6 +43,7 @@ var offsetfile = optionCmd.String("offsetfile", "offsetfile",
 	"assign a offsetfile name to use. Usage: 'offsetfile=dirname'")
 
 func main() {
+	defer profile.Start().Stop()
 	//check if enough arguments were given
 	if len(os.Args) < 2 {
 		fmt.Println(msg)
