@@ -15,6 +15,7 @@ type ForestData interface {
 	read(pos uint64) Hash
 	write(pos uint64, h Hash)
 	swapHash(a, b uint64)
+	swapHashRange(a, b, w uint64)
 	size() uint64
 	resize(moreSize uint64)
 }
@@ -39,6 +40,15 @@ func (r *ramForestData) write(pos uint64, h Hash) {
 // swapHash swaps 2 hashes.  Don't go out of bounds.
 func (r *ramForestData) swapHash(a, b uint64) {
 	r.m[a], r.m[b] = r.m[b], r.m[a]
+}
+
+// swapHashRange swaps 2 continuous ranges of hashes.  Don't go out of bounds.
+// could be sped up if you're ok with using more ram.
+func (r *ramForestData) swapHashRange(a, b, w uint64) {
+	for i := uint64(0); i < w; i++ {
+		r.m[a+i], r.m[b+i] = r.m[b+i], r.m[a+i]
+	}
+
 }
 
 // size gives you the size of the forest
@@ -80,6 +90,36 @@ func (d *diskForestData) swapHash(a, b uint64) {
 	hb := d.read(b)
 	d.write(a, hb)
 	d.write(b, ha)
+}
+
+// swapHashRange swaps 2 continuous ranges of hashes.  Don't go out of bounds.
+// uses lots of ram to make only 3 disk seeks (depending on how you count? 4?)
+// seek to a start, read a, seek to b start, read b, write b, seek to a, write a
+// depends if you count seeking from b-end to b-start as a seek. or if you have
+// like read & replace as one operation or something.
+func (d *diskForestData) swapHashRange(a, b, w uint64) {
+	arange := make([]byte, 32*w)
+	brange := make([]byte, 32*w)
+	_, err := d.f.ReadAt(arange, int64(a*leafSize)) // read at a
+	if err != nil {
+		fmt.Printf("\tWARNING!! read pos %d len %d %s\n",
+			a*leafSize, w, err.Error())
+	}
+	_, err = d.f.ReadAt(brange, int64(b*leafSize)) // read at b
+	if err != nil {
+		fmt.Printf("\tWARNING!! read pos %d len %d %s\n",
+			b*leafSize, w, err.Error())
+	}
+	_, err = d.f.WriteAt(arange, int64(b*leafSize)) // write arange to b
+	if err != nil {
+		fmt.Printf("\tWARNING!! write pos %d len %d %s\n",
+			b*leafSize, w, err.Error())
+	}
+	_, err = d.f.WriteAt(brange, int64(a*leafSize)) // write brange to a
+	if err != nil {
+		fmt.Printf("\tWARNING!! write pos %d len %d %s\n",
+			a*leafSize, w, err.Error())
+	}
 }
 
 // size gives you the size of the forest
