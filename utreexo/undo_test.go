@@ -38,7 +38,7 @@ func TestUndoTest(t *testing.T) {
 }
 
 func undoOnceRandom(blocks int32) error {
-	f := NewForest()
+	f := NewForest(nil)
 
 	sc := NewSimChain(0x07)
 	sc.lookahead = 0
@@ -87,7 +87,7 @@ func undoOnceRandom(blocks int32) error {
 }
 
 func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
-	f := NewForest()
+	f := NewForest(nil)
 	sc := NewSimChain(0xff)
 
 	// --------------- block 0

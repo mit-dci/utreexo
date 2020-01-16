@@ -20,8 +20,8 @@ func TestTopDown(t *testing.T) {
 	// fmt.Printf("td %v\n", td)
 
 	//  these should stay the same
-	fup := NewForest()   // bottom up modified forest
-	fdown := NewForest() // top down modified forest
+	fup := NewForest(nil)   // bottom up modified forest
+	fdown := NewForest(nil) // top down modified forest
 
 	adds := make([]LeafTXO, 16)
 	for j := range adds {
@@ -83,8 +83,8 @@ func TestRandTopDown(t *testing.T) {
 	for b := 1; b < 1000; b++ {
 		numDels := b
 		//  these should stay the same
-		fup := NewForest()   // bottom up modified forest
-		fdown := NewForest() // top down modified forest
+		fup := NewForest(nil)   // bottom up modified forest
+		fdown := NewForest(nil) // top down modified forest
 
 		delMap := make(map[uint64]bool)
 		adds := make([]LeafTXO, numAdds)

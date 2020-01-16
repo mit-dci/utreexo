@@ -12,7 +12,7 @@ func TestForestAddDel(t *testing.T) {
 
 	for b := 0; b < 1000; b++ {
 		//  these should stay the same
-		f := NewForest() // bottom up modified forest
+		f := NewForest(nil) // bottom up modified forest
 
 		delMap := make(map[uint64]bool)
 		adds := make([]LeafTXO, numAdds)
@@ -48,7 +48,7 @@ func TestForestAddDel(t *testing.T) {
 
 // Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
-	f := NewForest()
+	f := NewForest(nil)
 	var absidx uint32
 	adds := make([]LeafTXO, 2)
 
@@ -127,7 +127,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 		return fmt.Errorf("too many deletes")
 	}
 
-	f := NewForest()
+	f := NewForest(nil)
 	adds := make([]LeafTXO, nAdds)
 
 	for j := range adds {

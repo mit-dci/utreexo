@@ -65,21 +65,23 @@ type Forest struct {
 	TimeInVerify time.Duration
 }
 
-// NewForest :
-//func NewForest() *Forest {
+// NewForest : use ram if not given a file
 func NewForest(forestFile *os.File) *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
 	f.height = 0
 
-	// for on-disk
-	d := new(diskForestData)
-	d.f = forestFile
-	f.data = d
-	// for in-ram
-	//f.data = new(ramForestData)
+	if forestFile == nil {
+		// for in-ram
+		f.data = new(ramForestData)
+	} else {
+		// for on-disk
+		d := new(diskForestData)
+		d.f = forestFile
+		f.data = d
+	}
 
-	//f.data.resize(1)
+	f.data.resize(1)
 	f.positionMap = make(map[MiniHash]uint64)
 	return f
 }
@@ -252,10 +254,11 @@ func (f *Forest) reHash(dirt []uint64) error {
 }
 
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
-func (f *Forest) cleanup() {
-	for p := f.numLeaves; p < 1<<f.height; p++ {
+func (f *Forest) cleanup(overshoot uint64) {
+	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
 		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
-		f.data.write(p, empty)                       // clear forest
+		// TODO ^^^^ that probably does nothing
+		f.data.write(p, empty) // clear forest
 	}
 }
 
@@ -311,7 +314,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.cleanup()
+	f.cleanup(numdels)
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?

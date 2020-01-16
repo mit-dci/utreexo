@@ -2,7 +2,6 @@ package utreexo
 
 import (
 	"fmt"
-	"os"
 	"sync"
 )
 
@@ -394,9 +393,9 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
 //func (p *Pollard) toFull() (*Forest, error) {
-func (p *Pollard) toFull(forestFile *os.File) (*Forest, error) {
+func (p *Pollard) toFull() (*Forest, error) {
 
-	ff := NewForest(forestFile)
+	ff := NewForest(nil)
 	ff.height = p.height()
 	ff.numLeaves = p.numLeaves
 	ff.data = new(ramForestData)
@@ -425,8 +424,8 @@ func (p *Pollard) toFull(forestFile *os.File) (*Forest, error) {
 }
 
 //func (p *Pollard) ToString() string {
-func (p *Pollard) ToString(forestFile *os.File) string {
-	f, err := p.toFull(forestFile)
+func (p *Pollard) ToString() string {
+	f, err := p.toFull()
 	if err != nil {
 		return err.Error()
 	}

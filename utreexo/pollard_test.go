@@ -34,7 +34,7 @@ func TestPollardFixed(t *testing.T) {
 }
 
 func pollardRandomRemember(blocks int32) error {
-	f := NewForest()
+	f := NewForest(nil)
 
 	var p Pollard
 
@@ -121,7 +121,7 @@ func pollardRandomRemember(blocks int32) error {
 // fixedPollard adds and removes things in a non-random way
 func fixedPollard(leaves int32) error {
 	fmt.Printf("\t\tpollard test add %d remove 1\n", leaves)
-	f := NewForest()
+	f := NewForest(nil)
 
 	leafCounter := uint64(0)
 
