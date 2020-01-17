@@ -160,7 +160,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
 				// re-descending here which isn't great
 				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
-				hn, err = p.HnFromPos(hashDirt[0])
+				hn, err = p.hnFromPos(hashDirt[0])
 				if err != nil {
 					return err
 				}
@@ -244,7 +244,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	return nil
 }
 
-func (p *Pollard) HnFromPos(pos uint64) (*hashableNode, error) {
+func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 	if !inForest(pos, p.numLeaves, p.height()) {
 		// fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
