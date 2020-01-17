@@ -22,3 +22,33 @@ func (n *hashableNode) run(wg *sync.WaitGroup) {
 	// n.sib.niece[0].data[:4], n.sib.niece[1].data[:4], n.dest.data[:4])
 	wg.Done()
 }
+
+type hashNpos struct {
+	result Hash
+	pos    uint64
+}
+
+func hashOne(l, r Hash, p uint64, hchan chan hashNpos) {
+	var hnp hashNpos
+	hnp.pos = p
+	hnp.result = Parent(l, r)
+	hchan <- hnp
+}
+
+func (f *Forest) hashRow(dirtpositions []uint64) error {
+
+	hchan := make(chan hashNpos, 256) // probably don't need that big a buffer
+
+	for _, hp := range dirtpositions {
+		l := f.data.read(child(hp, f.height))
+		r := f.data.read(child(hp, f.height) | 1)
+		hashOne(l, r, hp, hchan)
+	}
+
+	for remaining := len(dirtpositions); remaining > 0; remaining-- {
+		hnp := <-hchan
+		f.data.write(hnp.pos, hnp.result)
+	}
+
+	return nil
+}

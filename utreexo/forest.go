@@ -3,7 +3,6 @@ package utreexo
 import (
 	"fmt"
 	"os"
-	"sync"
 	"time"
 )
 
@@ -99,7 +98,7 @@ var empty [32]byte
 // Remove :
 func (f *Forest) Remove(dels []uint64) error {
 
-	err := f.removev3(dels)
+	err := f.removev4(dels)
 	if err != nil {
 		return err
 	}
@@ -124,8 +123,6 @@ func (f *Forest) removev4(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 	}
-	wg := new(sync.WaitGroup)
-	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
@@ -134,20 +131,17 @@ func (f *Forest) removev4(dels []uint64) error {
 	// satisfy the same interface..?  maybe?  that could work...
 	// TODO try that ^^^^^^
 	for h := uint8(0); h < f.height; h++ {
-		var hnslice []*hashableNode
+		var hpslice []uint64
+		var hp uint64
 		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
-			var hn *hashableNode
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
 			if len(swaprows[h]) == 0 ||
 				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
 				// re-descending here which isn't great
 				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
-				hn, err = f.hnFromPos(hashDirt[0])
-				if err != nil {
-					return err
-				}
+				hp = hashDirt[0]
 				hashDirt = hashDirt[1:]
 			} else { // swapping
 				if swaprows[h][0].from == swaprows[h][0].to {
@@ -156,50 +150,58 @@ func (f *Forest) removev4(dels []uint64) error {
 					swaprows[h] = swaprows[h][1:]
 					continue
 				}
-				hn, err = f.swapNodes(swaprows[h][0])
+				err = f.swapNodes(swaprows[h][0], h)
 				if err != nil {
 					return err
 				}
+				hp = swaprows[h][0].to
 				swaprows[h] = swaprows[h][1:]
 			}
-			if hn == nil {
+			if hp == 0 {
 				continue
 			}
-			if hn.position == prevHash { // we just did this
+			if hp == prevHash { // we just did this
 				// fmt.Printf("just did %d\n", prevHash)
 				continue // TODO this doesn't cover eveything
 			}
-			hnslice = append(hnslice, hn)
-			prevHash = hn.position
+			hpslice = append(hpslice, hp)
+			prevHash = hp
 			if len(nextHashDirt) == 0 ||
-				(nextHashDirt[len(nextHashDirt)-1] != hn.position) {
+				(nextHashDirt[len(nextHashDirt)-1] != hp) {
 				// skip if already on end of slice. redundant?
-				nextHashDirt = append(nextHashDirt, hn.position)
+				nextHashDirt = append(nextHashDirt, hp)
 			}
 		}
 		hashDirt = nextHashDirt
 		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
-		wg.Add(len(hnslice))
-		for _, hn := range hnslice {
-			// skip hashes we can't compute
-			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
-				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
-				// TODO when is hn nil?  is this OK?
-				// it'd be better to avoid this and not create hns that aren't
-				// supposed to exist.
-				fmt.Printf("hn %d nil or uncomputable\n", hn.position)
-				wg.Done()
-				continue
-			}
-			// fmt.Printf("giving hasher %d %x %x\n",
-			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
-			go hn.run(wg)
+		err := f.hashRow(hpslice)
+		if err != nil {
+			return err
 		}
-		wg.Wait() // wait for all hashing to finish at end of each row
 	}
 	f.numLeaves = nextNumLeaves
 
+	return nil
+}
+
+func (f *Forest) swapNodes(s arrow, height uint8) error {
+	if height == 0 {
+		f.data.swapHash(s.from, s.to)
+		return nil
+	}
+	a := childMany(s.from, height, f.height)
+	b := childMany(s.to, height, f.height)
+	run := uint64(1 << height)
+	// start at the bottom and go to the top
+	for h := uint8(0); h < height; h++ {
+		f.data.swapHashRange(a, b, run)
+		a = up1(b, f.height)
+		b = up1(b, f.height)
+		run >>= 1
+	}
+
+	// for
 	return nil
 }
 
