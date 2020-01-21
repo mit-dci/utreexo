@@ -119,6 +119,9 @@ func IBDClient(isTestnet bool, offsetfile string, ttldb string, sig chan bool) e
 		}
 	}
 
+	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
+		height, totalTXOAdded, totalDels, p.Stats(),
+		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 	fmt.Println("Done Writing")
 
 	done <- true

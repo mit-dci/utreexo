@@ -62,17 +62,21 @@ func BuildProofs(
 	}
 
 	//if there is a heightfile, get the height from that
-	var t [4]byte
+	// heightFile saves the last block that was written to ttldb
+	var err error
 	if simutil.HasAccess(simutil.HeightFilePath) {
-		tf, err := os.Open(simutil.HeightFilePath)
+		heightFile, err := os.OpenFile(
+			simutil.HeightFilePath, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			panic(err)
 		}
-		tf.Read(t[:])
+		var t [4]byte
+		_, err = heightFile.Read(t[:])
+		if err != nil {
+			return err
+		}
 		height = int(simutil.BtU32(t[:]))
 	}
-
-	// heightFile saves the last block that was written to ttldb
 	heightFile, err := os.OpenFile(
 		simutil.HeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
@@ -122,15 +126,37 @@ func BuildProofs(
 
 	// Gives the location of where a particular block height's proofs are
 	// Basically an index
-	pOffsetFile, err := os.OpenFile(
-		simutil.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
+	var pOffset uint32
+	if simutil.HasAccess(simutil.POffsetCurrentOffsetFilePath) {
+		pOffsetCurrentOffsetFile, err := os.OpenFile(
+			simutil.POffsetCurrentOffsetFilePath,
+			os.O_CREATE|os.O_RDWR, 0600)
+		if err != nil {
+			panic(err)
+		}
+		pOffset, err = simutil.GetPOffsetNum(pOffsetCurrentOffsetFile)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Poffset restored to", pOffset)
+
 	}
-	defer pOffsetFile.Close()
+
+	pOffsetFile, err := os.OpenFile(
+		simutil.POffsetFilePath,
+		os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+	pOffsetCurrentOffsetFile, err := os.OpenFile(
+		simutil.POffsetCurrentOffsetFilePath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
 
 	var newForest *utreexo.Forest
 	if simutil.HasAccess(simutil.ForestFilePath) {
+		fmt.Println("forestFile access")
 
 		// Where the forestfile exists
 		forestFile, err := os.OpenFile(
@@ -138,7 +164,6 @@ func BuildProofs(
 		if err != nil {
 			return err
 		}
-		defer forestFile.Close()
 
 		// Other forest variables
 		miscForestFile, err := os.OpenFile(
@@ -146,10 +171,8 @@ func BuildProofs(
 		if err != nil {
 			return err
 		}
-		defer miscForestFile.Close()
-		fmt.Println("forestFile access")
-		newForest = utreexo.NewForest(forestFile)
 
+		newForest = utreexo.NewForest(forestFile)
 		// Restores all the forest data
 		err = newForest.RestoreForest(miscForestFile, forestFile)
 		if err != nil {
@@ -164,22 +187,14 @@ func BuildProofs(
 		newForest = utreexo.NewForest(forestFile)
 	}
 
-	// Where the forestfile exists
-	forestFile, err := os.OpenFile(simutil.ForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer forestFile.Close()
-
 	// Other forest variables
-	miscForestFile, err := os.OpenFile(simutil.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
+	miscForestFile, err := os.OpenFile(
+		simutil.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
 
-	//newForest := utreexo.NewForest()
 	var totalProofNodes int
-	var pOffset uint32
 
 	// bool for stopping the main loop
 	var stop bool
@@ -195,8 +210,6 @@ func BuildProofs(
 	for ; height != currentOffsetHeight && stop != true; height++ {
 
 		b := <-bchan
-		//fmt.Println("Block received, height:", b.Height)
-		//fmt.Println("height is:", height)
 
 		err := writeProofs(b.Txs, b.Height,
 			pFile, pOffsetFile, newForest, totalProofNodes, &pOffset)
@@ -210,7 +223,7 @@ func BuildProofs(
 		}
 
 		if b.Height%10000 == 0 {
-			fmt.Println("On block :", b.Height)
+			fmt.Println("On block :", b.Height+1)
 		}
 
 		// Check if stopSig is no longer false
@@ -220,16 +233,11 @@ func BuildProofs(
 		default:
 		}
 	}
-	savedPositionMap, err := os.OpenFile("savedpositionmap", os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-	newForest.PrintPositionMap(savedPositionMap)
 
-	fmt.Println("At height:", height-1)
+	fmt.Println("Cleaning up for exit...")
+
 	// write to the heightfile
-	// height was ++ by the for loop when it shouldn't have
-	_, err = heightFile.WriteAt(simutil.U32tB(uint32(height-1)), 0)
+	_, err = heightFile.WriteAt(simutil.U32tB(uint32(height)), 0)
 	if err != nil {
 		panic(err)
 	}
@@ -239,10 +247,17 @@ func BuildProofs(
 	if err != nil {
 		panic(err)
 	}
+	_, err = pOffsetCurrentOffsetFile.WriteAt(
+		simutil.U32tB(pOffset), 0)
+	if err != nil {
+		panic(err)
+	}
 
 	// wait until dbWorker() has written to the ttldb file
 	// allows leveldb to close gracefully
 	batchwg.Wait()
+
+	fmt.Println("Poffset is", pOffset)
 
 	fmt.Println("Done writing")
 
@@ -323,19 +338,19 @@ func writeProofs(
 
 	blockProof, err := newForest.ProveBlock(blockDels)
 	if err != nil {
-		return fmt.Errorf("block %d %s %s", height, newForest.Stats(), err.Error())
+		return fmt.Errorf("ProveBlock failed at block %d %s %s", height+1, newForest.Stats(), err.Error())
 	}
 
 	ok := newForest.VerifyBlockProof(blockProof)
 	if !ok {
-		return fmt.Errorf("VerifyBlockProof failed at block %d", height)
+		return fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
 	}
 
 	totalProofNodes += len(blockProof.Proof)
 
 	// U32tB always returns 4 bytes
 	// Later this could also be changed to magic bytes
-	_, err = pFile.Write(utreexo.U32tB(uint32(height)))
+	_, err = pFile.Write(utreexo.U32tB(uint32(height + 1)))
 	if err != nil {
 		return err
 	}

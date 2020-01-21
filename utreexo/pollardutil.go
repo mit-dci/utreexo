@@ -16,7 +16,7 @@ type Pollard struct {
 	tops []polNode // slice of the tree tops, which are polNodes.
 	// tops are in big to small order
 	// BUT THEY'RE WEIRD!  The left / right children are actual children,
-	// not neices as they are in every lower level.
+	// not nieces as they are in every lower level.
 
 	hashesEver, rememberEver, overWire uint64
 
