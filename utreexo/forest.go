@@ -149,8 +149,9 @@ func (f *Forest) removev4(dels []uint64) error {
 				hashdest = up1(swaprows[h][0].to, f.height)
 				swaprows[h] = swaprows[h][1:]
 			}
-			if !inForest(hashdest, nextNumLeaves, f.height) || hashdest == 0 {
+			if !inForest(hashdest, f.numLeaves, f.height) || hashdest == 0 {
 				continue
+				// TODO would be great to use nextNumLeaves... but tricky
 			}
 			if hashdest == prevHash { // we just did this
 				// fmt.Printf("just did %d\n", prevHash)
