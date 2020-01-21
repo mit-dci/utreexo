@@ -45,8 +45,10 @@ func (r *ramForestData) swapHash(a, b uint64) {
 // swapHashRange swaps 2 continuous ranges of hashes.  Don't go out of bounds.
 // could be sped up if you're ok with using more ram.
 func (r *ramForestData) swapHashRange(a, b, w uint64) {
+	fmt.Printf("swaprange %d %d %d\t", a, b, w)
 	for i := uint64(0); i < w; i++ {
 		r.m[a+i], r.m[b+i] = r.m[b+i], r.m[a+i]
+		fmt.Printf("swapped %d %d\t", a+i, b+i)
 	}
 
 }

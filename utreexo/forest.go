@@ -146,7 +146,7 @@ func (f *Forest) removev4(dels []uint64) error {
 			} else { // swapping
 				if swaprows[h][0].from == swaprows[h][0].to {
 					// TODO should get rid of these upstream
-					// panic("got non-moving swap")
+					panic("got non-moving swap")
 					swaprows[h] = swaprows[h][1:]
 					continue
 				}
@@ -154,7 +154,10 @@ func (f *Forest) removev4(dels []uint64) error {
 				if err != nil {
 					return err
 				}
-				hp = swaprows[h][0].to
+				fmt.Printf("swap %v %x %x\n", swaprows[h][0],
+					f.data.read(swaprows[h][0].from).Prefix(),
+					f.data.read(swaprows[h][0].to).Prefix())
+				hp = up1(swaprows[h][0].to, f.height)
 				swaprows[h] = swaprows[h][1:]
 			}
 			if hp == 0 {
@@ -165,6 +168,7 @@ func (f *Forest) removev4(dels []uint64) error {
 				continue // TODO this doesn't cover eveything
 			}
 			hpslice = append(hpslice, hp)
+			fmt.Printf("added hp %d\n", hp)
 			prevHash = hp
 			if len(nextHashDirt) == 0 ||
 				(nextHashDirt[len(nextHashDirt)-1] != hp) {
@@ -190,13 +194,15 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 		f.data.swapHash(s.from, s.to)
 		return nil
 	}
+	fmt.Printf("swapnodes %v\n", s)
 	a := childMany(s.from, height, f.height)
 	b := childMany(s.to, height, f.height)
 	run := uint64(1 << height)
 	// start at the bottom and go to the top
-	for h := uint8(0); h < height; h++ {
+	for h := uint8(0); h <= height; h++ {
+		fmt.Printf("shr %d %d %d\n", a, b, run)
 		f.data.swapHashRange(a, b, run)
-		a = up1(b, f.height)
+		a = up1(a, f.height)
 		b = up1(b, f.height)
 		run >>= 1
 	}
@@ -409,7 +415,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	}
 
 	// v3 should do the exact same thing as v2 now
-	err := f.removev3(dels)
+	err := f.removev4(dels)
 	if err != nil {
 		return nil, err
 	}

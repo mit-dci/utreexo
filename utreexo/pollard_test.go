@@ -43,7 +43,7 @@ func pollardRandomRemember(blocks int32) error {
 	sn := NewSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
@@ -87,9 +87,9 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		// fmt.Printf("pol postadd %s", p.toString())
+		fmt.Printf("pol postadd %s", p.ToString())
 
-		// fmt.Printf("frs postadd %s", f.toString())
+		fmt.Printf("frs postadd %s", f.ToString())
 
 		// check all leaves match
 		if !p.equalToForestIfThere(f) {
