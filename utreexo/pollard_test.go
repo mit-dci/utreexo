@@ -7,17 +7,17 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	for z := 0; z < 30000; z++ {
-		// z := 11221
-		// z := 16
-		rand.Seed(int64(z))
+	// for z := 0; z < 30000; z++ {
+	// z := 11221
+	z := 55
+	rand.Seed(int64(z))
+	fmt.Printf("randseed %d\n", z)
+	err := pollardRandomRemember(6)
+	if err != nil {
 		fmt.Printf("randseed %d\n", z)
-		err := pollardRandomRemember(5)
-		if err != nil {
-			fmt.Printf("randseed %d\n", z)
-			t.Fatal(err)
-		}
+		t.Fatal(err)
 	}
+	// }
 }
 
 func TestPollardFixed(t *testing.T) {
@@ -78,6 +78,11 @@ func pollardRandomRemember(blocks int32) error {
 			for h, p := range f.positionMap {
 				fmt.Printf("%x@%d ", h[:4], p)
 			}
+			return err
+		}
+		err = f.PosMapSanity()
+		if err != nil {
+			fmt.Printf(f.ToString())
 			return err
 		}
 

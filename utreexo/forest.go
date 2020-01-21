@@ -95,17 +95,6 @@ const bridgeVerbose = false
 // of the forest
 var empty [32]byte
 
-// Remove :
-func (f *Forest) Remove(dels []uint64) error {
-
-	err := f.removev4(dels)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // TODO forest.removev4 and pollard.rem2 are VERY similar.  It seems like
 // whether it's forest or pollard, most of the complicated stuff is the same.
 // so maybe they can both satisfy an interface.  In the case of remove, the only
@@ -131,8 +120,8 @@ func (f *Forest) removev4(dels []uint64) error {
 	// satisfy the same interface..?  maybe?  that could work...
 	// TODO try that ^^^^^^
 	for h := uint8(0); h < f.height; h++ {
-		var hpslice []uint64
-		var hp uint64
+		var hdestslice []uint64
+		var hashdest uint64
 		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			// check if doing dirt. if not dirt, swap.
@@ -140,8 +129,8 @@ func (f *Forest) removev4(dels []uint64) error {
 			if len(swaprows[h]) == 0 ||
 				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
 				// re-descending here which isn't great
-				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
-				hp = hashDirt[0]
+				fmt.Printf("hashing from dirt %d\n", hashDirt[0])
+				hashdest = up1(hashDirt[0], f.height)
 				hashDirt = hashDirt[1:]
 			} else { // swapping
 				if swaprows[h][0].from == swaprows[h][0].to {
@@ -157,29 +146,29 @@ func (f *Forest) removev4(dels []uint64) error {
 				fmt.Printf("swap %v %x %x\n", swaprows[h][0],
 					f.data.read(swaprows[h][0].from).Prefix(),
 					f.data.read(swaprows[h][0].to).Prefix())
-				hp = up1(swaprows[h][0].to, f.height)
+				hashdest = up1(swaprows[h][0].to, f.height)
 				swaprows[h] = swaprows[h][1:]
 			}
-			if hp == 0 {
+			if !inForest(hashdest, nextNumLeaves, f.height) || hashdest == 0 {
 				continue
 			}
-			if hp == prevHash { // we just did this
+			if hashdest == prevHash { // we just did this
 				// fmt.Printf("just did %d\n", prevHash)
 				continue // TODO this doesn't cover eveything
 			}
-			hpslice = append(hpslice, hp)
-			fmt.Printf("added hp %d\n", hp)
-			prevHash = hp
+			hdestslice = append(hdestslice, hashdest)
+			fmt.Printf("added hp %d\n", hashdest)
+			prevHash = hashdest
 			if len(nextHashDirt) == 0 ||
-				(nextHashDirt[len(nextHashDirt)-1] != hp) {
+				(nextHashDirt[len(nextHashDirt)-1] != hashdest) {
 				// skip if already on end of slice. redundant?
-				nextHashDirt = append(nextHashDirt, hp)
+				nextHashDirt = append(nextHashDirt, hashdest)
 			}
 		}
 		hashDirt = nextHashDirt
 		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
-		err := f.hashRow(hpslice)
+		err := f.hashRow(hdestslice)
 		if err != nil {
 			return err
 		}
@@ -192,12 +181,21 @@ func (f *Forest) removev4(dels []uint64) error {
 func (f *Forest) swapNodes(s arrow, height uint8) error {
 	if height == 0 {
 		f.data.swapHash(s.from, s.to)
+		f.positionMap[f.data.read(s.to).Mini()] = s.to
+		f.positionMap[f.data.read(s.from).Mini()] = s.from
 		return nil
 	}
 	fmt.Printf("swapnodes %v\n", s)
 	a := childMany(s.from, height, f.height)
 	b := childMany(s.to, height, f.height)
 	run := uint64(1 << height)
+
+	// happens before the actual swap, so swapping a and b
+	for i := uint64(0); i < run; i++ {
+		f.positionMap[f.data.read(a+i).Mini()] = b + i
+		f.positionMap[f.data.read(b+i).Mini()] = a + i
+	}
+
 	// start at the bottom and go to the top
 	for h := uint8(0); h <= height; h++ {
 		fmt.Printf("shr %d %d %d\n", a, b, run)
@@ -362,7 +360,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 func (f *Forest) cleanup(overshoot uint64) {
 	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
 		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
-		// TODO ^^^^ that probably does nothing
+		// TODO ^^^^ that probably does nothing. or at least should...
 		f.data.write(p, empty) // clear forest
 	}
 }
