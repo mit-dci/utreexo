@@ -98,11 +98,110 @@ var empty [32]byte
 // Remove :
 func (f *Forest) Remove(dels []uint64) error {
 
-	err := f.removev3(dels)
+	err := f.removev4(dels)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+// TODO forest.removev4 and pollard.rem2 are VERY similar.  It seems like
+// whether it's forest or pollard, most of the complicated stuff is the same.
+// so maybe they can both satisfy an interface.  In the case of remove, the only
+// specific calls are HnFromPos and swapNodes
+//
+//
+
+// rnew -- emove v4 with swapHashRange
+func (f *Forest) removev4(dels []uint64) error {
+	nextNumLeaves := f.numLeaves - uint64(len(dels))
+	// check that all dels are there
+	for _, dpos := range dels {
+		if dpos > f.numLeaves {
+			return fmt.Errorf(
+				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
+		}
+	}
+	var hashDirt, nextHashDirt []uint64
+	var prevHash uint64
+	var err error
+	swaprows := remTrans2(dels, f.numLeaves, f.height)
+	// loop taken from pollard rem2.  maybe pollard and forest can both
+	// satisfy the same interface..?  maybe?  that could work...
+	// TODO try that ^^^^^^
+	for h := uint8(0); h < f.height; h++ {
+		var hpslice []uint64
+		var hp uint64
+		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
+		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
+			// check if doing dirt. if not dirt, swap.
+			// (maybe a little clever here...)
+			if len(swaprows[h]) == 0 ||
+				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
+				// re-descending here which isn't great
+				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
+				hp = hashDirt[0]
+				hashDirt = hashDirt[1:]
+			} else { // swapping
+				if swaprows[h][0].from == swaprows[h][0].to {
+					// TODO should get rid of these upstream
+					// panic("got non-moving swap")
+					swaprows[h] = swaprows[h][1:]
+					continue
+				}
+				err = f.swapNodes(swaprows[h][0], h)
+				if err != nil {
+					return err
+				}
+				hp = swaprows[h][0].to
+				swaprows[h] = swaprows[h][1:]
+			}
+			if hp == 0 {
+				continue
+			}
+			if hp == prevHash { // we just did this
+				// fmt.Printf("just did %d\n", prevHash)
+				continue // TODO this doesn't cover eveything
+			}
+			hpslice = append(hpslice, hp)
+			prevHash = hp
+			if len(nextHashDirt) == 0 ||
+				(nextHashDirt[len(nextHashDirt)-1] != hp) {
+				// skip if already on end of slice. redundant?
+				nextHashDirt = append(nextHashDirt, hp)
+			}
+		}
+		hashDirt = nextHashDirt
+		nextHashDirt = []uint64{}
+		// do all the hashes at once at the end
+		err := f.hashRow(hpslice)
+		if err != nil {
+			return err
+		}
+	}
+	f.numLeaves = nextNumLeaves
+
+	return nil
+}
+
+func (f *Forest) swapNodes(s arrow, height uint8) error {
+	if height == 0 {
+		f.data.swapHash(s.from, s.to)
+		return nil
+	}
+	a := childMany(s.from, height, f.height)
+	b := childMany(s.to, height, f.height)
+	run := uint64(1 << height)
+	// start at the bottom and go to the top
+	for h := uint8(0); h < height; h++ {
+		f.data.swapHashRange(a, b, run)
+		a = up1(b, f.height)
+		b = up1(b, f.height)
+		run >>= 1
+	}
+
+	// for
 	return nil
 }
 
