@@ -248,3 +248,12 @@ func GetTipNum(txos string) (int, error) {
 	f.Close()
 	return num, nil
 }
+
+func GetPOffsetNum(pOffsetCurrentIndexFile *os.File) (uint32, error) {
+	var pOffsetByte [4]byte
+	_, err := pOffsetCurrentIndexFile.ReadAt(pOffsetByte[:], 0)
+	if err != nil {
+		return 0, err
+	}
+	return BtU32(pOffsetByte[:]), nil
+}

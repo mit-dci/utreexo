@@ -103,6 +103,9 @@ func readRawHeadersFromFile(fileNum uint32) ([]simutil.RawHeaderData, error) {
 
 		//offset for the next block from the current position
 		loc, err = f.Seek(int64(simutil.LBtU32(size[:]))-80, 1)
+		if err != nil {
+			return nil, err
+		}
 		blockHeaders = append(blockHeaders, *b)
 		b = nil
 	}

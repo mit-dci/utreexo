@@ -20,6 +20,7 @@ var HeightFilePath string = filepath.Join(OffsetDirPath, "heightfile")
 // proofdata file paths
 var PFilePath string = filepath.Join(ProofDirPath, "proof.dat")
 var POffsetFilePath string = filepath.Join(ProofDirPath, "proofoffset.dat")
+var POffsetCurrentOffsetFilePath string = filepath.Join(ProofDirPath, "lastproofoffset.dat")
 
 // forestdata file paths
 var ForestFilePath string = filepath.Join(ForestDirPath, "forestfile.dat")

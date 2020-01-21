@@ -116,7 +116,7 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	pOffsetFile.Seek(int64(height*4), 0)
 	pOffsetFile.Read(offset[:])
 	if offset == [4]byte{} && height != uint32(0) {
-		panic(fmt.Errorf("offset returned nil"))
+		panic(fmt.Errorf("offset returned nil\nIt's likely that genproofs was exited before finishing\nRun genproofs again and that will probably fix the problem"))
 	}
 
 	pFile.Seek(int64(simutil.BtU32(offset[:])), 0)
@@ -128,7 +128,7 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	copy(compare0[:], heightbytes[:])
 
 	var compare1 [4]byte
-	copy(compare1[:], utreexo.U32tB(height))
+	copy(compare1[:], utreexo.U32tB(height+1))
 	//check if height matches
 	if compare0 != compare1 {
 		fmt.Println("read:, given:", compare0, compare1)
