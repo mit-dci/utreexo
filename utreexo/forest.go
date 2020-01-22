@@ -133,12 +133,7 @@ func (f *Forest) removev4(dels []uint64) error {
 				hashdest = up1(hashDirt[0], f.height)
 				hashDirt = hashDirt[1:]
 			} else { // swapping
-				if swaprows[h][0].from == swaprows[h][0].to {
-					// TODO should get rid of these upstream
-					panic("got non-moving swap")
-					swaprows[h] = swaprows[h][1:]
-					continue
-				}
+
 				err = f.swapNodes(swaprows[h][0], h)
 				if err != nil {
 					return err
@@ -180,6 +175,10 @@ func (f *Forest) removev4(dels []uint64) error {
 }
 
 func (f *Forest) swapNodes(s arrow, height uint8) error {
+	if s.from == s.to {
+		// these shouldn't happen, and seems like the don't
+		panic("got non-moving swap")
+	}
 	if height == 0 {
 		f.data.swapHash(s.from, s.to)
 		f.positionMap[f.data.read(s.to).Mini()] = s.to
