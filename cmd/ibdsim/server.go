@@ -68,12 +68,8 @@ func genPollard(
 		}
 		for _, a := range adds {
 
-			if a.Duration == 0 {
-				continue
-			}
-			//fmt.Println("lookahead: ", lookahead)
+			// Set bool to true to cache and not redownload from server
 			a.Remember = a.Duration < lookahead
-			//fmt.Println("Remember", a.Remember)
 
 			*totalTXOAdded++
 
@@ -145,8 +141,10 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 
 }
 
-// plusLine reads in a line of text, generates a utxo leaf, and determines
-// if this is a leaf to remember or not.
+// genLeafTXO generates a slice of LeafTXOs with the Duration of how long each
+// that TXO lasts attached to them. Skips all OP_RETURNs and TXOs that are spent on the
+// same block. UTXOs get a Duration of 1 << 30. Just a random big number
+// to make sure that it's bigger than the lookahead so they don't get remembered.
 func genLeafTXO(tx *simutil.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
 	//fmt.Println("DeathHeights len:", len(tx.deathHeights))
 	adds := []utreexo.LeafTXO{}
@@ -154,12 +152,26 @@ func genLeafTXO(tx *simutil.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
 		if tx.Unspendable[i] == true {
 			continue
 		}
-		utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
-		addData := utreexo.LeafTXO{
-			Hash:     utreexo.HashFromString(utxostring),
-			Duration: int32(tx.DeathHeights[i] - height)}
-		adds = append(adds, addData)
-		// fmt.Printf("expire in\t%d remember %v\n", ttlval[i], addData.Remember)
+		// Skip all txos that are spent on the same block
+		// Does the same thing as DedupeHashSlices()
+		if tx.DeathHeights[i]-height == 0 {
+			continue
+		}
+		// if the DeathHeights is 0, it means it's a UTXO. Shouldn't be remembered
+		if tx.DeathHeights[i] == 0 {
+			utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
+			addData := utreexo.LeafTXO{
+				Hash:     utreexo.HashFromString(utxostring),
+				Duration: int32(1 << 30)} // random big number
+			adds = append(adds, addData)
+
+		} else {
+			utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
+			addData := utreexo.LeafTXO{
+				Hash:     utreexo.HashFromString(utxostring),
+				Duration: int32(tx.DeathHeights[i] - height)}
+			adds = append(adds, addData)
+		}
 	}
 	return adds, nil
 }
