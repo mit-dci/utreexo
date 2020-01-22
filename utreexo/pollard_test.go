@@ -7,12 +7,12 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	for z := 0; z < 30000; z++ {
+	for z := 0; z < 30; z++ {
 		// z := 11221
-		// z := 16
+		// z := 55
 		rand.Seed(int64(z))
 		fmt.Printf("randseed %d\n", z)
-		err := pollardRandomRemember(5)
+		err := pollardRandomRemember(60)
 		if err != nil {
 			fmt.Printf("randseed %d\n", z)
 			t.Fatal(err)
@@ -27,13 +27,19 @@ func TestPollardFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(11)
+	err := fixedPollard(7)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func pollardRandomRemember(blocks int32) error {
+
+	// ffile, err := os.Create("/dev/shm/forfile")
+	// if err != nil {
+	// return err
+	// }
+
 	f := NewForest(nil)
 
 	var p Pollard
@@ -80,6 +86,11 @@ func pollardRandomRemember(blocks int32) error {
 			}
 			return err
 		}
+		err = f.PosMapSanity()
+		if err != nil {
+			fmt.Printf(f.ToString())
+			return err
+		}
 
 		// apply adds / dels to pollard
 		err = p.Modify(adds, bp.Targets)
@@ -87,9 +98,9 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		// fmt.Printf("pol postadd %s", p.toString())
+		fmt.Printf("pol postadd %s", p.ToString())
 
-		// fmt.Printf("frs postadd %s", f.toString())
+		fmt.Printf("frs postadd %s", f.ToString())
 
 		// check all leaves match
 		if !p.equalToForestIfThere(f) {

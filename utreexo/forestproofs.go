@@ -146,7 +146,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	}
 
 	// for h, p := range f.positionMap {
-	// fmt.Printf("%x@%d ", h[:4], p)
+	// 	fmt.Printf("%x@%d ", h[:4], p)
 	// }
 
 	// first get all the leaf positions
@@ -198,7 +198,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 		// but we still need to verify it and tag it as a target.
 		if pos == f.numLeaves-1 && pos&1 == 0 {
 			proofTree[pos] = f.data.read(pos)
-			//			fmt.Printf("%d add as root\n", pos)
+			// fmt.Printf("%d add as root\n", pos)
 			continue
 		}
 
@@ -206,7 +206,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 		// this can be out of order but it will be sorted later
 		proofTree[pos] = f.data.read(pos)
 		proofTree[pos^1] = f.data.read(pos ^ 1)
-		//		fmt.Printf("added leaves %d, %d\n", pos, pos^1)
+		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
 		treeTop := detectSubTreeHeight(pos, f.numLeaves, f.height)
 		pos = up1(pos, f.height)
@@ -235,7 +235,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 				delete(proofTree, pos^1) // right? can delete both..?
 				break
 			}
-			//			fmt.Printf("add proof from pos %d\n", pos^1)
+			// fmt.Printf("add proof from pos %d\n", pos^1)
 			proofTree[pos^1] = f.data.read(pos ^ 1)
 			pos = up1(pos, f.height)
 		}
@@ -247,7 +247,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	for pos, hash := range proofTree {
 		nodeSlice = append(nodeSlice, Node{pos, hash})
 	}
-	//	fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
+	// fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
 
 	// sort the slice of nodes (even though we only want the hashes)
 	sortNodeSlice(nodeSlice)
