@@ -7,17 +7,17 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	// for z := 0; z < 30000; z++ {
-	// z := 11221
-	z := 55
-	rand.Seed(int64(z))
-	fmt.Printf("randseed %d\n", z)
-	err := pollardRandomRemember(6)
-	if err != nil {
+	for z := 0; z < 30; z++ {
+		// z := 11221
+		// z := 55
+		rand.Seed(int64(z))
 		fmt.Printf("randseed %d\n", z)
-		t.Fatal(err)
+		err := pollardRandomRemember(60)
+		if err != nil {
+			fmt.Printf("randseed %d\n", z)
+			t.Fatal(err)
+		}
 	}
-	// }
 }
 
 func TestPollardFixed(t *testing.T) {
@@ -27,13 +27,19 @@ func TestPollardFixed(t *testing.T) {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(11)
+	err := fixedPollard(7)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func pollardRandomRemember(blocks int32) error {
+
+	// ffile, err := os.Create("/dev/shm/forfile")
+	// if err != nil {
+	// return err
+	// }
+
 	f := NewForest(nil)
 
 	var p Pollard
@@ -43,7 +49,7 @@ func pollardRandomRemember(blocks int32) error {
 	sn := NewSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())

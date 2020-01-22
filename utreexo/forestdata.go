@@ -17,7 +17,7 @@ type ForestData interface {
 	swapHash(a, b uint64)
 	swapHashRange(a, b, w uint64)
 	size() uint64
-	resize(moreSize uint64)
+	resize(newSize uint64) // make it have a new size (bigger)
 }
 
 // ********************************************* forest in ram
@@ -26,9 +26,14 @@ type ramForestData struct {
 	m []Hash
 }
 
+// TODO it reads a lot of empty locations which can't be good
+
 // reads from specified location.  If you read beyond the bounds that's on you
 // and it'll crash
 func (r *ramForestData) read(pos uint64) Hash {
+	// if r.m[pos] == empty {
+	// fmt.Printf("\tWARNING!!empty at pos %d\n", pos)
+	// }
 	return r.m[pos]
 }
 
@@ -45,10 +50,10 @@ func (r *ramForestData) swapHash(a, b uint64) {
 // swapHashRange swaps 2 continuous ranges of hashes.  Don't go out of bounds.
 // could be sped up if you're ok with using more ram.
 func (r *ramForestData) swapHashRange(a, b, w uint64) {
-	fmt.Printf("swaprange %d %d %d\t", a, b, w)
+	// fmt.Printf("swaprange %d %d %d\t", a, b, w)
 	for i := uint64(0); i < w; i++ {
 		r.m[a+i], r.m[b+i] = r.m[b+i], r.m[a+i]
-		fmt.Printf("swapped %d %d\t", a+i, b+i)
+		// fmt.Printf("swapped %d %d\t", a+i, b+i)
 	}
 
 }
@@ -59,8 +64,8 @@ func (r *ramForestData) size() uint64 {
 }
 
 // resize makes the forest bigger (never gets smaller so don't try)
-func (r *ramForestData) resize(moreSize uint64) {
-	r.m = append(r.m, make([]Hash, moreSize)...)
+func (r *ramForestData) resize(newSize uint64) {
+	r.m = append(r.m, make([]Hash, newSize-r.size())...)
 }
 
 // ********************************************* forest on disk
@@ -73,7 +78,7 @@ func (d *diskForestData) read(pos uint64) Hash {
 	var h Hash
 	_, err := d.f.ReadAt(h[:], int64(pos*leafSize))
 	if err != nil {
-		fmt.Printf("\tWARNING!! read pos %d %s\n", pos, err.Error())
+		fmt.Printf("\tWARNING!! read %x pos %d %s\n", h, pos, err.Error())
 	}
 	return h
 }
@@ -104,22 +109,22 @@ func (d *diskForestData) swapHashRange(a, b, w uint64) {
 	brange := make([]byte, 32*w)
 	_, err := d.f.ReadAt(arange, int64(a*leafSize)) // read at a
 	if err != nil {
-		fmt.Printf("\tWARNING!! read pos %d len %d %s\n",
+		fmt.Printf("\tshr WARNING!! read pos %d len %d %s\n",
 			a*leafSize, w, err.Error())
 	}
 	_, err = d.f.ReadAt(brange, int64(b*leafSize)) // read at b
 	if err != nil {
-		fmt.Printf("\tWARNING!! read pos %d len %d %s\n",
+		fmt.Printf("\tshr WARNING!! read pos %d len %d %s\n",
 			b*leafSize, w, err.Error())
 	}
 	_, err = d.f.WriteAt(arange, int64(b*leafSize)) // write arange to b
 	if err != nil {
-		fmt.Printf("\tWARNING!! write pos %d len %d %s\n",
+		fmt.Printf("\tshr WARNING!! write pos %d len %d %s\n",
 			b*leafSize, w, err.Error())
 	}
 	_, err = d.f.WriteAt(brange, int64(a*leafSize)) // write brange to a
 	if err != nil {
-		fmt.Printf("\tWARNING!! write pos %d len %d %s\n",
+		fmt.Printf("\tshr WARNING!! write pos %d len %d %s\n",
 			a*leafSize, w, err.Error())
 	}
 }
@@ -131,10 +136,13 @@ func (d *diskForestData) size() uint64 {
 		fmt.Errorf("\tWARNING: %s. Returning 0", err.Error())
 		return 0
 	}
-	return uint64(s.Size())
+	return uint64(s.Size() / leafSize)
 }
 
 // resize makes the forest bigger (never gets smaller so don't try)
-func (d *diskForestData) resize(moreSize uint64) {
-	d.f.Truncate(int64(d.size() + moreSize))
+func (d *diskForestData) resize(newSize uint64) {
+	err := d.f.Truncate(int64(newSize * leafSize))
+	if err != nil {
+		panic(err)
+	}
 }

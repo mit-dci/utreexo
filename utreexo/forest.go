@@ -129,7 +129,7 @@ func (f *Forest) removev4(dels []uint64) error {
 			if len(swaprows[h]) == 0 ||
 				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
 				// re-descending here which isn't great
-				fmt.Printf("hashing from dirt %d\n", hashDirt[0])
+				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
 				hashdest = up1(hashDirt[0], f.height)
 				hashDirt = hashDirt[1:]
 			} else { // swapping
@@ -143,9 +143,9 @@ func (f *Forest) removev4(dels []uint64) error {
 				if err != nil {
 					return err
 				}
-				fmt.Printf("swap %v %x %x\n", swaprows[h][0],
-					f.data.read(swaprows[h][0].from).Prefix(),
-					f.data.read(swaprows[h][0].to).Prefix())
+				// fmt.Printf("swap %v %x %x\n", swaprows[h][0],
+				// f.data.read(swaprows[h][0].from).Prefix(),
+				// f.data.read(swaprows[h][0].to).Prefix())
 				hashdest = up1(swaprows[h][0].to, f.height)
 				swaprows[h] = swaprows[h][1:]
 			}
@@ -158,7 +158,7 @@ func (f *Forest) removev4(dels []uint64) error {
 				continue // TODO this doesn't cover eveything
 			}
 			hdestslice = append(hdestslice, hashdest)
-			fmt.Printf("added hp %d\n", hashdest)
+			// fmt.Printf("added hp %d\n", hashdest)
 			prevHash = hashdest
 			if len(nextHashDirt) == 0 ||
 				(nextHashDirt[len(nextHashDirt)-1] != hashdest) {
@@ -186,7 +186,7 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 		f.positionMap[f.data.read(s.from).Mini()] = s.from
 		return nil
 	}
-	fmt.Printf("swapnodes %v\n", s)
+	// fmt.Printf("swapnodes %v\n", s)
 	a := childMany(s.from, height, f.height)
 	b := childMany(s.to, height, f.height)
 	run := uint64(1 << height)
@@ -199,7 +199,7 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 
 	// start at the bottom and go to the top
 	for h := uint8(0); h <= height; h++ {
-		fmt.Printf("shr %d %d %d\n", a, b, run)
+		// fmt.Printf("shr %d %d %d\n", a, b, run)
 		f.data.swapHashRange(a, b, run)
 		a = up1(a, f.height)
 		b = up1(b, f.height)
@@ -208,53 +208,6 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 
 	// for
 	return nil
-}
-
-// removev3 uses top down swaps and hopefully works the exact same as before
-// top down swaps are better suited to undoing deletions
-func (f *Forest) removev3(dels []uint64) error {
-
-	if uint64(len(dels)) > f.numLeaves {
-		return fmt.Errorf("%d deletions but forest has %d leaves",
-			len(dels), f.numLeaves)
-	}
-	nextNumLeaves := f.numLeaves - uint64(len(dels))
-
-	// check that all dels are there
-	for _, dpos := range dels {
-		if dpos > f.numLeaves {
-			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
-		}
-	}
-
-	var dirt []uint64
-
-	// fmt.Printf("v3 topDownTransform %d %d %d\n", dels, f.numLeaves, f.height)
-	swaps := floorTransform(dels, f.numLeaves, f.height)
-	// TODO really really shouldn't use floor transform here.
-	// In fact I'm not sure floor transform should even exist.
-
-	// TODO definitely not how to do this, way inefficient
-	// don't even use dirt, do it like in pollard
-	for _, s := range swaps {
-		f.data.swapHash(s.from, s.to)
-		if s.to < nextNumLeaves {
-			// from as well?
-			dirt = append(dirt, s.to)
-			if s.from < nextNumLeaves {
-				dirt = append(dirt, s.from)
-			}
-		}
-		// OK well while we're using floortransform, EVERY swap is at
-		// height 0 so just change position map here...
-		f.positionMap[f.data.read(s.to).Mini()] = s.to
-		f.positionMap[f.data.read(s.from).Mini()] = s.from
-	}
-
-	f.numLeaves = nextNumLeaves
-
-	return f.reHash(dirt)
 }
 
 // reHash hashes new data in the forest based on dirty positions.
@@ -459,10 +412,10 @@ func (f *Forest) reMap(destHeight uint8) error {
 	}
 	// I don't think you ever need to remap down.  It really doesn't
 	// matter.  Something to program someday if you feel like it for fun.
-
+	fmt.Printf("size is %d\n", f.data.size())
 	// height increase
-	f.data.resize(1 << destHeight)
-
+	f.data.resize(2 << destHeight)
+	fmt.Printf("size is %d\n", f.data.size())
 	pos := uint64(1 << destHeight) // leftmost position of row 1
 	reach := pos >> 1              // how much to next row up
 	// start on row 1, row 0 doesn't move
@@ -475,7 +428,6 @@ func (f *Forest) reMap(destHeight uint8) error {
 			src := f.data.read((pos >> 1) + x)
 			if ok {
 				f.data.write(pos+x, src)
-				// f.forest[pos+x] = src
 			}
 		}
 		pos += reach

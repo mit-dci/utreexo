@@ -37,7 +37,7 @@ func TestForestAddDel(t *testing.T) {
 			}
 		}
 
-		err = f.removev3(dels) // was v2
+		err = f.removev4(dels) // was v2
 		if err != nil {
 			t.Fatal(err)
 		}
