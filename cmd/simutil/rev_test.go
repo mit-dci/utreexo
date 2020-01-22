@@ -1,4 +1,4 @@
-package utreexo_test
+package simutil_test
 
 import (
 	"math"
@@ -9,7 +9,7 @@ import (
 	"github.com/mit-dci/lit/btcutil/txscript"
 	"github.com/mit-dci/lit/crypto/koblitz"
 
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/cmd/simutil"
 )
 
 func TestCompactSize(t *testing.T) {
@@ -17,19 +17,19 @@ func TestCompactSize(t *testing.T) {
 	MAX_SIZE := uint64(0x02000000)
 	buf := []byte{}
 	for i := uint64(1); i <= MAX_SIZE; i *= 2 {
-		bs := utreexo.CompactSizeToBs(i - 1)
+		bs := simutil.CompactSizeToBs(i - 1)
 		buf = append(buf, bs...)
-		bs = utreexo.CompactSizeToBs(i)
+		bs = simutil.CompactSizeToBs(i)
 		buf = append(buf, bs...)
 	}
 	pos := int64(0)
 	for i := uint64(1); i <= MAX_SIZE; i *= 2 {
-		size, j := utreexo.BsToCompactSize(buf, pos)
+		size, j := simutil.BsToCompactSize(buf, pos)
 		pos += size
 		if j != i-1 {
 			t.Errorf("decoded:%d expected:%d", j, i-1)
 		}
-		size, j = utreexo.BsToCompactSize(buf, pos)
+		size, j = simutil.BsToCompactSize(buf, pos)
 		pos += size
 		if j != i {
 			t.Errorf("decoded:%d expected:%d", j, i)
@@ -45,8 +45,8 @@ func TestCompactSize(t *testing.T) {
 		[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 	}
 	for i, _ := range nums {
-		bs := utreexo.CompactSizeToBs(nums[i])
-		size, num := utreexo.BsToCompactSize(data[i], 0)
+		bs := simutil.CompactSizeToBs(nums[i])
+		size, num := simutil.BsToCompactSize(data[i], 0)
 		if (num != nums[i]) || (!reflect.DeepEqual(bs, data[i])) || (size != int64(len(data[i]))) {
 			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
 			t.Errorf("decoded : %d %x %d %d", i, bs, size, num)
@@ -63,8 +63,8 @@ func TestVarInt(t *testing.T) {
 		[]byte{0x82, 0xfe, 0x7f}, []byte{0x8e, 0xfe, 0xfe, 0xff, 0x00},
 	}
 	for i, _ := range nums {
-		bs := utreexo.VarIntToBs(nums[i])
-		size, num := utreexo.BsToVarInt(data[i], 0)
+		bs := simutil.VarIntToBs(nums[i])
+		size, num := simutil.BsToVarInt(data[i], 0)
 		if (num != nums[i]) || (!reflect.DeepEqual(bs, data[i])) || (size != int64(len(data[i]))) {
 			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
 			t.Errorf("decoded : %d %x %d %d", i, bs, size, num)
@@ -79,8 +79,8 @@ func TestVarInt(t *testing.T) {
 		[]byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x7f},
 	}
 	for i, _ := range nums {
-		bs := utreexo.VarIntToBs(nums[i])
-		size, num := utreexo.BsToVarInt(data[i], 0)
+		bs := simutil.VarIntToBs(nums[i])
+		size, num := simutil.BsToVarInt(data[i], 0)
 		if (num != nums[i]) || (!reflect.DeepEqual(bs, data[i])) || (size != int64(len(data[i]))) {
 			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
 			t.Errorf("decoded : %d %x %d %d", i, bs, size, num)
@@ -107,7 +107,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(p2pkh) illegal script size")
 		return
 	}
-	out := utreexo.CompressScript(script)
+	out := simutil.CompressScript(script)
 	if len(out) != 21 {
 		t.Errorf("(p2pkh) illegal compress script size")
 		return
@@ -136,7 +136,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(p2sh) illegal script size")
 		return
 	}
-	out = utreexo.CompressScript(script)
+	out = simutil.CompressScript(script)
 	if len(out) != 21 {
 		t.Errorf("(p2sh) illegal compress script size")
 		return
@@ -165,7 +165,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(compressed p2pk) illegal script size")
 		return
 	}
-	out = utreexo.CompressScript(script)
+	out = simutil.CompressScript(script)
 	if len(out) != 33 {
 		t.Errorf("(compressed p2pk) illegal compress script size")
 		return
@@ -194,7 +194,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(p2pk) illegal script size")
 		return
 	}
-	out = utreexo.CompressScript(script)
+	out = simutil.CompressScript(script)
 	if len(out) != 33 {
 		t.Errorf("(p2pk) illegal compress script size")
 		return
@@ -216,8 +216,8 @@ func TestCompressAmount(t *testing.T) {
 	decs := []uint64{0, 1, CENT, COIN, 50 * COIN, 21000000 * COIN}
 	encs := []uint64{0x0, 0x1, 0x7, 0x9, 0x32, 0x1406f40}
 	for i, _ := range decs {
-		enc := utreexo.CompressAmount(decs[i])
-		dec := utreexo.DecompressAmount(encs[i])
+		enc := simutil.CompressAmount(decs[i])
+		dec := simutil.DecompressAmount(encs[i])
 		if (dec != decs[i]) || (enc != encs[i]) {
 			t.Errorf("expected: %d %d %x", i, decs[i], encs[i])
 			t.Errorf("decoded : %d %x %d", i, dec, enc)
@@ -233,31 +233,31 @@ func TestCompressAmount(t *testing.T) {
 	NUM_MULTIPLES_50BTC := uint64(420000)
 	for i := uint64(1); i <= NUM_MULTIPLES_UNIT; i++ {
 		in := i
-		if in != utreexo.DecompressAmount(utreexo.CompressAmount(in)) {
+		if in != simutil.DecompressAmount(simutil.CompressAmount(in)) {
 			t.Errorf("(unit) illegal CompressAmount -> DecompressAmount : %d", in)
 		}
 	}
 	for i := uint64(1); i <= NUM_MULTIPLES_CENT; i++ {
 		in := i * CENT
-		if in != utreexo.DecompressAmount(utreexo.CompressAmount(in)) {
+		if in != simutil.DecompressAmount(simutil.CompressAmount(in)) {
 			t.Errorf("(cent) illegal CompressAmount -> DecompressAmount : %d", in)
 		}
 	}
 	for i := uint64(1); i <= NUM_MULTIPLES_1BTC; i++ {
 		in := i * COIN
-		if in != utreexo.DecompressAmount(utreexo.CompressAmount(in)) {
+		if in != simutil.DecompressAmount(simutil.CompressAmount(in)) {
 			t.Errorf("(1btc) illegal CompressAmount -> DecompressAmount : %d", in)
 		}
 	}
 	for i := uint64(1); i <= NUM_MULTIPLES_50BTC; i++ {
 		in := i * 50 * COIN
-		if in != utreexo.DecompressAmount(utreexo.CompressAmount(in)) {
+		if in != simutil.DecompressAmount(simutil.CompressAmount(in)) {
 			t.Errorf("(50btc) illegal CompressAmount -> DecompressAmount : %d", in)
 		}
 	}
 	for i := uint64(0); i <= 100000; i++ {
 		in := i
-		if in != utreexo.CompressAmount(utreexo.DecompressAmount(in)) {
+		if in != simutil.CompressAmount(simutil.DecompressAmount(in)) {
 			t.Errorf("(unit) illegal DecompressAmount -> CompressAmount : %d", in)
 		}
 	}

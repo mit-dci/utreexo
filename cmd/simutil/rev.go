@@ -1,4 +1,4 @@
-package utreexo
+package simutil
 
 import (
 	"encoding/binary"
