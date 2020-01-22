@@ -43,7 +43,7 @@ func (f *Forest) hashRow(dirtpositions []uint64) error {
 		l := f.data.read(child(hp, f.height))
 		r := f.data.read(child(hp, f.height) | 1)
 		// fmt.Printf("hash pos %d l %x r %x\n", hp, l[:4], r[:4])
-		hashOne(l, r, hp, hchan)
+		go hashOne(l, r, hp, hchan)
 	}
 
 	for remaining := len(dirtpositions); remaining > 0; remaining-- {
