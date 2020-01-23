@@ -1,6 +1,7 @@
 package simutil
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -9,207 +10,207 @@ import (
 	"os"
 )
 
-// RevReader ...
-type RevReader struct {
-	Records []*BlockRecord
-}
-
-// BlockRecord ...
-type BlockRecord struct {
+// CBlockUndo ...
+type CBlockUndo struct {
 	Magic uint32
 	Size  uint32
 	Data  []byte
-	Block *CBlockUndo
+	Txs   []*CTxUndo
 	Hash  []byte
-}
-
-// CBlockUndo ...
-type CBlockUndo struct {
-	Txs []*CTxUndo
 }
 
 // CTxUndo ...
 type CTxUndo struct {
-	Ins []*CTxInUndo
+	Coins []*Coin
 }
 
-// CTxInUndo ...
-type CTxInUndo struct {
-	Height uint64
+// Coin ...
+type Coin struct {
+	Height   uint32
+	CoinBase int
+	Txout    *CTxOut
+}
+
+// CTxOut ...
+type CTxOut struct {
 	Script []byte
 	Amount uint64
 }
 
-// OpenRevReader ...
-func OpenRevReader(name string) (*RevReader, error) {
-	f, err := os.Open(name)
+// UndoReadFromReader ...
+func UndoReadFromReader(r io.Reader) (*CBlockUndo, error) {
+	blockundo := new(CBlockUndo)
+	buf := make([]byte, 4)
+	_, err := r.Read(buf)
 	if err != nil {
 		return nil, err
 	}
-	fi, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	r := new(RevReader)
-	err = r.init(f, fi.Size())
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	return r, nil
-}
-
-// NewRevReader ...
-func NewRevReader(r io.ReaderAt, size int64) (*RevReader, error) {
-	if size < 0 {
-		return nil, errors.New("rev: size cannot be negative")
-	}
-	rr := new(RevReader)
-	err := rr.init(r, size)
+	blockundo.Magic = binary.LittleEndian.Uint32(buf)
+	_, err = r.Read(buf)
 	if err != nil {
 		return nil, err
 	}
-	return rr, nil
-}
-
-func (rr *RevReader) init(r io.ReaderAt, size int64) error {
-	pos := int64(0)
-	for size > pos {
-		record := new(BlockRecord)
-		buf := make([]byte, 4)
-		_, err := r.ReadAt(buf, pos)
-		if err != nil {
-			return err
-		}
-		record.Magic = binary.LittleEndian.Uint32(buf)
-		if record.Magic == 0 {
-			break
-		}
-		pos += 4
-		_, err = r.ReadAt(buf, pos)
-		if err != nil {
-			return err
-		}
-		record.Size = binary.LittleEndian.Uint32(buf)
-		pos += 4
-		data := make([]byte, record.Size)
-		_, err = r.ReadAt(data, pos)
-		if err != nil {
-			return err
-		}
-		record.Data = data
-		record.Block = block(data)
-		pos += int64(record.Size)
-		hash := make([]byte, 32)
-		_, err = r.ReadAt(hash, pos)
-		if err != nil {
-			return err
-		}
-		record.Hash = hash
-		pos += 32
-		rr.Records = append(rr.Records, record)
+	blockundo.Size = binary.LittleEndian.Uint32(buf)
+	if blockundo.Size == 0 {
+		return nil, errors.New("zero size")
 	}
-	return nil
-}
-
-func block(data []byte) *CBlockUndo {
-	block := new(CBlockUndo)
-	dp, tsize := BsToCompactSize(data, 0)
-	for i := uint64(0); i < tsize; i++ {
+	buf = make([]byte, blockundo.Size)
+	_, err = r.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	blockundo.Data = buf
+	s := bytes.NewBuffer(blockundo.Data)
+	count, err := ReadCompactSize(s)
+	if err != nil {
+		return nil, err
+	}
+	for i := uint64(0); i < count; i++ {
 		tx := new(CTxUndo)
-		ilen, isize := BsToCompactSize(data, dp)
-		dp += ilen
-		for j := uint64(0); j < isize; j++ {
-			in := new(CTxInUndo)
-			hlen, height := BsToVarInt(data, dp)
-			in.Height = height
-			dp += hlen
-			if in.Height/2 > 0 { // TODO need?
-				dp++
-			}
-			alen, amt := BsToVarInt(data, dp)
-			in.Amount = DecompressAmount(amt)
-			dp += alen
-			fb := int64(data[dp])
-			if fb == 0x00 || fb == 0x01 {
-				in.Script = data[dp : dp+21]
-				dp += 21
-			} else if fb < 0x06 {
-				in.Script = data[dp : dp+32]
-				dp += 33
-			} else {
-				slen, ssize := BsToVarInt(data, dp)
-				in.Script = data[dp : dp+slen+int64(ssize)-6]
-				dp += slen + int64(ssize) - 6
-			}
-			tx.Ins = append(tx.Ins, in)
+		err = tx.Unserialize(s)
+		if err != nil {
+			return nil, err
 		}
-		block.Txs = append(block.Txs, tx)
+		blockundo.Txs = append(blockundo.Txs, tx)
 	}
-	return block
+	s.Reset()
+	buf = make([]byte, 32)
+	_, err = r.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	blockundo.Hash = buf
+	return blockundo, nil
 }
 
-// BsToCompactSize ...
-// https://github.com/bitcoin/bitcoin/blob/v0.14.2/src/serialize.h#L202
-func BsToCompactSize(bs []byte, start int64) (int64, uint64) {
-	size := int64(1)
-	n := uint64(bs[start])
-	if n == 0xfd {
-		n = uint64(binary.LittleEndian.Uint16(bs[start+1 : start+3]))
-		size = 3
-	} else if n == 0xfe {
-		n = uint64(binary.LittleEndian.Uint32(bs[start+1 : start+5]))
-		size = 5
-	} else if n == 0x0ff {
-		n = binary.LittleEndian.Uint64(bs[start+1 : start+9])
-		size = 9
-	}
-	return size, n
+// UndoReadFromBytes ...
+func UndoReadFromBytes(bs []byte) (*CBlockUndo, error) {
+	return UndoReadFromReader(bytes.NewBuffer(bs))
 }
 
-// CompactSizeToBs ...
-// https://github.com/bitcoin/bitcoin/blob/v0.14.2/src/serialize.h#L202
-func CompactSizeToBs(n uint64) []byte {
-	var bs []byte
-	if n < 0xfd {
-		bs = []byte{byte(n)}
-	} else if n <= math.MaxUint16 {
-		bs = []byte{0xfd, 0x00, 0x00}
-		binary.LittleEndian.PutUint16(bs[1:], uint16(n))
-	} else if n <= math.MaxUint32 {
-		bs = []byte{0xfe, 0x00, 0x00, 0x00, 0x00}
-		binary.LittleEndian.PutUint32(bs[1:], uint32(n))
-	} else {
-		bs = []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-		binary.LittleEndian.PutUint64(bs[1:], n)
+// UndosReadFromFile ...
+func UndosReadFromFile(path string) ([]*CBlockUndo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
-	return bs
-}
-
-// BsToVarInt ...
-// https://github.com/bitcoin/bitcoin/blob/v0.14.2/src/serialize.h#L277
-func BsToVarInt(bs []byte, start int64) (int64, uint64) {
-	n := uint64(0)
-	pos := start
+	_, err = f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	defer f.Close()
+	undos := []*CBlockUndo{}
 	for {
-		b := bs[pos]
-		n = (n << 7) | uint64(b&0x7f)
-		pos++
-		if (b & 0x80) > 0 {
-			n++
-		} else {
+		undo, err := UndoReadFromReader(f)
+		if err != nil {
+			if err.Error() == "zero size" || err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		undos = append(undos, undo)
+	}
+	return undos, nil
+}
+
+// WriteCompactSize ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L270
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L287
+func WriteCompactSize(os io.Writer, nSize uint64) {
+	if nSize < 253 {
+		os.Write([]byte{byte(nSize)})
+	} else if nSize <= math.MaxUint16 {
+		bs := []byte{253, 0, 0}
+		binary.LittleEndian.PutUint16(bs[1:], uint16(nSize))
+		os.Write(bs)
+	} else if nSize <= math.MaxUint32 {
+		bs := []byte{254, 0, 0, 0, 0}
+		binary.LittleEndian.PutUint32(bs[1:], uint32(nSize))
+		os.Write(bs)
+	} else {
+		bs := []byte{255, 0, 0, 0, 0, 0, 0, 0, 0}
+		binary.LittleEndian.PutUint64(bs[1:], nSize)
+		os.Write(bs)
+	}
+	return
+}
+
+// ReadCompactSize ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L270
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L312
+func ReadCompactSize(is io.Reader) (uint64, error) {
+	var buf []byte
+	buf = make([]byte, 1)
+	_, err := is.Read(buf)
+	if err != nil {
+		return 0, err
+	}
+	chSize := buf[0]
+	nSizeRet := uint64(0)
+	if chSize < 253 {
+		nSizeRet = uint64(chSize)
+	} else if chSize == 253 {
+		buf = make([]byte, 2)
+		_, err := is.Read(buf)
+		if err != nil {
+			return 0, err
+		}
+		nSizeRet = uint64(binary.LittleEndian.Uint16(buf))
+		if nSizeRet < 253 {
+			return 0, errors.New("non-canonical ReadCompactSize()")
+		}
+	} else if chSize == 254 {
+		buf = make([]byte, 4)
+		_, err := is.Read(buf)
+		if err != nil {
+			return 0, err
+		}
+		nSizeRet = uint64(binary.LittleEndian.Uint32(buf))
+		if nSizeRet < 0x10000 {
+			return 0, errors.New("non-canonical ReadCompactSize()")
+		}
+	} else {
+		buf = make([]byte, 8)
+		_, err := is.Read(buf)
+		if err != nil {
+			return 0, err
+		}
+		nSizeRet = binary.LittleEndian.Uint64(buf)
+		if nSizeRet < 0x100000000 {
+			return 0, errors.New("non-canonical ReadCompactSize()")
+		}
+	}
+	// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L26
+	// static const unsigned int MAX_SIZE = 0x02000000;
+	if nSizeRet > uint64(0x02000000) {
+		return 0, errors.New("ReadCompactSize(): size too large")
+	}
+	return nSizeRet, nil
+}
+
+// GetSizeOfVarInt ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L344
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L389
+func GetSizeOfVarInt(n uint64) int {
+	nRet := 0
+	for {
+		nRet++
+		if n <= 0x7F {
 			break
 		}
+		n = (n >> 7) - 1
 	}
-	return pos - start, n
+	return nRet
 }
 
-// VarIntToBs ...
-// https://github.com/bitcoin/bitcoin/blob/v0.14.2/src/serialize.h#L277
-func VarIntToBs(n uint64) []byte {
+// WriteVarInt ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L344
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L406
+func WriteVarInt(os io.Writer, n uint64) {
 	if n < 0x7f {
-		return []byte{byte(n)}
+		os.Write([]byte{byte(n)})
+		return
 	}
 	bs := []byte{byte(n & 0x7f)}
 	for {
@@ -219,7 +220,29 @@ func VarIntToBs(n uint64) []byte {
 		n = (n >> 7) - 1
 		bs = append([]byte{byte((n & 0x7f) | 0x80)}, bs...)
 	}
-	return bs
+	os.Write(bs)
+	return
+}
+
+// ReadVarInt ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L344
+// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L424
+func ReadVarInt(is io.Reader) (uint64, error) {
+	n := uint64(0)
+	b := make([]byte, 1)
+	for {
+		_, err := is.Read(b)
+		if err != nil {
+			return 0, err
+		}
+		chData := b[0]
+		n = (n << 7) | uint64(chData&0x7f)
+		if (chData & 0x80) > 0 {
+			n++
+		} else {
+			return n, nil
+		}
+	}
 }
 
 // CompressScript ...
@@ -247,38 +270,42 @@ func CompressScript(script []byte) []byte {
 		cscript = append(cscript, script[2:34]...)
 		return cscript
 	}
-	cscript := VarIntToBs(uint64(size + 6))
-	cscript = append(cscript, script...)
-	return cscript
+	buf := new(bytes.Buffer)
+	WriteVarInt(buf, uint64(size+6))
+	return append(buf.Bytes(), script...)
 }
 
 // DecompressScript ...
 // https://github.com/bitcoin/bitcoin/blob/0.19/src/compressor.h#L25
-func DecompressScript(bs []byte, start int64) (int64, []byte) {
-	pos, size := BsToVarInt(bs, start)
+func DecompressScript(bs []byte) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	size, err := ReadCompactSize(buf)
+	if err != nil {
+		return nil, err
+	}
 	switch size {
 	case 0x00:
 		script := []byte{0x76, 0xa9, 20}
-		script = append(script, bs[start+pos:start+pos+20]...)
+		script = append(script, bs[1:21]...)
 		script = append(script, []byte{0x88, 0xac}...)
-		return pos + 20, script
+		return script, nil
 	case 0x01:
 		script := []byte{0xa9, 20}
-		script = append(script, bs[start+pos:start+pos+20]...)
+		script = append(script, bs[1:21]...)
 		script = append(script, 0x87)
-		return pos + 20, script
+		return script, nil
 	case 0x02:
 		fallthrough
 	case 0x03:
 		script := []byte{33, byte(size)}
-		script = append(script, bs[start+pos:start+pos+32]...)
+		script = append(script, bs[1:33]...)
 		script = append(script, 0xac)
-		return pos + 32, script
+		return script, nil
 	case 0x04:
 		fallthrough
 	case 0x05:
 		script := []byte{65, byte(size)}
-		x := new(big.Int).SetBytes(bs[start+pos : start+pos+32])
+		x := new(big.Int).SetBytes(bs[1:33])
 		p, _ := new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
 		y := new(big.Int).ModSqrt(new(big.Int).Mod(new(big.Int).Add(new(big.Int).Exp(x, big.NewInt(3), p), big.NewInt(7)), p), p)
 		if uint(size&0x01) != y.Bit(0) {
@@ -295,12 +322,12 @@ func DecompressScript(bs []byte, start int64) (int64, []byte) {
 		}
 		script = append(script, ybs...)
 		script = append(script, 0xac)
-		return pos + 32, script
+		return script, nil
 	default:
 		size -= 6
 		script := []byte{}
-		script = append(script, bs[start+pos:start+pos+int64(size)]...)
-		return pos + int64(size), script
+		script = append(script, bs[1:1+size]...)
+		return script, nil
 	}
 }
 
@@ -349,4 +376,81 @@ func DecompressAmount(x uint64) uint64 {
 		e--
 	}
 	return n
+}
+
+// Unserialize ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/undo.h#L86
+func (undo *CTxUndo) Unserialize(s io.Reader) error {
+	count, err := ReadCompactSize(s)
+	if err != nil {
+		return err
+	}
+	for i := uint64(0); i < count; i++ {
+		coin := new(Coin)
+		err = coin.Unserialize(s)
+		if err != nil {
+			return err
+		}
+		undo.Coins = append(undo.Coins, coin)
+	}
+	return nil
+}
+
+// Unserialize ...
+// https://github.com/bitcoin/bitcoin/blob/master/src/undo.h#L47
+func (coin *Coin) Unserialize(s io.Reader) error {
+	nCode, err := ReadVarInt(s)
+	if err != nil {
+		return err
+	}
+	coin.Height = uint32(nCode / 2)
+	coin.CoinBase = int(nCode & 1)
+	if coin.Height > 0 {
+		// Old versions stored the version number for the last spend of
+		// a transaction's outputs. Non-final spends were indicated with
+		// height = 0.
+		_, err := ReadVarInt(s)
+		if err != nil {
+			return err
+		}
+	}
+	coin.Txout = new(CTxOut)
+	// https://github.com/bitcoin/bitcoin/blob/master/src/compressor.h#L86
+	nVal, err := ReadVarInt(s)
+	if err != nil {
+		return err
+	}
+	coin.Txout.Amount = DecompressAmount(nVal)
+	// https://github.com/bitcoin/bitcoin/blob/master/src/compressor.h#L64
+	size, err := ReadVarInt(s)
+	if err != nil {
+		return err
+	}
+	if size < 2 { // size : 0x00 , 0x01
+		script := make([]byte, 21)
+		script[0] = byte(size)
+		_, err = s.Read(script[1:])
+		if err != nil {
+			return err
+		}
+		coin.Txout.Script = script
+	} else if size < 6 { // size : 0x02 , 0x03 , 0x04 , 0x05
+		script := make([]byte, 33)
+		script[0] = byte(size)
+		_, err = s.Read(script[1:])
+		if err != nil {
+			return err
+		}
+		coin.Txout.Script = script
+	} else {
+		script := make([]byte, size-6)
+		_, err = s.Read(script)
+		if err != nil {
+			return err
+		}
+		buf := new(bytes.Buffer)
+		WriteVarInt(buf, size)
+		coin.Txout.Script = append(buf.Bytes(), script...)
+	}
+	return nil
 }

@@ -28,19 +28,26 @@ Maybe this file is less than 20MB in size.
 |Size|CompactSize|'Txs' data size|
 |Txs|CTxUndo[]|Data of each Transaction in Block|
 
+
 ## CTxUndo
 
 |Description|Data type|Comments|
 |--|--|--|
 |Size|CompactSize|'Ins' data size|
-|Ins|CTxInUndo[]|Data of each Input in Transaction|
+|Ins|Coin[]|Data of each Input in Transaction|
 
-## CTxInUndo
+## Coin
 
 |Description|Data type|Comments|
 |--|--|--|
 |Height|VarInt|2*height (+1 if it was a coinbase output)|
 ||byte|0x00 , Required to maintain compatibility with older undo format.|
+|TxOut|CTxOut||
+
+## CTxOut
+
+|Description|Data type|Comments|
+|--|--|--|
 |Amount|VarInt(CompressAmount)|Amount compressed with CompressAmount and converted to VarInt|
 |Script|CompressScript|Compressed script|
 

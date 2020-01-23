@@ -1,7 +1,7 @@
 package simutil_test
 
 import (
-	"math"
+	"bytes"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -13,78 +13,151 @@ import (
 )
 
 func TestCompactSize(t *testing.T) {
+	// BOOST_AUTO_TEST_CASE(compactsize)
 	// https://github.com/bitcoin/bitcoin/blob/master/src/test/serialize_tests.cpp#L231
 	MAX_SIZE := uint64(0x02000000)
-	buf := []byte{}
+	ss := new(bytes.Buffer)
 	for i := uint64(1); i <= MAX_SIZE; i *= 2 {
-		bs := simutil.CompactSizeToBs(i - 1)
-		buf = append(buf, bs...)
-		bs = simutil.CompactSizeToBs(i)
-		buf = append(buf, bs...)
+		simutil.WriteCompactSize(ss, i-1)
+		simutil.WriteCompactSize(ss, i)
 	}
-	pos := int64(0)
 	for i := uint64(1); i <= MAX_SIZE; i *= 2 {
-		size, j := simutil.BsToCompactSize(buf, pos)
-		pos += size
-		if j != i-1 {
+		j, err := simutil.ReadCompactSize(ss)
+		if err != nil {
+			t.Errorf("simutil.ReadCompactSize error : %+v", err)
+			return
+		}
+		if i-1 != j {
 			t.Errorf("decoded:%d expected:%d", j, i-1)
+			return
 		}
-		size, j = simutil.BsToCompactSize(buf, pos)
-		pos += size
-		if j != i {
+		j, err = simutil.ReadCompactSize(ss)
+		if err != nil {
+			t.Errorf("simutil.ReadCompactSize error : %+v", err)
+			return
+		}
+		if i != j {
 			t.Errorf("decoded:%d expected:%d", j, i)
+			return
 		}
 	}
-	// original test case
-	nums := []uint64{0, 1, 252, 253, math.MaxUint16, math.MaxUint16 + 1, math.MaxUint32,
-		math.MaxUint32 + 1, math.MaxUint64}
-	data := [][]byte{
-		[]byte{0x00}, []byte{0x01}, []byte{0xfc}, []byte{0xfd, 0xfd, 0x00}, []byte{0xfd, 0xff, 0xff},
-		[]byte{0xfe, 0x00, 0x00, 0x01, 0x00}, []byte{0xfe, 0xff, 0xff, 0xff, 0xff},
-		[]byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00},
-		[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+	// BOOST_AUTO_TEST_CASE(noncanonical)
+	// https://github.com/bitcoin/bitcoin/blob/master/src/test/serialize_tests.cpp#L270
+	ss.Reset()
+	var err error
+	ss.Write([]byte{0xfd, 0x00, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
 	}
-	for i, _ := range nums {
-		bs := simutil.CompactSizeToBs(nums[i])
-		size, num := simutil.BsToCompactSize(data[i], 0)
-		if (num != nums[i]) || (!reflect.DeepEqual(bs, data[i])) || (size != int64(len(data[i]))) {
-			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
-			t.Errorf("decoded : %d %x %d %d", i, bs, size, num)
-		}
+	ss.Write([]byte{0xfd, 0xfc, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
+	}
+	ss.Write([]byte{0xfd, 0xfd, 0x00})
+	n, err := simutil.ReadCompactSize(ss)
+	if err != nil {
+		t.Errorf("%+v", err)
+	}
+	if n != 0xfd {
+		t.Errorf("0xfd")
+	}
+	ss.Write([]byte{0xfe, 0x00, 0x00, 0x00, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
+	}
+	ss.Write([]byte{0xfe, 0xff, 0xff, 0x00, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
+	}
+	ss.Write([]byte{0xfe, 0xff, 0xff, 0x00, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
+	}
+	ss.Write([]byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
+	}
+	ss.Write([]byte{0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00})
+	_, err = simutil.ReadCompactSize(ss)
+	if err == nil || err.Error() != "non-canonical ReadCompactSize()" {
+		t.Errorf("%+v", err)
 	}
 }
 
 func TestVarInt(t *testing.T) {
-	// https://github.com/bitcoin/bitcoin/blob/master/src/serialize.h#L344
-	nums := []uint64{0, 1, 127, 128, 255, 256, 16383, 16384, 16511, 65535, uint64(math.Pow(2, 32))}
-	data := [][]byte{
-		[]byte{0x00}, []byte{0x01}, []byte{0x7f}, []byte{0x80, 0x00}, []byte{0x80, 0x7f},
-		[]byte{0x81, 0x00}, []byte{0xfe, 0x7f}, []byte{0xff, 0x00}, []byte{0xff, 0x7f},
-		[]byte{0x82, 0xfe, 0x7f}, []byte{0x8e, 0xfe, 0xfe, 0xff, 0x00},
-	}
-	for i, _ := range nums {
-		bs := simutil.VarIntToBs(nums[i])
-		size, num := simutil.BsToVarInt(data[i], 0)
-		if (num != nums[i]) || (!reflect.DeepEqual(bs, data[i])) || (size != int64(len(data[i]))) {
-			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
-			t.Errorf("decoded : %d %x %d %d", i, bs, size, num)
+	// BOOST_AUTO_TEST_CASE(varints)
+	// https://github.com/bitcoin/bitcoin/blob/master/src/test/serialize_tests.cpp#L178
+	// encode
+	ss := new(bytes.Buffer)
+	size := 0
+	for i := uint64(0); i < 100000; i++ {
+		simutil.WriteVarInt(ss, i)
+		size += simutil.GetSizeOfVarInt(i)
+		if size != len(ss.Bytes()) {
+			t.Errorf("unmatch size")
+			return
 		}
 	}
+	for i := uint64(0); i < 100000000000; i += 999999937 {
+		simutil.WriteVarInt(ss, i)
+		size += simutil.GetSizeOfVarInt(i)
+		if size != len(ss.Bytes()) {
+			t.Errorf("unmatch size")
+			return
+		}
+	}
+	// decode
+	for i := uint64(0); i < 100000; i++ {
+		j, err := simutil.ReadVarInt(ss)
+		if err != nil {
+			t.Errorf("simutil.ReadVarInt error : %+v", err)
+			return
+		}
+		if i != j {
+			t.Errorf("decoded:%d expected:%d", j, i)
+			return
+		}
+	}
+	for i := uint64(0); i < 100000000000; i += 999999937 {
+		j, err := simutil.ReadVarInt(ss)
+		if err != nil {
+			t.Errorf("simutil.ReadVarInt error : %+v", err)
+			return
+		}
+		if i != j {
+			t.Errorf("decoded:%d expected:%d", j, i)
+			return
+		}
+	}
+	// BOOST_AUTO_TEST_CASE(varints_bitpatterns)
 	// https://github.com/bitcoin/bitcoin/blob/master/src/test/serialize_tests.cpp#L210
-	nums = []uint64{0, 0x7f, 0x80, 0x1234, 0xffff, 0x123456, 0x80123456, 0xffffffff, 0x7fffffffffffffff, 0xffffffffffffffff}
-	data = [][]byte{
+	nums := []uint64{0, 0x7f, 0x80, 0x1234, 0xffff, 0x123456, 0x80123456, 0xffffffff, 0x7fffffffffffffff, 0xffffffffffffffff}
+	data := [][]byte{
 		[]byte{0x00}, []byte{0x7f}, []byte{0x80, 0x00}, []byte{0xa3, 0x34},
 		[]byte{0x82, 0xfe, 0x7f}, []byte{0xc7, 0xe7, 0x56}, []byte{0x86, 0xff, 0xc7, 0xe7, 0x56},
 		[]byte{0x8e, 0xfe, 0xfe, 0xfe, 0x7f}, []byte{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x7f},
 		[]byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x7f},
 	}
 	for i, _ := range nums {
-		bs := simutil.VarIntToBs(nums[i])
-		size, num := simutil.BsToVarInt(data[i], 0)
-		if (num != nums[i]) || (!reflect.DeepEqual(bs, data[i])) || (size != int64(len(data[i]))) {
-			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
-			t.Errorf("decoded : %d %x %d %d", i, bs, size, num)
+		ss := new(bytes.Buffer)
+		simutil.WriteVarInt(ss, nums[i])
+		bs := ss.Bytes()
+		n, err := simutil.ReadVarInt(bytes.NewBuffer(data[i]))
+		if err != nil {
+			t.Errorf("simutil.ReadVarInt error : %+v", err)
+			return
 		}
+		if (n != nums[i]) || (!reflect.DeepEqual(bs, data[i])) {
+			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
+			t.Errorf("decoded : %d %x %d", i, bs, n)
+		}
+		ss.Reset()
 	}
 }
 
