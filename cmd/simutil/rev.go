@@ -2,12 +2,14 @@ package simutil
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"io"
 	"math"
 	"math/big"
 	"os"
+	"reflect"
 )
 
 // CBlockUndo ...
@@ -112,6 +114,24 @@ func UndosReadFromFile(path string) ([]*CBlockUndo, error) {
 		undos = append(undos, undo)
 	}
 	return undos, nil
+}
+
+// VerifyBlockHash ...
+// Example blockhash : 6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000
+func VerifyBlockHash(blockhash []byte, undos []*CBlockUndo) (*CBlockUndo, error) {
+	if len(blockhash) != 32 {
+		return nil, errors.New("invalid hash size")
+	}
+	var ret *CBlockUndo
+	for _, undo := range undos {
+		hash := sha256.Sum256(append(blockhash, undo.Data...))
+		hash = sha256.Sum256(hash[:])
+		if reflect.DeepEqual(hash[:], undo.Hash) {
+			ret = undo
+			break
+		}
+	}
+	return ret, nil
 }
 
 // WriteCompactSize ...

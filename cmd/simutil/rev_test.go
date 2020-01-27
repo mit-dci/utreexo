@@ -2,6 +2,7 @@ package simutil_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -11,6 +12,77 @@ import (
 
 	"github.com/mit-dci/utreexo/cmd/simutil"
 )
+
+const REV00000DAT_0 = "" +
+	"f9beb4d9010000000090c1d8d0ad21e0" +
+	"fc9266492be7fdb3d07348a74aa6f165" +
+	"5d478589178a3589ad"
+
+const BLOCK_HASH_0 = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+
+const REV00000DAT_1 = "" +
+	"f9beb4d90100000000f2c2727e535da5" +
+	"d314238c5e841b4346af303cecc8356b" +
+	"f2b739c8cd786b34a3"
+
+const BLOCK_HASH_1 = "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
+
+func TestVerifyBlockHash(t *testing.T) {
+	bs, err := hex.DecodeString(REV00000DAT_0)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	undo, err := simutil.UndoReadFromBytes(bs)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	bh, err := hex.DecodeString(BLOCK_HASH_0)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	for i, j := 0, len(bh)-1; i < j; i, j = i+1, j-1 {
+		bh[i], bh[j] = bh[j], bh[i]
+	}
+	ret, err := simutil.VerifyBlockHash(bh, []*simutil.CBlockUndo{undo})
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	if !reflect.DeepEqual(undo, ret) {
+		t.Errorf("unmatch undo")
+		return
+	}
+	bs, err = hex.DecodeString(REV00000DAT_1)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	undo, err = simutil.UndoReadFromBytes(bs)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	bh, err = hex.DecodeString(BLOCK_HASH_1)
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	for i, j := 0, len(bh)-1; i < j; i, j = i+1, j-1 {
+		bh[i], bh[j] = bh[j], bh[i]
+	}
+	ret, err = simutil.VerifyBlockHash(bh, []*simutil.CBlockUndo{undo})
+	if err != nil {
+		t.Errorf("%+v", err)
+		return
+	}
+	if !reflect.DeepEqual(undo, ret) {
+		t.Errorf("unmatch undo")
+		return
+	}
+}
 
 func TestCompactSize(t *testing.T) {
 	// BOOST_AUTO_TEST_CASE(compactsize)
