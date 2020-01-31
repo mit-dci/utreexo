@@ -9,6 +9,7 @@ import (
 var OffsetDirPath string = filepath.Join(".", "offsetdata")
 var ProofDirPath string = filepath.Join(".", "proofdata")
 var ForestDirPath string = filepath.Join(".", "forestdata")
+var PollardDirPath string = filepath.Join(".", "pollarddata")
 
 // File paths
 
@@ -26,8 +27,13 @@ var POffsetCurrentOffsetFilePath string = filepath.Join(ProofDirPath, "lastproof
 var ForestFilePath string = filepath.Join(ForestDirPath, "forestfile.dat")
 var MiscForestFilePath string = filepath.Join(ForestDirPath, "miscforestfile.dat")
 
+// pollard data file paths
+var PollardFilePath string = filepath.Join(PollardDirPath, "pollardfile.dat")
+var PollardHeightFilePath string = filepath.Join(PollardDirPath, "pollardheight.dat")
+
 func MakePaths() {
 	os.MkdirAll(OffsetDirPath, os.ModePerm)
 	os.MkdirAll(ProofDirPath, os.ModePerm)
 	os.MkdirAll(ForestDirPath, os.ModePerm)
+	os.MkdirAll(PollardDirPath, os.ModePerm)
 }

@@ -74,6 +74,7 @@ func NewForest(forestFile *os.File) *Forest {
 	if forestFile == nil {
 		// for in-ram
 		f.data = new(ramForestData)
+		f.data.resize(1)
 	} else {
 		// for on-disk
 		d := new(diskForestData)
@@ -81,7 +82,6 @@ func NewForest(forestFile *os.File) *Forest {
 		f.data = d
 	}
 
-	f.data.resize(1)
 	f.positionMap = make(map[MiniHash]uint64)
 	return f
 }
@@ -499,7 +499,7 @@ func (f *Forest) RestoreForest(miscForestFile *os.File, forestFile *os.File) err
 	for i = uint64(0); i < f.numLeaves; i++ {
 		f.positionMap[f.data.read(i).Mini()] = i
 
-		if i%uint64(10000) == 0 && i != uint64(0) {
+		if i%uint64(100000) == 0 && i != uint64(0) {
 			fmt.Printf("Done %d iterations\n", i)
 		}
 	}
