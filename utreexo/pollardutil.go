@@ -35,7 +35,7 @@ func (n *polNode) auntOp() Hash {
 	return Parent(n.niece[0].data, n.niece[1].data)
 }
 
-// auntOp tells you if you can call auntOp on a node
+// auntable tells you if you can call auntOp on a node
 func (n *polNode) auntable() bool {
 	return n.niece[0] != nil && n.niece[1] != nil
 }
