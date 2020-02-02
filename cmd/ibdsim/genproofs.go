@@ -172,9 +172,8 @@ func BuildProofs(
 			return err
 		}
 
-		newForest = utreexo.NewForest(forestFile)
 		// Restores all the forest data
-		err = newForest.RestoreForest(miscForestFile, forestFile)
+		newForest, err = utreexo.RestoreForest(miscForestFile, forestFile)
 		if err != nil {
 			panic(err)
 		}

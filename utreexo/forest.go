@@ -481,14 +481,27 @@ func (f *Forest) PosMapSanity() error {
 
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and height is stored
-func (f *Forest) RestoreForest(miscForestFile *os.File, forestFile *os.File) error {
-
+func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error) {
 	fmt.Println("Restoring Forest...")
+
+	// Initialize the forest for restore
+	f := new(Forest)
+	if forestFile == nil {
+		// for in-ram
+		f.data = new(ramForestData)
+	} else {
+		// for on-disk
+		d := new(diskForestData)
+		d.f = forestFile
+		f.data = d
+	}
+	f.positionMap = make(map[MiniHash]uint64)
+
 	// This restores the numLeaves
 	var byteLeaves [8]byte
 	_, err := miscForestFile.Read(byteLeaves[:])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	f.numLeaves = BtU64(byteLeaves[:])
 	fmt.Println("Forest leaves:", f.numLeaves)
@@ -499,25 +512,25 @@ func (f *Forest) RestoreForest(miscForestFile *os.File, forestFile *os.File) err
 	for i = uint64(0); i < f.numLeaves; i++ {
 		f.positionMap[f.data.read(i).Mini()] = i
 
-		if i%uint64(10000) == 0 && i != uint64(0) {
+		if i%uint64(100000) == 0 && i != uint64(0) {
 			fmt.Printf("Done %d iterations\n", i)
 		}
 	}
 	if f.positionMap == nil {
-		return fmt.Errorf("Generated positionMap is nil")
+		return nil, fmt.Errorf("Generated positionMap is nil")
 	}
 
 	// This restores the height
 	var byteHeight [1]byte
 	_, err = miscForestFile.Read(byteHeight[:])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	f.height = BtU8(byteHeight[:])
 	fmt.Println("Forest height:", f.height)
 	fmt.Println("Done restoring forest")
 
-	return nil
+	return f, nil
 }
 
 func (f *Forest) PrintPositionMap(file *os.File) {
