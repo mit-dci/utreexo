@@ -74,6 +74,7 @@ func NewForest(forestFile *os.File) *Forest {
 	if forestFile == nil {
 		// for in-ram
 		f.data = new(ramForestData)
+		f.data.resize(1)
 	} else {
 		// for on-disk
 		d := new(diskForestData)
@@ -81,7 +82,6 @@ func NewForest(forestFile *os.File) *Forest {
 		f.data = d
 	}
 
-	f.data.resize(1)
 	f.positionMap = make(map[MiniHash]uint64)
 	return f
 }
