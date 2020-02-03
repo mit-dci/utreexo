@@ -1,11 +1,6 @@
 package utreexo
 
-import (
-	"fmt"
-	"os"
-
-	"github.com/mit-dci/utreexo/cmd/simutil"
-)
+import "fmt"
 
 // Pollard is the sparse representation of the utreexo forest, using
 // binary tree pointers instead of a hash map.
@@ -125,62 +120,4 @@ func (p *Pollard) topHashesReverse() []Hash {
 		rHashes[len(rHashes)-(1+i)] = n.data
 	}
 	return rHashes
-}
-
-func (p *Pollard) WritePollard(pollardFile *os.File) error {
-
-	// "Overwriting" pollardFile passed in
-	// I feel like this is faster than writing 0s
-	os.Remove(simutil.PollardFilePath)
-	var err error
-	pollardFile, err = os.OpenFile(
-		simutil.PollardFilePath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	// The Hash of all the tops appended
-	var allTops []byte
-	for _, t := range p.tops {
-		allTops = append(allTops, t.data[:]...)
-	}
-
-	_, err = pollardFile.WriteAt(append(U64tB(p.numLeaves), allTops...), 0)
-	if err != nil {
-		return err
-	}
-	fmt.Println("Pollard leaves:", p.numLeaves)
-	return nil
-}
-
-func (p *Pollard) RestorePollard(pollardFile *os.File) error {
-	fmt.Println("Restoring Pollard Roots...")
-
-	var byteLeaves [8]byte
-	_, err := pollardFile.Read(byteLeaves[:])
-	if err != nil {
-		panic(err)
-	}
-	p.numLeaves = BtU64(byteLeaves[:])
-	fmt.Println("Pollard Leaves:", p.numLeaves)
-
-	pstat, err := pollardFile.Stat()
-	if err != nil {
-		panic(err)
-	}
-
-	pos := int64(8)
-	for i := int(0); pos != pstat.Size(); i++ {
-		var h Hash
-		_, err := pollardFile.Read(h[:])
-		if err != nil {
-			panic(err)
-		}
-		n := new(polNode)
-		n.data = h
-		p.tops = append(p.tops, *n)
-		pos += 32
-	}
-	fmt.Println("Finished restoring pollard")
-	return nil
 }
