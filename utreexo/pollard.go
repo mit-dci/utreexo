@@ -88,10 +88,16 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// make the new leaf & populate it with the actual data you're trying to add
 	n := new(polNode)
 	n.data = add
-	if remember {
+	if remember || p.positionMap != nil {
 		// flag this leaf as memorable via it's left pointer
 		n.niece[0] = n // points to itself (mind blown)
 	}
+
+	if p.positionMap != nil {
+		fmt.Printf("adding %x at %d\n", add.Prefix(), p.numLeaves)
+		p.positionMap[add.Mini()] = p.numLeaves
+	}
+
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
 	// loop until we find a zero; destroy tops until you make one
@@ -138,6 +144,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
+
+	if p.positionMap != nil { // if fulpol, remove hashes from posMap
+		for _, delpos := range dels {
+			delete(p.positionMap, p.read(delpos).Mini())
+		}
+	}
+
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
 	wg := new(sync.WaitGroup)
@@ -308,7 +321,11 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
-	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	if tree >= uint8(len(p.tops)) {
+		err = fmt.Errorf("want tree %d but only %d trees", tree, len(p.tops))
+		return
+	}
 	n, nsib = &p.tops[tree], &p.tops[tree]
 	hn = &hashableNode{dest: n, sib: nsib}
 	for h := branchLen - 1; h != 255; h-- { // go through branch
@@ -318,6 +335,7 @@ func (p *Pollard) grabPos(
 			hn.sib = n     // but yeah, switch siblingness
 			n, nsib = n.niece[lr^1], n.niece[lr]
 			if nsib == nil || n == nil {
+				fmt.Printf("gave up ")
 				return // give up and don't make hashable node
 			}
 			// fmt.Printf("h%d n %x nsib %x\n", h, n.data[:4], nsib.data[:4])

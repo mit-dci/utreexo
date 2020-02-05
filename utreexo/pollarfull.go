@@ -11,6 +11,9 @@ func (p *Pollard) read(pos uint64) Hash {
 		fmt.Printf("read err %s pos %d\n", err.Error(), pos)
 		return empty
 	}
+	if n == nil {
+		return empty
+	}
 	return n.data
 }
 
@@ -18,6 +21,17 @@ func (p *Pollard) read(pos uint64) Hash {
 func (p *Pollard) VerifyBlockProof(bp BlockProof) bool {
 	ok, _ := VerifyBlockProof(bp, p.topHashesReverse(), p.numLeaves, p.height())
 	return ok
+}
+
+// PosMapSanity is costly / slow: check that everything in posMap is correct
+func (p *Pollard) PosMapSanity() error {
+	for i := uint64(0); i < p.numLeaves; i++ {
+		if p.positionMap[p.read(i).Mini()] != i {
+			return fmt.Errorf("positionMap error: map says %x @%d but it's @%d",
+				p.read(i).Prefix(), p.positionMap[p.read(i).Mini()], i)
+		}
+	}
+	return nil
 }
 
 // TODO make interface to reduce code dupe

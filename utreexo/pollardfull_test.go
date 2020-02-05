@@ -7,17 +7,16 @@ import (
 )
 
 func TestPollardFullRand(t *testing.T) {
-	for z := 0; z < 30; z++ {
-		// z := 11221
-		// z := 55
-		rand.Seed(int64(z))
+	// for z := 0; z < 30; z++ {
+	z := 1
+	rand.Seed(int64(z))
+	fmt.Printf("randseed %d\n", z)
+	err := pollardFullRandomRemember(5)
+	if err != nil {
 		fmt.Printf("randseed %d\n", z)
-		err := pollardFullRandomRemember(60)
-		if err != nil {
-			fmt.Printf("randseed %d\n", z)
-			t.Fatal(err)
-		}
+		t.Fatal(err)
 	}
+	// }
 }
 
 func pollardFullRandomRemember(blocks int32) error {
@@ -35,7 +34,7 @@ func pollardFullRandomRemember(blocks int32) error {
 	sn := NewSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
+		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
@@ -78,21 +77,21 @@ func pollardFullRandomRemember(blocks int32) error {
 
 		fmt.Printf("pol postadd %s", p.ToString())
 
-		fmt.Printf("frs postadd %s", fp.ToString())
+		fmt.Printf("fulpol postadd %s", fp.ToString())
 
 		fullTops := fp.topHashesReverse()
 		polTops := p.topHashesReverse()
 
 		// check that tops match
 		if len(fullTops) != len(polTops) {
-			return fmt.Errorf("block %d full %d tops, pol %d tops",
+			return fmt.Errorf("block %d fulpol %d tops, pol %d tops",
 				sn.blockHeight, len(fullTops), len(polTops))
 		}
 		fmt.Printf("top matching: ")
 		for i, ft := range fullTops {
-			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
+			fmt.Printf("fp %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
-				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
+				return fmt.Errorf("block %d top %d mismatch, fulpol %x pol %x",
 					sn.blockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
