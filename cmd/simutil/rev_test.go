@@ -28,7 +28,7 @@ const REV00000DAT_1 = "" +
 const BLOCK_HASH_1 = "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
 
 func TestVerifyBlockHash(t *testing.T) {
-	bs, err := hex.DecodeString(REV00000DAT_0)
+	bs, err := hex.DecodeString(REV00000DAT_0 + REV00000DAT_1)
 	if err != nil {
 		t.Errorf("%+v", err)
 		return
@@ -55,12 +55,12 @@ func TestVerifyBlockHash(t *testing.T) {
 		t.Errorf("unmatch undo")
 		return
 	}
-	bs, err = hex.DecodeString(REV00000DAT_1)
+	bs, err = hex.DecodeString(REV00000DAT_0 + REV00000DAT_1)
 	if err != nil {
 		t.Errorf("%+v", err)
 		return
 	}
-	undo, err = simutil.UndoReadFromBytes(bs)
+	undo, err = simutil.UndoReadFromBytes(bs[len(REV00000DAT_0)/2:])
 	if err != nil {
 		t.Errorf("%+v", err)
 		return

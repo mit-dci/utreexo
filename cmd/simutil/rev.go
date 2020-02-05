@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"reflect"
 )
 
 // CBlockUndo ...
@@ -18,7 +17,7 @@ type CBlockUndo struct {
 	Size  uint32
 	Data  []byte
 	Txs   []*CTxUndo
-	Hash  []byte
+	Hash  [32]byte
 }
 
 // CTxUndo ...
@@ -56,12 +55,11 @@ func UndoReadFromReader(r io.Reader) (*CBlockUndo, error) {
 	if blockundo.Size == 0 {
 		return nil, errors.New("zero size")
 	}
-	buf = make([]byte, blockundo.Size)
-	_, err = r.Read(buf)
+	blockundo.Data = make([]byte, blockundo.Size)
+	_, err = r.Read(blockundo.Data)
 	if err != nil {
 		return nil, err
 	}
-	blockundo.Data = buf
 	s := bytes.NewBuffer(blockundo.Data)
 	count, err := ReadCompactSize(s)
 	if err != nil {
@@ -76,12 +74,11 @@ func UndoReadFromReader(r io.Reader) (*CBlockUndo, error) {
 		blockundo.Txs = append(blockundo.Txs, tx)
 	}
 	s.Reset()
-	buf = make([]byte, 32)
-	_, err = r.Read(buf)
+	blockundo.Hash = [32]byte{}
+	_, err = r.Read(blockundo.Hash[:])
 	if err != nil {
 		return nil, err
 	}
-	blockundo.Hash = buf
 	return blockundo, nil
 }
 
@@ -126,7 +123,7 @@ func VerifyBlockHash(blockhash []byte, undos []*CBlockUndo) (*CBlockUndo, error)
 	for _, undo := range undos {
 		hash := sha256.Sum256(append(blockhash, undo.Data...))
 		hash = sha256.Sum256(hash[:])
-		if reflect.DeepEqual(hash[:], undo.Hash) {
+		if hash == undo.Hash {
 			ret = undo
 			break
 		}
