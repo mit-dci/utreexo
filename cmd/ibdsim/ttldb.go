@@ -10,7 +10,7 @@ import (
 )
 
 //writeBlock sends off ttl info to dbWorker to be written to ttldb
-func writeBlock(tx []*wire.MsgTx, tipnum int,
+func writeBlock(tx []*wire.MsgTx, tipnum int32,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
 	blockBatch := new(leveldb.Batch)

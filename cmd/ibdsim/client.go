@@ -51,7 +51,7 @@ func IBDClient(isTestnet bool,
 		return err
 	}
 
-	var currentOffsetHeight int
+	var currentOffsetHeight int32
 	//grab the last block height from currentoffsetheight
 	//currentoffsetheight saves the last height from the offsetfile
 	var currentOffsetHeightByte [4]byte
@@ -60,7 +60,7 @@ func IBDClient(isTestnet bool,
 		panic(err)
 	}
 	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
-	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
+	currentOffsetHeight = simutil.BtI32(currentOffsetHeightByte[:])
 
 	var plustime time.Duration
 	starttime := time.Now()
@@ -70,7 +70,7 @@ func IBDClient(isTestnet bool,
 
 	simutil.MakePaths()
 
-	var height int
+	var height int32
 	var p utreexo.Pollard
 	if simutil.HasAccess(simutil.PollardFilePath) {
 		fmt.Println("pollardfile access")
@@ -86,7 +86,7 @@ func IBDClient(isTestnet bool,
 		if err != nil {
 			return err
 		}
-		height = int(simutil.BtU32(t[:]))
+		height = simutil.BtI32(t[:])
 		fmt.Println("height is:", height)
 
 		// Restore Pollard

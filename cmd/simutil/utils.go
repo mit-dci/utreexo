@@ -63,7 +63,7 @@ func CheckTestnet(isTestnet bool) {
 }
 
 func BlockReader(
-	bchan chan BlockToWrite, currentOffsetHeight, height int, offsetfile string) {
+	bchan chan BlockToWrite, currentOffsetHeight, height int32, offsetfile string) {
 	for height != currentOffsetHeight {
 		block, err := GetRawBlockFromFile(height, offsetfile)
 		if err != nil {
@@ -79,7 +79,7 @@ func BlockReader(
 // returns those blocks.
 // Skips the genesis block. If you search for block 0, it will give you
 // block 1.
-func GetRawBlockFromFile(tipnum int, offsetFileName string) ([]*wire.MsgTx, error) {
+func GetRawBlockFromFile(tipnum int32, offsetFileName string) ([]*wire.MsgTx, error) {
 	var datFile [4]byte
 	var offset [4]byte
 
@@ -132,6 +132,26 @@ func BtU32(b []byte) uint32 {
 		return 0xffffffff
 	}
 	var i uint32
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, &i)
+	return i
+}
+
+// uint32 to 4 bytes.  Always works.
+func I32tB(i int32) []byte {
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, i)
+	return buf.Bytes()
+}
+
+// TODO make actual error return here
+// 4 byte Big Endian slice to uint32.  Returns ffffffff if something doesn't work.
+func BtI32(b []byte) int32 {
+	if len(b) != 4 {
+		fmt.Printf("Got %x to ItU32 (%d bytes)\n", b, len(b))
+		return -0x7fffffff
+	}
+	var i int32
 	buf := bytes.NewBuffer(b)
 	binary.Read(buf, binary.BigEndian, &i)
 	return i

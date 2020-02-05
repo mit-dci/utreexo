@@ -54,5 +54,5 @@ type RawHeaderData struct {
 
 type BlockToWrite struct {
 	Txs    []*wire.MsgTx
-	Height int
+	Height int32
 }

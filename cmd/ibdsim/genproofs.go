@@ -46,8 +46,8 @@ func BuildProofs(
 	// Creates all the paths needed for simcmd
 	simutil.MakePaths()
 
-	var currentOffsetHeight int
-	height := 0
+	var currentOffsetHeight int32
+	var height int32
 	nextMap := make(map[[32]byte]simutil.RawHeaderData)
 
 	// if there isn't an offset file, make one
@@ -75,7 +75,7 @@ func BuildProofs(
 		if err != nil {
 			return err
 		}
-		height = int(simutil.BtU32(t[:]))
+		height = simutil.BtI32(t[:])
 	}
 	heightFile, err := os.OpenFile(
 		simutil.HeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
@@ -96,7 +96,7 @@ func BuildProofs(
 		panic(err)
 	}
 	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
-	currentOffsetHeight = int(simutil.BtU32(currentOffsetHeightByte[:]))
+	currentOffsetHeight = simutil.BtI32(currentOffsetHeightByte[:])
 
 	// Open leveldb
 	o := new(opt.Options)
@@ -271,7 +271,7 @@ func BuildProofs(
 //All the outputs are saved as LeafTXO type.
 func writeProofs(
 	tx []*wire.MsgTx,
-	height int,
+	height int32,
 	pFile *os.File,
 	pOffsetFile *os.File,
 	newForest *utreexo.Forest,

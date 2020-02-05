@@ -9,9 +9,9 @@ import (
 )
 
 //Builds the offset file
-func buildOffsetFile(tip simutil.Hash, tipnum int,
+func buildOffsetFile(tip simutil.Hash, tipnum int32,
 	nextMap map[[32]byte]simutil.RawHeaderData, offsetFilePath string,
-	currentOffsetHeightFilePath string, offsetfinished chan bool) (int, error) {
+	currentOffsetHeightFilePath string, offsetfinished chan bool) (int32, error) {
 	offsetFile, err := os.OpenFile(offsetFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
@@ -117,9 +117,9 @@ func writeBlockOffset(
 	blockHeaders []simutil.RawHeaderData, //        All headers from the select .dat file
 	nextMap map[[32]byte]simutil.RawHeaderData, //  Map to save the current block hash
 	offsetFile *os.File, //                 File to save the sorted blocks and locations to
-	tipnum int, //                          Current block it's on
+	tipnum int32, //                          Current block it's on
 	tip simutil.Hash) ( //                Current hash of the block it's on
-	simutil.Hash, int, error) {
+	simutil.Hash, int32, error) {
 
 	for _, b := range blockHeaders {
 		if len(nextMap) > 10000 { //Just a random big number

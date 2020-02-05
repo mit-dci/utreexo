@@ -16,7 +16,7 @@ import (
 //All the outputs are saved as LeafTXO type.
 func genPollard(
 	tx []*wire.MsgTx,
-	height int,
+	height int32,
 	totalTXOAdded *int,
 	lookahead int32,
 	totalDels *int,
