@@ -27,6 +27,8 @@ type Pollard struct {
 
 	//	Lookahead int32  // remember leafs below this TTL
 	//	Minleaves uint64 // remember everything below this leaf count
+
+	positionMap map[Hash]uint64
 }
 
 // PolNode is a node in the pollard forest
