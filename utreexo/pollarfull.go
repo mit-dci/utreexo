@@ -14,6 +14,12 @@ func (p *Pollard) read(pos uint64) Hash {
 	return n.data
 }
 
+// VerifyBlockProof :
+func (p *Pollard) VerifyBlockProof(bp BlockProof) bool {
+	ok, _ := VerifyBlockProof(bp, p.topHashesReverse(), p.numLeaves, p.height())
+	return ok
+}
+
 // TODO make interface to reduce code dupe
 
 // ProveBlock, but for pollard.
