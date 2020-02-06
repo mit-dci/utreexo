@@ -123,7 +123,7 @@ func VerifyBlockHash(blockhash []byte, undos []*CBlockUndo) (*CBlockUndo, error)
 	for _, undo := range undos {
 		hash := sha256.Sum256(append(blockhash, undo.Data...))
 		hash = sha256.Sum256(hash[:])
-		if hash == undo.Hash {
+		if bytes.Equal(hash[:], undo.Hash[:]) {
 			ret = undo
 			break
 		}
