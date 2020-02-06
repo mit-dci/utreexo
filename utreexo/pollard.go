@@ -94,7 +94,6 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	}
 
 	if p.positionMap != nil {
-		fmt.Printf("adding %x at %d\n", add.Prefix(), p.numLeaves)
 		p.positionMap[add.Mini()] = p.numLeaves
 	}
 
