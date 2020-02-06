@@ -7,16 +7,16 @@ import (
 )
 
 func TestPollardFullRand(t *testing.T) {
-	// for z := 0; z < 30; z++ {
-	z := 1
-	rand.Seed(int64(z))
-	fmt.Printf("randseed %d\n", z)
-	err := pollardFullRandomRemember(5)
-	if err != nil {
+	for z := 0; z < 30; z++ {
+		// z := 1
+		rand.Seed(int64(z))
 		fmt.Printf("randseed %d\n", z)
-		t.Fatal(err)
+		err := pollardFullRandomRemember(50)
+		if err != nil {
+			fmt.Printf("randseed %d\n", z)
+			t.Fatal(err)
+		}
 	}
-	// }
 }
 
 func pollardFullRandomRemember(blocks int32) error {
