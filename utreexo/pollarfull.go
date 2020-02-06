@@ -17,6 +17,13 @@ func (p *Pollard) read(pos uint64) Hash {
 	return n.data
 }
 
+// NewFullPollard gives you a Pollard with an activated
+func NewFullPollard() Pollard {
+	var p Pollard
+	p.positionMap = make(map[MiniHash]uint64)
+	return p
+}
+
 // VerifyBlockProof :
 func (p *Pollard) VerifyBlockProof(bp BlockProof) bool {
 	ok, _ := VerifyBlockProof(bp, p.topHashesReverse(), p.numLeaves, p.height())

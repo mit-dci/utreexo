@@ -27,7 +27,7 @@ func pollardFullRandomRemember(blocks int32) error {
 	// }
 
 	var fp, p Pollard
-	fp.positionMap = make(map[MiniHash]uint64) // map now non-nil
+	fp = NewFullPollard()
 
 	// p.Minleaves = 0
 
