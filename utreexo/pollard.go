@@ -88,10 +88,16 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// make the new leaf & populate it with the actual data you're trying to add
 	n := new(polNode)
 	n.data = add
-	if remember {
+	if remember || p.positionMap != nil {
 		// flag this leaf as memorable via it's left pointer
 		n.niece[0] = n // points to itself (mind blown)
 	}
+
+	if p.positionMap != nil {
+		fmt.Printf("adding %x at %d\n", add.Prefix(), p.numLeaves)
+		p.positionMap[add.Mini()] = p.numLeaves
+	}
+
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
 	// loop until we find a zero; destroy tops until you make one
@@ -138,6 +144,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 	ph := p.height() // height of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
+
+	if p.positionMap != nil { // if fulpol, remove hashes from posMap
+		for _, delpos := range dels {
+			delete(p.positionMap, p.read(delpos).Mini())
+		}
+	}
+
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
 	wg := new(sync.WaitGroup)
@@ -173,7 +186,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 					swaprows[h] = swaprows[h][1:]
 					continue
 				}
-				hn, err = p.swapNodes(swaprows[h][0])
+				hn, err = p.swapNodes(swaprows[h][0], h)
 				if err != nil {
 					return err
 				}
@@ -259,10 +272,21 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 
 // swapNodes swaps the nodes at positions a and b.
 // returns a hashable node with b, bsib, and bpar
-func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
-	if !inForest(r.from, p.numLeaves, p.height()) ||
-		!inForest(r.to, p.numLeaves, p.height()) {
-		return nil, fmt.Errorf("swapNodes %d %d out of bounds", r.from, r.to)
+func (p *Pollard) swapNodes(s arrow, height uint8) (*hashableNode, error) {
+	if !inForest(s.from, p.numLeaves, p.height()) ||
+		!inForest(s.to, p.numLeaves, p.height()) {
+		return nil, fmt.Errorf("swapNodes %d %d out of bounds", s.from, s.to)
+	}
+
+	if p.positionMap != nil {
+		a := childMany(s.from, height, p.height())
+		b := childMany(s.to, height, p.height())
+		run := uint64(1 << height)
+		// happens before the actual swap, so swapping a and b
+		for i := uint64(0); i < run; i++ {
+			p.positionMap[p.read(a+i).Mini()] = b + i
+			p.positionMap[p.read(b+i).Mini()] = a + i
+		}
 	}
 
 	// currently swaps the "values" instead of changing what parents point
@@ -272,24 +296,24 @@ func (p *Pollard) swapNodes(r arrow) (*hashableNode, error) {
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 
-	a, asib, _, err := p.grabPos(r.from)
+	a, asib, _, err := p.grabPos(s.from)
 	if err != nil {
 		return nil, err
 	}
-	b, bsib, bhn, err := p.grabPos(r.to)
+	b, bsib, bhn, err := p.grabPos(s.to)
 	if err != nil {
 		return nil, err
 	}
 	if asib == nil || bsib == nil {
-		return nil, fmt.Errorf("swapNodes %d %d sibling not found", r.from, r.to)
+		return nil, fmt.Errorf("swapNodes %d %d sibling not found", s.from, s.to)
 	}
 	if a == nil || b == nil {
-		return nil, fmt.Errorf("swapNodes %d %d node not found", r.from, r.to)
+		return nil, fmt.Errorf("swapNodes %d %d node not found", s.from, s.to)
 	}
 
 	// fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
 	// r.from, a.data[:4], r.to, b.data[:4])
-	bhn.position = up1(r.to, p.height())
+	bhn.position = up1(s.to, p.height())
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
 	if err != nil {
@@ -309,6 +333,10 @@ func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
+	if tree >= uint8(len(p.tops)) {
+		err = fmt.Errorf("want tree %d but only %d trees", tree, len(p.tops))
+		return
+	}
 	n, nsib = &p.tops[tree], &p.tops[tree]
 	hn = &hashableNode{dest: n, sib: nsib}
 	for h := branchLen - 1; h != 255; h-- { // go through branch
@@ -318,6 +346,7 @@ func (p *Pollard) grabPos(
 			hn.sib = n     // but yeah, switch siblingness
 			n, nsib = n.niece[lr^1], n.niece[lr]
 			if nsib == nil || n == nil {
+				// fmt.Printf("gave up ")
 				return // give up and don't make hashable node
 			}
 			// fmt.Printf("h%d n %x nsib %x\n", h, n.data[:4], nsib.data[:4])
