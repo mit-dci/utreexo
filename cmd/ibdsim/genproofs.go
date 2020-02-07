@@ -17,10 +17,7 @@ import (
 func BuildProofs(
 	isTestnet bool, ttldb string, offsetfile string, sig chan bool) error {
 
-	// Channel to alert the main loop to break
-	stopGoing := make(chan bool, 1)
-
-	// Channel to alert stopTxottl it's ok to exit
+	// Channel to alert the tell the main loop it's ok to exit
 	done := make(chan bool, 1)
 
 	// Channel to alert stopBuildProofs() that buildOffsetFile() has been finished
@@ -30,7 +27,7 @@ func BuildProofs(
 	finish := make(chan bool, 1)
 
 	// Handle user interruptions
-	go stopBuildProofs(sig, offsetfinished, stopGoing, done, finish, offsetfile)
+	go stopBuildProofs(sig, offsetfinished, done, finish)
 
 	//defaults to the testnet Gensis tip
 	tip := simutil.TestNet3GenHash
@@ -54,7 +51,8 @@ func BuildProofs(
 	if simutil.HasAccess(simutil.OffsetFilePath) == false {
 		fmt.Println("offsetfile not present. Building...")
 		currentOffsetHeight, _ = buildOffsetFile(tip, height, nextMap,
-			simutil.OffsetFilePath, simutil.CurrentOffsetFilePath, offsetfinished)
+			simutil.OffsetFilePath, simutil.CurrentOffsetFilePath,
+			offsetfinished)
 	} else {
 		// if there is a offset file, we should pass true to offsetfinished
 		// to let stopParse() know that it shouldn't delete offsetfile
@@ -73,7 +71,7 @@ func BuildProofs(
 		var t [4]byte
 		_, err = heightFile.Read(t[:])
 		if err != nil {
-			return err
+			panic(err)
 		}
 		height = simutil.BtI32(t[:])
 	}
@@ -120,7 +118,7 @@ func BuildProofs(
 	pFile, err := os.OpenFile(
 		simutil.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	defer pFile.Close()
 
@@ -162,14 +160,14 @@ func BuildProofs(
 		forestFile, err := os.OpenFile(
 			simutil.ForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		// Other forest variables
 		miscForestFile, err := os.OpenFile(
 			simutil.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		// Restores all the forest data
@@ -181,7 +179,7 @@ func BuildProofs(
 		fmt.Println("No forestFile access")
 		forestFile, err := os.OpenFile(simutil.ForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
-			return err
+			panic(err)
 		}
 		newForest = utreexo.NewForest(forestFile)
 	}
@@ -190,7 +188,7 @@ func BuildProofs(
 	miscForestFile, err := os.OpenFile(
 		simutil.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	var totalProofNodes int
@@ -228,7 +226,7 @@ func BuildProofs(
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
 		select {
-		case stop = <-done:
+		case stop = <-done: // receives true from stopBuildProofs()
 		default:
 		}
 	}
@@ -321,7 +319,7 @@ func writeProofs(
 	for _, b := range blocktxs {
 		adds, err := hashgen(b)
 		if err != nil {
-			return err
+			panic(err)
 		}
 		for _, add := range adds {
 			blockAdds = append(blockAdds, add)
@@ -351,29 +349,29 @@ func writeProofs(
 	// Later this could also be changed to magic bytes
 	_, err = pFile.Write(utreexo.U32tB(uint32(height + 1)))
 	if err != nil {
-		return err
+		panic(err)
 	}
 	p := blockProof.ToBytes()
 
 	// write the offset for a block
 	_, err = pOffsetFile.Write(utreexo.U32tB(*pOffset))
 	if err != nil {
-		return err
+		panic(err)
 	}
 	*pOffset += uint32(len(p)) + uint32(8) // add 8 for height bytes and load size
 	// write the size of the proof
 	_, err = pFile.Write(utreexo.U32tB(uint32(len(p))))
 	if err != nil {
-		return err
+		panic(err)
 	}
 	// Write the actual proof
 	_, err = pFile.Write(p)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	_, err = newForest.Modify(blockAdds, blockProof.Targets)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	// empty the blockAdds and blockDels that were written
 	blockAdds = []utreexo.LeafTXO{}
@@ -396,31 +394,47 @@ func hashgen(tx *simutil.Txotx) ([]utreexo.LeafTXO, error) {
 }
 
 func stopBuildProofs(
-	sig, offsetfinished, stopGoing, done, finish chan bool, offsetfile string) {
+	sig, offsetfinished, done, finish chan bool) {
 
+	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
 
-	//Tell BuildProofs to finish the block it's working on
-	stopGoing <- true
 	select {
-	//If offsetfile is there or was built, don't remove it
+	// If offsetfile is there or was built, don't remove it
 	case <-offsetfinished:
 		select {
 		default:
 			done <- true
 		}
-	//If nothing is received, delete offsetfile and currentoffsetheight
+	// If nothing is received, delete offsetfile and other directories
 	default:
 		select {
 		default:
-			os.Remove(offsetfile)
-			os.Remove("currentoffsetheight")
+			// May not work sometimes.
+			err := os.RemoveAll(simutil.OffsetDirPath)
+			if err != nil {
+				fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
+			}
+			err = os.RemoveAll(simutil.ProofDirPath)
+			if err != nil {
+				fmt.Println("ERR. proofdata/ directory not removed. Please manually remove it.")
+			}
+			err = os.RemoveAll(simutil.ForestDirPath)
+			if err != nil {
+				fmt.Println("ERR. forestdata/ directory not removed. Please manually remove it.")
+			}
+			err = os.RemoveAll(simutil.PollardDirPath)
+			if err != nil {
+				fmt.Println("ERR. pollarddata/ directory not removed. Please manually remove it.")
+			}
 			fmt.Println("offsetfile incomplete, removing...")
-			done <- true
+
+			fmt.Println("Exiting...")
+			os.Exit(0)
 		}
 	}
 
-	// Wait until BuildProofs() says it's ok to exit
+	// Wait until BuildProofs() or buildOffsetFile() says it's ok to exit
 	<-finish
 
 	fmt.Println("Exiting...")
