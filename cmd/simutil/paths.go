@@ -19,9 +19,15 @@ var CurrentOffsetFilePath string = filepath.Join(OffsetDirPath, "currentoffsetfi
 var HeightFilePath string = filepath.Join(OffsetDirPath, "heightfile")
 
 // proofdata file paths
+//
+// Where the proofs for txs are stored
 var PFilePath string = filepath.Join(ProofDirPath, "proof.dat")
+
+// Where the index for a proof for a block is stored
 var POffsetFilePath string = filepath.Join(ProofDirPath, "proofoffset.dat")
-var POffsetCurrentOffsetFilePath string = filepath.Join(ProofDirPath, "lastproofoffset.dat")
+
+// For resuming purposes. Stores the last index that genproofs left at
+var LastPOffsetFilePath string = filepath.Join(ProofDirPath, "lastproofoffset.dat")
 
 // forestdata file paths
 var ForestFilePath string = filepath.Join(ForestDirPath, "forestfile.dat")

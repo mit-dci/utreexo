@@ -6,15 +6,12 @@ import (
 	"time"
 
 	"github.com/mit-dci/utreexo/cmd/simutil"
-	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-// the deletion data and proofs though, we get from the leveldb
-// which was created by the bridge node.
 func IBDClient(isTestnet bool,
 	offsetfile string, ttldb string, sig chan bool) error {
 
@@ -39,6 +36,27 @@ func IBDClient(isTestnet bool,
 	}
 	defer lvdb.Close()
 
+	simutil.MakePaths()
+
+	// Bool to see if pollarddata is there
+	pollardInitialized := simutil.HasAccess(simutil.PollardFilePath)
+	currentOffsetHeight, height, p := InitIBDsim(pollardInitialized)
+
+	lookahead := int32(1000) // keep txos that last less than this many blocks
+
+	totalTXOAdded := 0
+	totalDels := 0
+
+	//bool for stopping the scanner.Scan loop
+	var stop bool
+
+	// To send/receive blocks from blockreader()
+	bchan := make(chan simutil.BlockToWrite, 10)
+
+	// Reads blocks asynchronously from blk*.dat files
+	go simutil.BlockReader(bchan,
+		currentOffsetHeight, height, simutil.OffsetFilePath)
+
 	pFile, err := os.OpenFile(
 		simutil.PFilePath, os.O_RDONLY, 0400)
 	if err != nil {
@@ -51,75 +69,8 @@ func IBDClient(isTestnet bool,
 		return err
 	}
 
-	var currentOffsetHeight int32
-	//grab the last block height from currentoffsetheight
-	//currentoffsetheight saves the last height from the offsetfile
-	var currentOffsetHeightByte [4]byte
-	currentOffsetHeightFile, err := os.Open(simutil.CurrentOffsetFilePath)
-	if err != nil {
-		panic(err)
-	}
-	currentOffsetHeightFile.Read(currentOffsetHeightByte[:])
-	currentOffsetHeight = simutil.BtI32(currentOffsetHeightByte[:])
-
 	var plustime time.Duration
 	starttime := time.Now()
-
-	totalTXOAdded := 0
-	totalDels := 0
-
-	simutil.MakePaths()
-
-	var height int32
-	var p utreexo.Pollard
-	if simutil.HasAccess(simutil.PollardFilePath) {
-		fmt.Println("pollardfile access")
-
-		// Restore height
-		pHeightFile, err := os.OpenFile(
-			simutil.PollardHeightFilePath, os.O_RDONLY, 0600)
-		if err != nil {
-			panic(err)
-		}
-		var t [4]byte
-		_, err = pHeightFile.Read(t[:])
-		if err != nil {
-			return err
-		}
-		height = simutil.BtI32(t[:])
-		fmt.Println("height is:", height)
-
-		// Restore Pollard
-		pollardFile, err := os.OpenFile(
-			simutil.PollardFilePath, os.O_RDWR, 0600)
-		if err != nil {
-			panic(err)
-		}
-		err = p.RestorePollard(pollardFile)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	pHeightFile, err := os.OpenFile(
-		simutil.PollardHeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-	//	p.Minleaves = 1 << 30
-	// p.Lookahead = 1000
-
-	lookahead := int32(1000) // keep txos that last less than this many blocks
-
-	//bool for stopping the scanner.Scan loop
-	var stop bool
-
-	// To send/receive blocks from blockreader()
-	bchan := make(chan simutil.BlockToWrite, 10)
-
-	// Reads block asynchronously from .dat files
-	go simutil.BlockReader(bchan,
-		currentOffsetHeight, height, simutil.OffsetFilePath)
 
 	for ; height != currentOffsetHeight && stop != true; height++ {
 
@@ -156,30 +107,16 @@ func IBDClient(isTestnet bool,
 		default:
 		}
 	}
+	pFile.Close()
+	pOffsetFile.Close()
 
 	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 		height, totalTXOAdded, totalDels, p.Stats(),
 		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
+
+	saveIBDsimData(height, p)
+
 	fmt.Println("Done Writing")
-	fmt.Println("Height finish:", height)
-
-	// write to the heightfile
-	_, err = pHeightFile.WriteAt(simutil.U32tB(uint32(height)), 0)
-	if err != nil {
-		panic(err)
-	}
-	pHeightFile.Close()
-
-	pollardFile, err := os.OpenFile(simutil.PollardFilePath,
-		os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	err = p.WritePollard(pollardFile)
-	if err != nil {
-		panic(err)
-	}
-	pollardFile.Close()
 
 	done <- true
 
