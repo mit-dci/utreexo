@@ -7,11 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mit-dci/utreexo/cmd/ibdsim"
+	"github.com/mit-dci/utreexo/cmd/bridgenode"
+	"github.com/mit-dci/utreexo/cmd/csn"
 )
 
 var msg = `
-Usage: simcmd COMMAND [OPTION]
+Usage: utreexo COMMAND [OPTION]
 A dynamic hash based accumulator designed for the Bitcoin UTXO set
 
 Commands:
@@ -36,10 +37,6 @@ var testnetCmd = optionCmd.Bool("testnet", false,
 	"Target testnet instead of mainnet. Usage: testnet=true")
 var schedFileName = optionCmd.String("schedFileName", "schedule1pos.clr",
 	"assign a scheduled file to use. Usage: 'schedFileName=filename'")
-var ttldb = optionCmd.String("ttldb", "ttldb",
-	"assign a ttldb/ name to use. Usage: 'ttldb=dirname'")
-var offsetfile = optionCmd.String("offsetfile", "offsetfile",
-	"assign a offsetfile name to use. Usage: 'offsetfile=dirname'")
 
 func main() {
 	//check if enough arguments were given
@@ -47,10 +44,11 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
+	var ttldb, offsetfile string
 	optionCmd.Parse(os.Args[2:])
 	if *testnetCmd == true {
-		*ttldb = "ttldb-testnet"
-		*offsetfile = "offsetfile-testnet"
+		ttldb = "ttldb-testnet"
+		offsetfile = "offsetfile-testnet"
 	}
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
@@ -59,18 +57,16 @@ func main() {
 	switch os.Args[1] {
 	case "ibdsim":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.RunIBD(*testnetCmd, *offsetfile, *ttldb, sig)
+		err := csn.RunIBD(*testnetCmd, offsetfile, ttldb, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genproofs":
 		optionCmd.Parse(os.Args[2:])
-		err := ibdsim.BuildProofs(*testnetCmd, *ttldb, *offsetfile, sig)
+		err := bridge.BuildProofs(*testnetCmd, ttldb, offsetfile, sig)
 		if err != nil {
 			panic(err)
 		}
-	case "genhist":
-		optionCmd.Parse(os.Args[2:])
 	default:
 		fmt.Println(msg)
 		os.Exit(0)

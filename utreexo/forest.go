@@ -482,7 +482,6 @@ func (f *Forest) PosMapSanity() error {
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and height is stored
 func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error) {
-	fmt.Println("Restoring Forest...")
 
 	// Initialize the forest for restore
 	f := new(Forest)
