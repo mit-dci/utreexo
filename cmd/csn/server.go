@@ -1,4 +1,4 @@
-package ibdsim
+package csn
 
 import (
 	"fmt"
@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/mit-dci/lit/wire"
-	"github.com/mit-dci/utreexo/cmd/simutil"
+	"github.com/mit-dci/utreexo/cmd/ttl"
+	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-//Here we write proofs for all the txs.
-//All the inputs are saved as 32byte sha256 hashes.
-//All the outputs are saved as LeafTXO type.
+// Here we write proofs for all the txs.
+// All the inputs are saved as 32byte sha256 hashes.
+// All the outputs are saved as LeafTXO type.
 func genPollard(
 	tx []*wire.MsgTx,
 	height int32,
@@ -27,7 +28,7 @@ func genPollard(
 	p *utreexo.Pollard) error {
 
 	var blockAdds []utreexo.LeafTXO
-	blocktxs := []*simutil.Txotx{new(simutil.Txotx)}
+	blocktxs := []*util.Txotx{new(util.Txotx)}
 	plusstart := time.Now()
 
 	for _, tx := range tx {
@@ -41,7 +42,7 @@ func genPollard(
 		//Adds z and index for all OP_RETURN transactions
 		//We don't keep track of the OP_RETURNS so probably can get rid of this
 		for i, out := range tx.TxOut {
-			if simutil.IsUnspendable(out) {
+			if util.IsUnspendable(out) {
 				// Skip all the unspendables
 				blocktxs[len(blocktxs)-1].Unspendable[i] = true
 			} else {
@@ -52,14 +53,14 @@ func genPollard(
 		}
 
 		// done with this txotx, make the next one and append
-		blocktxs = append(blocktxs, new(simutil.Txotx))
+		blocktxs = append(blocktxs, new(util.Txotx))
 
 	}
 	//TODO Get rid of this. This eats up cpu
 	//we started a tx but shouldn't have
 	blocktxs = blocktxs[:len(blocktxs)-1]
 	// call function to make all the db lookups and find deathheights
-	lookupBlock(blocktxs, lvdb)
+	ttl.LookupBlock(blocktxs, lvdb)
 
 	for _, blocktx := range blocktxs {
 		adds, err := genLeafTXO(blocktx, uint32(height+1))
@@ -115,7 +116,7 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 		panic(fmt.Errorf("offset returned nil\nIt's likely that genproofs was exited before finishing\nRun genproofs again and that will probably fix the problem"))
 	}
 
-	pFile.Seek(int64(simutil.BtU32(offset[:])), 0)
+	pFile.Seek(int64(util.BtU32(offset[:])), 0)
 
 	var heightbytes [4]byte
 	pFile.Read(heightbytes[:])
@@ -134,7 +135,7 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	var proofsize [4]byte
 	pFile.Read(proofsize[:])
 
-	proof := make([]byte, int(simutil.BtU32(proofsize[:])))
+	proof := make([]byte, int(util.BtU32(proofsize[:])))
 	pFile.Read(proof[:])
 
 	return proof, nil
@@ -143,10 +144,9 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 
 // genLeafTXO generates a slice of LeafTXOs with the Duration of how long each
 // that TXO lasts attached to them. Skips all OP_RETURNs and TXOs that are spent on the
-// same block. UTXOs get a Duration of 1 << 30. Just a random big number
+// same block. UTXOs get a Duration of 1 << 30. Which is just an arbitrary big number
 // to make sure that it's bigger than the lookahead so they don't get remembered.
-func genLeafTXO(tx *simutil.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
-	//fmt.Println("DeathHeights len:", len(tx.deathHeights))
+func genLeafTXO(tx *util.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
 	adds := []utreexo.LeafTXO{}
 	for i := 0; i < len(tx.DeathHeights); i++ {
 		if tx.Unspendable[i] == true {
@@ -162,10 +162,14 @@ func genLeafTXO(tx *simutil.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
 			utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
 			addData := utreexo.LeafTXO{
 				Hash:     utreexo.HashFromString(utxostring),
-				Duration: int32(1 << 30)} // random big number
+				Duration: int32(1 << 30)} // arbitrary big number
 			adds = append(adds, addData)
 
 		} else {
+			// Write the ttl (time to live).
+			// The value is just the duration of how many blocks
+			// it took for the TXO to be spent
+			// ttl is just 'SpentBlockHeight - CreatedBlockHeight'
 			utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
 			addData := utreexo.LeafTXO{
 				Hash:     utreexo.HashFromString(utxostring),

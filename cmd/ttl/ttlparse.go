@@ -1,9 +1,9 @@
-package ibdsim
+package ttl
 
 import (
 	"fmt"
 
-	"github.com/mit-dci/utreexo/cmd/simutil"
+	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -28,8 +28,8 @@ type deathInfo struct {
 // lookups in parallel and populate the deathheights.  From there you can go
 // back to serial to write back to the txofile.
 
-// ttlLookup takes the slice of txotxs and fills in the deathheights
-func lookupBlock(block []*simutil.Txotx, db *leveldb.DB) {
+// LookupBlock takes the slice of txotxs and fills in the deathheights
+func LookupBlock(block []*util.Txotx, db *leveldb.DB) {
 
 	// I don't think buffering this will do anything..?
 	infoChan := make(chan deathInfo)
@@ -54,8 +54,6 @@ func lookupBlock(block []*simutil.Txotx, db *leveldb.DB) {
 		block[rcv.blockPos].DeathHeights[rcv.txPos] = rcv.deathHeight
 		remaining--
 	}
-
-	return
 }
 
 // lookerUpperWorker does the hashing and db read, then returns it's result
@@ -70,7 +68,7 @@ func lookerUpperWorker(
 
 	// build string and hash it (nice that this in parallel too)
 	utxostring := fmt.Sprintf("%s;%d", txid, txPos)
-	opHash := simutil.HashFromString(utxostring)
+	opHash := util.HashFromString(utxostring)
 
 	// make DB lookup
 	ttlbytes, err := db.Get(opHash[:], nil)
@@ -86,7 +84,7 @@ func lookerUpperWorker(
 		panic("ded")
 	}
 
-	di.deathHeight = simutil.BtU32(ttlbytes)
+	di.deathHeight = util.BtU32(ttlbytes)
 	// send back to the channel and this output is done
 	infoChan <- di
 
