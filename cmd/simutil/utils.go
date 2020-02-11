@@ -3,15 +3,13 @@ package simutil
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/mit-dci/lit/wire"
 )
 
-//Hash is just [32]byte
+// Hash is just [32]byte
 var mainnetGenHash = Hash{
 	0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72,
 	0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
@@ -26,8 +24,8 @@ var testNet3GenHash = Hash{
 	0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
 }
 
-//Checks if the blk00000.dat file in the current directory
-//is testnet or mainnet
+// Checks if the blk00000.dat file in the current directory
+// is testnet3 or mainnet.
 func CheckTestnet(isTestnet bool) {
 	if isTestnet == true {
 		f, err := os.Open("blk00000.dat")
@@ -37,7 +35,7 @@ func CheckTestnet(isTestnet bool) {
 		var magicbytes [4]byte
 		f.Read(magicbytes[:])
 
-		//Check if the magicbytes are for testnet
+		// Check if the magicbytes are for testnet
 		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} {
 			fmt.Println("Option -testnet=true given but .dat file is NOT a testnet file.")
 			fmt.Println("Exiting...")
@@ -52,7 +50,7 @@ func CheckTestnet(isTestnet bool) {
 		var magicbytes [4]byte
 		f.Read(magicbytes[:])
 
-		//Check if the magicbytes are for mainnet
+		// Check if the magicbytes are for mainnet
 		if magicbytes != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} {
 			fmt.Println("Option -testnet=true not given but .dat file is a testnet file.")
 			fmt.Println("Exiting...")
@@ -62,6 +60,9 @@ func CheckTestnet(isTestnet bool) {
 	}
 }
 
+// BlockReader is a wrapper around GetRawBlockFromFile so that the process
+// can be made into a goroutine. As long as it's running, it keeps sending
+// the entire blocktxs and height to bchan with BlockToWrite type.
 func BlockReader(
 	bchan chan BlockToWrite, currentOffsetHeight, height int32, offsetfile string) {
 	for height != currentOffsetHeight {
@@ -157,8 +158,8 @@ func BtI32(b []byte) int32 {
 	return i
 }
 
-//Converts 4 byte Little Endian slices to uint32.
-//Returns ffffffff if something doesn't work.
+// Converts 4 byte Little Endian slices to uint32.
+// Returns ffffffff if something doesn't work.
 func LBtU32(b []byte) uint32 {
 	if len(b) != 4 {
 		fmt.Printf("Got %x to LBtU32 (%d bytes)\n", b, len(b))
@@ -170,8 +171,9 @@ func LBtU32(b []byte) uint32 {
 	return i
 }
 
-//checkMagicByte checks for the Bitcoin magic bytes.
-//returns false if it didn't read the Bitcoin magic bytes.
+// CheckMagicByte checks for the Bitcoin magic bytes.
+// returns false if it didn't read the Bitcoin magic bytes.
+// Checks only for testnet3 and mainnet
 func CheckMagicByte(bytesgiven [4]byte) bool {
 	if bytesgiven != [4]byte{0x0b, 0x11, 0x09, 0x07} && //testnet
 		bytesgiven != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} { // mainnet
@@ -182,19 +184,10 @@ func CheckMagicByte(bytesgiven [4]byte) bool {
 	}
 }
 
-//Reverses the given string.
-//"asdf" becomes "fdsa".
-func Reverse(s string) (result string) {
-	for _, v := range s {
-		result = string(v) + result
-	}
-	return
-}
-
-//HasAccess reports whether we have acces to the named file.
-//Returns true if HasAccess, false if it doesn't.
-//Does NOT tell us if the file exists or not.
-//File might exist but may not be available to us
+// HasAccess reports whether we have acces to the named file.
+// Returns true if HasAccess, false if it doesn't.
+// Does NOT tell us if the file exists or not.
+// File might exist but may not be available to us
 func HasAccess(fileName string) bool {
 	if _, err := os.Stat(fileName); err != nil {
 		if os.IsNotExist(err) {
@@ -215,58 +208,6 @@ func IsUnspendable(o *wire.TxOut) bool {
 	default:
 		return false
 	}
-}
-
-//Gets the latest tipnum from the .txos file
-func GetTipNum(txos string) (int, error) {
-	//check if there is access to the .txos file
-	if HasAccess(txos) == false {
-		fmt.Println("No .txos file found, Syncing from the genesis block...")
-		return 0, nil
-	}
-
-	f, err := os.Open(txos)
-	if err != nil {
-		panic(err)
-	}
-
-	//check if the .txos file is empty
-	fstat, _ := f.Stat()
-	if fstat.Size() == 0 || fstat.Size() == 1 {
-		fmt.Println(".txos file is empty. Syncing from the genesis block...")
-		return 0, nil
-	}
-
-	var all []byte
-	buf := make([]byte, 1)
-	var x int64
-	var s string
-
-	//Reads backwards and appends the character read to `all` until we hit the character "h".
-	//probably an empty/corrupted file if we loop more than 20 times
-	for s != "h" && x > -20 {
-		f.Seek(x, 2)
-		f.Read(buf)
-		s = fmt.Sprintf("%s", buf)
-		//Don't append any of these ascii characters
-		if s != "\n" && s != " " && s != "" && s != "\x00" && s != ":" && s != "h" {
-			all = append(all, buf...)
-		}
-		x--
-	}
-
-	//return error if we loop more than 20 times. Normally "h" should be found soon
-	err1 := errors.New("Couldn't find the tipnum in .txos file")
-	if x <= -20 {
-		return 0, err1
-	}
-	tipstring := fmt.Sprintf("%s", all)
-	num, err := strconv.Atoi(Reverse(tipstring))
-	if err != nil {
-		return 0, err
-	}
-	f.Close()
-	return num, nil
 }
 
 func GetPOffsetNum(pOffsetCurrentIndexFile *os.File) (uint32, error) {
