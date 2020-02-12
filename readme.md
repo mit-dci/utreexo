@@ -58,6 +58,8 @@ First, the "genproofs" command builds all the block proofs for the blockchain an
 $ cd ~/.bitcoin/testnet3/blocks
 $ ./simcmd genproofs -testnet=1 // -testnet=1 flag needed for testnet. Leave empty for mainnet
 [... takes time and builds block proofs]
+[genproofs is able to resume from where it left off. Use `ctrl + c` to stop it.]
+[To resume, just do `./simcmd genproofs -testnet=1 again`]
 ```
 
 * "genproofs" should take a few hours as it does two things. First, it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk. Second, it saves each TXO and height with leveldb to make a TXO time to live (bascially how long each txo lasts until it is spent) for caching purposes. This is what the bridge node and archive node would do in a real node.  Next, you can run 'simcmd ibdsim -testnet=1'; it will perform IBD as a compact node which maintains only a reduced state, and accepts proofs (which are created in the proof.dat file during the previous step)
@@ -67,6 +69,8 @@ $ ./simcmd genproofs -testnet=1 // -testnet=1 flag needed for testnet. Leave emp
 $ cd ~/.bitcoin/testnet3/blocks
 $ ./simcmd ibdsim -testnet=1 // -testnet=1 flag needed fro testnet. Leave empty for mainnet
 [... takes time and does utreexo sync simulation]
+[ibdsim is able to resume from where it left off. Use `ctrl + c` to stop it.]
+[To resume, just do `./simcmd ibdsim -testnet=1 again`]
 ```
 
 Note that your folders or filenames might be different, but this should give you the idea and work on default linux / golang setups.  If you've tried this and it doesn't work and you'd like to help out, you can either fix the code / documentation so that it does work and make a pull request, or open an issue describing what doesn't work.
