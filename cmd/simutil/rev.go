@@ -113,6 +113,56 @@ func UndosReadFromFile(path string) ([]*CBlockUndo, error) {
 	return undos, nil
 }
 
+// UndoEqual ...
+func UndoEqual(a, b *CBlockUndo) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil {
+		return false
+	}
+	if b == nil {
+		return false
+	}
+	if a.Magic != b.Magic {
+		return false
+	}
+	if a.Size != b.Size {
+		return false
+	}
+	if !bytes.Equal(a.Data, b.Data) {
+		return false
+	}
+	if len(a.Txs) != len(b.Txs) {
+		return false
+	}
+	for i := range a.Txs {
+		csa := a.Txs[i].Coins
+		csb := b.Txs[i].Coins
+		if len(csa) != len(csb) {
+			return false
+		}
+		for j := range csa {
+			if csa[j].Height != csb[j].Height {
+				return false
+			}
+			if csa[j].CoinBase != csb[j].CoinBase {
+				return false
+			}
+			if !bytes.Equal(csa[j].Txout.Script, csb[j].Txout.Script) {
+				return false
+			}
+			if csa[j].Txout.Amount != csb[j].Txout.Amount {
+				return false
+			}
+		}
+	}
+	if !bytes.Equal(a.Hash[:], b.Hash[:]) {
+		return false
+	}
+	return true
+}
+
 // VerifyBlockHash ...
 // Example blockhash : 6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000
 func VerifyBlockHash(blockhash []byte, undos []*CBlockUndo) (*CBlockUndo, error) {

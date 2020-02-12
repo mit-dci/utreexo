@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/mit-dci/lit/btcutil/txscript"
@@ -51,7 +50,7 @@ func TestVerifyBlockHash(t *testing.T) {
 		t.Errorf("%+v", err)
 		return
 	}
-	if !reflect.DeepEqual(undo, ret) {
+	if !simutil.UndoEqual(undo, ret) {
 		t.Errorf("unmatch undo")
 		return
 	}
@@ -78,7 +77,7 @@ func TestVerifyBlockHash(t *testing.T) {
 		t.Errorf("%+v", err)
 		return
 	}
-	if !reflect.DeepEqual(undo, ret) {
+	if !simutil.UndoEqual(undo, ret) {
 		t.Errorf("unmatch undo")
 		return
 	}
@@ -225,7 +224,7 @@ func TestVarInt(t *testing.T) {
 			t.Errorf("simutil.ReadVarInt error : %+v", err)
 			return
 		}
-		if (n != nums[i]) || (!reflect.DeepEqual(bs, data[i])) {
+		if (n != nums[i]) || (!bytes.Equal(bs, data[i])) {
 			t.Errorf("expected: %d %d %x", i, nums[i], data[i])
 			t.Errorf("decoded : %d %x %d", i, bs, n)
 		}
@@ -261,7 +260,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(p2pkh) illegal first byte of compress script")
 		return
 	}
-	if !reflect.DeepEqual(out[1:], script[3:23]) {
+	if !bytes.Equal(out[1:], script[3:23]) {
 		t.Errorf("(p2pkh) illegal bytes of compress script")
 		return
 	}
@@ -290,7 +289,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(p2sh) illegal first byte of compress script")
 		return
 	}
-	if !reflect.DeepEqual(out[1:], script[2:22]) {
+	if !bytes.Equal(out[1:], script[2:22]) {
 		t.Errorf("(p2sh) illegal bytes of compress script")
 		return
 	}
@@ -319,7 +318,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(compressed p2pk) illegal first byte of compress script")
 		return
 	}
-	if !reflect.DeepEqual(out[1:], script[2:34]) {
+	if !bytes.Equal(out[1:], script[2:34]) {
 		t.Errorf("(compressed p2pk) illegal bytes of compress script")
 		return
 	}
@@ -344,7 +343,7 @@ func TestCompressedScript(t *testing.T) {
 		t.Errorf("(p2pk) illegal compress script size")
 		return
 	}
-	if !reflect.DeepEqual(out[1:], script[2:34]) {
+	if !bytes.Equal(out[1:], script[2:34]) {
 		t.Errorf("(p2pk) illegal bytes of compress script")
 		return
 	}
