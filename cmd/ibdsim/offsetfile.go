@@ -12,6 +12,7 @@ import (
 func buildOffsetFile(tip simutil.Hash, tipnum int32,
 	nextMap map[[32]byte]simutil.RawHeaderData, offsetFilePath string,
 	currentOffsetHeightFilePath string, offsetfinished chan bool) (int32, error) {
+
 	offsetFile, err := os.OpenFile(offsetFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
