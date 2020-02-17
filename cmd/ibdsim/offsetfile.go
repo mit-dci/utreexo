@@ -15,7 +15,9 @@ import (
 // If you have more blk*.dat files to generate an index for, just
 // delete the current offsetfile directory and run genproofs again.
 // Fairly quick process with one blk*.dat file taking a few seconds.
-func buildOffsetFile(tip simutil.Hash, tipnum int32, offsetfinished chan bool) (int32, error) {
+//
+// Returns the last block height that it processed.
+func buildOffsetFile(tip simutil.Hash, offsetfinished chan bool) (int32, error) {
 
 	// Map to store Block Header Hashes for sorting purposes
 	// blk*.dat files aren't in block order so this is needed
@@ -26,6 +28,8 @@ func buildOffsetFile(tip simutil.Hash, tipnum int32, offsetfinished chan bool) (
 	if err != nil {
 		panic(err)
 	}
+
+	var lastOffsetHeight int32
 
 	defer offsetFile.Close()
 	for fileNum := 0; ; fileNum++ {
@@ -42,8 +46,8 @@ func buildOffsetFile(tip simutil.Hash, tipnum int32, offsetfinished chan bool) (
 		if err != nil {
 			panic(err)
 		}
-		tip, tipnum, err = writeBlockOffset(
-			rawheaders, nextMap, offsetFile, tipnum, tip)
+		tip, lastOffsetHeight, err = writeBlockOffset(
+			rawheaders, nextMap, offsetFile, lastOffsetHeight, tip)
 		if err != nil {
 			panic(err)
 		}
@@ -56,13 +60,13 @@ func buildOffsetFile(tip simutil.Hash, tipnum int32, offsetfinished chan bool) (
 	if err != nil {
 		panic(err)
 	}
-	currentOffsetHeightFile.Write(simutil.U32tB(uint32(tipnum))[:])
+	currentOffsetHeightFile.Write(simutil.U32tB(uint32(lastOffsetHeight))[:])
 	currentOffsetHeightFile.Close()
 
 	// Pass true to let stopParse() know we're finished
 	// and so it doesn't delete the offsetfile
 	offsetfinished <- true
-	return tipnum, nil
+	return lastOffsetHeight, nil
 }
 
 // readRawHeadersFromFile reads only the headers from the given .dat file
