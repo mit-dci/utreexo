@@ -6,7 +6,7 @@ Check out the ePrint paper here: [https://eprint.iacr.org/2019/611](https://epri
 
 Currently under active development.  If you're interested and have questions, checkout #utreexo on freenode.
 
-Logs for freenode are [here](https://github.com/utreexo-log/utreexo-irc-log)
+Logs for freenode are [here](http://gnusha.org/utreexo/)
 
 ## folders
 
