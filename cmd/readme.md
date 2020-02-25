@@ -1,29 +1,47 @@
 # cmd
 
-folders with executables
+Everything in cmd/ is related to the actual node implementation of Utreexo.
 
-General flow to get data on utreexo performance:
+## csn
 
-1. run blockparser to get txo list and ttl data.
+Implements the Utreexo Compact State Node. The CSN is the node that keeps only
+the Utreexo tree tops. For caching purposes, some TXOs may be kept. However, when
+flushing to disk, the cache data isn't flushed. This feature will come in the future.
 
-2. run txottl to merge the ttl data into the txo file
+## bridgenode
 
-3. run ibdsim -genroofs to build a db of proofs
+Since a Bitcoin Core node cannot serve Utreexo proofs, a bridge node is needed.
+The bridge node currently does:
 
-4. run ibdsim to run through the IBD process with those proofs and see how much data & time it takes
+1. Generate an index from the provided blk*.dat files.
+2. Generate TXO proofs.
+3. Do the Utreexo accumulator operations and maintain an Utreexo Forest.
 
+The bridge node currently does not:
 
-## blockparser
+1. Verify headers
+2. Verify blocks
+3. Verify signatures
 
-goes through bitcoind's blocks folder and reads all the transaction data.  Creates 2 things: a txos text file, and a ttl leveldb folder. 
+The general idea for a bridge node is outlined in Section 4.5 in the Utreexo paper.
+https://github.com/mit-dci/utreexo/blob/master/utreexo.pdf
 
-## txottl
+## ttl
 
-txottl parses a text list of transactions and builds a database of how long txos last.  It can then append the txo durations to the transaction file.
+Time To Live is the representation of how long each transaction "lives" until it is
+spent.
 
+For example, a transaction that is created in block #200 and spent at block #400 has
+a ttl value of 200.
 
-## ibdsim
+This is needed for caching outlined in Section 5.3 and 5.4 in the Utreexo paper.
+https://github.com/mit-dci/utreexo/blob/master/utreexo.pdf
 
-Performs the accumulator operations of initial block download (IBD) to measure performance.
-Note that this doesn't do any signature or transaction verification, only the accumulator operations.
+## util
 
+Various reused functions, constants, and paths used in all the packages.
+
+## clair
+
+An attempt at implementing Bélády's clairvoyent algorithm. Currently, it does not build.
+This code is kept to be used in the future.

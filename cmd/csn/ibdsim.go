@@ -1,6 +1,4 @@
-/* test the utreexo forest */
-
-package ibdsim
+package csn
 
 import (
 	"fmt"

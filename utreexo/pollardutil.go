@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/utreexo/cmd/simutil"
+	"github.com/mit-dci/utreexo/cmd/util"
 )
 
 // Pollard is the sparse representation of the utreexo forest, using
@@ -133,10 +133,10 @@ func (p *Pollard) WritePollard(pollardFile *os.File) error {
 
 	// "Overwriting" pollardFile passed in
 	// I feel like this is faster than writing 0s
-	os.Remove(simutil.PollardFilePath)
+	os.Remove(util.PollardFilePath)
 	var err error
 	pollardFile, err = os.OpenFile(
-		simutil.PollardFilePath, os.O_CREATE|os.O_RDWR, 0600)
+		util.PollardFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}

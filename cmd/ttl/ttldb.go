@@ -1,16 +1,16 @@
-package ibdsim
+package ttl
 
 import (
 	"fmt"
 	"sync"
 
 	"github.com/mit-dci/lit/wire"
-	"github.com/mit-dci/utreexo/cmd/simutil"
+	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 //writeBlock sends off ttl info to dbWorker to be written to ttldb
-func writeBlock(tx []*wire.MsgTx, tipnum int32,
+func WriteBlock(tx []*wire.MsgTx, tipnum int32,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
 	blockBatch := new(leveldb.Batch)
@@ -22,8 +22,8 @@ func writeBlock(tx []*wire.MsgTx, tipnum int32,
 				//TODO Maybe don't convert to a string?
 				//Perhaps converting to bytes can work?
 				opString := in.PreviousOutPoint.String()
-				h := simutil.HashFromString(opString)
-				blockBatch.Put(h[:], simutil.U32tB(uint32(tipnum)))
+				h := util.HashFromString(opString)
+				blockBatch.Put(h[:], util.U32tB(uint32(tipnum)))
 			}
 		}
 	}
@@ -40,7 +40,7 @@ func writeBlock(tx []*wire.MsgTx, tipnum int32,
 // dbWorker writes everything to the db. It's it's own goroutine so it
 // can work at the same time that the reads are happening
 // receives from writeBlock
-func dbWorker(
+func DbWorker(
 	bChan chan *leveldb.Batch, lvdb *leveldb.DB, wg *sync.WaitGroup) {
 
 	for {
