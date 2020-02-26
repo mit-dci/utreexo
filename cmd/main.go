@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mit-dci/utreexo/cmd/bridgenode"
+	bridge "github.com/mit-dci/utreexo/cmd/bridgenode"
 	"github.com/mit-dci/utreexo/cmd/csn"
 )
 
@@ -36,8 +36,8 @@ func main() {
 	var ttldb, offsetfile string
 	optionCmd.Parse(os.Args[2:])
 	if *testnetCmd == true {
-		ttldb = "ttldb-testnet"
-		offsetfile = "offsetfile-testnet"
+		ttldb = "testnetttldb"
+		offsetfile = "testnetoffsetfile"
 	}
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
