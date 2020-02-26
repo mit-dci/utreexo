@@ -35,9 +35,12 @@ func main() {
 	}
 	var ttldb, offsetfile string
 	optionCmd.Parse(os.Args[2:])
-	if *testnetCmd == true {
+	if *testnetCmd {
 		ttldb = "testnetttldb"
 		offsetfile = "testnetoffsetfile"
+	} else {
+		ttldb = "ttldb"
+		offsetfile = "offsetfile"
 	}
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
