@@ -36,8 +36,8 @@ func main() {
 	var ttldb, offsetfile string
 	optionCmd.Parse(os.Args[2:])
 	if *testnetCmd {
-		ttldb = "testnetttldb"
-		offsetfile = "testnetoffsetfile"
+		ttldb = "testnet-ttldb"
+		offsetfile = "testnet-offsetfile"
 	} else {
 		ttldb = "ttldb"
 		offsetfile = "offsetfile"
