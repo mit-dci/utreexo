@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/mit-dci/lit/wire"
 	bridge "github.com/mit-dci/utreexo/cmd/bridgenode"
 	"github.com/mit-dci/utreexo/cmd/csn"
 )
@@ -19,13 +20,14 @@ Commands:
   ibdsim         simulates an initial block download with ttl.testnet.txos as an input
   genproofs      generates proofs from the ttl.testnet.txos file
 OPTIONS:
-  testnet        configure whether the simulator should target testnet or not. Usage 'testnet=true'
+  -net=testnet   configure whether to use testnet. Optional.
+  -net=regtest   configure whether to use regtest. Optional.
 `
 
-// bit of a hack. Stdandard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
+// bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
-var testnetCmd = optionCmd.Bool("testnet", false,
-	"Target testnet instead of mainnet. Usage: testnet=true")
+var netCmd = optionCmd.String("net", "mainnet",
+	"Target testnet or regtest instead of mainnet. Usage: '-net=regtest' or '-net=testnet'")
 
 func main() {
 	// check if enough arguments were given
@@ -35,12 +37,23 @@ func main() {
 	}
 	var ttldb, offsetfile string
 	optionCmd.Parse(os.Args[2:])
-	if *testnetCmd {
+	var net wire.BitcoinNet
+	if *netCmd == "testnet" {
 		ttldb = "testnet-ttldb"
 		offsetfile = "testnet-offsetfile"
-	} else {
+		net = wire.TestNet3
+	} else if *netCmd == "regtest" {
+		ttldb = "regtest-ttldb"
+		offsetfile = "regtest-offsetfile"
+		net = wire.TestNet // yes, this is the name of regtest in lit
+	} else if *netCmd == "mainnet" {
 		ttldb = "ttldb"
 		offsetfile = "offsetfile"
+		net = wire.MainNet
+	} else {
+		fmt.Println("Invalid net flag given.")
+		fmt.Println(msg)
+		os.Exit(1)
 	}
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
@@ -48,14 +61,12 @@ func main() {
 
 	switch os.Args[1] {
 	case "ibdsim":
-		optionCmd.Parse(os.Args[2:])
-		err := csn.RunIBD(*testnetCmd, offsetfile, ttldb, sig)
+		err := csn.RunIBD(net, offsetfile, ttldb, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genproofs":
-		optionCmd.Parse(os.Args[2:])
-		err := bridge.BuildProofs(*testnetCmd, ttldb, offsetfile, sig)
+		err := bridge.BuildProofs(net, ttldb, offsetfile, sig)
 		if err != nil {
 			panic(err)
 		}

@@ -16,7 +16,7 @@ import (
 
 // build the bridge node / proofs
 func BuildProofs(
-	isTestnet bool, ttldb string, offsetfile string, sig chan bool) error {
+	net wire.BitcoinNet, ttldb string, offsetfile string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	done := make(chan bool, 1)
@@ -32,14 +32,14 @@ func BuildProofs(
 
 	// If given the option testnet=true, check if the blk00000.dat file
 	// in the directory is a testnet file. Vise-versa for mainnet
-	util.CheckTestnet(isTestnet)
+	util.CheckNet(net)
 
 	// Creates all the directories needed for bridgenode
 	util.MakePaths()
 
 	// forest is a
 	forest, height, lastIndexOffsetHeight, pOffset, err :=
-		initBridgeNodeState(isTestnet, offsetFinished)
+		initBridgeNodeState(net, offsetFinished)
 	if err != nil {
 		panic(err)
 	}

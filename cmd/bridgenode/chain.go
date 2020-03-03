@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mit-dci/lit/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
 )
@@ -11,7 +12,7 @@ import (
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
-func initBridgeNodeState(isTestnet bool, offsetFinished chan bool) (
+func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 	*utreexo.Forest, int32, int32, int32, error) {
 
 	var offsetInitialized, forestInitialized bool
@@ -33,7 +34,7 @@ func initBridgeNodeState(isTestnet bool, offsetFinished chan bool) (
 	} else {
 		var err error
 		fmt.Println("Offsetfile not present. Indexing offset for blocks blk*.dat files...")
-		lastIndexOffsetHeight, err = createOffsetData(isTestnet, offsetFinished)
+		lastIndexOffsetHeight, err = createOffsetData(net, offsetFinished)
 		if err != nil {
 			return nil, 0, 0, 0, err
 		}

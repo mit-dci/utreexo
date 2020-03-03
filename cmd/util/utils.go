@@ -10,7 +10,7 @@ import (
 )
 
 // Hash is just [32]byte
-var mainnetGenHash = Hash{
+var mainNetGenHash = Hash{
 	0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72,
 	0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
 	0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c,
@@ -24,39 +24,52 @@ var testNet3GenHash = Hash{
 	0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
 }
 
+var regTestGenHash = Hash{
+	0x06, 0x22, 0x6e, 0x46, 0x11, 0x1a, 0x0b, 0x59,
+	0xca, 0xaf, 0x12, 0x60, 0x43, 0xeb, 0x5b, 0xbf,
+	0x28, 0xc3, 0x4f, 0x3a, 0x5e, 0x33, 0x2a, 0x1f,
+	0xc7, 0xb2, 0xb7, 0x3c, 0xf1, 0x88, 0x91, 0x0f,
+}
+
+// For a given BitcoinNet, yields the genesis hash
+// If the BitcoinNet is not supported, an error is
+// returned.
+func GenHashForNet(net wire.BitcoinNet) (*Hash, error) {
+	switch net {
+	case wire.TestNet3:
+		return &testNet3GenHash, nil
+	case wire.MainNet:
+		return &mainNetGenHash, nil
+	case wire.TestNet: // yes, this is regtest
+		return &regTestGenHash, nil
+	}
+	return nil, fmt.Errorf("net not supported\n")
+}
+
 // Checks if the blk00000.dat file in the current directory
-// is testnet3 or mainnet.
-func CheckTestnet(isTestnet bool) {
-	if isTestnet == true {
-		f, err := os.Open("blk00000.dat")
-		if err != nil {
-			panic(err)
-		}
-		var magicbytes [4]byte
-		f.Read(magicbytes[:])
+// is testnet3 or mainnet or regtest.
+func CheckNet(net wire.BitcoinNet) {
+	f, err := os.Open("blk00000.dat")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	var magicbytes [4]byte
+	f.Read(magicbytes[:])
 
-		// Check if the magicbytes are for testnet
-		if magicbytes != [4]byte{0x0b, 0x11, 0x09, 0x07} {
-			fmt.Println("Option -testnet=true given but .dat file is NOT a testnet file.")
-			fmt.Println("Exiting...")
-			os.Exit(2)
-		}
-		f.Close()
-	} else {
-		f, err := os.Open("blk00000.dat")
-		if err != nil {
-			panic(err)
-		}
-		var magicbytes [4]byte
-		f.Read(magicbytes[:])
+	bytesToMatch := U32tLB(uint32(net))
 
-		// Check if the magicbytes are for mainnet
-		if magicbytes != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} {
-			fmt.Println("Option -testnet=true not given but .dat file is a testnet file.")
-			fmt.Println("Exiting...")
-			os.Exit(2)
+	if bytes.Compare(magicbytes[:], bytesToMatch) != 0 {
+		switch net {
+		case wire.TestNet3:
+			fmt.Println("Option -net=testnet given but .dat file is NOT a testnet file.")
+		case wire.MainNet:
+			fmt.Println("Neither option -net=testnet or -net=regtest was given but .dat file is NOT a mainnet file.")
+		case wire.TestNet:
+			fmt.Println("Option -net=regtest given but .dat file is NOT a regtest file.")
 		}
-		f.Close()
+		fmt.Println("Exiting...")
+		os.Exit(2)
 	}
 }
 
@@ -138,7 +151,7 @@ func BtU32(b []byte) uint32 {
 	return i
 }
 
-// uint32 to 4 bytes.  Always works.
+// int32 to 4 bytes (Big Endian).  Always works.
 func I32tB(i int32) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, i)
@@ -156,6 +169,13 @@ func BtI32(b []byte) int32 {
 	buf := bytes.NewBuffer(b)
 	binary.Read(buf, binary.BigEndian, &i)
 	return i
+}
+
+// uint32 to 4 bytes (Little Endian).  Always works.
+func U32tLB(i uint32) []byte {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, i)
+	return b
 }
 
 // Converts 4 byte Little Endian slices to uint32.

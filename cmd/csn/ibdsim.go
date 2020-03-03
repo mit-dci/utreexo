@@ -2,17 +2,18 @@ package csn
 
 import (
 	"fmt"
+	"github.com/mit-dci/lit/wire"
 	"os"
 )
 
 var maxmalloc uint64
 
-func RunIBD(isTestnet bool, offsetfile string, ttldb string, sig chan bool) error {
+func RunIBD(net wire.BitcoinNet, offsetfile string, ttldb string, sig chan bool) error {
 	// start server & listen
 	// go IBDServer()
 
 	// start client & connect
-	return IBDClient(isTestnet, offsetfile, ttldb, sig)
+	return IBDClient(net, offsetfile, ttldb, sig)
 }
 
 /*

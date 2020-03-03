@@ -3,6 +3,7 @@ package bridge
 import (
 	"os"
 
+	"github.com/mit-dci/lit/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
 )
@@ -10,21 +11,19 @@ import (
 // createOffsetData restores the offsetfile needed to index the
 // blocks in the raw blk*.dat files.
 func createOffsetData(
-	isTestnet bool, offsetFinished chan bool) (int32, error) {
+	net wire.BitcoinNet, offsetFinished chan bool) (int32, error) {
 
 	var lastIndexOffsetHeight int32
+	var err error
 
 	// Set the Block Header hash
 	// buildOffsetFile matches the header hash to organize
-	var tip util.Hash
-	if isTestnet == true {
-		tip = util.TestNet3GenHash
-	} else {
-		tip = util.MainnetGenHash
+	tip, err := util.GenHashForNet(net)
+	if err != nil {
+		return 0, err
 	}
 
-	var err error
-	lastIndexOffsetHeight, err = buildOffsetFile(tip, offsetFinished)
+	lastIndexOffsetHeight, err = buildOffsetFile(*tip, offsetFinished)
 	if err != nil {
 		return 0, err
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/mit-dci/lit/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -12,7 +13,7 @@ import (
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-func IBDClient(isTestnet bool,
+func IBDClient(net wire.BitcoinNet,
 	offsetfile string, ttldb string, sig chan bool) error {
 
 	//Channel to alert the main loop to break
@@ -23,8 +24,8 @@ func IBDClient(isTestnet bool,
 
 	go stopRunIBD(sig, stopGoing, done)
 
-	// Check if the blk*.dat file given is a testnet file
-	util.CheckTestnet(isTestnet)
+	// Check if the blk*.dat file given is a testnet/mainnet/regtest file corresponding to net
+	util.CheckNet(net)
 
 	// open database
 	o := new(opt.Options)
