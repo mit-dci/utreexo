@@ -11,7 +11,7 @@ func TestPollardFullRand(t *testing.T) {
 		// z := 1
 		rand.Seed(int64(z))
 		fmt.Printf("randseed %d\n", z)
-		err := pollardFullRandomRemember(50)
+		err := pollardFullRandomRemember(20)
 		if err != nil {
 			fmt.Printf("randseed %d\n", z)
 			t.Fatal(err)

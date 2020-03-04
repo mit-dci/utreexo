@@ -18,10 +18,10 @@ func TestUndoFixed(t *testing.T) {
 
 func TestUndoRandom(t *testing.T) {
 
-	for z := int64(0); z < 999; z++ {
+	for z := int64(0); z < 100; z++ {
 		// z := int64(11)
 		rand.Seed(z)
-		err := undoOnceRandom(101)
+		err := undoOnceRandom(20)
 		if err != nil {
 			fmt.Printf("rand seed %d\n", z)
 			t.Fatal(err)

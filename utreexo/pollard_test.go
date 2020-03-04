@@ -12,7 +12,7 @@ func TestPollardRand(t *testing.T) {
 		// z := 55
 		rand.Seed(int64(z))
 		fmt.Printf("randseed %d\n", z)
-		err := pollardRandomRemember(60)
+		err := pollardRandomRemember(20)
 		if err != nil {
 			fmt.Printf("randseed %d\n", z)
 			t.Fatal(err)

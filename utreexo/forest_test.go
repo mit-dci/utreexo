@@ -7,37 +7,23 @@ import (
 
 func TestForestAddDel(t *testing.T) {
 
-	numAdds := 10
-	numDels := 5
+	numAdds := uint32(10)
+
+	f := NewForest(nil)
+
+	sc := NewSimChain(0x07)
+	sc.lookahead = 400
 
 	for b := 0; b < 1000; b++ {
-		//  these should stay the same
-		f := NewForest(nil) // bottom up modified forest
 
-		delMap := make(map[uint64]bool)
-		adds := make([]LeafTXO, numAdds)
-		for j := range adds {
-			adds[j].Hash[1] = uint8(j)
-			adds[j].Hash[3] = 0xcc
-			delMap[uint64(j)] = true
-		}
+		adds, delHashes := sc.NextBlock(numAdds)
 
-		_, err := f.Modify(adds, nil)
+		bp, err := f.ProveBlock(delHashes)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		var k int
-		dels := make([]uint64, numDels)
-		for i, _ := range delMap {
-			dels[k] = i
-			k++
-			if k >= numDels {
-				break
-			}
-		}
-
-		err = f.removev4(dels) // was v2
+		_, err = f.Modify(adds, bp.Targets)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,7 +38,7 @@ func Test2Fwd1Back(t *testing.T) {
 	var absidx uint32
 	adds := make([]LeafTXO, 2)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 
 		for j := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0
