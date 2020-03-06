@@ -179,7 +179,7 @@ func swapIfDescendant(a, b arrow, ah, bh, fh uint8) (subMask uint64) {
 // TODO optimization: if children move, parents don't need to move.
 // (But siblings might)
 
-// floorTransform calles remTrans2 and expands it to give all leaf swaps
+// floorTransform calls remTrans2 and expands it to give all leaf swaps
 func floorTransform(
 	dels []uint64, numLeaves uint64, fHeight uint8) []arrow {
 	// fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)

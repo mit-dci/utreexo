@@ -172,8 +172,8 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		// which makes a leaf last forever, and the forest will expand
 		// over time.
 
-		// the first utxo addded lives forever.
-		// (prevents leaves from goign to 0 which is buggy)
+		// the first utxo added lives forever.
+		// (prevents leaves from going to 0 which is buggy)
 		if s.blockHeight == 0 {
 			adds[j].Duration = 0
 		}

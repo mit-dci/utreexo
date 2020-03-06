@@ -37,7 +37,7 @@ var ForestLastSyncedBlockHeightFilePath string = filepath.Join(ForestDirPath, "f
 var PollardFilePath string = filepath.Join(PollardDirPath, "pollardfile.dat")
 var PollardHeightFilePath string = filepath.Join(PollardDirPath, "pollardheight.dat")
 
-// MakePaths makes the neccessary paths for all files
+// MakePaths makes the necessary paths for all files
 func MakePaths() {
 	os.MkdirAll(OffsetDirPath, os.ModePerm)
 	os.MkdirAll(ProofDirPath, os.ModePerm)

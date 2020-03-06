@@ -234,7 +234,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 			h++
 		}
 		if h > f.height {
-			return fmt.Errorf("postion %d at height %d but forest only %d high",
+			return fmt.Errorf("position %d at height %d but forest only %d high",
 				pos, h, f.height)
 		}
 		// if bridgeVerbose {
@@ -246,7 +246,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 
 	// this is basically the same as VerifyBlockProof.  Could maybe split
 	// it to a separate function to reduce redundant code..?
-	// nah but pretty different beacuse the dirtyMap has stuff that appears
+	// nah but pretty different because the dirtyMap has stuff that appears
 	// halfway up...
 
 	var currentRow, nextRow []uint64
