@@ -144,7 +144,7 @@ func VerifyBlockProof(
 	var left, right uint64
 	// iterate through height
 
-	for h := uint8(0); h < height; h++ {
+	for h := uint8(0); h <= height; h++ {
 		// iterate through tagged positions in this row
 
 		for len(tagRow) > 0 {
