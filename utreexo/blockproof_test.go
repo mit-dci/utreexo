@@ -1,6 +1,9 @@
 package utreexo
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // TestVerifyBlockProof tests that the computedTop is compared to the top in the
 // Utreexo forest.
@@ -56,5 +59,50 @@ func TestVerifyBlockProof(t *testing.T) {
 	if shouldBeFalse != false {
 		t.Fail()
 		t.Logf("Block verified with old proof. Double spending allowed.")
+	}
+}
+
+// In a two leaf tree:
+// We prove one node, then delete the other one.
+// Now, the proof of the first node should not pass verification.
+
+// Full explanation: https://github.com/mit-dci/utreexo/pull/95#issuecomment-599390850
+func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
+	adds := make([]LeafTXO, 2)
+	proofIndex := 1
+	adds[0].Hash = Hash { 1 } // will be deleted
+	adds[1].Hash = Hash { 2 } // will be proven
+
+	f := NewForest(nil)
+	_, err := f.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(fmt.Errorf("Modify with initial adds: %w", err))
+	}
+
+	blockProof, err := f.ProveBlock(
+		[]Hash {
+			adds[proofIndex].Hash,
+		})
+	if err != nil {
+		t.Fatal(fmt.Errorf("ProveBlock of existing values: %w", err))
+	}
+
+	if (!f.VerifyBlockProof(blockProof)) {
+		t.Fatal(
+			fmt.Errorf(
+				"proof of %d didn't verify (before deletion)",
+				proofIndex))
+	}
+
+	_, err = f.Modify(nil, []uint64{ 0 })
+	if err != nil {
+		t.Fatal(fmt.Errorf("Modify with deletions: %w", err))
+	}
+
+	if (f.VerifyBlockProof(blockProof)) {
+		t.Fatal(
+			fmt.Errorf(
+				"proof of %d is still valid (after deletion)",
+				proofIndex))
 	}
 }
