@@ -353,10 +353,10 @@ func (f *Forest) addv2(adds []LeafTXO) {
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
 func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
-	numdels, numadds := uint64(len(dels)), uint64(len(adds))
-	delta := numadds - numdels // watch 32/64 bit
+	numdels, numadds := len(dels), len(adds)
+	delta := int64(numadds - numdels) // watch 32/64 bit
 	// remap to expand the forest if needed
-	for f.numLeaves+delta > 1<<f.height {
+	for int64(f.numLeaves)+delta > int64(1<<f.height) {
 		// fmt.Printf("current cap %d need %d\n",
 		// 1<<f.height, f.numLeaves+delta)
 		err := f.reMap(f.height + 1)
@@ -370,14 +370,14 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.cleanup(numdels)
+	f.cleanup(uint64(numdels))
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
 	// BuildUndoData takes all the stuff swapped to the right by removev3
 	// and saves it in the order it's in, which should make it go back to
 	// the right place when it's swapped in reverse
-	ub := f.BuildUndoData(numadds, dels)
+	ub := f.BuildUndoData(uint64(numadds), dels)
 
 	f.addv2(adds)
 
