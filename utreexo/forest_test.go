@@ -148,3 +148,12 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	fmt.Printf("VerifyBlockProof worked\n")
 	return nil
 }
+
+func TestDeleteNonExisting (t *testing.T) {
+	f := NewForest(nil)
+	deletions := []uint64{0}
+	_, err := f.Modify(nil, deletions)
+	if err == nil {
+		t.Fatal(fmt.Errorf("could delete non-existing leaf 0 from empty forest"))
+	}
+}
