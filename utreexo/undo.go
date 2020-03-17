@@ -58,8 +58,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// remove everything between prevNumLeaves and numLeaves from positionMap
 	for p := f.numLeaves; p < f.numLeaves+prevAdds; p++ {
 		fmt.Printf("remove %x@%d from map\n",
-			f.data.read(p).Prefix(), f.positionMap[f.data.read(p).Mini()])
-		delete(f.positionMap, f.data.read(p).Mini())
+			f.data.read(p).Prefix(), f.positions.read(f.data.read(p)).pos)
+		f.positions.rem(f.data.read(p))
 	}
 
 	// also add everything past numleaves and prevnumleaves to dirt
@@ -87,21 +87,21 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// the stuff we don't want has been moved to the right past the edge
 	for p := f.numLeaves; p < prevNumLeaves; p++ {
 		fmt.Printf("put back edge %x@%d from map\n", f.data.read(p).Prefix(), p)
-		f.positionMap[f.data.read(p).Mini()] = p
+		f.positions.move(f.data.read(p), p)
 	}
 	for _, p := range ub.positions {
 		fmt.Printf("put back internal %x@%d in map\n", f.data.read(p).Prefix(), p)
-		f.positionMap[f.data.read(p).Mini()] = p
+		f.positions.move(f.data.read(p), p)
 	}
 	for _, d := range dirt {
 		// everything that moved needs to have its position updated in the map
 		// TODO does it..?
-		m := f.data.read(d).Mini()
-		oldpos := f.positionMap[m]
-		if oldpos != d {
-			fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
-			delete(f.positionMap, m)
-			f.positionMap[m] = d
+		m := f.data.read(d)
+		old := f.positions.read(m)
+		if old.pos != d {
+			fmt.Printf("update positions %x %d to %d\n",
+				m.Prefix(), old.pos, d)
+			f.positions.move(m, d)
 		}
 	}
 

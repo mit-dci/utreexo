@@ -146,3 +146,50 @@ func (d *diskForestData) resize(newSize uint64) {
 		panic(err)
 	}
 }
+
+// ForestPosition used to be postionMap.  It's not a map anymore.  Though
+// it could be.  But probably need to use levelDB.
+type ForestPosition interface {
+	add(Hash, utxoData) // add hash & extra data
+	rem(Hash)           // remove hash
+	read(Hash) utxoData // read extra data for hash
+	move(Hash, uint64)  // move position data for hash, leaving bytes
+}
+
+type utxoData struct {
+	pos   uint64
+	extra []byte // will change this to a real struct soon
+	// TODO         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+}
+
+type ramForestPostion struct {
+	m map[MiniHash]utxoData
+}
+
+func startRamForestPosition() *ramForestPostion {
+	r := new(ramForestPostion)
+	r.m = make(map[MiniHash]utxoData)
+	return r
+}
+
+func (r *ramForestPostion) add(h Hash, u utxoData) {
+	r.m[h.Mini()] = u
+}
+
+func (r *ramForestPostion) rem(h Hash) {
+	delete(r.m, h.Mini())
+}
+
+func (r *ramForestPostion) read(h Hash) utxoData {
+	u, ok := r.m[h.Mini()]
+	if !ok {
+		return utxoData{pos: 1 << 60}
+	}
+	return u
+}
+
+func (r *ramForestPostion) move(h Hash, p uint64) {
+	u := r.m[h.Mini()]
+	u.pos = p
+	r.m[h.Mini()] = u
+}
