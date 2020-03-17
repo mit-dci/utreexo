@@ -70,36 +70,36 @@ func TestVerifyBlockProof(t *testing.T) {
 func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 	adds := make([]LeafTXO, 2)
 	proofIndex := 1
-	adds[0].Hash = Hash { 1 } // will be deleted
-	adds[1].Hash = Hash { 2 } // will be proven
+	adds[0].Hash = Hash{1} // will be deleted
+	adds[1].Hash = Hash{2} // will be proven
 
 	f := NewForest(nil)
 	_, err := f.Modify(adds, nil)
 	if err != nil {
-		t.Fatal(fmt.Errorf("Modify with initial adds: %w", err))
+		t.Fatal(fmt.Errorf("Modify with initial adds: %v", err))
 	}
 
 	blockProof, err := f.ProveBlock(
-		[]Hash {
+		[]Hash{
 			adds[proofIndex].Hash,
 		})
 	if err != nil {
-		t.Fatal(fmt.Errorf("ProveBlock of existing values: %w", err))
+		t.Fatal(fmt.Errorf("ProveBlock of existing values: %v", err))
 	}
 
-	if (!f.VerifyBlockProof(blockProof)) {
+	if !f.VerifyBlockProof(blockProof) {
 		t.Fatal(
 			fmt.Errorf(
 				"proof of %d didn't verify (before deletion)",
 				proofIndex))
 	}
 
-	_, err = f.Modify(nil, []uint64{ 0 })
+	_, err = f.Modify(nil, []uint64{0})
 	if err != nil {
-		t.Fatal(fmt.Errorf("Modify with deletions: %w", err))
+		t.Fatal(fmt.Errorf("Modify with deletions: %v", err))
 	}
 
-	if (f.VerifyBlockProof(blockProof)) {
+	if f.VerifyBlockProof(blockProof) {
 		t.Fatal(
 			fmt.Errorf(
 				"proof of %d is still valid (after deletion)",
