@@ -81,9 +81,7 @@ func pollardRandomRemember(blocks int32) error {
 		err = f.sanity()
 		if err != nil {
 			fmt.Printf("frs broke %s", f.ToString())
-			for h, p := range f.positionMap {
-				fmt.Printf("%x@%d ", h[:4], p)
-			}
+			fmt.Printf(f.PrintPositionMap())
 			return err
 		}
 		err = f.PosMapSanity()

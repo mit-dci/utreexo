@@ -533,16 +533,17 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	return f, nil
 }
 
-func (f *Forest) PrintPositionMap(file *os.File) {
+func (f *Forest) PrintPositionMap() string {
 	var s string
 	for i := uint64(0); i < f.numLeaves; i++ {
 		u := f.positions.read(f.data.read(i))
 		s += fmt.Sprintf("pos %d, leaf %x\n", u.pos, f.data.read(i).Prefix())
 	}
-	_, err := file.WriteString(s)
-	if err != nil {
-		panic(err)
-	}
+	return s
+	// _, err := file.WriteString(s)
+	// if err != nil {
+	// panic(err)
+	// }
 }
 
 // WriteForest writes the numLeaves and height to miscForestFile
