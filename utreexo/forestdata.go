@@ -6,7 +6,7 @@ import (
 )
 
 // leafSize is a [32]byte hash (sha256).
-// Length is alwasy 32.
+// Length is always 32.
 const leafSize = 32
 
 // A forestData is the thing that holds all the hashes in the forest.  Could
@@ -133,7 +133,7 @@ func (d *diskForestData) swapHashRange(a, b, w uint64) {
 func (d *diskForestData) size() uint64 {
 	s, err := d.f.Stat()
 	if err != nil {
-		fmt.Errorf("\tWARNING: %s. Returning 0", err.Error())
+		fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
 		return 0
 	}
 	return uint64(s.Size() / leafSize)

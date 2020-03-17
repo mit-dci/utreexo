@@ -76,7 +76,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 
 	// go through swaps in reverse order
 	for i, a := range leafMoves {
-		fmt.Printf("swaped %d %x, %d %x\n", a.to,
+		fmt.Printf("swapped %d %x, %d %x\n", a.to,
 			f.data.read(a.to).Prefix(), a.from, f.data.read(a.from).Prefix())
 		f.data.swapHash(a.from, a.to)
 		dirt[2*i] = a.to       // this is wrong, it way over hashes

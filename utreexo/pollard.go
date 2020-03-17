@@ -123,7 +123,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 }
 
 // Hash and swap.  "grabPos" in rowdirt / hashdirt is inefficient because you
-// descend to the place you already just decended to perfom swapNodes.
+// descend to the place you already just decended to perform swapNodes.
 
 // rem2 outline:
 // perform swaps & hash, then select new tops.
@@ -368,7 +368,7 @@ func (p *Pollard) grabPos(
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
-// path.  Retruns paths in bottom-to-top order (backwards)
+// path.  Returns paths in bottom-to-top order (backwards)
 // sibs[0] is the node you actually asked for
 func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// interate to descend.  It's like the leafnum, xored with ...1111110

@@ -148,8 +148,8 @@ func fixedPollard(leaves int32) error {
 		adds[j].Hash[4] = uint8(leafCounter >> 24)
 		adds[j].Hash[9] = uint8(0xff)
 
-		// the first utxo addded lives forever.
-		// (prevents leaves from goign to 0 which is buggy)
+		// the first utxo added lives forever.
+		// (prevents leaves from going to 0 which is buggy)
 		adds[j].Remember = true
 		leafCounter++
 	}

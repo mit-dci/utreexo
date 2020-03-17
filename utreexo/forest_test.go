@@ -87,7 +87,7 @@ func Test2Fwd1Back(t *testing.T) {
 
 		worked := f.Verify(keep)
 		if !worked {
-			t.Fatalf("proof at postition %d, length %d failed to verify\n",
+			t.Fatalf("proof at position %d, length %d failed to verify\n",
 				keep.Position, len(keep.Siblings))
 		}
 	}
@@ -147,4 +147,13 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	}
 	fmt.Printf("VerifyBlockProof worked\n")
 	return nil
+}
+
+func TestDeleteNonExisting (t *testing.T) {
+	f := NewForest(nil)
+	deletions := []uint64{0}
+	_, err := f.Modify(nil, deletions)
+	if err == nil {
+		t.Fatal(fmt.Errorf("could delete non-existing leaf 0 from empty forest"))
+	}
 }

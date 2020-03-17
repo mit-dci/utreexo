@@ -246,7 +246,7 @@ func writeProofs(
 	return nil
 }
 
-// genLeafTXO takes in txs from a block and contructs a slice
+// genLeafTXO takes in txs from a block and constructs a slice
 // of LeafTXOs ready to be processed by the utreexo library
 func genLeafTXO(tx *util.Txotx) ([]utreexo.LeafTXO, error) {
 	adds := []utreexo.LeafTXO{}

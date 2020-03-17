@@ -204,7 +204,7 @@ func CheckMagicByte(bytesgiven [4]byte) bool {
 	}
 }
 
-// HasAccess reports whether we have acces to the named file.
+// HasAccess reports whether we have access to the named file.
 // Returns true if HasAccess, false if it doesn't.
 // Does NOT tell us if the file exists or not.
 // File might exist but may not be available to us
