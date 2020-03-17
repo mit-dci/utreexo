@@ -87,7 +87,7 @@ func Test2Fwd1Back(t *testing.T) {
 
 		worked := f.Verify(keep)
 		if !worked {
-			t.Fatalf("proof at postition %d, length %d failed to verify\n",
+			t.Fatalf("proof at position %d, length %d failed to verify\n",
 				keep.Position, len(keep.Siblings))
 		}
 	}

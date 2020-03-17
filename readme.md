@@ -67,7 +67,7 @@ $ ./cmd genproofs -net=testnet # -net=testnet flag needed for testnet. Leave out
 [To resume, just do `./cmd genproofs -net=testnet` again]
 ```
 
-* `genproofs` should take a few hours. It does two things. First, it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk. Second, it saves each TXO and height with LevelDB to make a TXO time-to-live (bascially how long each TXO lasts until it is spent) for caching purposes. This is what the bridge node and archive node would do in a real node.  Next, you can run `cmd ibdsim -net=testnet`; it will perform IBD (initial block download) as a compact node which maintains only a reduced state, and accepts proofs (which are created in the `proof.dat` file during the previous step)
+* `genproofs` should take a few hours. It does two things. First, it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk. Second, it saves each TXO and height with LevelDB to make a TXO time-to-live (basically how long each TXO lasts until it is spent) for caching purposes. This is what the bridge node and archive node would do in a real node.  Next, you can run `cmd ibdsim -net=testnet`; it will perform IBD (initial block download) as a compact node which maintains only a reduced state, and accepts proofs (which are created in the `proof.dat` file during the previous step)
 
 
 ```

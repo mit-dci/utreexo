@@ -63,7 +63,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 			pos = (child(pos, p.height()) ^ 2) | lr
 		}
 
-		// TODO do you need this at all?  If the Verify part already happend, maybe no?
+		// TODO do you need this at all?  If the Verify part already happened, maybe not?
 		// at bottom, populate target if needed
 		// if we don't need this and take it out, will need to change the forget
 		// pop above

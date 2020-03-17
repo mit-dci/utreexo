@@ -111,7 +111,7 @@ func detectSubTreeHeight(
 // where it just looks for a different number of leading 0s.
 // Actually I will write that function here
 
-// higher returns how much higher position is than h.  if postion is at height
+// higher returns how much higher position is than h.  if position is at height
 // h, it returns 0.  if position is lower than h it's undefined (probably 0)
 // untested
 func higher(position uint64, h, forestHeight uint8) uint8 {
@@ -128,7 +128,7 @@ func higher(position uint64, h, forestHeight uint8) uint8 {
 }
 
 // detectHeight finds the current height of your node given the node
-// position and the total forest height.. counts preceeding 1 bits.
+// position and the total forest height.. counts preceding 1 bits.
 func detectHeight(position uint64, forestHeight uint8) uint8 {
 	marker := uint64(1 << forestHeight)
 	var h uint8
@@ -384,7 +384,7 @@ func reversePolNodeSlice(a []polNode) {
 // topUp takes a slice of arrows (in order) and returns an expanded slice of
 // arrows that contains all the parents of the given slice up to roots
 func topUp(rows [][]uint64, fh uint8) {
-	// kindof inefficent since we actually start at row 1 and rows[0] is
+	// kindof inefficient since we actually start at row 1 and rows[0] is
 	// always empty when we call this... but mergeSortedSlices has the
 	// shortcut so shouldn't matter
 	nextrow := []uint64{}
@@ -409,8 +409,8 @@ func topUp(rows [][]uint64, fh uint8) {
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into
-// a signle sorted slice, discarding duplicates.  (but not detecting or discarding
-// duplicates within a signle slice)
+// a single sorted slice, discarding duplicates.  (but not detecting or discarding
+// duplicates within a single slice)
 // (eg [1, 5, 8, 9], [2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6, 8, 9]
 func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 	maxa := len(a)

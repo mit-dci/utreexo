@@ -364,7 +364,7 @@ func genTXOEndHeight(tx *simutil.Txotx, utxoCounter *uint32, height uint32) (sor
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into
-// a signle sorted slice, discarding duplicates.
+// a single sorted slice, discarding duplicates.
 // (eg [1, 5, 8, 9], [2, 3, 4, 5, 6] -> [1, 2, 3, 4, 5, 6, 8, 9]
 func mergeSortedSlices(a sortableTxoSlice, b sortableTxoSlice) (c sortableTxoSlice) {
 	maxa := len(a)
