@@ -154,6 +154,7 @@ func TestDeleteNonExisting(t *testing.T) {
 	deletions := []uint64{0}
 	_, err := f.Modify(nil, deletions)
 	if err == nil {
-		t.Fatal(fmt.Errorf("can't delete non-existing leaf 0 from empty forest"))
+		t.Fatal(fmt.Errorf(
+			"shouldn't be able to delete non-existing leaf 0 from empty forest"))
 	}
 }
