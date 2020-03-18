@@ -3,7 +3,8 @@ package util
 import (
 	"crypto/sha256"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 )
 
 type Hash [32]byte
@@ -40,19 +41,35 @@ type Txotx struct {
 	DeathHeights []uint32
 }
 
-//Header data read off the .dat file.
-//FileNum is the .dat file number
-//Offset is where it is in the .dat file.
-//CurrentHeaderHash is the 80byte header double hashed
-//Prevhash is the 32 byte previous header included in the 80byte header.
-type RawHeaderData struct {
-	CurrentHeaderHash [32]byte
-	Prevhash          [32]byte
-	FileNum           [4]byte
-	Offset            [4]byte
+// Tx defines a bitcoin transaction that provides easier and more efficient
+// manipulation of raw transactions.  It also memoizes the hash for the
+// transaction on its first access so subsequent accesses don't have to repeat
+// the relatively expensive hashing operations.
+type ProofTx struct {
+	msgTx         *wire.MsgTx // Underlying MsgTx
+	txHash        *Hash       // Cached transaction hash
+	txHashWitness *Hash       // Cached transaction witness hash
+	txHasWitness  *bool       // If the transaction has witness data
+	txIndex       int         // Position within a block or TxIndexUnknown
 }
 
-type BlockToWrite struct {
-	Txs    []*wire.MsgTx
+// RawHeaderData is used for blk*.dat offsetfile building
+// Used for ordering blocks as they aren't stored in order in the blk files.
+// Includes 32 bytes of sha256 hash along with other variables
+// needed for offsetfile building.
+type RawHeaderData struct {
+	// CurrentHeaderHash is the double hashed 32 byte header
+	CurrentHeaderHash [32]byte
+	// Prevhash is the 32 byte previous header included in the 80byte header.
+	// Needed for ordering
+	Prevhash [32]byte
+	// FileNum is the blk*.dat file number
+	FileNum [4]byte
+	// Offset is where it is in the .dat file.
+	Offset [4]byte
+}
+
+type TxToWrite struct {
+	Txs    []*btcutil.Tx
 	Height int32
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
 )
@@ -13,14 +13,13 @@ import (
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
-	*utreexo.Forest, int32, int32, int32, error) {
+	forest *utreexo.Forest, height int32, lastIndexOffsetHeight int32,
+	pOffset int32, err error) {
 
 	var offsetInitialized, forestInitialized bool
 
 	// bool to check if the offsetfile is present
 	offsetInitialized = util.HasAccess(util.OffsetFilePath)
-
-	var lastIndexOffsetHeight int32
 
 	// Default behavior is that the user should delete all offsetdata
 	// if they have new blk*.dat files to sync
@@ -42,9 +41,6 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 
 	// bool to check if the forestdata is present
 	forestInitialized = util.HasAccess(util.ForestFilePath)
-
-	var forest *utreexo.Forest
-	var height, pOffset int32
 
 	if forestInitialized {
 		var err error
@@ -70,7 +66,7 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 		}
 	}
 
-	return forest, height, lastIndexOffsetHeight, pOffset, nil
+	return
 }
 
 // saveBridgeNodeData saves the state of the bridgenode so that when the

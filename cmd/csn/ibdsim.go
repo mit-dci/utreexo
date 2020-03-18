@@ -2,8 +2,9 @@ package csn
 
 import (
 	"fmt"
-	"github.com/mit-dci/lit/wire"
 	"os"
+
+	"github.com/btcsuite/btcd/wire"
 )
 
 var maxmalloc uint64

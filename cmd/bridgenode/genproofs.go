@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
@@ -37,7 +37,7 @@ func BuildProofs(
 	// Creates all the directories needed for bridgenode
 	util.MakePaths()
 
-	// forest is a
+	// Init forest and variables. Resumes if the data directory exists
 	forest, height, lastIndexOffsetHeight, pOffset, err :=
 		initBridgeNodeState(net, offsetFinished)
 	if err != nil {
@@ -66,11 +66,11 @@ func BuildProofs(
 	fmt.Println("Building Proofs and ttldb...")
 
 	// To send/receive blocks from blockreader()
-	bchan := make(chan util.BlockToWrite, 10)
+	txChan := make(chan util.TxToWrite, 10)
 
 	// Reads block asynchronously from .dat files
 	go util.BlockReader(
-		bchan, lastIndexOffsetHeight, height, util.OffsetFilePath)
+		txChan, lastIndexOffsetHeight, height, util.OffsetFilePath)
 
 	// Where the proofs for txs exist
 	pFile, err := os.OpenFile(
@@ -88,21 +88,23 @@ func BuildProofs(
 
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
-		b := <-bchan
+		// Receive txs from the asynchronous blk*.dat reader
+		txs := <-txChan
 
-		err = writeProofs(b.Txs, b.Height,
+		err = writeProofs(txs.Txs, txs.Height,
 			pFile, pOffsetFile, forest, &pOffset)
 		if err != nil {
 			panic(err)
 		}
 
-		err = ttl.WriteBlock(b.Txs, b.Height+1, batchan, &batchwg)
+		// Save the ttl values to leveldb
+		err = ttl.WriteBlock(txs.Txs, txs.Height+1, batchan, &batchwg)
 		if err != nil {
 			panic(err)
 		}
 
-		if b.Height%10000 == 0 {
-			fmt.Println("On block :", b.Height+1)
+		if txs.Height%10000 == 0 {
+			fmt.Println("On block :", txs.Height+1)
 		}
 
 		// Check if stopSig is no longer false
@@ -133,79 +135,22 @@ func BuildProofs(
 
 }
 
-// Here we write proofs for all the txs.
-// All the inputs are saved as 32byte sha256 hashes.
-// All the outputs are saved as LeafTXO type.
-func writeProofs(
-	tx []*wire.MsgTx,
-	height int32,
-	pFile *os.File,
-	pOffsetFile *os.File,
-	forest *utreexo.Forest,
-	pOffset *int32) error {
+// writeProofs writes the proofs to the given pFile and modifies the Utreexo
+// Forest. Main function for generating proofs
+func writeProofs(txs []*btcutil.Tx, height int32, pFile *os.File, pOffsetFile *os.File,
+	forest *utreexo.Forest, pOffset *int32) error {
 
-	var blockAdds []utreexo.LeafTXO
-	var blockDels []utreexo.Hash
-	var plustime time.Duration
+	// generate the adds and dels in LeafTXO format
+	blockAdds, blockDels, err := genAddDel(txs)
 
-	blocktxs := []*util.Txotx{new(util.Txotx)}
-	plusstart := time.Now()
-
-	for blockindex, tx := range tx {
-		for _, in := range tx.TxIn {
-			if blockindex > 0 { // skip coinbase "spend"
-				opString := in.PreviousOutPoint.String()
-				h := utreexo.HashFromString(opString)
-				blockDels = append(blockDels, h)
-			}
-		}
-
-		//creates all txos up to index indicated
-		txhash := tx.TxHash()
-		numoutputs := uint32(len(tx.TxOut))
-
-		blocktxs[len(blocktxs)-1].Unspendable = make([]bool, numoutputs)
-		//Adds z and index for all OP_RETURN transactions
-		//We don't keep track of the OP_RETURNS so probably can get rid of this
-		for i, out := range tx.TxOut {
-			if util.IsUnspendable(out) {
-				// Skip all the unspendables
-				blocktxs[len(blocktxs)-1].Unspendable[i] = true
-			} else {
-				//txid := tx.TxHash().String()
-				blocktxs[len(blocktxs)-1].Outputtxid = txhash.String()
-			}
-		}
-		// done with this txotx, make the next one and append
-		blocktxs = append(blocktxs, new(util.Txotx))
-
-	}
-	//TODO Get rid of this. This eats up cpu
-	//we started a tx but shouldn't have
-	blocktxs = blocktxs[:len(blocktxs)-1]
-
-	for _, b := range blocktxs {
-		adds, err := genLeafTXO(b)
-		if err != nil {
-			panic(err)
-		}
-		for _, add := range adds {
-			blockAdds = append(blockAdds, add)
-		}
-	}
-
-	donetime := time.Now()
-	plustime += donetime.Sub(plusstart)
-
-	// Forget all utxos that get spent on the same block
-	// they are created.
-	utreexo.DedupeHashSlices(&blockAdds, &blockDels)
-
+	// generate block proof. Errors if the tx cannot be proven
+	// Should never error out with genproofs
 	blockProof, err := forest.ProveBlock(blockDels)
 	if err != nil {
 		return fmt.Errorf("ProveBlock failed at block %d %s %s", height+1, forest.Stats(), err.Error())
 	}
 
+	// Sanity check. Don't really need it for now
 	ok := forest.VerifyBlockProof(blockProof)
 	if !ok {
 		return fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
@@ -215,46 +160,105 @@ func writeProofs(
 	// Later this could also be changed to magic bytes
 	_, err = pFile.Write(utreexo.U32tB(uint32(height + 1)))
 	if err != nil {
-		panic(err)
+		return err
 	}
+
+	// convert blockproof struct to bytes
 	p := blockProof.ToBytes()
 
 	// write the offset for a block
 	_, err = pOffsetFile.Write(util.I32tB(*pOffset))
 	if err != nil {
-		panic(err)
+		return err
 	}
+
+	// Updates the global proof offset. Need for resuming purposes
 	*pOffset += int32(len(p)) + int32(8) // add 8 for height bytes and load size
+
 	// write the size of the proof
 	_, err = pFile.Write(utreexo.U32tB(uint32(len(p))))
 	if err != nil {
-		panic(err)
+		return err
 	}
 	// Write the actual proof
 	_, err = pFile.Write(p)
 	if err != nil {
-		panic(err)
+		return err
 	}
+
+	// Modify the forest
 	_, err = forest.Modify(blockAdds, blockProof.Targets)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	// empty the blockAdds and blockDels that were written
-	blockAdds = []utreexo.LeafTXO{}
-	blockDels = []utreexo.Hash{}
-
 	return nil
 }
 
-// genLeafTXO takes in txs from a block and constructs a slice
+// genAddDel takes in a raw Bitcoin message tx and outputs a
+// slice of LeafTXOs to be added and a slice of hashes to be
+// deleted.
+func genAddDel(txs []*btcutil.Tx) (
+	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash, err error) {
+
+	blocktxs := []*util.Txotx{new(util.Txotx)}
+
+	for blockindex, tx := range txs {
+		for _, in := range tx.MsgTx().TxIn {
+			if blockindex > 0 { // skip coinbase "spend"
+				opString := in.PreviousOutPoint.String()
+				// TODO replace with TXID and index
+				h := utreexo.HashFromString(opString)
+				blockDels = append(blockDels, h)
+			}
+		}
+		// Set txid aka txhash
+		blocktxs[len(blocktxs)-1].Outputtxid = tx.MsgTx().TxHash().String()
+
+		// creates all txos up to index indicated
+		numoutputs := uint32(len(tx.MsgTx().TxOut))
+
+		// For tagging each TXO as unspendable
+		blocktxs[len(blocktxs)-1].Unspendable = make([]bool, numoutputs)
+		for i, out := range tx.MsgTx().TxOut {
+			if util.IsUnspendable(out) {
+				// Tag unspendable
+				blocktxs[len(blocktxs)-1].Unspendable[i] = true
+			}
+		}
+		// done with this txotx, make the next one and append
+		blocktxs = append(blocktxs, new(util.Txotx))
+
+	}
+	// TODO Get rid of this. This eats up cpu
+	// we started a tx but shouldn't have
+	blocktxs = blocktxs[:len(blocktxs)-1]
+
+	for _, b := range blocktxs {
+		adds, err := genLeafTXO(b)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, add := range adds {
+			blockAdds = append(blockAdds, add)
+		}
+	}
+
+	// Forget all utxos that get spent on the same block
+	// they are created.
+	utreexo.DedupeHashSlices(&blockAdds, &blockDels)
+	return
+}
+
+// genLeafTXO takes in txs from a block and contructs a slice
 // of LeafTXOs ready to be processed by the utreexo library
+// skips all OP_RETURN transactions
 func genLeafTXO(tx *util.Txotx) ([]utreexo.LeafTXO, error) {
 	adds := []utreexo.LeafTXO{}
 	for i := 0; i < len(tx.Unspendable); i++ {
 		if tx.Unspendable[i] {
 			continue
 		}
-		utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
+		utxostring := fmt.Sprintf("%s:%d", tx.Outputtxid, i)
 		addData := utreexo.LeafTXO{Hash: utreexo.HashFromString(utxostring)}
 		adds = append(adds, addData)
 	}
@@ -278,12 +282,12 @@ func stopBuildProofs(
 	default:
 		select {
 		default:
+			fmt.Println("offsetfile incomplete, removing...")
 			// May not work sometimes.
 			err := os.RemoveAll(util.OffsetDirPath)
 			if err != nil {
 				fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
 			}
-			fmt.Println("offsetfile incomplete, removing...")
 			fmt.Println("Exiting...")
 			os.Exit(0)
 		}

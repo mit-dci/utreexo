@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 )
 
 // Hash is just [32]byte
@@ -77,14 +78,14 @@ func CheckNet(net wire.BitcoinNet) {
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with BlockToWrite type.
 func BlockReader(
-	bchan chan BlockToWrite, currentOffsetHeight, height int32, offsetfile string) {
+	txChan chan TxToWrite, currentOffsetHeight, height int32, offsetfile string) {
 	for height != currentOffsetHeight {
-		block, err := GetRawBlockFromFile(height, offsetfile)
+		txs, err := GetRawBlockFromFile(height, offsetfile)
 		if err != nil {
 			panic(err)
 		}
-		b := BlockToWrite{Txs: block, Height: height}
-		bchan <- b
+		send := TxToWrite{Txs: txs, Height: height}
+		txChan <- send
 		height++
 	}
 }
@@ -93,13 +94,15 @@ func BlockReader(
 // returns those blocks.
 // Skips the genesis block. If you search for block 0, it will give you
 // block 1.
-func GetRawBlockFromFile(tipnum int32, offsetFileName string) ([]*wire.MsgTx, error) {
+func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
+	txs []*btcutil.Tx, err error) {
+
 	var datFile [4]byte
 	var offset [4]byte
 
 	offsetFile, err := os.Open(offsetFileName)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// offset file consists of 8 bytes per block
@@ -114,7 +117,7 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) ([]*wire.MsgTx, er
 	// Channel to alert stopParse() that offset
 	f, err := os.Open(fileName)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// +8 skips the 8 bytes of magicbytes and load size
 	f.Seek(int64(BtU32(offset[:])+8), 0)
@@ -123,15 +126,19 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) ([]*wire.MsgTx, er
 	b := new(wire.MsgBlock)
 	err = b.Deserialize(f)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	f.Close()
 	offsetFile.Close()
 
-	return b.Transactions, nil
+	for _, msgTx := range b.Transactions {
+		txs = append(txs, btcutil.NewTx(msgTx))
+	}
+
+	return
 }
 
-// uint32 to 4 bytes.  Always works.
+// U32tB converts uint32 to 4 bytes.  Always works.
 func U32tB(i uint32) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, i)
@@ -189,6 +196,25 @@ func LBtU32(b []byte) uint32 {
 	buf := bytes.NewBuffer(b)
 	binary.Read(buf, binary.LittleEndian, &i)
 	return i
+}
+
+// BtU64 : 8 bytes to uint64.  returns ffff. if it doesn't work.
+func BtU64(b []byte) uint64 {
+	if len(b) != 8 {
+		fmt.Printf("Got %x to BtU64 (%d bytes)\n", b, len(b))
+		return 0xffffffffffffffff
+	}
+	var i uint64
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, &i)
+	return i
+}
+
+// U64tB : uint64 to 8 bytes.  Always works.
+func U64tB(i uint64) []byte {
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, i)
+	return buf.Bytes()
 }
 
 // CheckMagicByte checks for the Bitcoin magic bytes.

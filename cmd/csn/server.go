@@ -5,7 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
@@ -16,7 +17,7 @@ import (
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as LeafTXO type.
 func genPollard(
-	tx []*wire.MsgTx,
+	tx []*btcutil.Tx,
 	height int32,
 	totalTXOAdded *int,
 	lookahead int32,
@@ -27,28 +28,71 @@ func genPollard(
 	lvdb *leveldb.DB,
 	p *utreexo.Pollard) error {
 
-	var blockAdds []utreexo.LeafTXO
-	blocktxs := []*util.Txotx{new(util.Txotx)}
 	plusstart := time.Now()
 
+	blockAdds, err := genAdds(tx, lvdb, height, totalTXOAdded, lookahead)
+
+	donetime := time.Now()
+	plustime += donetime.Sub(plusstart)
+
+	// Grab the proof by height
+	bpBytes, err := getProof(uint32(height), pFile, pOffsetFile)
+	if err != nil {
+		return err
+	}
+	bp, err := utreexo.FromBytesBlockProof(bpBytes)
+	if err != nil {
+		return err
+	}
+
+	// Fills in the nieces for verification/deletion
+	err = p.IngestBlockProof(bp)
+	if err != nil {
+		return err
+	}
+
+	// totalTXOAdded += len(blockAdds) // TODO
+	*totalDels += len(bp.Targets)
+
+	// Utreexo tree modification. blockAdds are the added txos and
+	// bp.Targets are the positions of the leaves to delete
+	err = p.Modify(blockAdds, bp.Targets)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func genAdds(tx []*btcutil.Tx, lvdb *leveldb.DB, height int32,
+	totalTXOAdded *int, lookahead int32) (
+	blockAdds []utreexo.LeafTXO, err error) {
+
+	blocktxs := []*util.Txotx{new(util.Txotx)}
+	var msgTxs []*wire.MsgTx
+
+	// grab all the MsgTx
 	for _, tx := range tx {
+		msgTxs = append(msgTxs, tx.MsgTx())
+	}
+	for _, msgTx := range msgTxs {
 
-		//creates all txos up to index indicated
-		txhash := tx.TxHash()
-		//fmt.Println(txhash.String())
-		numoutputs := uint32(len(tx.TxOut))
+		// creates all txos up to index indicated
+		numoutputs := uint32(len(msgTx.TxOut))
 
+		// Cache the txhash as it's expensive to generate
+		txhash := msgTx.TxHash().String()
+
+		// For tagging each TXO as unspenable
 		blocktxs[len(blocktxs)-1].Unspendable = make([]bool, numoutputs)
-		//Adds z and index for all OP_RETURN transactions
-		//We don't keep track of the OP_RETURNS so probably can get rid of this
-		for i, out := range tx.TxOut {
+		for i, out := range msgTx.TxOut {
 			if util.IsUnspendable(out) {
-				// Skip all the unspendables
+				// Tag all the unspenables
 				blocktxs[len(blocktxs)-1].Unspendable[i] = true
 			} else {
-				//txid := tx.TxHash().String()
-				blocktxs[len(blocktxs)-1].Outputtxid = txhash.String()
-				blocktxs[len(blocktxs)-1].DeathHeights = make([]uint32, numoutputs)
+				blocktxs[len(blocktxs)-1].Outputtxid = txhash
+
+				blocktxs[len(blocktxs)-1].DeathHeights =
+					make([]uint32, numoutputs)
 			}
 		}
 
@@ -65,7 +109,7 @@ func genPollard(
 	for _, blocktx := range blocktxs {
 		adds, err := genLeafTXO(blocktx, uint32(height+1))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, a := range adds {
 
@@ -75,35 +119,9 @@ func genPollard(
 			*totalTXOAdded++
 
 			blockAdds = append(blockAdds, a)
-			//fmt.Println("adds:", blockAdds)
 		}
 	}
-	donetime := time.Now()
-	plustime += donetime.Sub(plusstart)
-	bpBytes, err := getProof(uint32(height), pFile, pOffsetFile)
-	if err != nil {
-		return err
-	}
-	bp, err := utreexo.FromBytesBlockProof(bpBytes)
-	if err != nil {
-		return err
-	}
-	if len(bp.Targets) > 0 {
-		fmt.Printf("block proof for block %d targets: %v\n", height+1, bp.Targets)
-	}
-	err = p.IngestBlockProof(bp)
-	if err != nil {
-		return err
-	}
-
-	// totalTXOAdded += len(blockAdds)
-	*totalDels += len(bp.Targets)
-
-	err = p.Modify(blockAdds, bp.Targets)
-	if err != nil {
-		return err
-	}
-	return nil
+	return
 }
 
 // Gets the proof for a given block height
@@ -159,7 +177,7 @@ func genLeafTXO(tx *util.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
 		}
 		// if the DeathHeights is 0, it means it's a UTXO. Shouldn't be remembered
 		if tx.DeathHeights[i] == 0 {
-			utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
+			utxostring := fmt.Sprintf("%s:%d", tx.Outputtxid, i)
 			addData := utreexo.LeafTXO{
 				Hash:     utreexo.HashFromString(utxostring),
 				Duration: int32(1 << 30)} // arbitrary big number
@@ -170,7 +188,7 @@ func genLeafTXO(tx *util.Txotx, height uint32) ([]utreexo.LeafTXO, error) {
 			// The value is just the duration of how many blocks
 			// it took for the TXO to be spent
 			// ttl is just 'SpentBlockHeight - CreatedBlockHeight'
-			utxostring := fmt.Sprintf("%s;%d", tx.Outputtxid, i)
+			utxostring := fmt.Sprintf("%s:%d", tx.Outputtxid, i)
 			addData := utreexo.LeafTXO{
 				Hash:     utreexo.HashFromString(utxostring),
 				Duration: int32(tx.DeathHeights[i] - height)}
