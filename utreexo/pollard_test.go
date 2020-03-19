@@ -123,7 +123,7 @@ func pollardRandomRemember(blocks int32) error {
 		}
 		fmt.Printf("\n")
 	}
-
+	f.EndForest()
 	return nil
 }
 

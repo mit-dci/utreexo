@@ -85,8 +85,13 @@ func NewForest(forestFile *os.File) *Forest {
 
 	f.data.resize(1)
 
-	f.positions = startRamForestPosition()
+	// f.positions = startRamForestPosition()
+	f.positions = startLevelDBForestPosition("/dev/shm/tempdb")
 	return f
+}
+
+func (f *Forest) EndForest() {
+	f.positions.end()
 }
 
 const sibSwap = false

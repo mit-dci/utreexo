@@ -445,7 +445,6 @@ func (p *Pollard) toFull() (*Forest, error) {
 			ff.data.write(i, sib[0].data)
 			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
 		}
-
 	}
 
 	return ff, nil
@@ -457,6 +456,7 @@ func (p *Pollard) ToString() string {
 	if err != nil {
 		return err.Error()
 	}
+	f.EndForest()
 	return f.ToString()
 }
 
