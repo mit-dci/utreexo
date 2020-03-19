@@ -7,6 +7,7 @@ import (
 
 // Directory paths
 var OffsetDirPath string = filepath.Join(".", "offsetdata")
+var RevOffsetDirPath string = filepath.Join(".", "revdata")
 var ProofDirPath string = filepath.Join(".", "proofdata")
 var ForestDirPath string = filepath.Join(".", "forestdata")
 var PollardDirPath string = filepath.Join(".", "pollarddata")
@@ -37,10 +38,14 @@ var ForestLastSyncedBlockHeightFilePath string = filepath.Join(ForestDirPath, "f
 var PollardFilePath string = filepath.Join(PollardDirPath, "pollardfile.dat")
 var PollardHeightFilePath string = filepath.Join(PollardDirPath, "pollardheight.dat")
 
-// MakePaths makes the necessary paths for all files
+// RevOffsetFilePath is the path for rev data file paths
+var RevOffsetFilePath string = filepath.Join(RevOffsetDirPath, "revoffsetfile")
+
+// MakePaths makes the neccessary paths for all files
 func MakePaths() {
 	os.MkdirAll(OffsetDirPath, os.ModePerm)
 	os.MkdirAll(ProofDirPath, os.ModePerm)
 	os.MkdirAll(ForestDirPath, os.ModePerm)
 	os.MkdirAll(PollardDirPath, os.ModePerm)
+	os.MkdirAll(RevOffsetDirPath, os.ModePerm)
 }
