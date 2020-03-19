@@ -196,7 +196,7 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 	// happens before the actual swap, so swapping a and b
 	for i := uint64(0); i < run; i++ {
 		f.positions.move(f.data.read(a+i), b+i)
-		f.positions.move(f.data.read(b+i), b+i)
+		f.positions.move(f.data.read(b+i), a+i)
 	}
 
 	// start at the bottom and go to the top
