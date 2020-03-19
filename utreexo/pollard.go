@@ -422,8 +422,9 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 // a good toString method for  forest.
 //func (p *Pollard) toFull() (*Forest, error) {
 func (p *Pollard) toFull() (*Forest, error) {
-
-	ff := NewForest(nil)
+	// ff := NewForest(nil)
+	// NOTE not a real forest here
+	ff := new(Forest)
 	ff.height = p.height()
 	ff.numLeaves = p.numLeaves
 	ff.data = new(ramForestData)
@@ -456,7 +457,6 @@ func (p *Pollard) ToString() string {
 	if err != nil {
 		return err.Error()
 	}
-	f.EndForest()
 	return f.ToString()
 }
 
