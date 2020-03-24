@@ -67,7 +67,7 @@ func lookerUpperWorker(
 	di.blockPos, di.txPos = blockPos, txPos
 
 	// build string and hash it (nice that this in parallel too)
-	utxostring := fmt.Sprintf("%s;%d", txid, txPos)
+	utxostring := fmt.Sprintf("%s:%d", txid, txPos)
 	opHash := util.HashFromString(utxostring)
 
 	// make DB lookup
@@ -80,7 +80,7 @@ func lookerUpperWorker(
 		panic(err)
 	}
 	if len(ttlbytes) != 4 {
-		fmt.Printf("val len %d, op %s;%d\n", len(ttlbytes), txid, txPos)
+		fmt.Printf("val len %d, op %s:%d\n", len(ttlbytes), txid, txPos)
 		panic("ded")
 	}
 

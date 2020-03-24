@@ -55,13 +55,13 @@ func buildOffsetFile(tip util.Hash, offsetfinished chan bool) (int32, error) {
 
 	// write the last height of the offsetfile
 	// needed info for the main genproofs processes
-	currentOffsetHeightFile, err := os.OpenFile(
+	LastIndexOffsetHeightFile, err := os.OpenFile(
 		util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
-	currentOffsetHeightFile.Write(util.U32tB(uint32(lastOffsetHeight))[:])
-	currentOffsetHeightFile.Close()
+	LastIndexOffsetHeightFile.Write(util.U32tB(uint32(lastOffsetHeight))[:])
+	LastIndexOffsetHeightFile.Close()
 
 	// Pass true to let stopParse() know we're finished
 	// and so it doesn't delete the offsetfile
@@ -79,17 +79,19 @@ func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
 		panic(err)
 	}
 
-	fstat, err := f.Stat()
+	fStat, err := f.Stat()
 	if err != nil {
 		panic(err)
 	}
+
+	fSize := fStat.Size()
 
 	defer f.Close()
 	loc := int64(0)
 	offset := uint32(0) // where the block is located from the beginning of the file
 
 	// until offset is at the end of the file
-	for loc != fstat.Size() {
+	for loc != fSize {
 		b := new(util.RawHeaderData)
 		copy(b.FileNum[:], util.U32tB(fileNum))
 		copy(b.Offset[:], util.U32tB(offset))

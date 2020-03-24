@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
 	bridge "github.com/mit-dci/utreexo/cmd/bridgenode"
 	"github.com/mit-dci/utreexo/cmd/csn"
 )

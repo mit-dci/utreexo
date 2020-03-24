@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 //writeBlock sends off ttl info to dbWorker to be written to ttldb
-func WriteBlock(tx []*wire.MsgTx, tipnum int32,
+func WriteBlock(tx []*btcutil.Tx, tipnum int32,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) error {
 
 	blockBatch := new(leveldb.Batch)
 
 	for blockindex, tx := range tx {
-		for _, in := range tx.TxIn {
+		for _, in := range tx.MsgTx().TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
 				//hashing because blockbatch wants a byte slice
 				//TODO Maybe don't convert to a string?

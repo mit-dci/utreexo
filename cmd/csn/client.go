@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/mit-dci/lit/wire"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -52,10 +52,10 @@ func IBDClient(net wire.BitcoinNet,
 	var stop bool
 
 	// To send/receive blocks from blockreader()
-	bchan := make(chan util.BlockToWrite, 10)
+	txChan := make(chan util.TxToWrite, 10)
 
 	// Reads blocks asynchronously from blk*.dat files
-	go util.BlockReader(bchan,
+	go util.BlockReader(txChan,
 		lastIndexOffsetHeight, height, util.OffsetFilePath)
 
 	pFile, err := os.OpenFile(
@@ -75,9 +75,9 @@ func IBDClient(net wire.BitcoinNet,
 
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
-		b := <-bchan
+		txs := <-txChan
 
-		err = genPollard(b.Txs, b.Height, &totalTXOAdded,
+		err = genPollard(txs.Txs, txs.Height, &totalTXOAdded,
 			lookahead, &totalDels, plustime, pFile, pOffsetFile, lvdb, &p)
 		if err != nil {
 			panic(err)
