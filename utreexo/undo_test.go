@@ -60,9 +60,8 @@ func undoOnceRandom(blocks int32) error {
 		}
 		fmt.Printf(f.ToString())
 		fmt.Printf(sc.ttlString())
-		for h, p := range f.positionMap {
-			fmt.Printf("%x@%d ", h[:4], p)
-		}
+
+		fmt.Printf(f.PrintPositionMap())
 		err = f.PosMapSanity()
 		if err != nil {
 			return err
@@ -76,9 +75,7 @@ func undoOnceRandom(blocks int32) error {
 				return err
 			}
 			fmt.Printf("\n post undo map: ")
-			for h, p := range f.positionMap {
-				fmt.Printf("%x@%d ", h[:4], p)
-			}
+			fmt.Printf(f.PrintPositionMap())
 			sc.BackOne(adds, delHashes)
 		}
 
@@ -138,9 +135,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	for i, h := range undoneTops {
 		fmt.Printf("undoneTops %d %x\n", i, h)
 	}
-	for h, p := range f.positionMap {
-		fmt.Printf("%x@%d ", h[:4], p)
-	}
+	fmt.Printf(f.PrintPositionMap())
 	fmt.Printf("tops: ")
 	for i, _ := range beforeTops {
 		fmt.Printf("pre %04x post %04x ", beforeTops[i][:4], undoneTops[i][:4])

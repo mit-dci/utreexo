@@ -43,7 +43,9 @@ type Forest struct {
 	// at that point to do runs of i/o).  Not sure about "deleting" as it
 	// might not be needed at all with a slice.
 
-	positionMap map[MiniHash]uint64 // map from hashes to positions.
+	positions ForestPosition
+
+	// positionMap  map[MiniHash]uint64 // map from hashes to positions.
 	// Inverse of forestMap for leaves.
 
 	// -------------------- following are just for testing / benchmarking
@@ -82,8 +84,14 @@ func NewForest(forestFile *os.File) *Forest {
 	}
 
 	f.data.resize(1)
-	f.positionMap = make(map[MiniHash]uint64)
+
+	// f.positions = startRamForestPosition()
+	f.positions = startLevelDBForestPosition("/dev/shm/tempdb")
 	return f
+}
+
+func (f *Forest) EndForest() {
+	f.positions.end()
 }
 
 const sibSwap = false
@@ -181,8 +189,8 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 	}
 	if height == 0 {
 		f.data.swapHash(s.from, s.to)
-		f.positionMap[f.data.read(s.to).Mini()] = s.to
-		f.positionMap[f.data.read(s.from).Mini()] = s.from
+		f.positions.move(f.data.read(s.to), s.to)
+		f.positions.move(f.data.read(s.from), s.from)
 		return nil
 	}
 	// fmt.Printf("swapnodes %v\n", s)
@@ -192,8 +200,8 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 
 	// happens before the actual swap, so swapping a and b
 	for i := uint64(0); i < run; i++ {
-		f.positionMap[f.data.read(a+i).Mini()] = b + i
-		f.positionMap[f.data.read(b+i).Mini()] = a + i
+		f.positions.move(f.data.read(a+i), b+i)
+		f.positions.move(f.data.read(b+i), a+i)
 	}
 
 	// start at the bottom and go to the top
@@ -312,7 +320,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
 func (f *Forest) cleanup(overshoot uint64) {
 	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
-		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
+		f.positions.rem(f.data.read(p)) // clear position data
 		// TODO ^^^^ that probably does nothing. or at least should...
 		f.data.write(p, empty) // clear forest
 	}
@@ -328,7 +336,8 @@ func (f *Forest) addv2(adds []LeafTXO) {
 
 	for _, add := range adds {
 		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
-		f.positionMap[add.Mini()] = f.numLeaves
+		f.positions.add(add.Hash, utxoData{pos: f.numLeaves, extra: nil})
+		// TODO put in extradata
 
 		tops, _ := getTopsReverse(f.numLeaves, f.height)
 		pos := f.numLeaves
@@ -460,10 +469,10 @@ func (f *Forest) sanity() error {
 				f.numLeaves, len(tops), t)
 		}
 	}
-	if uint64(len(f.positionMap)) > f.numLeaves {
-		return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
-			len(f.positionMap), f.numLeaves)
-	}
+	// if uint64(len(f.positionMap)) > f.numLeaves {
+	// return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
+	// len(f.positionMap), f.numLeaves)
+	// }
 
 	return nil
 }
@@ -471,9 +480,10 @@ func (f *Forest) sanity() error {
 // PosMapSanity is costly / slow: check that everything in posMap is correct
 func (f *Forest) PosMapSanity() error {
 	for i := uint64(0); i < f.numLeaves; i++ {
-		if f.positionMap[f.data.read(i).Mini()] != i {
+
+		if f.positions.read(f.data.read(i)).pos != i {
 			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
-				f.data.read(i).Prefix(), f.positionMap[f.data.read(i).Mini()], i)
+				f.data.read(i).Prefix(), f.positions.read(f.data.read(i)).pos, i)
 		}
 	}
 	return nil
@@ -494,7 +504,7 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 		d.f = forestFile
 		f.data = d
 	}
-	f.positionMap = make(map[MiniHash]uint64)
+	f.positions = startRamForestPosition()
 
 	// This restores the numLeaves
 	var byteLeaves [8]byte
@@ -509,14 +519,10 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	var i uint64
 	fmt.Printf("%d iterations to do\n", f.numLeaves)
 	for i = uint64(0); i < f.numLeaves; i++ {
-		f.positionMap[f.data.read(i).Mini()] = i
-
+		f.positions.add(f.data.read(i), utxoData{pos: i})
 		if i%uint64(100000) == 0 && i != uint64(0) {
 			fmt.Printf("Done %d iterations\n", i)
 		}
-	}
-	if f.positionMap == nil {
-		return nil, fmt.Errorf("Generated positionMap is nil")
 	}
 
 	// This restores the height
@@ -532,15 +538,17 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	return f, nil
 }
 
-func (f *Forest) PrintPositionMap(file *os.File) {
+func (f *Forest) PrintPositionMap() string {
 	var s string
-	for m, pos := range f.positionMap {
-		s += fmt.Sprintf("pos %d, leaf %x\n", pos, m)
+	for i := uint64(0); i < f.numLeaves; i++ {
+		u := f.positions.read(f.data.read(i))
+		s += fmt.Sprintf("pos %d, leaf %x\n", u.pos, f.data.read(i).Prefix())
 	}
-	_, err := file.WriteString(s)
-	if err != nil {
-		panic(err)
-	}
+	return s
+	// _, err := file.WriteString(s)
+	// if err != nil {
+	// panic(err)
+	// }
 }
 
 // WriteForest writes the numLeaves and height to miscForestFile
@@ -570,8 +578,8 @@ func (f *Forest) GetTops() []Hash {
 // Stats :
 func (f *Forest) Stats() string {
 
-	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
-		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
+	s := fmt.Sprintf("numleaves: %d hashesever: %d  forest: %d\n",
+		f.numLeaves, f.HistoricHashes, f.data.size())
 
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
