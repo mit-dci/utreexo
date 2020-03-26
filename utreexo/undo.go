@@ -142,7 +142,7 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
 	for i, _ := range ub.positions {
 		ub.hashes[i] = f.data.read(f.numLeaves + uint64(i))
 		if ub.hashes[i] == empty {
-			fmt.Printf("warning, wrote  empty hash for position %d\n",
+			fmt.Printf("warning, wrote empty hash for position %d\n",
 				ub.positions[i])
 		}
 	}

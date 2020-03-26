@@ -318,11 +318,11 @@ func (f *Forest) reHash(dirt []uint64) error {
 }
 
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
+// Probably don't need this at all, if everything else is working.
 func (f *Forest) cleanup(overshoot uint64) {
 	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
 		f.positions.rem(f.data.read(p)) // clear position data
-		// TODO ^^^^ that probably does nothing. or at least should...
-		f.data.write(p, empty) // clear forest
+		f.data.write(p, empty)          // clear forest
 	}
 }
 
@@ -383,7 +383,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.cleanup(uint64(numdels))
+	// f.cleanup(uint64(numdels))
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
