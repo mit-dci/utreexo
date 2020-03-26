@@ -35,15 +35,21 @@ type ramForestData struct {
 // and it'll crash
 func (r *ramForestData) read(pos uint64) Hash {
 	// if r.m[pos] == empty {
-	// fmt.Printf("\tWARNING!!empty at pos %d\n", pos)
+	// 	fmt.Printf("\tuseless read empty at pos %d\n", pos)
 	// }
 	return r.m[pos]
 }
 
 // writeHash writes a hash.  Don't go out of bounds.
 func (r *ramForestData) write(pos uint64, h Hash) {
+	// if h == empty {
+	// 	fmt.Printf("\tWARNING!! write empty at pos %d\n", pos)
+	// }
 	r.m[pos] = h
 }
+
+// TODO there's lots of empty writes as well, mostly in resize?  Anyway could
+// be optimized away.
 
 // swapHash swaps 2 hashes.  Don't go out of bounds.
 func (r *ramForestData) swapHash(a, b uint64) {
