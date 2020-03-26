@@ -70,6 +70,9 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// place hashes starting at old post-remove numLeaves.  they're off the
 	// forest bounds to the right; they will be shuffled in to the left.
 	for i, h := range ub.hashes {
+		if h == empty {
+			return fmt.Errorf("hash %d in undoblock is empty", i)
+		}
 		f.data.write(f.numLeaves+uint64(i), h)
 		dirt = append(dirt, f.numLeaves+uint64(i))
 	}
@@ -86,12 +89,20 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// update positionMap.  The stuff we do want has been moved in to the forest,
 	// the stuff we don't want has been moved to the right past the edge
 	for p := f.numLeaves; p < prevNumLeaves; p++ {
-		fmt.Printf("put back edge %x@%d from map\n", f.data.read(p).Prefix(), p)
-		f.positions.move(f.data.read(p), p)
+		d := f.data.read(p)
+		if d == empty {
+			return fmt.Errorf("read empty hash at %d", p)
+		}
+		fmt.Printf("put back edge %x@%d from map\n", d.Prefix(), p)
+		f.positions.move(d, p)
 	}
 	for _, p := range ub.positions {
-		fmt.Printf("put back internal %x@%d in map\n", f.data.read(p).Prefix(), p)
-		f.positions.move(f.data.read(p), p)
+		d := f.data.read(p)
+		if d == empty {
+			return fmt.Errorf("read empty hash at %d", p)
+		}
+		fmt.Printf("put back internal %x@%d in map\n", d.Prefix(), p)
+		f.positions.move(d, p)
 	}
 	for _, d := range dirt {
 		// everything that moved needs to have its position updated in the map
@@ -123,12 +134,17 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
 	ub := new(undoBlock)
 	ub.numAdds = uint32(numadds)
 
+	fmt.Printf("%d del, nl %d\n", len(dels), f.numLeaves)
 	ub.positions = dels // the deletion positions, in sorted order
 	ub.hashes = make([]Hash, len(dels))
 
 	// populate all the hashes from the left edge of the forest
 	for i, _ := range ub.positions {
 		ub.hashes[i] = f.data.read(f.numLeaves + uint64(i))
+		if ub.hashes[i] == empty {
+			fmt.Printf("warning, wrote  empty hash for position %d\n",
+				ub.positions[i])
+		}
 	}
 
 	return ub

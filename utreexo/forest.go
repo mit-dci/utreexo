@@ -364,6 +364,10 @@ func (f *Forest) addv2(adds []LeafTXO) {
 func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	numdels, numadds := len(dels), len(adds)
 	delta := int64(numadds - numdels) // watch 32/64 bit
+	if int64(f.numLeaves)+delta < 0 {
+		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
+			len(dels), f.numLeaves)
+	}
 	// remap to expand the forest if needed
 	for int64(f.numLeaves)+delta > int64(1<<f.height) {
 		// fmt.Printf("current cap %d need %d\n",
@@ -420,10 +424,10 @@ func (f *Forest) reMap(destHeight uint8) error {
 	}
 	// I don't think you ever need to remap down.  It really doesn't
 	// matter.  Something to program someday if you feel like it for fun.
-	fmt.Printf("size is %d\n", f.data.size())
+	// fmt.Printf("size is %d\n", f.data.size())
 	// height increase
 	f.data.resize(2 << destHeight)
-	fmt.Printf("size is %d\n", f.data.size())
+	// fmt.Printf("size is %d\n", f.data.size())
 	pos := uint64(1 << destHeight) // leftmost position of row 1
 	reach := pos >> 1              // how much to next row up
 	// start on row 1, row 0 doesn't move
