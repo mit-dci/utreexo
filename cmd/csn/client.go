@@ -16,15 +16,18 @@ import (
 func IBDClient(net wire.BitcoinNet,
 	offsetfile string, ttldb string, sig chan bool) error {
 
-	//Channel to alert the main loop to break
+	// Channel to alert the main loop to break when receiving a quit signal from
+	// the OS
 	stopGoing := make(chan bool, 1)
 
-	//Channel to alert stopTxottl it's ok to exit
+	// Channel to alert stopRunIBD it's ok to exit
+	// Makes it wait for flushing to disk
 	done := make(chan bool, 1)
 
 	go stopRunIBD(sig, stopGoing, done)
 
-	// Check if the blk*.dat file given is a testnet/mainnet/regtest file corresponding to net
+	// Check if the blk*.dat file given is a testnet/mainnet/regtest
+	// file corresponding to net
 	util.CheckNet(net)
 
 	// open database
@@ -37,6 +40,7 @@ func IBDClient(net wire.BitcoinNet,
 	}
 	defer lvdb.Close()
 
+	// Make neccesary directories
 	util.MakePaths()
 
 	p, height, lastIndexOffsetHeight, err := initCSNState()
@@ -44,18 +48,17 @@ func IBDClient(net wire.BitcoinNet,
 		panic(err)
 	}
 
-	lookahead := int32(1000) // keep txos that last less than this many blocks
-	totalTXOAdded := 0
-	totalDels := 0
+	// caching parameter. Keeps txos that are spent before than this many blocks
+	lookahead := int32(1000)
 
-	//bool for stopping the scanner.Scan loop
-	var stop bool
+	// for benchmarking
+	var totalTXOAdded, totalDels int
 
 	// To send/receive blocks from blockreader()
-	txChan := make(chan util.BlockToWrite, 10)
+	blockChan := make(chan util.BlockToWrite, 10)
 
 	// Reads blocks asynchronously from blk*.dat files
-	go util.BlockReader(txChan,
+	go util.BlockReader(blockChan,
 		lastIndexOffsetHeight, height, util.OffsetFilePath)
 
 	pFile, err := os.OpenFile(
@@ -73,12 +76,14 @@ func IBDClient(net wire.BitcoinNet,
 	var plustime time.Duration
 	starttime := time.Now()
 
+	// bool for stopping the below for loop
+	var stop bool
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
-		txs := <-txChan
+		txs := <-blockChan
 
-		err = genPollard(txs.Txs, txs.Height, &totalTXOAdded,
-			lookahead, &totalDels, plustime, pFile, pOffsetFile, lvdb, &p)
+		err = genPollard(txs.Txs, txs.Height, &totalTXOAdded, &totalDels,
+			lookahead, plustime, pFile, pOffsetFile, lvdb, &p)
 		if err != nil {
 			panic(err)
 		}
@@ -95,14 +100,9 @@ func IBDClient(net wire.BitcoinNet,
 				height+1, totalTXOAdded, totalDels, p.Stats(),
 				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 		}
-		/*
-			if height%100000 == 0 {
-				fmt.Printf(MemStatString(fname))
-			}
-		*/
 
-		//Check if stopSig is no longer false
-		//stop = true makes the loop exit
+		// Check if stopSig is no longer false
+		// stop = true makes the loop exit
 		select {
 		case stop = <-stopGoing:
 		default:
