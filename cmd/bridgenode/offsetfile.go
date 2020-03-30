@@ -17,7 +17,7 @@ import (
 // Fairly quick process with one blk*.dat file taking a few seconds.
 //
 // Returns the last block height that it processed.
-func buildOffsetFile(tip util.Hash, offsetfinished chan bool) (int32, error) {
+func buildOffsetFile(tip util.Hash) (int32, error) {
 
 	// Map to store Block Header Hashes for sorting purposes
 	// blk*.dat files aren't in block order so this is needed
@@ -63,9 +63,6 @@ func buildOffsetFile(tip util.Hash, offsetfinished chan bool) (int32, error) {
 	LastIndexOffsetHeightFile.Write(util.U32tB(uint32(lastOffsetHeight))[:])
 	LastIndexOffsetHeightFile.Close()
 
-	// Pass true to let stopParse() know we're finished
-	// and so it doesn't delete the offsetfile
-	offsetfinished <- true
 	return lastOffsetHeight, nil
 }
 

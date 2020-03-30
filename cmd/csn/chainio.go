@@ -2,6 +2,7 @@ package csn
 
 import (
 	"os"
+	"sync"
 
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
@@ -50,30 +51,42 @@ func restorePollardHeight() (height int32, err error) {
 // user restarts, they'll be able to resume.
 // Saves height for ibdsim and pollard itself
 func saveIBDsimData(height int32, p utreexo.Pollard) error {
-	pHeightFile, err := os.OpenFile(
-		util.PollardHeightFilePath, os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
 
-	// write to the heightfile
-	_, err = pHeightFile.WriteAt(util.U32tB(uint32(height)), 0)
-	if err != nil {
-		return err
-	}
-	pHeightFile.Close()
+	var fileWait sync.WaitGroup
 
-	pollardFile, err := os.OpenFile(
-		util.PollardFilePath, os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	err = p.WritePollard(pollardFile)
-	if err != nil {
-		return err
-	}
-	pollardFile.Close()
+	fileWait.Add(1)
+	go func() error {
+		pHeightFile, err := os.OpenFile(
+			util.PollardHeightFilePath, os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		// write to the heightfile
+		_, err = pHeightFile.WriteAt(util.U32tB(uint32(height)), 0)
+		if err != nil {
+			return err
+		}
+		fileWait.Done()
+		return nil
+	}()
 
+	fileWait.Add(1)
+	go func() error {
+
+		pollardFile, err := os.OpenFile(
+			util.PollardFilePath, os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		err = p.WritePollard(pollardFile)
+		if err != nil {
+			return err
+		}
+		fileWait.Done()
+		return nil
+	}()
+
+	fileWait.Wait()
 	return nil
 }
 
