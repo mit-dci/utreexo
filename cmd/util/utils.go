@@ -76,10 +76,10 @@ func CheckNet(net wire.BitcoinNet) {
 
 // BlockReader is a wrapper around GetRawBlockFromFile so that the process
 // can be made into a goroutine. As long as it's running, it keeps sending
-// the entire blocktxs and height to bchan with BlockToWrite type.
+// the entire blocktxs and height to bchan with TxToWrite type.
 func BlockReader(
-	txChan chan TxToWrite, currentOffsetHeight, height int32, offsetfile string) {
-	for height != currentOffsetHeight {
+	txChan chan TxToWrite, lastIndexOffsetHeight, height int32, offsetfile string) {
+	for height != lastIndexOffsetHeight {
 		txs, err := GetRawBlockFromFile(height, offsetfile)
 		if err != nil {
 			panic(err)
@@ -88,6 +88,7 @@ func BlockReader(
 		txChan <- send
 		height++
 	}
+	//close(txChan)
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and

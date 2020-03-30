@@ -29,8 +29,9 @@ func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
 
-//Struct for a tx to be converted to LeafTXOs
+// Struct for a tx to be converted to LeafTXOs
 type Txotx struct {
+	Hash
 	//txid of the tx
 	Outputtxid string
 
@@ -39,6 +40,11 @@ type Txotx struct {
 
 	//When the output is spent
 	DeathHeights []uint32
+}
+
+type ProofAndHeight struct {
+	Proof  []byte
+	Height int32
 }
 
 // Tx defines a bitcoin transaction that provides easier and more efficient

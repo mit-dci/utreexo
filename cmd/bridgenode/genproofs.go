@@ -1,9 +1,11 @@
 package bridge
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -21,7 +23,8 @@ func BuildProofs(
 	// Channel to alert the tell the main loop it's ok to exit
 	done := make(chan bool, 1)
 
-	// Channel to alert stopBuildProofs() that buildOffsetFile() has been finished
+	// Waitgroup to alert stopBuildProofs() that revoffet and offset has
+	// been finished
 	offsetFinished := make(chan bool, 1)
 
 	// Channel for stopBuildProofs() to wait
@@ -55,7 +58,7 @@ func BuildProofs(
 
 	var batchwg sync.WaitGroup
 	// make the channel ... have a buffer? does it matter?
-	batchan := make(chan *leveldb.Batch)
+	batchan := make(chan *leveldb.Batch, 10)
 
 	// start db writer worker... actually start a bunch of em
 	// try 16 workers...?
@@ -63,44 +66,79 @@ func BuildProofs(
 		go ttl.DbWorker(batchan, lvdb, &batchwg)
 	}
 
-	fmt.Println("Building Proofs and ttldb...")
+	// for the pFile
+	proofAndHeightChan := make(chan util.ProofAndHeight, 1)
 
-	// To send/receive blocks from blockreader()
-	txChan := make(chan util.TxToWrite, 10)
+	// for pOffsetFile
+	proofChan := make(chan []byte, 1)
 
-	// Reads block asynchronously from .dat files
-	go util.BlockReader(
-		txChan, lastIndexOffsetHeight, height, util.OffsetFilePath)
-
-	// Where the proofs for txs exist
 	pFile, err := os.OpenFile(
 		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
+	pFileBuf := bufio.NewWriter(pFile)
+
 	pOffsetFile, err := os.OpenFile(
 		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
+	pOffsetFileBuf := bufio.NewWriter(pOffsetFile)
+
+	var fileWait sync.WaitGroup
+	go pFileWorker(proofAndHeightChan, pFileBuf, &fileWait, done)
+	go pOffsetFileWorker(proofChan, &pOffset, pOffsetFileBuf, &fileWait, done)
+
+	fmt.Println("Building Proofs and ttldb...")
+
+	// To send/receive blocks from blockreader()
+	txChan := make(chan util.TxToWrite)
+
+	// Reads block asynchronously from .dat files
+	// Reads util the lastIndexOffsetHeight
+	go util.BlockReader(
+		txChan, lastIndexOffsetHeight, height, util.OffsetFilePath)
 
 	var stop bool // bool for stopping the main loop
 
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
-		// Receive txs from the asynchronous blk*.dat reader
 		txs := <-txChan
 
-		err = writeProofs(txs.Txs, txs.Height,
-			pFile, pOffsetFile, forest, &pOffset)
+		// Writes the ttl values for each tx to leveldb
+		ttl.WriteBlock(txs, batchan, &batchwg)
+
+		// generate the adds and dels from the transactions passed in
+		// Adds are the TXOs and Dels are the TXINs
+		blockAdds, blockDels := genAddDel(txs)
+
+		// Verify that the TXINs exist in our forest
+		// This should never fail within the context of our code and setting
+		blockProof, err := genVerifyDels(blockDels, forest, txs.Height)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
-		// Save the ttl values to leveldb
-		err = ttl.WriteBlock(txs.Txs, txs.Height+1, batchan, &batchwg)
+		// convert blockproof struct to bytes
+		b := blockProof.ToBytes()
+
+		// Add to WaitGroup and send data to channel to be written
+		// to disk
+		fileWait.Add(1)
+		proofChan <- b
+
+		// Add to WaitGroup and send data to channel to be written
+		// to disk
+		fileWait.Add(1)
+		proofAndHeightChan <- util.ProofAndHeight{
+			Proof: b, Height: txs.Height}
+
+		// TODO: Don't ignore undoblock
+		// Modifies the forest with the given TXINs and TXOUTs
+		_, err = forest.Modify(blockAdds, blockProof.Targets)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		if txs.Height%10000 == 0 {
@@ -114,12 +152,15 @@ func BuildProofs(
 		default:
 		}
 	}
-	pFile.Close()
-	pOffsetFile.Close()
 
 	// wait until dbWorker() has written to the ttldb file
 	// allows leveldb to close gracefully
 	batchwg.Wait()
+
+	// Wait for the file workers to finish
+	fileWait.Wait()
+	pFileBuf.Flush()
+	pOffsetFileBuf.Flush()
 
 	// Save the current state so genproofs can be resumed
 	err = saveBridgeNodeData(forest, pOffset, height)
@@ -135,113 +176,92 @@ func BuildProofs(
 
 }
 
-// writeProofs writes the proofs to the given pFile and modifies the Utreexo
-// Forest. Main function for generating proofs
-func writeProofs(txs []*btcutil.Tx, height int32, pFile *os.File, pOffsetFile *os.File,
-	forest *utreexo.Forest, pOffset *int32) error {
+// pFileWorker takes in blockproof and height information from the channel
+// and writes to disk. MUST NOT have more than one worker as the proofs need to be
+// in order
+func pFileWorker(blockProofAndHeight chan util.ProofAndHeight,
+	pFileBuf *bufio.Writer, fileWait *sync.WaitGroup, done chan bool) {
 
-	// generate the adds and dels in LeafTXO format
-	blockAdds, blockDels, err := genAddDel(txs)
+	for {
 
-	// generate block proof. Errors if the tx cannot be proven
-	// Should never error out with genproofs
-	blockProof, err := forest.ProveBlock(blockDels)
-	if err != nil {
-		return fmt.Errorf("ProveBlock failed at block %d %s %s", height+1, forest.Stats(), err.Error())
+		bp := <-blockProofAndHeight
+
+		var writebyte []byte
+		// U32tB always returns 4 bytes
+		// Later this could also be changed to magic bytes
+		writebyte = append(writebyte,
+			utreexo.U32tB(uint32(bp.Height+1))...)
+
+		// write the size of the proof
+		writebyte = append(writebyte,
+			utreexo.U32tB(uint32(len(bp.Proof)))...)
+
+		// Write the actual proof
+		writebyte = append(writebyte, bp.Proof...)
+
+		_, err := pFileBuf.Write(writebyte)
+		if err != nil {
+			panic(err)
+		}
+		fileWait.Done()
 	}
-
-	// Sanity check. Don't really need it for now
-	ok := forest.VerifyBlockProof(blockProof)
-	if !ok {
-		return fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
-	}
-
-	// U32tB always returns 4 bytes
-	// Later this could also be changed to magic bytes
-	_, err = pFile.Write(utreexo.U32tB(uint32(height + 1)))
-	if err != nil {
-		return err
-	}
-
-	// convert blockproof struct to bytes
-	p := blockProof.ToBytes()
-
-	// write the offset for a block
-	_, err = pOffsetFile.Write(util.I32tB(*pOffset))
-	if err != nil {
-		return err
-	}
-
-	// Updates the global proof offset. Need for resuming purposes
-	*pOffset += int32(len(p)) + int32(8) // add 8 for height bytes and load size
-
-	// write the size of the proof
-	_, err = pFile.Write(utreexo.U32tB(uint32(len(p))))
-	if err != nil {
-		return err
-	}
-	// Write the actual proof
-	_, err = pFile.Write(p)
-	if err != nil {
-		return err
-	}
-
-	// Modify the forest
-	_, err = forest.Modify(blockAdds, blockProof.Targets)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-// genAddDel takes in a raw Bitcoin message tx and outputs a
-// slice of LeafTXOs to be added and a slice of hashes to be
-// deleted.
-func genAddDel(txs []*btcutil.Tx) (
-	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash, err error) {
+// pOffsetFileWorker receives proofs from the channel and writes to disk
+// aynschornously. MUST NOT have more than one worker as the proofoffsets need to be
+// in order.
+func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
+	pOffsetFileBuf *bufio.Writer, fileWait *sync.WaitGroup, done chan bool) {
 
-	blocktxs := []*util.Txotx{new(util.Txotx)}
+	for {
+		bp := <-proofChan
 
-	for blockindex, tx := range txs {
-		for _, in := range tx.MsgTx().TxIn {
-			if blockindex > 0 { // skip coinbase "spend"
-				opString := in.PreviousOutPoint.String()
-				// TODO replace with TXID and index
-				h := utreexo.HashFromString(opString)
-				blockDels = append(blockDels, h)
-			}
-		}
-		// Set txid aka txhash
-		blocktxs[len(blocktxs)-1].Outputtxid = tx.MsgTx().TxHash().String()
+		var writebyte []byte
+		writebyte = append(writebyte, util.I32tB(*pOffset)...)
 
-		// creates all txos up to index indicated
-		numoutputs := uint32(len(tx.MsgTx().TxOut))
+		// Updates the global proof offset. Need for resuming purposes
+		*pOffset += int32(len(bp)) + int32(8) // add 8 for height bytes and load size
 
-		// For tagging each TXO as unspendable
-		blocktxs[len(blocktxs)-1].Unspendable = make([]bool, numoutputs)
-		for i, out := range tx.MsgTx().TxOut {
-			if util.IsUnspendable(out) {
-				// Tag unspendable
-				blocktxs[len(blocktxs)-1].Unspendable[i] = true
-			}
-		}
-		// done with this txotx, make the next one and append
-		blocktxs = append(blocktxs, new(util.Txotx))
-
-	}
-	// TODO Get rid of this. This eats up cpu
-	// we started a tx but shouldn't have
-	blocktxs = blocktxs[:len(blocktxs)-1]
-
-	for _, b := range blocktxs {
-		adds, err := genLeafTXO(b)
+		_, err := pOffsetFileBuf.Write(writebyte)
 		if err != nil {
-			return nil, nil, err
+			panic(err)
 		}
-		for _, add := range adds {
-			blockAdds = append(blockAdds, add)
-		}
+
+		fileWait.Done()
 	}
+
+}
+
+// genVerifyDels is a wrapper around forest.ProveBlock and forest.VerifyBlockProof
+func genVerifyDels(dels []utreexo.Hash, f *utreexo.Forest, height int32) (
+	utreexo.BlockProof, error) {
+
+	// generate block proof. Errors if the tx cannot be proven
+	// Should never error out with genproofs as it takes
+	// blk*.dat files which have already been vetted by Bitcoin Core
+	blockProof, err := f.ProveBlock(dels)
+	if err != nil {
+		return blockProof, fmt.Errorf("ProveBlock failed at block %d %s %s",
+			height+1, f.Stats(), err.Error())
+	}
+
+	// Sanity check. Should never fail
+	ok := f.VerifyBlockProof(blockProof)
+	if !ok {
+		return blockProof,
+			fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
+	}
+
+	return blockProof, nil
+}
+
+// genAddDel is a wrapper around genAdds and genDels. It calls those both and
+// throws out all the same block spends.
+func genAddDel(txs util.TxToWrite) (
+	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash) {
+
+	blockDels = genDels(txs.Txs)
+	blockAdds = genAdds(txs.Txs)
 
 	// Forget all utxos that get spent on the same block
 	// they are created.
@@ -249,27 +269,62 @@ func genAddDel(txs []*btcutil.Tx) (
 	return
 }
 
-// genLeafTXO takes in txs from a block and contructs a slice
-// of LeafTXOs ready to be processed by the utreexo library
-// skips all OP_RETURN transactions
-func genLeafTXO(tx *util.Txotx) ([]utreexo.LeafTXO, error) {
-	adds := []utreexo.LeafTXO{}
-	for i := 0; i < len(tx.Unspendable); i++ {
-		if tx.Unspendable[i] {
-			continue
+// genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
+// Skips all the OP_RETURN transactions
+func genAdds(txs []*btcutil.Tx) (blockAdds []utreexo.LeafTXO) {
+	for _, tx := range txs {
+
+		// cache txid aka txhash
+		txid := tx.MsgTx().TxHash().String()
+
+		for i, out := range tx.MsgTx().TxOut {
+			// Skip all the OP_RETURNs
+			if util.IsUnspendable(out) {
+				continue
+			}
+			utxostring := fmt.Sprintf("%s:%d", txid, i)
+			addData := utreexo.LeafTXO{
+				Hash: utreexo.HashFromString(utxostring)}
+			blockAdds = append(blockAdds, addData)
 		}
-		utxostring := fmt.Sprintf("%s:%d", tx.Outputtxid, i)
-		addData := utreexo.LeafTXO{Hash: utreexo.HashFromString(utxostring)}
-		adds = append(adds, addData)
 	}
-	return adds, nil
+	return
 }
 
+// genDels generates txs to be deleted from the Utreexo forest. These are TxIns
+func genDels(txs []*btcutil.Tx) (blockDels []utreexo.Hash) {
+	for index, tx := range txs {
+		for _, in := range tx.MsgTx().TxIn {
+			// skip coinbase "spend"
+			if index > 0 {
+				// Grab TXID of the tx that created this TXIN
+				s := in.PreviousOutPoint.String()
+				// Hash. Need 32byte but has index
+				hash := utreexo.HashFromString(s)
+				blockDels = append(blockDels, hash)
+			}
+		}
+	}
+	return
+}
+
+// stopBuildProofs listens for the signal from the OS and initiates an exit squence
 func stopBuildProofs(
 	sig, offsetfinished, done, finish chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
+
+	// Sometimes there are bugs that make the program run forver.
+	// Utreexo binary should never take more than 10 seconds to exit
+	go func() {
+		time.Sleep(10 * time.Second)
+		fmt.Println("Program timed out. Force quitting. Data likely corrupted")
+		os.Exit(1)
+	}()
+
+	// Tell the user that the sig is received
+	fmt.Println("User exit signal received. Exiting...")
 
 	select {
 	// If offsetfile is there or was built, don't remove it
@@ -279,6 +334,7 @@ func stopBuildProofs(
 			done <- true
 		}
 	// If nothing is received, delete offsetfile and other directories
+	// Don't wait for done channel from the main BuildProofs() for loop
 	default:
 		select {
 		default:
@@ -288,6 +344,10 @@ func stopBuildProofs(
 			if err != nil {
 				fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
 			}
+			err = os.RemoveAll(util.RevOffsetDirPath)
+			if err != nil {
+				fmt.Println("ERR. revdata/ directory not removed. Please manually remove it.")
+			}
 			fmt.Println("Exiting...")
 			os.Exit(0)
 		}
@@ -295,7 +355,5 @@ func stopBuildProofs(
 
 	// Wait until BuildProofs() or buildOffsetFile() says it's ok to exit
 	<-finish
-
-	fmt.Println("Exiting...")
 	os.Exit(0)
 }
