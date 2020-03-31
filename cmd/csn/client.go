@@ -52,7 +52,7 @@ func IBDClient(net wire.BitcoinNet,
 	var stop bool
 
 	// To send/receive blocks from blockreader()
-	txChan := make(chan util.TxToWrite, 10)
+	txChan := make(chan util.BlockToWrite, 10)
 
 	// Reads blocks asynchronously from blk*.dat files
 	go util.BlockReader(txChan,
