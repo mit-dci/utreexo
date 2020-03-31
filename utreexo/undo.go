@@ -89,13 +89,13 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// update positionMap.  The stuff we do want has been moved in to the forest,
 	// the stuff we don't want has been moved to the right past the edge
 	for p := f.numLeaves; p < prevNumLeaves; p++ {
- 		fmt.Printf("put back edge %x@%d from map\n", f.data.read(p).Prefix(), p)
+		fmt.Printf("put back edge %x@%d from map\n", f.data.read(p).Prefix(), p)
 		f.positionMap[f.data.read(p).Mini()] = p
 	}
 	for _, p := range ub.positions {
 		fmt.Printf("put back internal %x@%d in map\n", f.data.read(p).Prefix(), p)
 		f.positionMap[f.data.read(p).Mini()] = p
- 	}
+	}
 	for _, d := range dirt {
 		// everything that moved needs to have its position updated in the map
 		// TODO does it..?
@@ -126,7 +126,7 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
 	ub := new(undoBlock)
 	ub.numAdds = uint32(numadds)
 
-	fmt.Printf("%d del, nl %d\n", len(dels), f.numLeaves)
+	// fmt.Printf("%d del, nl %d\n", len(dels), f.numLeaves)
 	ub.positions = dels // the deletion positions, in sorted order
 	ub.hashes = make([]Hash, len(dels))
 
