@@ -93,6 +93,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	// --------------- block 0
 	// make starting forest with numStart leaves, and store tops
 	adds, _ := sc.NextBlock(numStart)
+	fmt.Printf("adding %d leaves\n", numStart)
 	_, err := f.Modify(adds, nil)
 	if err != nil {
 		return err
@@ -117,6 +118,8 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("block 1 add %d rem %d\n", numAdds, numDels)
 
 	ub, err := f.Modify(adds, bp.Targets)
 	if err != nil {

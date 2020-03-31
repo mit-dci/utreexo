@@ -310,12 +310,13 @@ func (f *Forest) reHash(dirt []uint64) error {
 }
 
 // cleanup removes extraneous hashes from the forest.  Currently only the bottom
+// Probably don't need this at all, if everything else is working.
 func (f *Forest) cleanup(overshoot uint64) {
 	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
 		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
 		// TODO ^^^^ that probably does nothing. or at least should...
 		f.data.write(p, empty) // clear forest
-	}
+ 	}
 }
 
 // Add adds leaves to the forest.  This is the easy part.
@@ -355,6 +356,10 @@ func (f *Forest) addv2(adds []LeafTXO) {
 func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	numdels, numadds := len(dels), len(adds)
 	delta := int64(numadds - numdels) // watch 32/64 bit
+	if int64(f.numLeaves)+delta < 0 {
+		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
+			len(dels), f.numLeaves)
+	}
 	// remap to expand the forest if needed
 	for int64(f.numLeaves)+delta > int64(1<<f.height) {
 		// fmt.Printf("current cap %d need %d\n",
@@ -370,7 +375,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.cleanup(uint64(numdels))
+	// f.cleanup(uint64(numdels))
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
@@ -411,10 +416,10 @@ func (f *Forest) reMap(destHeight uint8) error {
 	}
 	// I don't think you ever need to remap down.  It really doesn't
 	// matter.  Something to program someday if you feel like it for fun.
-	fmt.Printf("size is %d\n", f.data.size())
+	// fmt.Printf("size is %d\n", f.data.size())
 	// height increase
 	f.data.resize(2 << destHeight)
-	fmt.Printf("size is %d\n", f.data.size())
+	// fmt.Printf("size is %d\n", f.data.size())
 	pos := uint64(1 << destHeight) // leftmost position of row 1
 	reach := pos >> 1              // how much to next row up
 	// start on row 1, row 0 doesn't move
