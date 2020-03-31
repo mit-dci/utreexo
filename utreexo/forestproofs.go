@@ -19,41 +19,41 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	var pr Proof
 	var empty [32]byte
 	// first look up where the hash is
-	u := f.positions.read(wanted)
-	if u.extra == nil {
+	pos, ok := f.positionMap[wanted.Mini()]
+	if !ok {
 		return pr, fmt.Errorf("hash %x not found", wanted)
 	}
 
 	// should never happen
-	if u.pos > f.numLeaves {
+	if pos > f.numLeaves {
 		return pr, fmt.Errorf("prove: got leaf position %d but only %d leaves exist",
-			u.pos, f.numLeaves)
+			pos, f.numLeaves)
 	}
 
 	// build empty proof branch slice of siblings
 	// not full height -- need to figure out which subtree it's in!
-	pr.Siblings = make([]Hash, detectSubTreeHeight(u.pos, f.numLeaves, f.height))
-	pr.Payload = f.data.read(u.pos)
+	pr.Siblings = make([]Hash, detectSubTreeHeight(pos, f.numLeaves, f.height))
+	pr.Payload = f.data.read(pos)
 	if pr.Payload != wanted {
 		return pr, fmt.Errorf(
 			"prove: forest and position map conflict. want %x got %x at pos %d",
-			wanted[:4], pr.Payload[:4], u.pos)
+			wanted[:4], pr.Payload[:4], pos)
 	}
-	pr.Position = u.pos
+	pr.Position = pos
 	//	fmt.Printf("nl %d proof for %d len %d\n", f.numLeaves, pos, len(pr.Siblings))
 	//	fmt.Printf("\tprove pos %d %x:\n", pos, pr.Payload[:4])
 	// go up and populate the siblings
 	for h := range pr.Siblings {
 
-		pr.Siblings[h] = f.data.read(u.pos ^ 1)
+		pr.Siblings[h] = f.data.read(pos ^ 1)
 		if pr.Siblings[h] == empty {
 			fmt.Printf(f.ToString())
 			return pr, fmt.Errorf(
 				"prove: got empty hash proving leaf %d height %d pos %d nl %d",
-				pr.Position, h, u.pos^1, f.numLeaves)
+				pr.Position, h, pos^1, f.numLeaves)
 		}
 		//		fmt.Printf("sibling %d: pos %d %x\n", h, pos^1, pr.Siblings[h][:4])
-		u.pos = up1(u.pos, f.height)
+		pos = up1(pos, f.height)
 
 	}
 
@@ -156,19 +156,22 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 
 	for i, wanted := range hs {
 
-		u := f.positions.read(wanted)
-		if u.pos == 1<<60 {
+		pos, ok := f.positionMap[wanted.Mini()]
+		if !ok {
 			fmt.Printf(f.ToString())
-			return bp, fmt.Errorf("hash %x not found in position index", wanted)
+			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 
 		// should never happen
-		if u.pos > f.numLeaves {
+		if pos > f.numLeaves {
+			for m, p := range f.positionMap {
+				fmt.Printf("%x @%d\t", m[:4], p)
+			}
 			return bp, fmt.Errorf(
 				"ProveBlock: got leaf position %d but only %d leaves exist",
-				u.pos, f.numLeaves)
+				pos, f.numLeaves)
 		}
-		bp.Targets[i] = u.pos
+		bp.Targets[i] = pos
 	}
 	// targets need to be sorted because the proof hashes are sorted
 	// NOTE that this is a big deal -- we lose in-block positional information
