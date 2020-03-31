@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
@@ -66,11 +65,11 @@ func BuildProofs(
 	fmt.Println("Building Proofs and ttldb...")
 
 	// To send/receive blocks from blockreader()
-	txChan := make(chan util.TxToWrite, 10)
+	blockReadQueue := make(chan util.BlockToWrite, 10)
 
 	// Reads block asynchronously from .dat files
 	go util.BlockReader(
-		txChan, lastIndexOffsetHeight, height, util.OffsetFilePath)
+		blockReadQueue, lastIndexOffsetHeight, height, util.OffsetFilePath)
 
 	// Where the proofs for txs exist
 	pFile, err := os.OpenFile(
@@ -89,22 +88,21 @@ func BuildProofs(
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
-		txs := <-txChan
+		block := <-blockReadQueue
 
-		err = writeProofs(txs.Txs, txs.Height,
-			pFile, pOffsetFile, forest, &pOffset)
+		err = writeProofs(block, pFile, pOffsetFile, forest, &pOffset)
 		if err != nil {
 			panic(err)
 		}
 
 		// Save the ttl values to leveldb
-		err = ttl.WriteBlock(txs.Txs, txs.Height+1, batchan, &batchwg)
+		err = ttl.WriteBlock(block.Txs, block.Height+1, batchan, &batchwg)
 		if err != nil {
 			panic(err)
 		}
 
-		if txs.Height%10000 == 0 {
-			fmt.Println("On block :", txs.Height+1)
+		if block.Height%10000 == 0 {
+			fmt.Println("On block :", block.Height+1)
 		}
 
 		// Check if stopSig is no longer false
@@ -137,28 +135,29 @@ func BuildProofs(
 
 // writeProofs writes the proofs to the given pFile and modifies the Utreexo
 // Forest. Main function for generating proofs
-func writeProofs(txs []*btcutil.Tx, height int32, pFile *os.File, pOffsetFile *os.File,
+func writeProofs(block util.BlockToWrite, pFile *os.File, pOffsetFile *os.File,
 	forest *utreexo.Forest, pOffset *int32) error {
 
 	// generate the adds and dels in LeafTXO format
-	blockAdds, blockDels, err := genAddDel(txs)
+	blockAdds, blockDels, err := genAddDel(block)
 
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs
 	blockProof, err := forest.ProveBlock(blockDels)
 	if err != nil {
-		return fmt.Errorf("ProveBlock failed at block %d %s %s", height+1, forest.Stats(), err.Error())
+		return fmt.Errorf("ProveBlock failed at block %d %s %s",
+			block.Height+1, forest.Stats(), err.Error())
 	}
 
 	// Sanity check. Don't really need it for now
 	ok := forest.VerifyBlockProof(blockProof)
 	if !ok {
-		return fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
+		return fmt.Errorf("VerifyBlockProof failed at block %d", block.Height+1)
 	}
 
 	// U32tB always returns 4 bytes
 	// Later this could also be changed to magic bytes
-	_, err = pFile.Write(utreexo.U32tB(uint32(height + 1)))
+	_, err = pFile.Write(utreexo.U32tB(uint32(block.Height + 1)))
 	if err != nil {
 		return err
 	}
@@ -197,12 +196,12 @@ func writeProofs(txs []*btcutil.Tx, height int32, pFile *os.File, pOffsetFile *o
 // genAddDel takes in a raw Bitcoin message tx and outputs a
 // slice of LeafTXOs to be added and a slice of hashes to be
 // deleted.
-func genAddDel(txs []*btcutil.Tx) (
+func genAddDel(block util.BlockToWrite) (
 	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash, err error) {
 
 	blocktxs := []*util.Txotx{new(util.Txotx)}
 
-	for blockindex, tx := range txs {
+	for blockindex, tx := range block.Txs {
 		for _, in := range tx.MsgTx().TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
 				opString := in.PreviousOutPoint.String()
