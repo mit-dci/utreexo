@@ -315,8 +315,8 @@ func (f *Forest) cleanup(overshoot uint64) {
 	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
 		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
 		// TODO ^^^^ that probably does nothing. or at least should...
-		f.data.write(p, empty) // clear forest
- 	}
+		// f.data.write(p, empty) // clear forest
+	}
 }
 
 // Add adds leaves to the forest.  This is the easy part.
@@ -375,7 +375,7 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	// f.cleanup(uint64(numdels))
+	f.cleanup(uint64(numdels))
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
