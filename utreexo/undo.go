@@ -58,8 +58,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// remove everything between prevNumLeaves and numLeaves from positionMap
 	for p := f.numLeaves; p < f.numLeaves+prevAdds; p++ {
 		fmt.Printf("remove %x@%d from map\n",
-			f.data.read(p).Prefix(), f.positions.read(f.data.read(p)).pos)
-		f.positions.rem(f.data.read(p))
+			f.data.read(p).Prefix(), f.positionMap[f.data.read(p).Mini()])
+		delete(f.positionMap, f.data.read(p).Mini())
 	}
 
 	// also add everything past numleaves and prevnumleaves to dirt
@@ -89,30 +89,22 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// update positionMap.  The stuff we do want has been moved in to the forest,
 	// the stuff we don't want has been moved to the right past the edge
 	for p := f.numLeaves; p < prevNumLeaves; p++ {
-		d := f.data.read(p)
-		if d == empty {
-			return fmt.Errorf("read empty hash at %d", p)
-		}
-		fmt.Printf("put back edge %x@%d from map\n", d.Prefix(), p)
-		f.positions.move(d, p)
+		fmt.Printf("put back edge %x@%d from map\n", f.data.read(p).Prefix(), p)
+		f.positionMap[f.data.read(p).Mini()] = p
 	}
 	for _, p := range ub.positions {
-		d := f.data.read(p)
-		if d == empty {
-			return fmt.Errorf("read empty hash at %d", p)
-		}
-		fmt.Printf("put back internal %x@%d in map\n", d.Prefix(), p)
-		f.positions.move(d, p)
+		fmt.Printf("put back internal %x@%d in map\n", f.data.read(p).Prefix(), p)
+		f.positionMap[f.data.read(p).Mini()] = p
 	}
 	for _, d := range dirt {
 		// everything that moved needs to have its position updated in the map
 		// TODO does it..?
-		m := f.data.read(d)
-		old := f.positions.read(m)
-		if old.pos != d {
-			fmt.Printf("update positions %x %d to %d\n",
-				m.Prefix(), old.pos, d)
-			f.positions.move(m, d)
+		m := f.data.read(d).Mini()
+		oldpos := f.positionMap[m]
+		if oldpos != d {
+			fmt.Printf("update map %x %d to %d\n", m[:4], oldpos, d)
+			delete(f.positionMap, m)
+			f.positionMap[m] = d
 		}
 	}
 
@@ -134,7 +126,7 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
 	ub := new(undoBlock)
 	ub.numAdds = uint32(numadds)
 
-	fmt.Printf("%d del, nl %d\n", len(dels), f.numLeaves)
+	// fmt.Printf("%d del, nl %d\n", len(dels), f.numLeaves)
 	ub.positions = dels // the deletion positions, in sorted order
 	ub.hashes = make([]Hash, len(dels))
 

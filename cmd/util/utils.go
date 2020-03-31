@@ -78,13 +78,13 @@ func CheckNet(net wire.BitcoinNet) {
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with BlockToWrite type.
 func BlockReader(
-	txChan chan TxToWrite, currentOffsetHeight, height int32, offsetfile string) {
+	txChan chan BlockToWrite, currentOffsetHeight, height int32, offsetfile string) {
 	for height != currentOffsetHeight {
-		txs, err := GetRawBlockFromFile(height, offsetfile)
+		txs, bh, err := GetRawBlockFromFile(height, offsetfile)
 		if err != nil {
 			panic(err)
 		}
-		send := TxToWrite{Txs: txs, Height: height}
+		send := BlockToWrite{Txs: txs, Height: height, Blockhash: bh}
 		txChan <- send
 		height++
 	}
@@ -95,14 +95,14 @@ func BlockReader(
 // Skips the genesis block. If you search for block 0, it will give you
 // block 1.
 func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
-	txs []*btcutil.Tx, err error) {
+	txs []*btcutil.Tx, Blockhash [32]byte, err error) {
 
 	var datFile [4]byte
 	var offset [4]byte
 
 	offsetFile, err := os.Open(offsetFileName)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// offset file consists of 8 bytes per block
@@ -117,7 +117,7 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	// Channel to alert stopParse() that offset
 	f, err := os.Open(fileName)
 	if err != nil {
-		return nil, err
+		return
 	}
 	// +8 skips the 8 bytes of magicbytes and load size
 	f.Seek(int64(BtU32(offset[:])+8), 0)
@@ -126,10 +126,12 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	b := new(wire.MsgBlock)
 	err = b.Deserialize(f)
 	if err != nil {
-		return nil, err
+		return
 	}
 	f.Close()
 	offsetFile.Close()
+
+	Blockhash = b.BlockHash()
 
 	for _, msgTx := range b.Transactions {
 		txs = append(txs, btcutil.NewTx(msgTx))
@@ -212,6 +214,25 @@ func BtU64(b []byte) uint64 {
 
 // U64tB : uint64 to 8 bytes.  Always works.
 func U64tB(i uint64) []byte {
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, i)
+	return buf.Bytes()
+}
+
+// BtI64 : 8 bytes to int64.  returns ffff. if it doesn't work.
+func BtI64(b []byte) int64 {
+	if len(b) != 8 {
+		fmt.Printf("Got %x to BtI64 (%d bytes)\n", b, len(b))
+		return -0x7fffffffffffffff
+	}
+	var i int64
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, &i)
+	return i
+}
+
+// I64tB : int64 to 8 bytes.  Always works.
+func I64tB(i int64) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, i)
 	return buf.Bytes()
