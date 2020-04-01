@@ -71,11 +71,11 @@ type BlockToWrite struct {
 
 // LeafData is all the data that goes into a leaf in the utreexo accumulator
 type LeafData struct {
-	BlockHash    [32]byte
-	Outpoint     wire.OutPoint
-	CbHeight     int32
-	Amt          int64
-	ScriptPubkey []byte
+	BlockHash [32]byte
+	Outpoint  wire.OutPoint
+	CbHeight  int32
+	Amt       int64
+	PkScript  []byte
 }
 
 func LeafDataFromBytes(b []byte) (LeafData, error) {
@@ -88,7 +88,7 @@ func LeafDataFromBytes(b []byte) (LeafData, error) {
 	l.Outpoint.Index = BtU32(b[64:68])
 	l.CbHeight = BtI32(b[68:72])
 	l.Amt = BtI64(b[72:80])
-	l.ScriptPubkey = b[80:]
+	l.PkScript = b[80:]
 
 	return l, nil
 }
@@ -99,11 +99,17 @@ func (l *LeafData) ToBytes() (b []byte) {
 	b = append(b, U32tB(l.Outpoint.Index)...)
 	b = append(b, I32tB(l.CbHeight)...)
 	b = append(b, I64tB(l.Amt)...)
-	b = append(b, l.ScriptPubkey...)
+	b = append(b, l.PkScript...)
 	return
 }
 
 // turn a LeafData into a LeafHash
-func (l *LeafData) LeafHash() Hash {
+func (l *LeafData) LeafHash() [32]byte {
 	return sha256.Sum256(l.ToBytes())
+}
+
+func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
+	var l LeafData
+
+	return l, nil
 }
