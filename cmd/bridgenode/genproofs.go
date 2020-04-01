@@ -259,7 +259,7 @@ func genAddDel(block util.BlockToWrite) (
 	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash) {
 
 	blockDels = genDels(block.Txs)
-	blockAdds = genAdds(block.Txs)
+	blockAdds = genAdds(block)
 
 	// Forget all utxos that get spent on the same block
 	// they are created.
@@ -269,21 +269,31 @@ func genAddDel(block util.BlockToWrite) (
 
 // genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
 // Skips all the OP_RETURN transactions
-func genAdds(txs []*btcutil.Tx) (blockAdds []utreexo.LeafTXO) {
-	for _, tx := range txs {
-
+func genAdds(bl util.BlockToWrite) (leaves []utreexo.LeafTXO) {
+	bh := bl.Blockhash
+	cheight := bl.Height << 1 // *2 because of the weird coinbase bit thing
+	for coinbaseif0, tx := range bl.Txs {
 		// cache txid aka txhash
-		txid := tx.MsgTx().TxHash().String()
-
+		txid := tx.MsgTx().TxHash()
 		for i, out := range tx.MsgTx().TxOut {
 			// Skip all the OP_RETURNs
 			if util.IsUnspendable(out) {
 				continue
 			}
-			utxostring := fmt.Sprintf("%s:%d", txid, i)
-			addData := utreexo.LeafTXO{
-				Hash: utreexo.HashFromString(utxostring)}
-			blockAdds = append(blockAdds, addData)
+			var l util.LeafData
+			l.BlockHash = bh
+			l.Outpoint.Hash = txid
+			l.Outpoint.Index = uint32(i)
+			l.CbHeight = cheight
+			if coinbaseif0 == 0 {
+				l.CbHeight |= 1
+			}
+			l.Amt = out.Value
+			l.PkScript = out.PkScript
+
+			var uleaf utreexo.LeafTXO
+			uleaf.Hash = l.LeafHash()
+			leaves = append(leaves, uleaf)
 		}
 	}
 	return

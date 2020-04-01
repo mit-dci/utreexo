@@ -47,10 +47,14 @@ type Node struct {
 // LeafTXOs have a hash and a expiry date (block when that utxo gets used)
 type LeafTXO struct {
 	Hash
-	Duration int32
 	// During ibdsim, this will dictate whether it is saved to
 	// the memory or not.
 	Remember bool // this leaf will be deleted soon, remember it
+}
+
+type simLeaf struct {
+	LeafTXO
+	duration int32
 }
 
 // Parent gets you the merkle parent.  So far no committing to height.
@@ -104,7 +108,7 @@ func NewSimChain(duration uint32) *SimChain {
 }
 
 // BackOne takes the output of NextBlock and undoes the block
-func (s *SimChain) BackOne(leaves []LeafTXO, dels []Hash) {
+func (s *SimChain) BackOne(leaves []simLeaf, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
 	s.ttlSlices =
@@ -112,16 +116,16 @@ func (s *SimChain) BackOne(leaves []LeafTXO, dels []Hash) {
 
 	// Gotta go through the leaves and delete them all from the ttlslices
 	for _, l := range leaves {
-		if l.Duration == 0 {
+		if l.duration == 0 {
 			continue
 		}
-		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], l.Duration)
+		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], l.duration)
 		// everything should be in order, right?
 		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.ttlSlices[l.Duration][len(s.ttlSlices[l.Duration])-1][:4],
-			l.Duration)
-		s.ttlSlices[l.Duration] =
-			s.ttlSlices[l.Duration][:len(s.ttlSlices[l.Duration])-1]
+			s.ttlSlices[l.duration][len(s.ttlSlices[l.duration])-1][:4],
+			l.duration)
+		s.ttlSlices[l.duration] =
+			s.ttlSlices[l.duration][:len(s.ttlSlices[l.duration])-1]
 	}
 
 	s.blockHeight--
@@ -142,7 +146,7 @@ func (s *SimChain) ttlString() string {
 }
 
 // NextBlock :
-func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
+func (s *SimChain) NextBlock(numAdds uint32) ([]simLeaf, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
 
@@ -150,7 +154,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		numAdds = 1
 	}
 	// they're all forgettable
-	adds := make([]LeafTXO, numAdds)
+	adds := make([]simLeaf, numAdds)
 
 	// make dels; dels are preset by the ttlMap
 	delHashes := s.ttlSlices[0]
@@ -166,7 +170,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
 		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
 
-		adds[j].Duration = int32(rand.Uint32() & s.durationMask)
+		adds[j].duration = int32(rand.Uint32() & s.durationMask)
 		// with "+1", the duration is 1 to 256, so the forest never gets
 		// big or tall.  Without the +1, the duration is sometimes 0,
 		// which makes a leaf last forever, and the forest will expand
@@ -175,17 +179,17 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 		// the first utxo added lives forever.
 		// (prevents leaves from going to 0 which is buggy)
 		if s.blockHeight == 0 {
-			adds[j].Duration = 0
+			adds[j].duration = 0
 		}
 
-		if adds[j].Duration != 0 && adds[j].Duration < s.lookahead {
+		if adds[j].duration != 0 && adds[j].duration < s.lookahead {
 			adds[j].Remember = true
 		}
 
-		if adds[j].Duration != 0 {
-			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].Duration-1)
-			s.ttlSlices[adds[j].Duration-1] =
-				append(s.ttlSlices[adds[j].Duration-1], adds[j].Hash)
+		if adds[j].duration != 0 {
+			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].duration-1)
+			s.ttlSlices[adds[j].duration-1] =
+				append(s.ttlSlices[adds[j].duration-1], adds[j].Hash)
 		}
 
 		s.leafCounter++
