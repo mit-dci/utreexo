@@ -24,10 +24,11 @@ func initCSNState() (
 		var err error
 		lastIndexOffsetHeight, err = restoreLastIndexOffsetHeight()
 		if err != nil {
-			panic(err)
+			return p, 0, 0, err
 		}
 	} else {
-		panic(fmt.Errorf("No offsetdata present. Please run `genproofs` and try again"))
+		return p, 0, 0, fmt.Errorf("No offsetdata present. " +
+			"Please run `genproofs` first and try again")
 	}
 
 	// bool to check if the pollarddata is present
@@ -38,11 +39,11 @@ func initCSNState() (
 		var err error
 		p, err = restorePollard()
 		if err != nil {
-			panic(err)
+			return p, 0, 0, err
 		}
 		height, err = restorePollardHeight()
 		if err != nil {
-			panic(err)
+			return p, 0, 0, err
 		}
 
 	} else {

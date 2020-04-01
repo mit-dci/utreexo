@@ -25,21 +25,14 @@ var TestNet3GenHash = Hash{
 	0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
 }
 
-//HashFromString hahes the given string with sha256
+// HashFromString hahes the given string with sha256
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
 
-//Struct for a tx to be converted to LeafTXOs
-type Txotx struct {
-	//txid of the tx
-	Outputtxid string
-
-	//Whether the output is an OP_RETURN or not
-	Unspendable []bool
-
-	//When the output is spent
-	DeathHeights []uint32
+type ProofAndHeight struct {
+	Proof  []byte
+	Height int32
 }
 
 // Tx defines a bitcoin transaction that provides easier and more efficient
