@@ -262,13 +262,37 @@ func genAddDel(block util.BlockAndRev) (
 	blockDels = genDels(block)
 	blockAdds, dataLeaves = genAdds(block)
 
+	numins := 0
+	for skipcb, tx := range block.Txs {
+		if skipcb == 0 {
+			continue
+		}
+		for _, in := range tx.MsgTx().TxIn {
+			fmt.Printf("spend %s\n", in.PreviousOutPoint.String())
+		}
+		numins += len(tx.MsgTx().TxIn)
+	}
+
 	revtxs := len(block.Rev.Block.Tx)
+	if numins != 0 {
+		fmt.Printf("\t\tblock %d (off by 1?)\n", block.Height)
+	}
+	match := true
+	if numins != revtxs {
+		fmt.Printf("?ERROR? block %d %d inputs but %d revs\n",
+			block.Height, numins, revtxs)
+		match = false
+	}
 	if revtxs != 0 {
-		fmt.Printf("block %d rev data:\n", block.Height)
+		// fmt.Printf("block %d has rev data:\n", block.Height)
 		// what's in a revblock?
 		for i, tx := range block.Rev.Block.Tx {
 			for j, in := range tx.TxIn {
-				fmt.Printf("tx %d in %x h %d amt %d pks %x\n",
+				if match {
+
+				}
+
+				fmt.Printf("REV tx %d in %x h %d amt %d pks %x\n",
 					i, j, in.Height, in.Amount, in.PKScript)
 			}
 		}
