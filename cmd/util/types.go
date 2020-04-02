@@ -63,10 +63,11 @@ type RawHeaderData struct {
 	Offset [4]byte
 }
 
-type BlockToWrite struct {
-	Txs       []*btcutil.Tx
-	Height    int32
+type BlockAndRev struct {
 	Blockhash [32]byte
+	Height    int32
+	Rev       RevBlock
+	Txs       []*btcutil.Tx
 }
 
 // LeafData is all the data that goes into a leaf in the utreexo accumulator

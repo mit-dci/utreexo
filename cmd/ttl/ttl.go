@@ -18,7 +18,7 @@ type DeathInfo struct {
 }
 
 // WriteBlock sends off ttl info to dbWorker to be written to ttldb
-func WriteBlock(txs util.BlockToWrite,
+func WriteBlock(txs util.BlockAndRev,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) {
 
 	blockBatch := new(leveldb.Batch)

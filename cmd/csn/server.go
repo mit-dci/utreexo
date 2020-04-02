@@ -109,8 +109,8 @@ func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
 				blockAdds = append(blockAdds, add)
 			} else {
 				add := utreexo.LeafTXO{
-					Hash:     txo.Txid,
-					Duration: txo.DeathHeight - (height + 1),
+					Hash: txo.Txid,
+					// Duration: txo.DeathHeight - (height + 1),
 					// Only remember if duration is less than the
 					// lookahead value
 					Remember: txo.DeathHeight-(height+1) < lookahead}

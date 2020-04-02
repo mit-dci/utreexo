@@ -78,13 +78,17 @@ func CheckNet(net wire.BitcoinNet) {
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with TxToWrite type.
 func BlockReader(
-	blockChan chan BlockToWrite, lastIndexOffsetHeight, height int32, offsetfile string) {
+	blockChan chan BlockAndRev, lastIndexOffsetHeight, height int32,
+	offsetfile, revoffsetfile string) {
 	for height != lastIndexOffsetHeight {
 		txs, bh, err := GetRawBlockFromFile(height, offsetfile)
 		if err != nil {
 			panic(err)
 		}
-		send := BlockToWrite{Txs: txs, Height: height, Blockhash: bh}
+
+		rb, err := GetRevBlock(height, revoffsetfile)
+
+		send := BlockAndRev{Txs: txs, Height: height, Blockhash: bh, Rev: rb}
 		blockChan <- send
 		height++
 	}
