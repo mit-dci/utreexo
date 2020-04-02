@@ -251,8 +251,14 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 
 		// Write the .dat file name and the
 		// offset the block can be found at
-		offsetFile.Write(U32tB(fileNum))
-		offsetFile.Write(U32tB(offset))
+		_, err = offsetFile.Write(U32tB(fileNum))
+		if err != nil {
+			return err
+		}
+		_, err = offsetFile.Write(U32tB(offset))
+		if err != nil {
+			return err
+		}
 
 		// offset for the next block from the current position
 		// skip the 32 bytes of double sha hash of the rev block

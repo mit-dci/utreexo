@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/utreexo"
@@ -18,7 +17,7 @@ import (
 
 // build the bridge node / proofs
 func BuildProofs(
-	net wire.BitcoinNet, ttldb string, offsetfile string, sig chan bool) error {
+	net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	done := make(chan bool, 1)
@@ -50,7 +49,7 @@ func BuildProofs(
 	// Open leveldb
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile(ttldb, o)
+	lvdb, err := leveldb.OpenFile(ttlpath, o)
 	if err != nil {
 		panic(err)
 	}
@@ -66,12 +65,13 @@ func BuildProofs(
 	}
 
 	// To send/receive blocks from blockreader()
-	blockReadQueue := make(chan util.BlockToWrite, 10)
+	blockReadQueue := make(chan util.BlockAndRev, 10)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go util.BlockReader(
-		blockReadQueue, lastIndexOffsetHeight, height, util.OffsetFilePath)
+		blockReadQueue, lastIndexOffsetHeight, height,
+		util.OffsetFilePath, util.RevOffsetFilePath)
 
 	// for the pFile
 	proofAndHeightChan := make(chan util.ProofAndHeight, 1)
@@ -109,7 +109,7 @@ func BuildProofs(
 
 		// generate the adds and dels from the transactions passed in
 		// Adds are the TXOs and Dels are the TXINs
-		blockAdds, blockDels := genAddDel(block)
+		blockAdds, _, blockDels := genAddDel(block)
 
 		// Verify that the TXINs exist in our forest
 		// This should never fail within the context of our code and setting
@@ -255,11 +255,24 @@ func genVerifyDels(dels []utreexo.Hash, f *utreexo.Forest, height int32) (
 
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and
 // throws out all the same block spends.
-func genAddDel(block util.BlockToWrite) (
-	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash) {
+func genAddDel(block util.BlockAndRev) (
+	blockAdds []utreexo.LeafTXO, dataLeaves []util.LeafData,
+	blockDels []utreexo.Hash) {
 
-	blockDels = genDels(block.Txs)
-	blockAdds = genAdds(block)
+	blockDels = genDels(block)
+	blockAdds, dataLeaves = genAdds(block)
+
+	revtxs := len(block.Rev.Block.Tx)
+	if revtxs != 0 {
+		fmt.Printf("block %d rev data:\n", block.Height)
+		// what's in a revblock?
+		for i, tx := range block.Rev.Block.Tx {
+			for j, in := range tx.TxIn {
+				fmt.Printf("tx %d in %x h %d amt %d pks %x\n",
+					i, j, in.Height, in.Amount, in.PKScript)
+			}
+		}
+	}
 
 	// Forget all utxos that get spent on the same block
 	// they are created.
@@ -269,7 +282,8 @@ func genAddDel(block util.BlockToWrite) (
 
 // genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
 // Skips all the OP_RETURN transactions
-func genAdds(bl util.BlockToWrite) (leaves []utreexo.LeafTXO) {
+func genAdds(bl util.BlockAndRev) (hashleaves []utreexo.LeafTXO,
+	dataleaves []util.LeafData) {
 	bh := bl.Blockhash
 	cheight := bl.Height << 1 // *2 because of the weird coinbase bit thing
 	for coinbaseif0, tx := range bl.Txs {
@@ -291,28 +305,34 @@ func genAdds(bl util.BlockToWrite) (leaves []utreexo.LeafTXO) {
 			l.Amt = out.Value
 			l.PkScript = out.PkScript
 
+			// before shipping off the hash, save leafdata into DB
+			// TODO this is super redundant and should be done with rev
+			// data or gettxout instead
+			dataleaves = append(dataleaves, l)
+
 			var uleaf utreexo.LeafTXO
 			uleaf.Hash = l.LeafHash()
-			leaves = append(leaves, uleaf)
+			hashleaves = append(hashleaves, uleaf)
 		}
 	}
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func genDels(txs []*btcutil.Tx) (blockDels []utreexo.Hash) {
-	for index, tx := range txs {
-		for _, in := range tx.MsgTx().TxIn {
-			// skip coinbase "spend"
-			if index > 0 {
-				// Grab TXID of the tx that created this TXIN
-				s := in.PreviousOutPoint.String()
-				// Hash. Need 32byte but has index
-				hash := utreexo.HashFromString(s)
-				blockDels = append(blockDels, hash)
-			}
-		}
-	}
+func genDels(block util.BlockAndRev) (blockDels []utreexo.Hash) {
+	// for coinbaseif0, tx := range block.Txs {
+	// if coinbaseif0 == 0 {
+	// continue
+	// }
+
+	// for _, in := range tx.MsgTx().TxIn {
+	// Grab TXID of the tx that created this TXIN
+	// op := in.PreviousOutPoint.String()
+
+	// look up outpoint here, either with rev data or gettxout
+
+	// }
+	// }
 	return
 }
 
