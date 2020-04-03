@@ -262,40 +262,32 @@ func genAddDel(block util.BlockAndRev) (
 	blockDels = genDels(block)
 	blockAdds, dataLeaves = genAdds(block)
 
-	numins := 0
+	var ins []wire.OutPoint
+	var revs []*util.TxInUndo
+
 	for skipcb, tx := range block.Txs {
 		if skipcb == 0 {
 			continue
 		}
 		for _, in := range tx.MsgTx().TxIn {
-			fmt.Printf("spend %s\n", in.PreviousOutPoint.String())
+			ins = append(ins, in.PreviousOutPoint)
 		}
-		numins += len(tx.MsgTx().TxIn)
 	}
 
-	revtxs := len(block.Rev.Block.Tx)
-	if numins != 0 {
-		fmt.Printf("\t\tblock %d (off by 1?)\n", block.Height)
-	}
-	match := true
-	if numins != revtxs {
-		fmt.Printf("?ERROR? block %d %d inputs but %d revs\n",
-			block.Height, numins, revtxs)
-		match = false
-	}
-	if revtxs != 0 {
-		// fmt.Printf("block %d has rev data:\n", block.Height)
-		// what's in a revblock?
-		for i, tx := range block.Rev.Block.Tx {
-			for j, in := range tx.TxIn {
-				if match {
-
-				}
-
-				fmt.Printf("REV tx %d in %x h %d amt %d pks %x\n",
-					i, j, in.Height, in.Amount, in.PKScript)
-			}
+	for _, tx := range block.Rev.Block.Tx {
+		for _, r := range tx.TxIn {
+			revs = append(revs, r)
 		}
+	}
+
+	if len(ins) != 0 && len(ins) == len(revs) {
+		fmt.Printf("-------- block %d ins and revs match: \n", block.Height)
+		for i, _ := range ins {
+			fmt.Printf("%s from %d amt %d pk %x\n",
+				ins[i].String(), revs[i].Height, revs[i].Amount, revs[i].PKScript)
+		}
+	} else if len(ins) != 0 {
+		fmt.Printf("\tERROR block %d %d ins %d revs\n", block.Height, len(ins), len(revs))
 	}
 
 	// Forget all utxos that get spent on the same block
