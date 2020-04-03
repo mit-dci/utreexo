@@ -143,10 +143,6 @@ func (tx *TxUndo) Deserialize(r io.Reader) error {
 		if err != nil {
 			return err
 		}
-		// NOTE: Sanity check. Should never be true
-		if in.PKScript == nil {
-			fmt.Println("WARNING nil script")
-		}
 		tx.TxIn = append(tx.TxIn, &in)
 	}
 	return nil
@@ -169,7 +165,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 			return err
 		}
 		if varint != 0 {
-			return fmt.Errorf("varint is %d\n", varint)
+			return fmt.Errorf("varint is %d", varint)
 		}
 		ti.Varint = varint
 	}
@@ -177,8 +173,10 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 	amount, _ := deserializeVLQ(r)
 	ti.Amount = decompressTxOutAmount(amount)
 
-	pkscript := decompressScript(r)
-	ti.PKScript = pkscript
+	ti.PKScript = decompressScript(r)
+	if ti.PKScript == nil {
+		panic("nil pkscript")
+	}
 
 	return nil
 }
@@ -195,6 +193,7 @@ func BuildRevOffsetFile() error {
 
 	for fileNum := uint32(0); ; fileNum++ {
 		fileName := fmt.Sprintf("rev%05d.dat", fileNum)
+		fmt.Printf("Building offsetfile... %s\n", fileName)
 		_, err := os.Stat(fileName)
 		if os.IsNotExist(err) {
 			fmt.Printf("%s doesn't exist; done building\n",
@@ -214,6 +213,7 @@ func BuildRevOffsetFile() error {
 // each individual revblock
 func writeOffset(fileNum uint32, offsetFile *os.File) error {
 	fileName := fmt.Sprintf("rev%05d.dat", fileNum)
+	fmt.Println(fileName)
 	f, err := os.Open(fileName)
 	if err != nil {
 		return err
@@ -228,8 +228,10 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 
 	offset := uint32(0)
 	loc := int64(0)
-	// Read until the location of the offset is bigger than that of the file size
-	for loc < fSize {
+	// Read until the location of the offset does not match the size
+	// the rev*.dat files have trailing 0s so it'll sometimes read
+	// non-magicbytes 00000000
+	for loc != fSize {
 		// check if Bitcoin magic bytes were read
 		var magicbytes [4]byte
 		_, err := f.Read(magicbytes[:])
@@ -237,8 +239,6 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 			panic(err)
 		}
 		if CheckMagicByte(magicbytes) == false {
-			fmt.Println("non-magic byte read" +
-				"May have an incomplete rev*.dat file")
 			break
 		}
 
@@ -256,14 +256,12 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 
 		// offset for the next block from the current position
 		// skip the 32 bytes of double sha hash of the rev block
-		i, err := f.Seek(int64(LBtU32(size[:]))+32, 1)
+		loc, err = f.Seek(int64(LBtU32(size[:]))+32, 1)
 		if err != nil {
 			return err
 		}
 		// set offset
-		offset = uint32(i)
-		// advance location
-		loc += i
+		offset = uint32(loc)
 
 	}
 	return nil

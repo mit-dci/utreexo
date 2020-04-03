@@ -420,13 +420,14 @@ func decompressScript(compressedPkScript io.Reader) []byte {
 		// compressed pubkey.  This really should never fail since the
 		// encoding ensures it is valid before compressing to this type.
 		compressedKey := make([]byte, 33)
-		buf := make([]byte, 33+1)
+		compressedKey[0] = byte(encodedScriptSize - 2)
+
+		buf := make([]byte, 32)
 		_, err := io.ReadFull(compressedPkScript, buf)
 		if err != nil {
 			panic(err)
 		}
-		compressedKey[0] = byte(encodedScriptSize - 2)
-		copy(compressedKey[1:], buf[1:])
+		copy(compressedKey[1:], buf)
 		key, err := btcec.ParsePubKey(compressedKey, btcec.S256())
 		if err != nil {
 			return nil
@@ -450,7 +451,6 @@ func decompressScript(compressedPkScript io.Reader) []byte {
 	if err != nil {
 		panic(err)
 	}
-
 	copy(pkScript, buf)
 	return pkScript
 }
