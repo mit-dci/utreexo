@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+func TestDeleteReverseOrder(t *testing.T) {
+	f := NewForest(nil)
+	leaf1 := LeafTXO { Hash: Hash { 1 } }
+	leaf2 := LeafTXO { Hash: Hash { 2 } }
+	_, err := f.Modify([]LeafTXO { leaf1, leaf2 }, nil)
+	if err != nil {
+		t.Fail()
+	}
+	_, err = f.Modify(nil, []uint64 { 1, 0 })
+	if err != nil {
+		t.Log(err)
+		t.Fatal("could not delete leaves 1 and 0")
+	}
+}
+
 func TestForestAddDel(t *testing.T) {
 
 	numAdds := uint32(10)
