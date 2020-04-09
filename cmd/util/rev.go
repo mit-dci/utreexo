@@ -30,16 +30,16 @@ const MaxMessagePayload = (1024 * 1024 * 32) // 32MB
 // RevBlock is the structure of how a block is stored in the
 // rev*.dat file the Bitcoin Core generates
 type RevBlock struct {
-	Magic [4]byte    // Network magic bytes
-	Size  [4]byte    // size of the BlockUndo record
-	Block *BlockUndo // acutal undo record
-	Hash  [32]byte   // 32 byte double sha256 hash of the block
+	Magic [4]byte   // Network magic bytes
+	Size  [4]byte   // size of the BlockUndo record
+	Txs   []*TxUndo // acutal undo record
+	Hash  [32]byte  // 32 byte double sha256 hash of the block
 }
 
 // BlockUndo is the slice of undo information about transactions
 // Excludes the coinbase transaction
 // see github.com/bitcoin/bitcoin/src/undo.h
-type BlockUndo struct {
+type BlockUndoTx struct {
 	Tx []*TxUndo
 }
 
@@ -116,14 +116,13 @@ func (rb *RevBlock) Deserialize(r io.Reader) error {
 		return err
 	}
 
-	rb.Block = new(BlockUndo)
 	for i := uint64(0); i < txCount; i++ {
 		var tx TxUndo
 		err := tx.Deserialize(r)
 		if err != nil {
 			return err
 		}
-		rb.Block.Tx = append(rb.Block.Tx, &tx)
+		rb.Txs = append(rb.Txs, &tx)
 	}
 	return nil
 }

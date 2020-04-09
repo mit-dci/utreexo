@@ -24,9 +24,9 @@ func NewFullPollard() Pollard {
 	return p
 }
 
-// VerifyBlockProof :
-func (p *Pollard) VerifyBlockProof(bp BlockProof) bool {
-	ok, _ := VerifyBlockProof(bp, p.topHashesReverse(), p.numLeaves, p.height())
+// VerifyBatchProof :
+func (p *Pollard) VerifyBatchProof(bp BatchProof) bool {
+	ok, _ := VerifyBatchProof(bp, p.topHashesReverse(), p.numLeaves, p.height())
 	return ok
 }
 
@@ -43,12 +43,12 @@ func (p *Pollard) PosMapSanity() error {
 
 // TODO make interface to reduce code dupe
 
-// ProveBlock, but for pollard.
+// ProveBatch, but for pollard.
 // Now getting really obvious that forest and pollard should both satisfy some
 // kind of utreexoy interface.  And maybe forest shouldn't be called forest.
 // Anyway do that after this.
-func (p *Pollard) ProveBlock(hs []Hash) (BlockProof, error) {
-	var bp BlockProof
+func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
+	var bp BatchProof
 	// skip everything if empty (should this be an error?
 	if len(hs) == 0 {
 		return bp, nil

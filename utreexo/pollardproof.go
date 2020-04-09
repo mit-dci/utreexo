@@ -6,10 +6,10 @@ import (
 
 // IngestBlockProof populates the Pollard with all needed data to delete the
 // targets in the block proof
-func (p *Pollard) IngestBlockProof(bp BlockProof) error {
+func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty Hash
 	// TODO so many things to change
-	ok, proofMap := VerifyBlockProof(
+	ok, proofMap := VerifyBatchProof(
 		bp, p.topHashesReverse(), p.numLeaves, p.height())
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
