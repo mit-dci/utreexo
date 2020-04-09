@@ -14,7 +14,7 @@ type BatchProof struct {
 	// the position of the hashes is implied / computable from the leaf positions
 }
 
-// ToBytes give the bytes for a blockproof.  It errors out silently because
+// ToBytes give the bytes for a BatchProof.  It errors out silently because
 // I don't think the binary.Write errors ever actually happen
 func (bp *BatchProof) ToBytes() []byte {
 	var buf bytes.Buffer

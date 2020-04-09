@@ -145,6 +145,28 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 }
 
 // U32tB converts uint32 to 4 bytes.  Always works.
+func PrefixLen16(b []byte) []byte {
+	l := uint16(len(b))
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, l)
+	return append(buf.Bytes(), b...)
+}
+
+func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
+	if len(b) < 2 {
+		return nil, nil, fmt.Errorf("PrefixedLen slice only %d long", len(b))
+	}
+	prefix, payload := b[:2], b[2:]
+	var l uint16
+	buf := bytes.NewBuffer(prefix)
+	binary.Read(buf, binary.BigEndian, &l)
+	if int(l) > len(payload) {
+		return nil, nil, fmt.Errorf("Prefixed %d but payload %d left", l)
+	}
+	return payload[:l], payload[l:], nil
+}
+
+// U32tB converts uint32 to 4 bytes.  Always works.
 func U32tB(i uint32) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, i)

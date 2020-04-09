@@ -107,22 +107,21 @@ func BuildProofs(
 		// Writes the ttl values for each tx to leveldb
 		ttl.WriteBlock(block, batchan, &batchwg)
 
-		// generate the adds and dels from the transactions passed in
-		// Adds are the TXOs and Dels are the TXINs
+		// Get the add and remove data needed from the block & undo block
 		blockAdds, delLeaves, delHashes, err := genAddDel(block)
 		if err != nil {
 			return err
 		}
 
-		// Verify that the TXINs exist in our forest
-		// This should never fail within the context of our code and setting
-		batchProof, err := genBlockProof(delHashes, forest, block.Height)
+		// use the accumulator to get inclusion proofs, and produce a block
+		// proof with all data needed to verify the block
+		blkProof, err := genBlockProof(delLeaves, delHashes, forest, block.Height)
 		if err != nil {
 			return err
 		}
 
 		// convert blockproof struct to bytes
-		b := batchProof.ToBytes()
+		b := blkProof.ToBytes()
 
 		// Add to WaitGroup and send data to channel to be written
 		// to disk
@@ -137,7 +136,7 @@ func BuildProofs(
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, blockProof.Targets)
+		_, err = forest.Modify(blockAdds, blkProof.Proof.Targets)
 		if err != nil {
 			return err
 		}
@@ -239,14 +238,15 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 // needed for transaction verification.
 func genBlockProof(dels []util.LeafData, delHashes []utreexo.Hash,
 	f *utreexo.Forest, height int32) (
-	utreexo.BatchProof, error) {
+	util.BlockProof, error) {
 
+	var blockP util.BlockProof
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
-	blockProof, err := f.ProveBatch(delHashes)
+	batchProof, err := f.ProveBatch(delHashes)
 	if err != nil {
-		return blockProof, fmt.Errorf("ProveBlock failed at block %d %s %s",
+		return blockP, fmt.Errorf("ProveBlock failed at block %d %s %s",
 			height+1, f.Stats(), err.Error())
 	}
 
@@ -260,7 +260,7 @@ func genBlockProof(dels []util.LeafData, delHashes []utreexo.Hash,
 
 	// Add leafData to struct here
 
-	return blockProof, nil
+	return blockP, nil
 }
 
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and
@@ -343,7 +343,7 @@ func genDels(block util.BlockAndRev) (
 			// TODO get blockhash from headers here -- empty for now
 			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
 
-			if coinbaseif0 == 0 {
+			if txinblock == 0 {
 				l.CbHeight |= 1
 			}
 			l.Amt = out.Value

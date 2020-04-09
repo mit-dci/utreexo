@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/mit-dci/utreexo/utreexo"
 )
 
 type Hash [32]byte
@@ -74,9 +75,15 @@ type BlockAndRev struct {
 type LeafData struct {
 	BlockHash [32]byte
 	Outpoint  wire.OutPoint
-	CbHeight  int32
+	Height    int32
+	Coinbase  bool
 	Amt       int64
 	PkScript  []byte
+}
+
+type BlockProof struct {
+	Proof    utreexo.BatchProof
+	UtxoData []LeafData
 }
 
 func LeafDataFromBytes(b []byte) (LeafData, error) {
@@ -87,7 +94,11 @@ func LeafDataFromBytes(b []byte) (LeafData, error) {
 	copy(l.BlockHash[:], b[0:32])
 	copy(l.Outpoint.Hash[:], b[32:64])
 	l.Outpoint.Index = BtU32(b[64:68])
-	l.CbHeight = BtI32(b[68:72])
+	l.Height = BtI32(b[68:72])
+	if l.Height&1 == 1 {
+		l.Coinbase = true
+	}
+	l.Height >>= 1
 	l.Amt = BtI64(b[72:80])
 	l.PkScript = b[80:]
 
@@ -98,10 +109,51 @@ func LeafDataFromBytes(b []byte) (LeafData, error) {
 func (l *LeafData) ToBytes() (b []byte) {
 	b = append(l.BlockHash[:], l.Outpoint.Hash[:]...)
 	b = append(b, U32tB(l.Outpoint.Index)...)
-	b = append(b, I32tB(l.CbHeight)...)
+	l.Height <<= 1
+	if l.Coinbase {
+		l.Height |= 1
+	}
+	b = append(b, I32tB(l.Height)...)
 	b = append(b, I64tB(l.Amt)...)
 	b = append(b, l.PkScript...)
 	return
+}
+
+// compact serialization for LeafData:
+// don't need to send BlockHash; figure it out from height
+// don't need to send outpoint, it's already in the msgBlock
+// can use tags for PkScript
+// so it's just height, coinbaseness, amt, pkscript tag
+
+// turn a LeafData into bytes (compact, for sending in blockProof) -
+// don't hash this, it doesn't commit to everything
+func (l *LeafData) ToCompactBytes() (b []byte) {
+	l.Height <<= 1
+	if l.Coinbase {
+		l.Height |= 1
+	}
+	b = append(b, I32tB(l.Height)...)
+	b = append(b, I64tB(l.Amt)...)
+	b = append(b, l.PkScript...)
+	return
+}
+
+// LeafDataFromCompactBytes doesn't fill in blockhash, outpoint, and in
+// most cases PkScript, so something else has to fill those in later.
+func LeafDataFromCompactBytes(b []byte) (LeafData, error) {
+	var l LeafData
+	if len(b) < 13 {
+		return l, fmt.Errorf("Not long enough for leafdata, need 80 bytes")
+	}
+	l.Height = BtI32(b[0:4])
+	if l.Height&1 == 1 {
+		l.Coinbase = true
+	}
+	l.Height >>= 1
+	l.Amt = BtI64(b[4:12])
+	l.PkScript = b[12:]
+
+	return l, nil
 }
 
 // turn a LeafData into a LeafHash
@@ -113,4 +165,80 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 	var l LeafData
 
 	return l, nil
+}
+
+// BlockProof serialization:
+// There's a bunch of variable length things (the batchProof.hashes, and the
+// LeafDatas) so we prefix lengths for those.  Ordering is:
+// batch proof length (4 bytes)
+// batch proof
+// Bunch of LeafDatas, prefixed with 2-byte lengths
+func (bp *BlockProof) ToBytes() (b []byte) {
+
+	// first stick the batch proof on the beginning
+	batchBytes := bp.Proof.ToBytes()
+	b = U32tB(uint32(len(batchBytes)))
+	b = append(b, batchBytes...)
+
+	// next, all the leafDatas
+	for _, ld := range bp.UtxoData {
+		ldb := ld.ToBytes()
+		b = append(b, PrefixLen16(ldb)...)
+	}
+
+	return
+}
+
+func BlockProofFromBytes(b []byte) (bp BlockProof, err error) {
+
+	if len(b) < 4 {
+		err = fmt.Errorf("block proof too short %d bytes", len(b))
+		return
+	}
+	batchLen := BtU32(b[:4])
+	if batchLen > uint32(len(b)-4) {
+		err = fmt.Errorf("block proof says %d bytes but %d remain",
+			batchLen, len(b)-4)
+		return
+	}
+	b = b[4:]
+	batchProofBytes := b[:batchLen]
+	leafDataBytes := b[batchLen:]
+	bp.Proof, err = utreexo.FromBytesBatchProof(batchProofBytes)
+	if err != nil {
+		return
+	}
+	// got the batch proof part; now populate the leaf data part
+	// first there are as many leafDatas as there are proof targets
+	bp.UtxoData = make([]LeafData, len(bp.Proof.Targets))
+
+	var ldb []byte
+	// loop until we've filled in every leafData (or something breaks first)
+	for i, _ := range bp.UtxoData {
+		ldb, leafDataBytes, err = PopPrefixLen16(leafDataBytes)
+		if err != nil {
+			return
+		}
+		bp.UtxoData[i], err = LeafDataFromBytes(ldb)
+		if err != nil {
+			return
+		}
+	}
+
+	return bp, nil
+}
+
+// TODO use compact leafDatas in the block proofs -- probably 50%+ space savings
+// Also should be default / the only serialization.  Whenever you've got the
+// block proof, you've also got the block, so should always be OK to omit the
+// data that's already in the block.
+
+func BlockProofFromCompactBytes(b []byte) (BlockProof, error) {
+	var bp BlockProof
+
+	return bp, nil
+}
+
+func (bp *BlockProof) ToCompactBytes() (b []byte) {
+	return
 }
