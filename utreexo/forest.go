@@ -177,6 +177,8 @@ func (f *Forest) removev4(dels []uint64) error {
 func (f *Forest) swapNodes(s arrow, height uint8) error {
 	if s.from == s.to {
 		// these shouldn't happen, and seems like the don't
+
+		fmt.Printf("%s\nmove %d to %d\n", f.ToString(), s.from, s.to)
 		panic("got non-moving swap")
 	}
 	if height == 0 {
@@ -359,6 +361,9 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 	if int64(f.numLeaves)+delta < 0 {
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(dels), f.numLeaves)
+	}
+	if !checkSortedNoDupes(dels) {
+		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
 	}
 	// remap to expand the forest if needed
 	for int64(f.numLeaves)+delta > int64(1<<f.height) {
