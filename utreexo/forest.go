@@ -362,8 +362,13 @@ func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(dels), f.numLeaves)
 	}
-	if !checkSortedNoDupes(dels) {
+	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
 		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
+	}
+	for _, a := range adds { // check for empty leaves
+		if a.Hash == empty {
+			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")
+		}
 	}
 	// remap to expand the forest if needed
 	for int64(f.numLeaves)+delta > int64(1<<f.height) {
