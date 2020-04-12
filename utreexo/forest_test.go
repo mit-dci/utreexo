@@ -47,6 +47,35 @@ func TestForestAddDel(t *testing.T) {
 	}
 }
 
+func TestForestFixed(t *testing.T) {
+	f := NewForest(nil)
+	numadds := 5
+	numdels := 3
+	adds := make([]LeafTXO, numadds)
+	dels := make([]uint64, numdels)
+
+	for j, _ := range adds {
+		adds[j].Hash[0] = uint8(j >> 8)
+		adds[j].Hash[1] = uint8(j)
+		adds[j].Hash[3] = 0xaa
+	}
+	for k, _ := range dels {
+		dels[k] = uint64(k)
+	}
+
+	_, err := f.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// fmt.Printf(f.ToString())
+
+	_, err = f.Modify(nil, dels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// fmt.Printf(f.ToString())
+}
+
 // Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
 	f := NewForest(nil)
