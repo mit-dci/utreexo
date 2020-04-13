@@ -67,13 +67,14 @@ func TestForestFixed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// fmt.Printf(f.ToString())
-
+	fmt.Printf(f.ToString())
+	fmt.Printf(f.PrintPositionMap())
 	_, err = f.Modify(nil, dels)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// fmt.Printf(f.ToString())
+	fmt.Printf(f.ToString())
+	fmt.Printf(f.PrintPositionMap())
 }
 
 // Add 2. delete 1.  Repeat.
