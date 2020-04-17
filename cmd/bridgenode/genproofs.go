@@ -236,7 +236,7 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 // inclusion proof from the accumulator.  It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
-func genBlockProof(dels []util.LeafData, delHashes []utreexo.Hash,
+func genBlockProof(delLeaves []util.LeafData, delHashes []utreexo.Hash,
 	f *utreexo.Forest, height int32) (
 	util.BlockProof, error) {
 
@@ -249,16 +249,20 @@ func genBlockProof(dels []util.LeafData, delHashes []utreexo.Hash,
 		return blockP, fmt.Errorf("ProveBlock failed at block %d %s %s",
 			height+1, f.Stats(), err.Error())
 	}
+	if len(batchProof.Targets) != len(delLeaves) {
+		return blockP, fmt.Errorf("ProveBatch %d targets but %d leafData",
+			len(batchProof.Targets), len(delLeaves))
+	}
 
-	// Takes time and redundant, can enable for testing but not real use
-	// Sanity check. Should never fail.
+	// Optional Sanity check. Should never fail.
 	// ok := f.VerifyBatchProof(blockProof)
 	// if !ok {
 	// return blockProof,
 	// fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
 	// }
 
-	// Add leafData to struct here
+	blockP.Proof = batchProof
+	blockP.UtxoData = delLeaves
 
 	return blockP, nil
 }
@@ -281,8 +285,7 @@ func genAddDel(block util.BlockAndRev) (blockAdds []utreexo.LeafTXO,
 // genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
 // Skips all the OP_RETURN transactions
 func genAdds(bl util.BlockAndRev) (hashleaves []utreexo.LeafTXO) {
-	bh := bl.Blockhash
-	cheight := bl.Height << 1 // *2 because of the weird coinbase bit thing
+	// bh := bl.Blockhash
 	for coinbaseif0, tx := range bl.Txs {
 		// cache txid aka txhash
 		txid := tx.MsgTx().TxHash()
@@ -296,9 +299,9 @@ func genAdds(bl util.BlockAndRev) (hashleaves []utreexo.LeafTXO) {
 			// l.BlockHash = bh
 			l.Outpoint.Hash = txid
 			l.Outpoint.Index = uint32(i)
-			l.CbHeight = cheight
+			l.Height = bl.Height
 			if coinbaseif0 == 0 {
-				l.CbHeight |= 1
+				l.Coinbase = true
 			}
 			l.Amt = out.Value
 			l.PkScript = out.PkScript
@@ -318,8 +321,8 @@ func genAdds(bl util.BlockAndRev) (hashleaves []utreexo.LeafTXO) {
 func genDels(block util.BlockAndRev) (
 	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
 
-	// make sure same number of txs and rev txs
-	if len(block.Txs) != len(block.Rev.Txs) {
+	// make sure same number of txs and rev txs (minus coinbase)
+	if len(block.Txs)-1 != len(block.Rev.Txs) {
 		err = fmt.Errorf("block %d %d txs but %d rev txs",
 			block.Height, len(block.Txs), len(block.Rev.Txs))
 	}
@@ -327,6 +330,7 @@ func genDels(block util.BlockAndRev) (
 		if txinblock == 0 {
 			continue
 		}
+		txinblock--
 		// make sure there's the same number of txins
 		if len(tx.MsgTx().TxIn) != len(block.Rev.Txs[txinblock].TxIn) {
 			err = fmt.Errorf("block %d tx %d has %d inputs but %d rev entries",
@@ -339,20 +343,17 @@ func genDels(block util.BlockAndRev) (
 			var l util.LeafData
 
 			l.Outpoint = txin.PreviousOutPoint
-			l.CbHeight = block.Rev.Txs[txinblock].TxIn[i].Height
+			l.Height = block.Rev.Txs[txinblock].TxIn[i].Height
 			// TODO get blockhash from headers here -- empty for now
 			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
 
 			if txinblock == 0 {
-				l.CbHeight |= 1
+				l.Coinbase = true
 			}
-			l.Amt = out.Value
-			l.PkScript = out.PkScript
-
+			l.Amt = block.Rev.Txs[txinblock].TxIn[i].Amount
+			l.PkScript = block.Rev.Txs[txinblock].TxIn[i].PKScript
 		}
-
 	}
-
 	return
 }
 

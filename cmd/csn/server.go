@@ -41,21 +41,22 @@ func genPollard(
 	}
 
 	// deserialize byte slice to utreexo.BlockProof struct
-	bp, err := utreexo.FromBytesBlockProof(bpBytes)
+	blkp, err := util.BlockProofFromCompactBytes(bpBytes)
+
 	if err != nil {
 		return err
 	}
-	*totalDels += len(bp.Targets) // for benchmarking
+	*totalDels += len(blkp.Proof.Targets) // for benchmarking
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err = p.IngestBlockProof(bp)
+	err = p.IngestBatchProof(blkp.Proof)
 	if err != nil {
 		return err
 	}
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, bp.Targets)
+	err = p.Modify(blockAdds, blkp.Proof.Targets)
 	if err != nil {
 		return err
 	}

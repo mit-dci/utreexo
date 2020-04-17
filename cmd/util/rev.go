@@ -62,7 +62,7 @@ type TxInUndo struct {
 	PKScript []byte
 
 	// Value of the spent UTXO
-	Amount uint64
+	Amount int64
 
 	// Whether if the TxInUndo is a coinbase or not
 	// Not actually included in the rev*.dat files
