@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"sort"
+	"testing"
 )
 
 // "verbose" is a global const to get lots of printfs for debugging
@@ -607,3 +609,22 @@ func U8tB(i uint8) []byte {
 	binary.Write(&buf, binary.BigEndian, i)
 	return buf.Bytes()
 }
+
+// START BLOCK FROM https://git.sr.ht/~samwhited/testlog/tree/master/testlog.go (2-clause BSD)
+
+// New returns a new logger that logs to the provided testing.T.
+func NewLogger(t testing.TB) *log.Logger {
+	t.Helper()
+	return log.New(testWriter{TB: t}, "", log.Lshortfile)
+}
+
+type testWriter struct {
+	testing.TB
+}
+
+func (tw testWriter) Write(p []byte) (int, error) {
+	tw.Helper()
+	tw.Logf("%s", p)
+	return len(p), nil
+}
+// END BLOCK from samwhited/testlog

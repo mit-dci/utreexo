@@ -2,24 +2,27 @@ package utreexo
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"testing"
+	utreLog "github.com/mit-dci/utreexo/log"
 )
 
 func TestPollardFullRand(t *testing.T) {
+	logger := NewLogger(t)
 	for z := 0; z < 30; z++ {
 		// z := 1
 		rand.Seed(int64(z))
-		fmt.Printf("randseed %d\n", z)
-		err := pollardFullRandomRemember(20)
+		logger.Printf("randseed %d\n", z)
+		err := pollardFullRandomRemember(logger, 20)
 		if err != nil {
-			fmt.Printf("randseed %d\n", z)
+			logger.Printf("randseed %d\n", z)
 			t.Fatal(err)
 		}
 	}
 }
 
-func pollardFullRandomRemember(blocks int32) error {
+func pollardFullRandomRemember(logger *log.Logger, blocks int32) error {
 
 	// ffile, err := os.Create("/dev/shm/forfile")
 	// if err != nil {
@@ -27,7 +30,8 @@ func pollardFullRandomRemember(blocks int32) error {
 	// }
 
 	var fp, p Pollard
-	fp = NewFullPollard()
+	p.loggers.SetLoggers(logger)
+	fp = NewFullPollard(utreLog.UseLoggerForAll(logger))
 
 	// p.Minleaves = 0
 
@@ -36,7 +40,7 @@ func pollardFullRandomRemember(blocks int32) error {
 	for b := int32(0); b < blocks; b++ {
 		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 
-		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
+		logger.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
 
 		// get proof for these deletions (with respect to prev block)
@@ -50,7 +54,7 @@ func pollardFullRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("del %v\n", bp.Targets)
+		logger.Printf("del %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		err = fp.Modify(adds, bp.Targets)
@@ -65,7 +69,7 @@ func pollardFullRandomRemember(blocks int32) error {
 
 		err = fp.PosMapSanity()
 		if err != nil {
-			fmt.Printf(fp.ToString())
+			logger.Printf(fp.ToString())
 			return err
 		}
 
@@ -75,9 +79,9 @@ func pollardFullRandomRemember(blocks int32) error {
 			return err
 		}
 
-		fmt.Printf("pol postadd %s", p.ToString())
+		logger.Printf("pol postadd %s", p.ToString())
 
-		fmt.Printf("fulpol postadd %s", fp.ToString())
+		logger.Printf("fulpol postadd %s", fp.ToString())
 
 		fullTops := fp.topHashesReverse()
 		polTops := p.topHashesReverse()
@@ -87,15 +91,15 @@ func pollardFullRandomRemember(blocks int32) error {
 			return fmt.Errorf("block %d fulpol %d tops, pol %d tops",
 				sn.blockHeight, len(fullTops), len(polTops))
 		}
-		fmt.Printf("top matching: ")
+		logger.Printf("top matching: ")
 		for i, ft := range fullTops {
-			fmt.Printf("fp %04x p %04x ", ft[:4], polTops[i][:4])
+			logger.Printf("fp %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, fulpol %x pol %x",
 					sn.blockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
-		fmt.Printf("\n")
+		logger.Printf("\n")
 	}
 
 	return nil

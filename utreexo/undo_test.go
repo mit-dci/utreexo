@@ -2,42 +2,46 @@ package utreexo
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"testing"
 )
 
 func TestUndoFixed(t *testing.T) {
+	logger := NewLogger(t)
 	rand.Seed(2)
 
 	// needs in-order
-	err := undoAddDelOnce(6, 4, 4)
+	err := undoAddDelOnce(logger, 6, 4, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestUndoRandom(t *testing.T) {
+	logger := NewLogger(t)
 
 	for z := int64(0); z < 100; z++ {
 		// z := int64(11)
 		rand.Seed(z)
-		err := undoOnceRandom(20)
+		err := undoOnceRandom(logger, 20)
 		if err != nil {
-			fmt.Printf("rand seed %d\n", z)
+			logger.Printf("rand seed %d\n", z)
 			t.Fatal(err)
 		}
 	}
 }
 
 func TestUndoTest(t *testing.T) {
+	logger := NewLogger(t)
 	rand.Seed(1)
-	err := undoTestSimChain()
+	err := undoTestSimChain(logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func undoOnceRandom(blocks int32) error {
+func undoOnceRandom(logger *log.Logger, blocks int32) error {
 	f := NewForest(nil)
 
 	sc := NewSimChain(0x07)
@@ -46,7 +50,7 @@ func undoOnceRandom(blocks int32) error {
 
 		adds, delHashes := sc.NextBlock(rand.Uint32() & 0x03)
 
-		fmt.Printf("\t\tblock %d del %d add %d - %s\n",
+		logger.Printf("\t\tblock %d del %d add %d - %s\n",
 			sc.blockHeight, len(delHashes), len(adds), f.Stats())
 
 		bp, err := f.ProveBlock(delHashes)
@@ -58,10 +62,10 @@ func undoOnceRandom(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf(f.ToString())
-		fmt.Printf(sc.ttlString())
+		logger.Printf(f.ToString())
+		logger.Printf(sc.ttlString())
 		for h, p := range f.positionMap {
-			fmt.Printf("%x@%d ", h[:4], p)
+			logger.Printf("%x@%d ", h[:4], p)
 		}
 		err = f.PosMapSanity()
 		if err != nil {
@@ -70,14 +74,14 @@ func undoOnceRandom(blocks int32) error {
 
 		//undo every 3rd block
 		if b%3 == 2 {
-			fmt.Printf(ub.ToString())
+			logger.Printf(ub.ToString())
 			err := f.Undo(*ub)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("\n post undo map: ")
+			logger.Printf("\n post undo map: ")
 			for h, p := range f.positionMap {
-				fmt.Printf("%x@%d ", h[:4], p)
+				logger.Printf("%x@%d ", h[:4], p)
 			}
 			sc.BackOne(adds, delHashes)
 		}
@@ -86,22 +90,22 @@ func undoOnceRandom(blocks int32) error {
 	return nil
 }
 
-func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
+func undoAddDelOnce(logger *log.Logger, numStart, numAdds, numDels uint32) error {
 	f := NewForest(nil)
 	sc := NewSimChain(0xff)
 
 	// --------------- block 0
 	// make starting forest with numStart leaves, and store tops
 	adds, _ := sc.NextBlock(numStart)
-	fmt.Printf("adding %d leaves\n", numStart)
+	logger.Printf("adding %d leaves\n", numStart)
 	_, err := f.Modify(adds, nil)
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
+	logger.Printf(f.ToString())
 	beforeTops := f.GetTops()
 	for i, h := range beforeTops {
-		fmt.Printf("beforeTops %d %x\n", i, h)
+		logger.Printf("beforeTops %d %x\n", i, h)
 	}
 
 	// ---------------- block 1
@@ -119,17 +123,17 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		return err
 	}
 
-	fmt.Printf("block 1 add %d rem %d\n", numAdds, numDels)
+	logger.Printf("block 1 add %d rem %d\n", numAdds, numDels)
 
 	ub, err := f.Modify(adds, bp.Targets)
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
-	fmt.Printf(ub.ToString())
+	logger.Printf(f.ToString())
+	logger.Printf(ub.ToString())
 	afterTops := f.GetTops()
 	for i, h := range afterTops {
-		fmt.Printf("afterTops %d %x\n", i, h)
+		logger.Printf("afterTops %d %x\n", i, h)
 	}
 
 	err = f.Undo(*ub)
@@ -139,34 +143,34 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 
 	undoneTops := f.GetTops()
 	for i, h := range undoneTops {
-		fmt.Printf("undoneTops %d %x\n", i, h)
+		logger.Printf("undoneTops %d %x\n", i, h)
 	}
 	for h, p := range f.positionMap {
-		fmt.Printf("%x@%d ", h[:4], p)
+		logger.Printf("%x@%d ", h[:4], p)
 	}
-	fmt.Printf("tops: ")
+	logger.Printf("tops: ")
 	for i, _ := range beforeTops {
-		fmt.Printf("pre %04x post %04x ", beforeTops[i][:4], undoneTops[i][:4])
+		logger.Printf("pre %04x post %04x ", beforeTops[i][:4], undoneTops[i][:4])
 		if undoneTops[i] != beforeTops[i] {
 			return fmt.Errorf("block %d top %d mismatch, pre %x post %x",
 				sc.blockHeight, i, beforeTops[i][:4], undoneTops[i][:4])
 		}
 	}
-	fmt.Printf("\n")
+	logger.Printf("\n")
 
 	return nil
 }
 
-func undoTestSimChain() error {
+func undoTestSimChain(logger *log.Logger) error {
 
 	sc := NewSimChain(7)
 	sc.NextBlock(3)
 	sc.NextBlock(3)
 	sc.NextBlock(3)
-	fmt.Printf(sc.ttlString())
+	logger.Printf("\n" + sc.ttlString())
 	l1, h1 := sc.NextBlock(3)
-	fmt.Printf(sc.ttlString())
+	logger.Printf("\n" + sc.ttlString())
 	sc.BackOne(l1, h1)
-	fmt.Printf(sc.ttlString())
+	logger.Printf("\n" + sc.ttlString())
 	return nil
 }

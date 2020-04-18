@@ -2,6 +2,7 @@ package utreexo
 
 import (
 	"fmt"
+	"github.com/mit-dci/utreexo/log"
 )
 
 // read is just like forestData read but for pollard
@@ -18,8 +19,9 @@ func (p *Pollard) read(pos uint64) Hash {
 }
 
 // NewFullPollard gives you a Pollard with an activated
-func NewFullPollard() Pollard {
+func NewFullPollard(loggers log.Loggers) Pollard {
 	var p Pollard
+	p.loggers = loggers
 	p.positionMap = make(map[MiniHash]uint64)
 	return p
 }

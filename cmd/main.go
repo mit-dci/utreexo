@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	bridge "github.com/mit-dci/utreexo/cmd/bridgenode"
 	"github.com/mit-dci/utreexo/cmd/csn"
+	ourLog "github.com/mit-dci/utreexo/log"
 )
 
 var msg = `
@@ -59,9 +61,14 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig)
 
+	loggers := ourLog.Loggers {
+		Csn:     log.New(os.Stdout, "csn: ", log.Lshortfile),
+		Pollard: log.New(os.Stdout, "pollard: ", log.Lshortfile),
+	}
+
 	switch os.Args[1] {
 	case "ibdsim":
-		err := csn.RunIBD(net, offsetfile, ttldb, sig)
+		err := csn.RunIBD(net, offsetfile, ttldb, sig, loggers)
 		if err != nil {
 			panic(err)
 		}

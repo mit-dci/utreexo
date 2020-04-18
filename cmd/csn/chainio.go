@@ -5,20 +5,20 @@ import (
 	"sync"
 
 	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/log"
 	"github.com/mit-dci/utreexo/utreexo"
 )
 
 // restorePollard restores the pollard from disk to memory.
 // If starting anew, it just returns a empty pollard.
-func restorePollard() (p utreexo.Pollard, err error) {
-
+func restorePollard(loggers log.Loggers) (p utreexo.Pollard, err error) {
 	// Restore Pollard
 	pollardFile, err := os.OpenFile(
 		util.PollardFilePath, os.O_RDWR, 0600)
 	if err != nil {
 		return p, err
 	}
-	err = p.RestorePollard(pollardFile)
+	err = p.RestorePollard(pollardFile, loggers)
 	if err != nil {
 		return p, err
 	}

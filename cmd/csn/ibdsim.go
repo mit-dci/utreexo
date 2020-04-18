@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/log"
 )
 
-func RunIBD(net wire.BitcoinNet, offsetfile string, ttldb string, sig chan bool) error {
+func RunIBD(net wire.BitcoinNet, offsetfile string, ttldb string, sig chan bool, loggers log.Loggers) error {
 	// start server & listen
 	// go IBDServer()
 
 	// start client & connect
-	return IBDClient(net, offsetfile, ttldb, sig)
+	return IBDClient(net, offsetfile, ttldb, sig, loggers)
 }
 
 func stopRunIBD(sig chan bool, stopGoing chan bool, done chan bool) {

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/log"
 )
 
 // Pollard is the sparse representation of the utreexo forest, using
@@ -16,6 +17,8 @@ import (
 
 // Pollard :
 type Pollard struct {
+	loggers log.Loggers
+
 	numLeaves uint64 // number of leaves in the pollard forest
 
 	tops []polNode // slice of the tree tops, which are polNodes.
@@ -51,7 +54,7 @@ func (n *polNode) auntable() bool {
 // could also return true if n itself is nil! (maybe a bad idea?)
 func (n *polNode) deadEnd() bool {
 	// if n == nil {
-	// 	fmt.Printf("nil deadend\n")
+	// 	p.loggers.Pollard.Printf("nil deadend\n")
 	// 	return true
 	// }
 	return n.niece[0] == nil && n.niece[1] == nil
@@ -151,12 +154,14 @@ func (p *Pollard) WritePollard(pollardFile *os.File) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Pollard leaves:", p.numLeaves)
+	p.loggers.Pollard.Println("leaves:", p.numLeaves)
 	return nil
 }
 
-func (p *Pollard) RestorePollard(pollardFile *os.File) error {
-	fmt.Println("Restoring Pollard Roots...")
+func (p *Pollard) RestorePollard(pollardFile *os.File, loggers log.Loggers) error {
+	p.loggers = loggers
+
+	loggers.Pollard.Println("Restoring Pollard Roots...")
 
 	var byteLeaves [8]byte
 	_, err := pollardFile.Read(byteLeaves[:])
@@ -164,7 +169,7 @@ func (p *Pollard) RestorePollard(pollardFile *os.File) error {
 		panic(err)
 	}
 	p.numLeaves = BtU64(byteLeaves[:])
-	fmt.Println("Pollard Leaves:", p.numLeaves)
+	loggers.Pollard.Println("Leaves:", p.numLeaves)
 
 	pstat, err := pollardFile.Stat()
 	if err != nil {
@@ -183,6 +188,6 @@ func (p *Pollard) RestorePollard(pollardFile *os.File) error {
 		p.tops = append(p.tops, *n)
 		pos += 32
 	}
-	fmt.Println("Finished restoring pollard")
+	loggers.Pollard.Println("Finished restoring pollard")
 	return nil
 }

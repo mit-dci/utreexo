@@ -9,6 +9,7 @@ import (
 
 	"github.com/mit-dci/lit/wire"
 	"github.com/mit-dci/utreexo/cmd/utils"
+	"github.com/mit-dci/utreexo/log"
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -19,7 +20,7 @@ import (
 // the deletion data and proofs though, we get from the leveldb
 // which was created by the bridge node.
 func RunIBDWithClair(isTestnet bool, offsetfile string, ttldb string,
-	scheduleFileName string, sig chan bool) error {
+	scheduleFileName string, sig chan bool, loggers log.Loggers) error {
 
 	//Channel to alert the main loop to break
 	stopGoing := make(chan bool, 1)
@@ -78,6 +79,7 @@ func RunIBDWithClair(isTestnet bool, offsetfile string, ttldb string,
 	totalDels := 0
 
 	var p utreexo.Pollard
+	p.loggers = loggers
 
 	//	p.Minleaves = 1 << 30
 	// p.Lookahead = 1000

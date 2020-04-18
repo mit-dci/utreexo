@@ -1,11 +1,11 @@
 package csn
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/log"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -14,7 +14,8 @@ import (
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
 func IBDClient(net wire.BitcoinNet,
-	offsetfile string, ttldb string, sig chan bool) error {
+	offsetfile string, ttldb string, sig chan bool, loggers log.Loggers) error {
+	log := loggers.Csn
 
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
@@ -43,7 +44,7 @@ func IBDClient(net wire.BitcoinNet,
 	// Make neccesary directories
 	util.MakePaths()
 
-	p, height, lastIndexOffsetHeight, err := initCSNState()
+	p, height, lastIndexOffsetHeight, err := initCSNState(loggers)
 	if err != nil {
 		panic(err)
 	}
@@ -89,14 +90,14 @@ func IBDClient(net wire.BitcoinNet,
 		}
 
 		//if height%10000 == 0 {
-		//	fmt.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
+		//	log.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
 		//		height, newForest.Stats(),
 		//		plustime.Seconds(), time.Now().Sub(starttime).Seconds(),
 		//		totalProofNodes)
 		//}
 
 		if height%10000 == 0 {
-			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
+			log.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 				height+1, totalTXOAdded, totalDels, p.Stats(),
 				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 		}
@@ -111,13 +112,13 @@ func IBDClient(net wire.BitcoinNet,
 	pFile.Close()
 	pOffsetFile.Close()
 
-	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
+	log.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 		height, totalTXOAdded, totalDels, p.Stats(),
 		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 
 	saveIBDsimData(height, p)
 
-	fmt.Println("Done Writing")
+	log.Println("Done Writing")
 
 	done <- true
 

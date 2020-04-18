@@ -2,6 +2,7 @@ package utreexo
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -25,6 +26,7 @@ func TestDeleteReverseOrder(t *testing.T) {
 }
 
 func TestForestAddDel(t *testing.T) {
+	logger := NewLogger(t)
 
 	numAdds := uint32(10)
 
@@ -47,11 +49,12 @@ func TestForestAddDel(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+		logger.Printf("nl %d %s", f.numLeaves, f.ToString())
 	}
 }
 
 func TestForestFixed(t *testing.T) {
+	logger := NewLogger(t)
 	f := NewForest(nil)
 	numadds := 5
 	numdels := 3
@@ -71,18 +74,19 @@ func TestForestFixed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf(f.ToString())
-	fmt.Printf(f.PrintPositionMap())
+	logger.Printf(f.ToString())
+	logger.Printf(f.PrintPositionMap())
 	_, err = f.Modify(nil, dels)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf(f.ToString())
-	fmt.Printf(f.PrintPositionMap())
+	logger.Printf(f.ToString())
+	logger.Printf(f.PrintPositionMap())
 }
 
 // Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
+	logger := NewLogger(t)
 	f := NewForest(nil)
 	var absidx uint32
 	adds := make([]LeafTXO, 2)
@@ -101,7 +105,7 @@ func Test2Fwd1Back(t *testing.T) {
 		}
 
 		//		t.Logf("-------- block %d\n", i)
-		fmt.Printf("\t\t\t########### block %d ##########\n\n", i)
+		logger.Printf("\t\t\t########### block %d ##########\n\n", i)
 
 		// add 2
 		_, err := f.Modify(adds, nil)
@@ -110,7 +114,7 @@ func Test2Fwd1Back(t *testing.T) {
 		}
 
 		s := f.ToString()
-		fmt.Printf(s)
+		logger.Printf(s)
 
 		// get proof for the first
 		_, err = f.Prove(adds[0].Hash)
@@ -125,7 +129,7 @@ func Test2Fwd1Back(t *testing.T) {
 		//		}
 
 		//		s = f.ToString()
-		//		fmt.Printf(s)
+		//		logger.Printf(s)
 
 		// get proof for the 2nd
 		keep, err := f.Prove(adds[1].Hash)
@@ -145,9 +149,10 @@ func Test2Fwd1Back(t *testing.T) {
 // Add and delete variable numbers, repeat.
 // deletions are all on the left side and contiguous.
 func TestAddxDelyLeftFullBlockProof(t *testing.T) {
+	logger := NewLogger(t)
 	for x := 0; x < 10; x++ {
 		for y := 0; y < x; y++ {
-			err := AddDelFullBlockProof(x, y)
+			err := AddDelFullBlockProof(logger, x, y)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +162,7 @@ func TestAddxDelyLeftFullBlockProof(t *testing.T) {
 }
 
 // Add x, delete y, construct & reconstruct blockproof
-func AddDelFullBlockProof(nAdds, nDels int) error {
+func AddDelFullBlockProof(logger *log.Logger, nAdds, nDels int) error {
 	if nDels > nAdds-1 {
 		return fmt.Errorf("too many deletes")
 	}
@@ -194,7 +199,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	if !worked {
 		return fmt.Errorf("VerifyBlockProof failed")
 	}
-	fmt.Printf("VerifyBlockProof worked\n")
+	logger.Printf("VerifyBlockProof worked\n")
 	return nil
 }
 
@@ -203,8 +208,8 @@ func TestDeleteNonExisting(t *testing.T) {
 	deletions := []uint64{0}
 	_, err := f.Modify(nil, deletions)
 	if err == nil {
-		t.Fatal(fmt.Errorf(
-			"shouldn't be able to delete non-existing leaf 0 from empty forest"))
+		t.Fatalf(
+			"shouldn't be able to delete non-existing leaf 0 from empty forest")
 	}
 }
 

@@ -5,12 +5,13 @@ import (
 	"os"
 
 	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/log"
 	"github.com/mit-dci/utreexo/utreexo"
 )
 
 // initCSNState attempts to load and initialize the CSN state from the disk.
 // If a CSN state is not present, chain is initialized to the genesis
-func initCSNState() (
+func initCSNState(loggers log.Loggers) (
 	p utreexo.Pollard, height int32, lastIndexOffsetHeight int32, err error) {
 
 	var offsetInitialized, pollardInitialized bool
@@ -37,7 +38,7 @@ func initCSNState() (
 	if pollardInitialized {
 		fmt.Println("Has access to forestdata, resuming")
 		var err error
-		p, err = restorePollard()
+		p, err = restorePollard(loggers)
 		if err != nil {
 			return p, 0, 0, err
 		}
@@ -47,7 +48,7 @@ func initCSNState() (
 		}
 
 	} else {
-		fmt.Println("Creating new pollarddata")
+		loggers.Csn.Println("Creating new pollarddata")
 
 		// Create files needed for pollard
 		_, err := os.OpenFile(

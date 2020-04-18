@@ -2,38 +2,41 @@ package utreexo
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"testing"
 )
 
 func TestPollardRand(t *testing.T) {
+	logger := NewLogger(t)
 	for z := 0; z < 30; z++ {
 		// z := 11221
 		// z := 55
 		rand.Seed(int64(z))
-		fmt.Printf("randseed %d\n", z)
-		err := pollardRandomRemember(20)
+		logger.Printf("randseed %d\n", z)
+		err := pollardRandomRemember(logger, 20)
 		if err != nil {
-			fmt.Printf("randseed %d\n", z)
+			logger.Printf("randseed %d\n", z)
 			t.Fatal(err)
 		}
 	}
 }
 
 func TestPollardFixed(t *testing.T) {
+	logger := NewLogger(t)
 	rand.Seed(2)
 	//	err := pollardMiscTest()
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
 	//	for i := 6; i < 100; i++ {
-	err := fixedPollard(7)
+	err := fixedPollard(logger, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func pollardRandomRemember(blocks int32) error {
+func pollardRandomRemember(logger *log.Logger, blocks int32) error {
 
 	// ffile, err := os.Create("/dev/shm/forfile")
 	// if err != nil {
@@ -43,6 +46,7 @@ func pollardRandomRemember(blocks int32) error {
 	f := NewForest(nil)
 
 	var p Pollard
+	p.loggers.SetLoggers(logger)
 
 	// p.Minleaves = 0
 
@@ -51,7 +55,7 @@ func pollardRandomRemember(blocks int32) error {
 	for b := int32(0); b < blocks; b++ {
 		adds, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
 
-		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
+		logger.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.blockHeight, len(delHashes), len(adds), p.Stats())
 
 		// get proof for these deletions (with respect to prev block)
@@ -65,7 +69,7 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("del %v\n", bp.Targets)
+		logger.Printf("del %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
@@ -80,15 +84,15 @@ func pollardRandomRemember(blocks int32) error {
 
 		err = f.sanity()
 		if err != nil {
-			fmt.Printf("frs broke %s", f.ToString())
+			logger.Printf("frs broke %s", f.ToString())
 			for h, p := range f.positionMap {
-				fmt.Printf("%x@%d ", h[:4], p)
+				logger.Printf("%x@%d ", h[:4], p)
 			}
 			return err
 		}
 		err = f.PosMapSanity()
 		if err != nil {
-			fmt.Printf(f.ToString())
+			logger.Printf(f.ToString())
 			return err
 		}
 
@@ -98,9 +102,9 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		fmt.Printf("pol postadd %s", p.ToString())
+		logger.Printf("pol postadd %s", p.ToString())
 
-		fmt.Printf("frs postadd %s", f.ToString())
+		logger.Printf("frs postadd %s", f.ToString())
 
 		// check all leaves match
 		if !p.equalToForestIfThere(f) {
@@ -115,23 +119,23 @@ func pollardRandomRemember(blocks int32) error {
 			return fmt.Errorf("block %d full %d tops, pol %d tops",
 				sn.blockHeight, len(fullTops), len(polTops))
 		}
-		fmt.Printf("top matching: ")
+		logger.Printf("top matching: ")
 		for i, ft := range fullTops {
-			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
+			logger.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
 					sn.blockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
-		fmt.Printf("\n")
+		logger.Printf("\n")
 	}
 
 	return nil
 }
 
 // fixedPollard adds and removes things in a non-random way
-func fixedPollard(leaves int32) error {
-	fmt.Printf("\t\tpollard test add %d remove 1\n", leaves)
+func fixedPollard(logger *log.Logger, leaves int32) error {
+	logger.Printf("\t\tpollard test add %d remove 1\n", leaves)
 	f := NewForest(nil)
 
 	leafCounter := uint64(0)
@@ -161,16 +165,17 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("forest  post del %s", f.ToString())
+	logger.Printf("forest  post del %s", f.ToString())
 
 	var p Pollard
+	p.loggers.SetLoggers(logger)
 
 	err = p.add(adds)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("pollard post add %s", p.ToString())
+	logger.Printf("pollard post add %s", p.ToString())
 
 	err = p.rem2(dels)
 	if err != nil {
@@ -181,9 +186,9 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("forest  post del %s", f.ToString())
+	logger.Printf("forest  post del %s", f.ToString())
 
-	fmt.Printf("pollard post del %s", p.ToString())
+	logger.Printf("pollard post del %s", p.ToString())
 
 	if !p.equalToForest(f) {
 		return fmt.Errorf("p != f (leaves)\n")
