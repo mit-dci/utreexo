@@ -71,6 +71,11 @@ type BlockAndRev struct {
 	Txs       []*btcutil.Tx
 }
 
+type BlockWithProof struct {
+	Block wire.MsgBlock
+	Proof uProof
+}
+
 // LeafData is all the data that goes into a leaf in the utreexo accumulator
 type LeafData struct {
 	BlockHash [32]byte
@@ -81,8 +86,8 @@ type LeafData struct {
 	PkScript  []byte
 }
 
-type BlockProof struct {
-	Proof    utreexo.BatchProof
+type uProof struct {
+	AccProof utreexo.BatchProof
 	UtxoData []LeafData
 }
 
@@ -173,10 +178,10 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 // batch proof length (4 bytes)
 // batch proof
 // Bunch of LeafDatas, prefixed with 2-byte lengths
-func (bp *BlockProof) ToBytes() (b []byte) {
+func (bp *uProof) ToBytes() (b []byte) {
 
 	// first stick the batch proof on the beginning
-	batchBytes := bp.Proof.ToBytes()
+	batchBytes := bp.AccProof.ToBytes()
 	b = U32tB(uint32(len(batchBytes)))
 	b = append(b, batchBytes...)
 
@@ -189,7 +194,7 @@ func (bp *BlockProof) ToBytes() (b []byte) {
 	return
 }
 
-func BlockProofFromBytes(b []byte) (bp BlockProof, err error) {
+func BlockProofFromBytes(b []byte) (bp uProof, err error) {
 
 	if len(b) < 4 {
 		err = fmt.Errorf("block proof too short %d bytes", len(b))
@@ -204,13 +209,13 @@ func BlockProofFromBytes(b []byte) (bp BlockProof, err error) {
 	b = b[4:]
 	batchProofBytes := b[:batchLen]
 	leafDataBytes := b[batchLen:]
-	bp.Proof, err = utreexo.FromBytesBatchProof(batchProofBytes)
+	bp.AccProof, err = utreexo.FromBytesBatchProof(batchProofBytes)
 	if err != nil {
 		return
 	}
 	// got the batch proof part; now populate the leaf data part
 	// first there are as many leafDatas as there are proof targets
-	bp.UtxoData = make([]LeafData, len(bp.Proof.Targets))
+	bp.UtxoData = make([]LeafData, len(bp.AccProof.Targets))
 
 	var ldb []byte
 	// loop until we've filled in every leafData (or something breaks first)
@@ -233,12 +238,12 @@ func BlockProofFromBytes(b []byte) (bp BlockProof, err error) {
 // block proof, you've also got the block, so should always be OK to omit the
 // data that's already in the block.
 
-func BlockProofFromCompactBytes(b []byte) (BlockProof, error) {
-	var bp BlockProof
+func BlockProofFromCompactBytes(b []byte) (uProof, error) {
+	var bp uProof
 
 	return bp, nil
 }
 
-func (bp *BlockProof) ToCompactBytes() (b []byte) {
+func (bp *uProof) ToCompactBytes() (b []byte) {
 	return
 }

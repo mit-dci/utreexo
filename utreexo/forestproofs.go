@@ -134,6 +134,7 @@ func (f *Forest) VerifyMany(ps []Proof) bool {
 // also, more efficient
 // known is a slice of known node positions in the forest; prove up to
 // the intersections
+// TODO the elements to be proven should not be included in the proof.
 func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	starttime := time.Now()
 	var bp BatchProof

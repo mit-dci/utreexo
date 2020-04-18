@@ -1,4 +1,4 @@
-package bridge
+package bridgenode
 
 import (
 	"crypto/sha256"

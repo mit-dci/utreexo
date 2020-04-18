@@ -1,4 +1,4 @@
-package bridge
+package bridgenode
 
 import (
 	"bufio"
@@ -136,7 +136,7 @@ func BuildProofs(
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, blkProof.Proof.Targets)
+		_, err = forest.Modify(blockAdds, blkProof.AccProof.Targets)
 		if err != nil {
 			return err
 		}
@@ -261,7 +261,7 @@ func genBlockProof(delLeaves []util.LeafData, delHashes []utreexo.Hash,
 	// fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
 	// }
 
-	blockP.Proof = batchProof
+	blockP.AccProof = batchProof
 	blockP.UtxoData = delLeaves
 
 	return blockP, nil

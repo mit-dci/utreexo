@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 )
 
 // Hash is just [32]byte
@@ -77,20 +76,25 @@ func CheckNet(net wire.BitcoinNet) {
 // BlockReader is a wrapper around GetRawBlockFromFile so that the process
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with TxToWrite type.
+// It also puts in the proofs.  This will run on the archive server, and the
+// data will be sent over the network to the CSN.
 func BlockReader(
-	blockChan chan BlockAndRev, lastIndexOffsetHeight, height int32,
+	blockChan chan BlockWithProof,
+	maxHeight, curHeight, look int32,
 	offsetfile, revoffsetfile string) {
-	for height != lastIndexOffsetHeight {
-		txs, bh, err := GetRawBlockFromFile(height, offsetfile)
+	for curHeight != maxHeight {
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
 		if err != nil {
 			panic(err)
 		}
 
-		rb, err := GetRevBlock(height, revoffsetfile)
+		// rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
 
-		send := BlockAndRev{Txs: txs, Height: height, Blockhash: bh, Rev: rb}
+		send := BlockWithProof{Block: blk} //Proof: nil}
+
+		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
 		blockChan <- send
-		height++
+		curHeight++
 	}
 }
 
@@ -99,7 +103,7 @@ func BlockReader(
 // Skips the genesis block. If you search for block 0, it will give you
 // block 1.
 func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
-	txs []*btcutil.Tx, Blockhash [32]byte, err error) {
+	block wire.MsgBlock, err error) {
 
 	var datFile [4]byte
 	var offset [4]byte
@@ -127,19 +131,12 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	f.Seek(int64(BtU32(offset[:])+8), 0)
 
 	// TODO this is probably expensive. fix
-	b := new(wire.MsgBlock)
-	err = b.Deserialize(f)
+	err = block.Deserialize(f)
 	if err != nil {
 		return
 	}
 	f.Close()
 	offsetFile.Close()
-
-	Blockhash = b.BlockHash()
-
-	for _, msgTx := range b.Transactions {
-		txs = append(txs, btcutil.NewTx(msgTx))
-	}
 
 	return
 }

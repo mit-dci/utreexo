@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -54,12 +55,10 @@ func IBDClient(net wire.BitcoinNet,
 	// for benchmarking
 	var totalTXOAdded, totalDels int
 
-	// To send/receive blocks from blockreader()
-	blockChan := make(chan util.BlockAndRev, 10)
-
-	// Reads blocks asynchronously from blk*.dat files
-	go util.BlockReader(blockChan,
-		lastIndexOffsetHeight, height, util.OffsetFilePath, util.RevOffsetFilePath)
+	// blocks come in and sit in the blockQueue
+	// They should come in from the network -- right now they're coming from the
+	// disk but it should be the exact same thing
+	blockQueue := make(chan util.BlockWithProof, 10)
 
 	pFile, err := os.OpenFile(
 		util.PFilePath, os.O_RDONLY, 0400)
@@ -73,6 +72,12 @@ func IBDClient(net wire.BitcoinNet,
 		return err
 	}
 
+	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
+	// this will be a network reader, with the server sending the same stuff over
+	go util.BlockReader(blockQueue,
+		lastIndexOffsetHeight, height,
+		util.OffsetFilePath, util.RevOffsetFilePath, lookahead)
+
 	var plustime time.Duration
 	starttime := time.Now()
 
@@ -80,10 +85,10 @@ func IBDClient(net wire.BitcoinNet,
 	var stop bool
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
-		txs := <-blockChan
+		blocknproof := <-blockQueue
 
-		err = genPollard(txs.Txs, txs.Height, &totalTXOAdded, &totalDels,
-			lookahead, plustime, pFile, pOffsetFile, lvdb, &p)
+		err = putBlockInPollard(blocknproof,
+			&totalTXOAdded, &totalDels, plustime, &p)
 		if err != nil {
 			panic(err)
 		}
@@ -121,5 +126,51 @@ func IBDClient(net wire.BitcoinNet,
 
 	done <- true
 
+	return nil
+}
+
+// Here we write proofs for all the txs.
+// All the inputs are saved as 32byte sha256 hashes.
+// All the outputs are saved as LeafTXO type.
+func putBlockInPollard(
+	block util.BlockWithProof,
+	totalTXOAdded, totalDels *int,
+	plustime time.Duration,
+	p *utreexo.Pollard) error {
+
+	plusstart := time.Now()
+
+	blockAdds, err := genAdds(tx, lvdb, height, lookahead)
+	*totalTXOAdded += len(blockAdds) // for benchmarking
+
+	donetime := time.Now()
+	plustime += donetime.Sub(plusstart)
+
+	// Grab the proof by height
+	bpBytes, err := getBlockProof(uint32(height), pFile, pOffsetFile)
+	if err != nil {
+		return err
+	}
+
+	// deserialize byte slice to utreexo.BlockProof struct
+	blkp, err := util.BlockProofFromCompactBytes(bpBytes)
+
+	if err != nil {
+		return err
+	}
+	*totalDels += len(blkp.AccProof.Targets) // for benchmarking
+
+	// Fills in the empty(nil) nieces for verification && deletion
+	err = p.IngestBatchProof(blkp.AccProof)
+	if err != nil {
+		return err
+	}
+
+	// Utreexo tree modification. blockAdds are the added txos and
+	// bp.Targets are the positions of the leaves to delete
+	err = p.Modify(blockAdds, blkp.AccProof.Targets)
+	if err != nil {
+		return err
+	}
 	return nil
 }
