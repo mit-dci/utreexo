@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/utreexo"
 )
 
@@ -40,7 +39,7 @@ type ProofAndHeight struct {
 // manipulation of raw transactions.  It also memoizes the hash for the
 // transaction on its first access so subsequent accesses don't have to repeat
 // the relatively expensive hashing operations.
-type ProofTx struct {
+type zProofTx struct {
 	msgTx         *wire.MsgTx // Underlying MsgTx
 	txHash        *Hash       // Cached transaction hash
 	txHashWitness *Hash       // Cached transaction witness hash
@@ -64,16 +63,24 @@ type RawHeaderData struct {
 	Offset [4]byte
 }
 
+// BlockAndRev is a regular block and a rev block stuck together
 type BlockAndRev struct {
-	Blockhash [32]byte
-	Height    int32
-	Rev       RevBlock
-	Txs       []*btcutil.Tx
+	Height int32
+	Rev    RevBlock
+	Blk    wire.MsgBlock
 }
 
-type BlockWithProof struct {
-	Block wire.MsgBlock
-	Proof uProof
+// UBlock is a regular block, with Udata stuck on
+type UBlock struct {
+	Block     wire.MsgBlock
+	ExtraData UData
+	Height    int32
+}
+
+type UData struct {
+	AccProof       utreexo.BatchProof
+	UtxoData       []LeafData
+	RememberLeaves []bool
 }
 
 // LeafData is all the data that goes into a leaf in the utreexo accumulator
@@ -84,11 +91,6 @@ type LeafData struct {
 	Coinbase  bool
 	Amt       int64
 	PkScript  []byte
-}
-
-type uProof struct {
-	AccProof utreexo.BatchProof
-	UtxoData []LeafData
 }
 
 func LeafDataFromBytes(b []byte) (LeafData, error) {
@@ -178,7 +180,7 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 // batch proof length (4 bytes)
 // batch proof
 // Bunch of LeafDatas, prefixed with 2-byte lengths
-func (bp *uProof) ToBytes() (b []byte) {
+func (bp *UData) ToBytes() (b []byte) {
 
 	// first stick the batch proof on the beginning
 	batchBytes := bp.AccProof.ToBytes()
@@ -194,7 +196,7 @@ func (bp *uProof) ToBytes() (b []byte) {
 	return
 }
 
-func BlockProofFromBytes(b []byte) (bp uProof, err error) {
+func BlockProofFromBytes(b []byte) (bp UData, err error) {
 
 	if len(b) < 4 {
 		err = fmt.Errorf("block proof too short %d bytes", len(b))
@@ -238,12 +240,12 @@ func BlockProofFromBytes(b []byte) (bp uProof, err error) {
 // block proof, you've also got the block, so should always be OK to omit the
 // data that's already in the block.
 
-func BlockProofFromCompactBytes(b []byte) (uProof, error) {
-	var bp uProof
+func BlockProofFromCompactBytes(b []byte) (UData, error) {
+	var bp UData
 
 	return bp, nil
 }
 
-func (bp *uProof) ToCompactBytes() (b []byte) {
+func (bp *UData) ToCompactBytes() (b []byte) {
 	return
 }

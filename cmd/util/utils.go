@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/utreexo"
 )
 
 // Hash is just [32]byte
@@ -78,10 +79,33 @@ func CheckNet(net wire.BitcoinNet) {
 // the entire blocktxs and height to bchan with TxToWrite type.
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
-func BlockReader(
-	blockChan chan BlockWithProof,
-	maxHeight, curHeight, look int32,
+func BlockAndRevReader(
+	blockChan chan BlockAndRev,
+	maxHeight, curHeight int32,
 	offsetfile, revoffsetfile string) {
+	for curHeight != maxHeight {
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		if err != nil {
+			panic(err)
+		}
+
+		rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
+
+		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
+
+		blockChan <- bnr
+		curHeight++
+	}
+}
+
+// BlockReader is a wrapper around GetRawBlockFromFile so that the process
+// can be made into a goroutine. As long as it's running, it keeps sending
+// the entire blocktxs and height to bchan with TxToWrite type.
+// It also puts in the proofs.  This will run on the archive server, and the
+// data will be sent over the network to the CSN.
+func BlockAndProofReader(
+	blockChan chan UBlock,
+	maxHeight, curHeight, lookahead int32) {
 	for curHeight != maxHeight {
 		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
 		if err != nil {
@@ -90,7 +114,7 @@ func BlockReader(
 
 		// rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
 
-		send := BlockWithProof{Block: blk} //Proof: nil}
+		send := UBlock{Block: blk, Height: curHeight} //Proof: nil}
 
 		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
 		blockChan <- send
@@ -138,6 +162,40 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	f.Close()
 	offsetFile.Close()
 
+	return
+}
+
+// BlockToAdds turns all the new utxos in a msgblock into leafTxos
+func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []utreexo.LeafTXO) {
+	// bh := bl.Blockhash
+	for coinbaseif0, tx := range blk.Transactions {
+		// cache txid aka txhash
+		txid := tx.TxHash()
+		for i, out := range tx.TxOut {
+			// Skip all the OP_RETURNs
+			if IsUnspendable(out) {
+				continue
+			}
+			var l LeafData
+			// TODO put blockhash back in -- leaving empty for now!
+			// l.BlockHash = bh
+			l.Outpoint.Hash = txid
+			l.Outpoint.Index = uint32(i)
+			l.Height = height
+			if coinbaseif0 == 0 {
+				l.Coinbase = true
+			}
+			l.Amt = out.Value
+			l.PkScript = out.PkScript
+
+			// Don't need to save leafData here
+			// dataleaves = append(dataleaves, l)
+
+			var uleaf utreexo.LeafTXO
+			uleaf.Hash = l.LeafHash()
+			hashleaves = append(hashleaves, uleaf)
+		}
+	}
 	return
 }
 

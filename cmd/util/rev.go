@@ -36,13 +36,6 @@ type RevBlock struct {
 	Hash  [32]byte  // 32 byte double sha256 hash of the block
 }
 
-// BlockUndo is the slice of undo information about transactions
-// Excludes the coinbase transaction
-// see github.com/bitcoin/bitcoin/src/undo.h
-type BlockUndoTx struct {
-	Tx []*TxUndo
-}
-
 // TxUndo contains the TxInUndo records.
 // see github.com/bitcoin/bitcoin/src/undo.h
 type TxUndo struct {

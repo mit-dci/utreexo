@@ -58,7 +58,7 @@ func IBDClient(net wire.BitcoinNet,
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	blockQueue := make(chan util.BlockWithProof, 10)
+	blockQueue := make(chan util.UBlock, 10)
 
 	pFile, err := os.OpenFile(
 		util.PFilePath, os.O_RDONLY, 0400)
@@ -74,9 +74,8 @@ func IBDClient(net wire.BitcoinNet,
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go util.BlockReader(blockQueue,
-		lastIndexOffsetHeight, height,
-		util.OffsetFilePath, util.RevOffsetFilePath, lookahead)
+	go util.BlockAndProofReader(blockQueue,
+		lastIndexOffsetHeight, height, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
@@ -133,42 +132,43 @@ func IBDClient(net wire.BitcoinNet,
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as LeafTXO type.
 func putBlockInPollard(
-	block util.BlockWithProof,
+	bnu util.UBlock,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
 	p *utreexo.Pollard) error {
 
 	plusstart := time.Now()
 
-	blockAdds, err := genAdds(tx, lvdb, height, lookahead)
+	blockAdds := util.BlockToAdds(bnu.Block, bnu.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	donetime := time.Now()
 	plustime += donetime.Sub(plusstart)
 
 	// Grab the proof by height
-	bpBytes, err := getBlockProof(uint32(height), pFile, pOffsetFile)
-	if err != nil {
-		return err
-	}
+	// bpBytes, err := getBlockProof(uint32(height), pFile, pOffsetFile)
+	// if err != nil {
+	// return err
+	// }
 
 	// deserialize byte slice to utreexo.BlockProof struct
-	blkp, err := util.BlockProofFromCompactBytes(bpBytes)
+	// blkp, err := util.BlockProofFromCompactBytes(bpBytes)
+	// if err != nil {
+	// return err
+	// }
+	*totalDels += len(bnu.ExtraData.AccProof.Targets) // for benchmarking
 
-	if err != nil {
-		return err
-	}
-	*totalDels += len(blkp.AccProof.Targets) // for benchmarking
+	// derive leafHashes from leafData
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err = p.IngestBatchProof(blkp.AccProof)
+	err := p.IngestBatchProof(bnu.ExtraData.AccProof)
 	if err != nil {
 		return err
 	}
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, blkp.AccProof.Targets)
+	err = p.Modify(blockAdds, bnu.ExtraData.AccProof.Targets)
 	if err != nil {
 		return err
 	}

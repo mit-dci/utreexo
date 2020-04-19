@@ -65,12 +65,12 @@ func BuildProofs(
 	}
 
 	// To send/receive blocks from blockreader()
-	blockReadQueue := make(chan util.BlockAndRev, 10)
+	blockAndRevReadQueue := make(chan util.BlockAndRev, 10)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
-	go util.BlockReader(
-		blockReadQueue, lastIndexOffsetHeight, height,
+	go util.BlockAndRevReader(blockAndRevReadQueue,
+		lastIndexOffsetHeight, height,
 		util.OffsetFilePath, util.RevOffsetFilePath)
 
 	// for the pFile
@@ -102,20 +102,20 @@ func BuildProofs(
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
-		block := <-blockReadQueue
+		bnr := <-blockAndRevReadQueue
 
 		// Writes the ttl values for each tx to leveldb
-		ttl.WriteBlock(block, batchan, &batchwg)
+		ttl.WriteBlock(bnr, batchan, &batchwg)
 
 		// Get the add and remove data needed from the block & undo block
-		blockAdds, delLeaves, delHashes, err := genAddDel(block)
+		blockAdds, delLeaves, delHashes, err := genAddDel(bnr)
 		if err != nil {
 			return err
 		}
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
-		blkProof, err := genBlockProof(delLeaves, delHashes, forest, block.Height)
+		blkProof, err := genBlockProof(delLeaves, delHashes, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func BuildProofs(
 		// to disk
 		fileWait.Add(1)
 		proofAndHeightChan <- util.ProofAndHeight{
-			Proof: b, Height: block.Height}
+			Proof: b, Height: bnr.Height}
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
@@ -141,8 +141,8 @@ func BuildProofs(
 			return err
 		}
 
-		if block.Height%10000 == 0 {
-			fmt.Println("On block :", block.Height+1)
+		if bnr.Height%10000 == 0 {
+			fmt.Println("On block :", bnr.Height+1)
 		}
 
 		// Check if stopSig is no longer false
@@ -238,9 +238,9 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 // needed for transaction verification.
 func genBlockProof(delLeaves []util.LeafData, delHashes []utreexo.Hash,
 	f *utreexo.Forest, height int32) (
-	util.BlockProof, error) {
+	util.UData, error) {
 
-	var blockP util.BlockProof
+	var blockP util.UData
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
@@ -276,82 +276,47 @@ func genAddDel(block util.BlockAndRev) (blockAdds []utreexo.LeafTXO,
 	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
 
 	delLeaves, delHashes, err = genDels(block)
-	blockAdds = genAdds(block)
+	blockAdds = util.BlockToAdds(block.Blk, block.Height)
 
 	utreexo.DedupeHashSlices(&blockAdds, &delHashes)
 	return
 }
 
-// genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
-// Skips all the OP_RETURN transactions
-func genAdds(bl util.BlockAndRev) (hashleaves []utreexo.LeafTXO) {
-	// bh := bl.Blockhash
-	for coinbaseif0, tx := range bl.Txs {
-		// cache txid aka txhash
-		txid := tx.MsgTx().TxHash()
-		for i, out := range tx.MsgTx().TxOut {
-			// Skip all the OP_RETURNs
-			if util.IsUnspendable(out) {
-				continue
-			}
-			var l util.LeafData
-			// TODO put blockhash back in -- leaving empty for now!
-			// l.BlockHash = bh
-			l.Outpoint.Hash = txid
-			l.Outpoint.Index = uint32(i)
-			l.Height = bl.Height
-			if coinbaseif0 == 0 {
-				l.Coinbase = true
-			}
-			l.Amt = out.Value
-			l.PkScript = out.PkScript
-
-			// Don't need to save leafData here
-			// dataleaves = append(dataleaves, l)
-
-			var uleaf utreexo.LeafTXO
-			uleaf.Hash = l.LeafHash()
-			hashleaves = append(hashleaves, uleaf)
-		}
-	}
-	return
-}
-
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func genDels(block util.BlockAndRev) (
+func genDels(bnr util.BlockAndRev) (
 	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
-	if len(block.Txs)-1 != len(block.Rev.Txs) {
+	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
 		err = fmt.Errorf("block %d %d txs but %d rev txs",
-			block.Height, len(block.Txs), len(block.Rev.Txs))
+			bnr.Height, len(bnr.Blk.Transactions), len(bnr.Rev.Txs))
 	}
-	for txinblock, tx := range block.Txs {
+	for txinblock, tx := range bnr.Blk.Transactions {
 		if txinblock == 0 {
 			continue
 		}
 		txinblock--
 		// make sure there's the same number of txins
-		if len(tx.MsgTx().TxIn) != len(block.Rev.Txs[txinblock].TxIn) {
+		if len(tx.TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
 			err = fmt.Errorf("block %d tx %d has %d inputs but %d rev entries",
-				block.Height, txinblock+1,
-				len(tx.MsgTx().TxIn), len(block.Rev.Txs[txinblock].TxIn))
+				bnr.Height, txinblock+1,
+				len(tx.TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
 		}
 		// loop through inputs
-		for i, txin := range tx.MsgTx().TxIn {
+		for i, txin := range tx.TxIn {
 			// build leaf
 			var l util.LeafData
 
 			l.Outpoint = txin.PreviousOutPoint
-			l.Height = block.Rev.Txs[txinblock].TxIn[i].Height
+			l.Height = bnr.Rev.Txs[txinblock].TxIn[i].Height
 			// TODO get blockhash from headers here -- empty for now
 			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
 
 			if txinblock == 0 {
 				l.Coinbase = true
 			}
-			l.Amt = block.Rev.Txs[txinblock].TxIn[i].Amount
-			l.PkScript = block.Rev.Txs[txinblock].TxIn[i].PKScript
+			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
+			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
 		}
 	}
 	return
