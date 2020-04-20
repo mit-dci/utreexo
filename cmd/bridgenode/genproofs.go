@@ -11,7 +11,8 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/tree"
+	treeutil "github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -188,11 +189,11 @@ func pFileWorker(blockProofAndHeight chan util.ProofAndHeight,
 		// U32tB always returns 4 bytes
 		// Later this could also be changed to magic bytes
 		writebyte = append(writebyte,
-			utreexo.U32tB(uint32(bp.Height+1))...)
+			treeutil.U32tB(uint32(bp.Height+1))...)
 
 		// write the size of the proof
 		writebyte = append(writebyte,
-			utreexo.U32tB(uint32(len(bp.Proof)))...)
+			treeutil.U32tB(uint32(len(bp.Proof)))...)
 
 		// Write the actual proof
 		writebyte = append(writebyte, bp.Proof...)
@@ -231,8 +232,8 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 }
 
 // genVerifyDels is a wrapper around forest.ProveBlock and forest.VerifyBlockProof
-func genVerifyDels(dels []utreexo.Hash, f *utreexo.Forest, height int32) (
-	utreexo.BlockProof, error) {
+func genVerifyDels(dels []treeutil.Hash, f *tree.Forest, height int32) (
+	tree.BlockProof, error) {
 
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
@@ -256,20 +257,20 @@ func genVerifyDels(dels []utreexo.Hash, f *utreexo.Forest, height int32) (
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and
 // throws out all the same block spends.
 func genAddDel(block util.BlockToWrite) (
-	blockAdds []utreexo.LeafTXO, blockDels []utreexo.Hash) {
+	blockAdds []treeutil.LeafTXO, blockDels []treeutil.Hash) {
 
 	blockDels = genDels(block.Txs)
 	blockAdds = genAdds(block.Txs)
 
 	// Forget all utxos that get spent on the same block
 	// they are created.
-	utreexo.DedupeHashSlices(&blockAdds, &blockDels)
+	treeutil.DedupeHashSlices(&blockAdds, &blockDels)
 	return
 }
 
 // genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
 // Skips all the OP_RETURN transactions
-func genAdds(txs []*btcutil.Tx) (blockAdds []utreexo.LeafTXO) {
+func genAdds(txs []*btcutil.Tx) (blockAdds []treeutil.LeafTXO) {
 	for _, tx := range txs {
 
 		// cache txid aka txhash
@@ -281,8 +282,8 @@ func genAdds(txs []*btcutil.Tx) (blockAdds []utreexo.LeafTXO) {
 				continue
 			}
 			utxostring := fmt.Sprintf("%s:%d", txid, i)
-			addData := utreexo.LeafTXO{
-				Hash: utreexo.HashFromString(utxostring)}
+			addData := treeutil.LeafTXO{
+				Hash: treeutil.HashFromString(utxostring)}
 			blockAdds = append(blockAdds, addData)
 		}
 	}
@@ -290,7 +291,7 @@ func genAdds(txs []*btcutil.Tx) (blockAdds []utreexo.LeafTXO) {
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func genDels(txs []*btcutil.Tx) (blockDels []utreexo.Hash) {
+func genDels(txs []*btcutil.Tx) (blockDels []treeutil.Hash) {
 	for index, tx := range txs {
 		for _, in := range tx.MsgTx().TxIn {
 			// skip coinbase "spend"
@@ -298,7 +299,7 @@ func genDels(txs []*btcutil.Tx) (blockDels []utreexo.Hash) {
 				// Grab TXID of the tx that created this TXIN
 				s := in.PreviousOutPoint.String()
 				// Hash. Need 32byte but has index
-				hash := utreexo.HashFromString(s)
+				hash := treeutil.HashFromString(s)
 				blockDels = append(blockDels, hash)
 			}
 		}

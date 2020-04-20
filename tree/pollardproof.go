@@ -1,13 +1,15 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // IngestBlockProof populates the Pollard with all needed data to delete the
 // targets in the block proof
 func (p *Pollard) IngestBlockProof(bp BlockProof) error {
-	var empty Hash
+	var empty util.Hash
 	// TODO so many things to change
 	ok, proofMap := VerifyBlockProof(
 		bp, p.topHashesReverse(), p.numLeaves, p.height())
@@ -18,26 +20,26 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 	// go through each target and populate pollard
 	for _, target := range bp.Targets {
 
-		tNum, branchLen, bits := detectOffset(target, p.numLeaves)
+		tNum, branchLen, bits := util.DetectOffset(target, p.numLeaves)
 		if branchLen == 0 {
 			// if there's no branch (1-tree) nothing to prove
 			continue
 		}
 		node := &p.tops[tNum]
 		h := branchLen - 1
-		pos := upMany(target, branchLen, p.height()) // this works but...
+		pos := util.UpMany(target, branchLen, p.height()) // this works but...
 		// we should have a way to get the top positions from just p.tops
 
 		// fmt.Printf("ingest adding target %d to top %04x h %d brlen %d bits %04b\n",
 		// target, node.data[:4], h, branchLen, bits&((2<<h)-1))
 
 		lr := (bits >> h) & 1
-		pos = (child(pos, p.height())) | lr
+		pos = (util.Child(pos, p.height())) | lr
 		// descend until we hit the bottom, populating as we go
 		// also populate siblings...
 		for {
 			if node.niece[lr] == nil {
-				node.niece[lr] = new(polNode)
+				node.niece[lr] = new(PolNode)
 				node.niece[lr].data = proofMap[pos]
 				// fmt.Printf("------wrote %x at %d\n", proofMap[pos], pos)
 				if node.niece[lr].data == empty {
@@ -49,7 +51,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 				p.overWire++
 			}
 			if node.niece[lr^1] == nil {
-				node.niece[lr^1] = new(polNode)
+				node.niece[lr^1] = new(PolNode)
 				node.niece[lr^1].data = proofMap[pos^1]
 				// doesn't count as overwire because computed, not read
 			}
@@ -60,7 +62,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 			h--
 			node = node.niece[lr]
 			lr = (bits >> h) & 1
-			pos = (child(pos, p.height()) ^ 2) | lr
+			pos = (util.Child(pos, p.height()) ^ 2) | lr
 		}
 
 		// TODO do you need this at all?  If the Verify part already happened, maybe not?
@@ -69,7 +71,7 @@ func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 		// pop above
 
 		if node.niece[lr^1] == nil {
-			node.niece[lr^1] = new(polNode)
+			node.niece[lr^1] = new(PolNode)
 			node.niece[lr^1].data = proofMap[pos^1]
 			fmt.Printf("------wrote %x at %d\n", proofMap[pos^1], pos^1)
 			if node.niece[lr^1].data == empty {

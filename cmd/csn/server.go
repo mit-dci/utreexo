@@ -8,7 +8,8 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/tree"
+	treeutil "github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -24,7 +25,7 @@ func genPollard(
 	pFile *os.File,
 	pOffsetFile *os.File,
 	lvdb *leveldb.DB,
-	p *utreexo.Pollard) error {
+	p *tree.Pollard) error {
 
 	plusstart := time.Now()
 
@@ -40,8 +41,8 @@ func genPollard(
 		return err
 	}
 
-	// deserialize byte slice to utreexo.BlockProof struct
-	bp, err := utreexo.FromBytesBlockProof(bpBytes)
+	// deserialize byte slice to tree.BlockProof struct
+	bp, err := tree.FromBytesBlockProof(bpBytes)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func genPollard(
 // genAdds generates txos that are turned into LeafTXOs from the given Txs in a block
 // so it's ready to be added to the tree
 func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
-	height int32, lookahead int32) (blockAdds []utreexo.LeafTXO, err error) {
+	height int32, lookahead int32) (blockAdds []treeutil.LeafTXO, err error) {
 
 	// grab all the MsgTx
 	for blockIndex, tx := range txs {
@@ -105,10 +106,10 @@ func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
 			}
 			// 0 means it's a UTXO. Don't remember it
 			if txo.DeathHeight == 0 {
-				add := utreexo.LeafTXO{Hash: txo.Txid}
+				add := treeutil.LeafTXO{Hash: txo.Txid}
 				blockAdds = append(blockAdds, add)
 			} else {
-				add := utreexo.LeafTXO{
+				add := treeutil.LeafTXO{
 					Hash:     txo.Txid,
 					Duration: txo.DeathHeight - (height + 1),
 					// Only remember if duration is less than the
@@ -148,7 +149,7 @@ func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, erro
 	// match the height that was passed as the argument to getProof
 	var compare0, compare1 [4]byte
 	copy(compare0[:], heightbytes[:])
-	copy(compare1[:], utreexo.U32tB(height+1))
+	copy(compare1[:], treeutil.U32tB(height+1))
 	// check if height matches
 	if compare0 != compare1 {
 		fmt.Println("read:, given:", compare0, compare1)

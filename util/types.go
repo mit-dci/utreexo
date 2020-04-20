@@ -1,4 +1,4 @@
-package utreexo
+package util
 
 import (
 	"crypto/sha256"
@@ -6,36 +6,40 @@ import (
 	"math/rand"
 )
 
-// Hash :
+// Hash represents a 256 bit sha256 hash
 type Hash [32]byte
 
-// Prefix, for printfs
+// Prefix is the first 4 bytes of Hash. It's meant for printfs
 func (h Hash) Prefix() []byte {
 	return h[:4]
 }
 
-// Mini :
+// Mini takes a 32 byte hash slice and returns a MiniHash(first 12 bytes)
+// Done for storage efficiency
 func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])
 	return
 }
 
-// MiniHash :
+// MiniHash is the first 12 byte chunk of a 32 byte hash of a leaf
+// Done for storage efficiency
 type MiniHash [12]byte
 
-// HashFromString :
+// HashFromString takes a string and returns a sha256 hash of that string
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
 
-// an arror describes the movement of a node from one position to another
-type arrow struct {
-	from, to uint64
+// Arrow describes the movement of a node from one position to another
+// used for transform
+type Arrow struct {
+	From, To uint64
 }
 
-type arrowh struct {
-	from, to uint64
-	ht       uint8
+// Arrowh is Arrow with height field added
+type Arrowh struct {
+	From, To uint64
+	Ht       uint8
 }
 
 // Node :
@@ -53,7 +57,7 @@ type LeafTXO struct {
 	Remember bool // this leaf will be deleted soon, remember it
 }
 
-// Parent gets you the merkle parent.  So far no committing to height.
+// Parent gets you the merkle parent. So far no committing to height.
 // if the left child is zero it should crash...
 func Parent(l, r Hash) Hash {
 	var empty [32]byte
@@ -87,19 +91,19 @@ func xParent(l, r Hash) Hash {
 // SimChain is for testing; it spits out "blocks" of adds and deletes
 type SimChain struct {
 	// ttlMap is when the hashes get removed
-	ttlSlices    [][]Hash
-	blockHeight  int32
-	leafCounter  uint64
-	durationMask uint32
-	lookahead    int32
+	TtlSlices    [][]Hash
+	BlockHeight  int32
+	LeafCounter  uint64
+	DurationMask uint32
+	Lookahead    int32
 }
 
 // NewSimChain :
 func NewSimChain(duration uint32) *SimChain {
 	var s SimChain
-	s.blockHeight = -1
-	s.durationMask = duration
-	s.ttlSlices = make([][]Hash, s.durationMask+1)
+	s.BlockHeight = -1
+	s.DurationMask = duration
+	s.TtlSlices = make([][]Hash, s.DurationMask+1)
 	return &s
 }
 
@@ -107,8 +111,8 @@ func NewSimChain(duration uint32) *SimChain {
 func (s *SimChain) BackOne(leaves []LeafTXO, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
-	s.ttlSlices =
-		append([][]Hash{dels}, s.ttlSlices[:len(s.ttlSlices)-1]...)
+	s.TtlSlices =
+		append([][]Hash{dels}, s.TtlSlices[:len(s.TtlSlices)-1]...)
 
 	// Gotta go through the leaves and delete them all from the ttlslices
 	for _, l := range leaves {
@@ -118,19 +122,19 @@ func (s *SimChain) BackOne(leaves []LeafTXO, dels []Hash) {
 		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], l.Duration)
 		// everything should be in order, right?
 		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.ttlSlices[l.Duration][len(s.ttlSlices[l.Duration])-1][:4],
+			s.TtlSlices[l.Duration][len(s.TtlSlices[l.Duration])-1][:4],
 			l.Duration)
-		s.ttlSlices[l.Duration] =
-			s.ttlSlices[l.Duration][:len(s.ttlSlices[l.Duration])-1]
+		s.TtlSlices[l.Duration] =
+			s.TtlSlices[l.Duration][:len(s.TtlSlices[l.Duration])-1]
 	}
 
-	s.blockHeight--
+	s.BlockHeight--
 	return
 }
 
-func (s *SimChain) ttlString() string {
+func (s *SimChain) TtlString() string {
 	x := "-------------\n"
-	for i, d := range s.ttlSlices {
+	for i, d := range s.TtlSlices {
 		x += fmt.Sprintf("%d: ", i)
 		for _, h := range d {
 			x += fmt.Sprintf(" %x ", h[:4])
@@ -143,30 +147,30 @@ func (s *SimChain) ttlString() string {
 
 // NextBlock :
 func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
-	s.blockHeight++
-	fmt.Printf("blockHeight %d\n", s.blockHeight)
+	s.BlockHeight++
+	fmt.Printf("blockHeight %d\n", s.BlockHeight)
 
-	if s.blockHeight == 0 && numAdds == 0 {
+	if s.BlockHeight == 0 && numAdds == 0 {
 		numAdds = 1
 	}
 	// they're all forgettable
 	adds := make([]LeafTXO, numAdds)
 
 	// make dels; dels are preset by the ttlMap
-	delHashes := s.ttlSlices[0]
-	s.ttlSlices = append(s.ttlSlices[1:], []Hash{})
+	delHashes := s.TtlSlices[0]
+	s.TtlSlices = append(s.TtlSlices[1:], []Hash{})
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
 	for j := range adds {
-		adds[j].Hash[0] = uint8(s.leafCounter)
-		adds[j].Hash[1] = uint8(s.leafCounter >> 8)
-		adds[j].Hash[2] = uint8(s.leafCounter >> 16)
+		adds[j].Hash[0] = uint8(s.LeafCounter)
+		adds[j].Hash[1] = uint8(s.LeafCounter >> 8)
+		adds[j].Hash[2] = uint8(s.LeafCounter >> 16)
 		adds[j].Hash[3] = 0xff
-		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
-		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
+		adds[j].Hash[4] = uint8(s.LeafCounter >> 24)
+		adds[j].Hash[5] = uint8(s.LeafCounter >> 32)
 
-		adds[j].Duration = int32(rand.Uint32() & s.durationMask)
+		adds[j].Duration = int32(rand.Uint32() & s.DurationMask)
 		// with "+1", the duration is 1 to 256, so the forest never gets
 		// big or tall.  Without the +1, the duration is sometimes 0,
 		// which makes a leaf last forever, and the forest will expand
@@ -174,21 +178,21 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []Hash) {
 
 		// the first utxo added lives forever.
 		// (prevents leaves from going to 0 which is buggy)
-		if s.blockHeight == 0 {
+		if s.BlockHeight == 0 {
 			adds[j].Duration = 0
 		}
 
-		if adds[j].Duration != 0 && adds[j].Duration < s.lookahead {
+		if adds[j].Duration != 0 && adds[j].Duration < s.Lookahead {
 			adds[j].Remember = true
 		}
 
 		if adds[j].Duration != 0 {
 			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].Duration-1)
-			s.ttlSlices[adds[j].Duration-1] =
-				append(s.ttlSlices[adds[j].Duration-1], adds[j].Hash)
+			s.TtlSlices[adds[j].Duration-1] =
+				append(s.TtlSlices[adds[j].Duration-1], adds[j].Hash)
 		}
 
-		s.leafCounter++
+		s.LeafCounter++
 	}
 
 	return adds, delHashes

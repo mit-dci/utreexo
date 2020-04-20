@@ -1,9 +1,11 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"math/rand"
 	"testing"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 func TestPollardFullRand(t *testing.T) {
@@ -31,13 +33,13 @@ func pollardFullRandomRemember(blocks int32) error {
 
 	// p.Minleaves = 0
 
-	sn := NewSimChain(0x07)
-	sn.lookahead = 400
+	sn := util.NewSimChain(0x07)
+	sn.Lookahead = 400
 	for b := int32(0); b < blocks; b++ {
 		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
-			sn.blockHeight, len(delHashes), len(adds), p.Stats())
+			sn.BlockHeight, len(delHashes), len(adds), p.Stats())
 
 		// get proof for these deletions (with respect to prev block)
 		bp, err := fp.ProveBlock(delHashes)
@@ -85,14 +87,14 @@ func pollardFullRandomRemember(blocks int32) error {
 		// check that tops match
 		if len(fullTops) != len(polTops) {
 			return fmt.Errorf("block %d fulpol %d tops, pol %d tops",
-				sn.blockHeight, len(fullTops), len(polTops))
+				sn.BlockHeight, len(fullTops), len(polTops))
 		}
 		fmt.Printf("top matching: ")
 		for i, ft := range fullTops {
 			fmt.Printf("fp %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, fulpol %x pol %x",
-					sn.blockHeight, i, ft[:4], polTops[i][:4])
+					sn.BlockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
 		fmt.Printf("\n")

@@ -1,8 +1,10 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"testing"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // TestVerifyBlockProof tests that the computedTop is compared to the top in the
@@ -15,15 +17,15 @@ func TestVerifyBlockProof(t *testing.T) {
 	lastIdx := uint64(7)
 
 	// Generate adds
-	adds := make([]LeafTXO, 8)
-	adds[0].Hash = Hash{1}
-	adds[1].Hash = Hash{2}
-	adds[2].Hash = Hash{3}
-	adds[3].Hash = Hash{4}
-	adds[4].Hash = Hash{5}
-	adds[5].Hash = Hash{6}
-	adds[6].Hash = Hash{7}
-	adds[7].Hash = Hash{8}
+	adds := make([]util.LeafTXO, 8)
+	adds[0].Hash = util.Hash{1}
+	adds[1].Hash = util.Hash{2}
+	adds[2].Hash = util.Hash{3}
+	adds[3].Hash = util.Hash{4}
+	adds[4].Hash = util.Hash{5}
+	adds[5].Hash = util.Hash{6}
+	adds[6].Hash = util.Hash{7}
+	adds[7].Hash = util.Hash{8}
 
 	// Modify with the additions to simulate txos being added
 	_, err := f.Modify(adds, nil)
@@ -33,7 +35,7 @@ func TestVerifyBlockProof(t *testing.T) {
 
 	// create blockProof based on the last add in the slice
 	blockProof, err := f.ProveBlock(
-		[]Hash{adds[lastIdx].Hash})
+		[]util.Hash{adds[lastIdx].Hash})
 
 	if err != nil {
 		t.Fatal(err)
@@ -47,8 +49,8 @@ func TestVerifyBlockProof(t *testing.T) {
 	}
 
 	// delete last leaf and add a new leaf
-	adds = make([]LeafTXO, 1)
-	adds[0].Hash = Hash{9}
+	adds = make([]util.LeafTXO, 1)
+	adds[0].Hash = util.Hash{9}
 	_, err = f.Modify(adds, []uint64{lastIdx})
 	if err != nil {
 		t.Fatal(err)
@@ -68,10 +70,10 @@ func TestVerifyBlockProof(t *testing.T) {
 
 // Full explanation: https://github.com/mit-dci/utreexo/pull/95#issuecomment-599390850
 func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
-	adds := make([]LeafTXO, 2)
+	adds := make([]util.LeafTXO, 2)
 	proofIndex := 1
-	adds[0].Hash = Hash{1} // will be deleted
-	adds[1].Hash = Hash{2} // will be proven
+	adds[0].Hash = util.Hash{1} // will be deleted
+	adds[1].Hash = util.Hash{2} // will be proven
 
 	f := NewForest(nil)
 	_, err := f.Modify(adds, nil)
@@ -80,7 +82,7 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 	}
 
 	blockProof, err := f.ProveBlock(
-		[]Hash{
+		[]util.Hash{
 			adds[proofIndex].Hash,
 		})
 	if err != nil {

@@ -1,7 +1,10 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
+
+	"github.com/mit-dci/utreexo/transform"
+	"github.com/mit-dci/utreexo/util"
 )
 
 /* we need to be able to undo blocks!  for bridge nodes at least.
@@ -14,9 +17,9 @@ although actually it can make sense for non-bridge nodes to undo as well...
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
 type undoBlock struct {
-	numAdds   uint32   // number of adds in the block
-	positions []uint64 // position of all deletions this block
-	hashes    []Hash   // hashes that were deleted
+	numAdds   uint32      // number of adds in the block
+	positions []uint64    // position of all deletions this block
+	hashes    []util.Hash // hashes that were deleted
 }
 
 func (u *undoBlock) ToString() string {
@@ -41,8 +44,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// how many leaves were there at the last block?
 	prevNumLeaves := f.numLeaves + prevDels - prevAdds
 	// run the transform to figure out where things came from
-	leafMoves := floorTransform(ub.positions, prevNumLeaves, f.height)
-	reverseArrowSlice(leafMoves)
+	leafMoves := transform.FloorTransform(ub.positions, prevNumLeaves, f.height)
+	util.ReverseArrowSlice(leafMoves)
 	// first undo the leaves added in the last block
 	f.numLeaves -= prevAdds
 	// clear out the hashes themselves (maybe don't need to but seems safer)
@@ -79,11 +82,11 @@ func (f *Forest) Undo(ub undoBlock) error {
 
 	// go through swaps in reverse order
 	for i, a := range leafMoves {
-		fmt.Printf("swapped %d %x, %d %x\n", a.to,
-			f.data.read(a.to).Prefix(), a.from, f.data.read(a.from).Prefix())
-		f.data.swapHash(a.from, a.to)
-		dirt[2*i] = a.to       // this is wrong, it way over hashes
-		dirt[(2*i)+1] = a.from // also should be parents
+		fmt.Printf("swapped %d %x, %d %x\n", a.To,
+			f.data.read(a.To).Prefix(), a.From, f.data.read(a.From).Prefix())
+		f.data.swapHash(a.From, a.To)
+		dirt[2*i] = a.To       // this is wrong, it way over hashes
+		dirt[(2*i)+1] = a.From // also should be parents
 	}
 
 	// update positionMap.  The stuff we do want has been moved in to the forest,
@@ -110,7 +113,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 
 	// rehash above all tos/froms
 	f.numLeaves = prevNumLeaves // change numLeaves before rehashing
-	sortUint64s(dirt)
+	util.SortUint64s(dirt)
 	fmt.Printf("rehash dirt: %v\n", dirt)
 	err := f.reHash(dirt)
 	if err != nil {
@@ -128,7 +131,7 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
 
 	// fmt.Printf("%d del, nl %d\n", len(dels), f.numLeaves)
 	ub.positions = dels // the deletion positions, in sorted order
-	ub.hashes = make([]Hash, len(dels))
+	ub.hashes = make([]util.Hash, len(dels))
 
 	// populate all the hashes from the left edge of the forest
 	for i, _ := range ub.positions {

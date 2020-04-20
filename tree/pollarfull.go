@@ -1,11 +1,13 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // read is just like forestData read but for pollard
-func (p *Pollard) read(pos uint64) Hash {
+func (p *Pollard) read(pos uint64) util.Hash {
 	n, _, _, err := p.grabPos(pos)
 	if err != nil {
 		fmt.Printf("read err %s pos %d\n", err.Error(), pos)
@@ -20,7 +22,7 @@ func (p *Pollard) read(pos uint64) Hash {
 // NewFullPollard gives you a Pollard with an activated
 func NewFullPollard() Pollard {
 	var p Pollard
-	p.positionMap = make(map[MiniHash]uint64)
+	p.positionMap = make(map[util.MiniHash]uint64)
 	return p
 }
 
@@ -47,7 +49,7 @@ func (p *Pollard) PosMapSanity() error {
 // Now getting really obvious that forest and pollard should both satisfy some
 // kind of utreexoy interface.  And maybe forest shouldn't be called forest.
 // Anyway do that after this.
-func (p *Pollard) ProveBlock(hs []Hash) (BlockProof, error) {
+func (p *Pollard) ProveBlock(hs []util.Hash) (BlockProof, error) {
 	var bp BlockProof
 	// skip everything if empty (should this be an error?
 	if len(hs) == 0 {
@@ -89,13 +91,13 @@ func (p *Pollard) ProveBlock(hs []Hash) (BlockProof, error) {
 	// NOTE that this is a big deal -- we lose in-block positional information
 	// because of this sorting.  Does that hurt locality or performance?  My
 	// guess is no, but that's untested.
-	sortUint64s(bp.Targets)
+	util.SortUint64s(bp.Targets)
 
 	// TODO feels like you could do all this with just slices and no maps...
 	// that would be better
 	// proofTree is the partially populated tree of everything needed for the
 	// proofs
-	proofTree := make(map[uint64]Hash)
+	proofTree := make(map[uint64]util.Hash)
 
 	// go through each target and add a proof for it up to the intersection
 	for _, pos := range bp.Targets {
@@ -120,8 +122,8 @@ func (p *Pollard) ProveBlock(hs []Hash) (BlockProof, error) {
 		proofTree[pos^1] = p.read(pos ^ 1)
 		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
-		treeTop := detectSubTreeHeight(pos, p.numLeaves, p.height())
-		pos = up1(pos, p.height())
+		treeTop := util.DetectSubTreeHeight(pos, p.numLeaves, p.height())
+		pos = util.Up1(pos, p.height())
 		// go bottom to top and add siblings into the partial tree
 		// start at height 1 though; we always populate the bottom leaf and sibling
 		// This either gets to the top, or intersects before that and deletes
@@ -149,27 +151,27 @@ func (p *Pollard) ProveBlock(hs []Hash) (BlockProof, error) {
 			}
 			// fmt.Printf("add proof from pos %d\n", pos^1)
 			proofTree[pos^1] = p.read(pos ^ 1)
-			pos = up1(pos, p.height())
+			pos = util.Up1(pos, p.height())
 		}
 	}
 
-	var nodeSlice []Node
+	var nodeSlice []util.Node
 
 	// run through partial tree to turn it into a slice
 	for pos, hash := range proofTree {
-		nodeSlice = append(nodeSlice, Node{pos, hash})
+		nodeSlice = append(nodeSlice, util.Node{pos, hash})
 	}
 	// fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
 
 	// sort the slice of nodes (even though we only want the hashes)
-	sortNodeSlice(nodeSlice)
+	util.SortNodeSlice(nodeSlice)
 	// copy the sorted / in-order hashes into a hash slice
-	bp.Proof = make([]Hash, len(nodeSlice))
+	bp.Proof = make([]util.Hash, len(nodeSlice))
 
 	for i, n := range nodeSlice {
 		bp.Proof[i] = n.Val
 	}
-	if verbose {
+	if util.Verbose {
 		fmt.Printf("blockproof targets: %v\n", bp.Targets)
 	}
 

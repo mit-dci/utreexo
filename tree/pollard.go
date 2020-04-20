@@ -1,12 +1,21 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"sync"
+
+	"github.com/mit-dci/utreexo/transform"
+	"github.com/mit-dci/utreexo/util"
 )
 
+// hashableNode is the data needed to perform a hash
+type hashableNode struct {
+	sib, dest *PolNode
+	position  uint64 // doesn't really need to be there, but convenient for debugging
+}
+
 // Modify is the main function that deletes then adds elements to the accumulator
-func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
+func (p *Pollard) Modify(adds []util.LeafTXO, dels []uint64) error {
 	err := p.rem2(dels)
 	if err != nil {
 		return err
@@ -29,7 +38,7 @@ func (p *Pollard) Stats() string {
 }
 
 // Add a leaf to a pollard.  Not as simple!
-func (p *Pollard) add(adds []LeafTXO) error {
+func (p *Pollard) add(adds []util.LeafTXO) error {
 
 	// General algo goes:
 	// 1 make a new node & assign data (no neices; at bottom)
@@ -81,12 +90,12 @@ but that leftTop is still being pointed to anyway do it's OK.
 */
 
 // add a single leaf to a pollard
-func (p *Pollard) addOne(add Hash, remember bool) error {
+func (p *Pollard) addOne(add util.Hash, remember bool) error {
 	// basic idea: you're going to start at the LSB and move left;
 	// the first 0 you find you're going to turn into a 1.
 
 	// make the new leaf & populate it with the actual data you're trying to add
-	n := new(polNode)
+	n := new(PolNode)
 	n.data = add
 	if remember || p.positionMap != nil {
 		// flag this leaf as memorable via it's left pointer
@@ -105,8 +114,8 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		leftTop := p.tops[len(p.tops)-1]                           // grab
 		p.tops = p.tops[:len(p.tops)-1]                            // pop
 		leftTop.niece, n.niece = n.niece, leftTop.niece            // swap
-		nHash := Parent(leftTop.data, n.data)                      // hash
-		n = &polNode{data: nHash, niece: [2]*polNode{&leftTop, n}} // new
+		nHash := util.Parent(leftTop.data, n.data)                 // hash
+		n = &PolNode{data: nHash, niece: [2]*PolNode{&leftTop, n}} // new
 		p.hashesEver++
 
 		n.prune()
@@ -151,7 +160,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 
 	// get all the swaps, then apply them all
-	swaprows := remTrans2(dels, p.numLeaves, ph)
+	swaprows := transform.RemTrans(dels, p.numLeaves, ph)
 	wg := new(sync.WaitGroup)
 	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashDirt, nextHashDirt []uint64
@@ -162,14 +171,14 @@ func (p *Pollard) rem2(dels []uint64) error {
 	for h := uint8(0); h < ph; h++ {
 		var hnslice []*hashableNode
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
-		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
+		hashDirt = util.DedupeSwapDirt(hashDirt, swaprows[h])
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
 			if len(swaprows[h]) == 0 ||
-				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
+				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].To {
 				// re-descending here which isn't great
 				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
 				hn, err = p.hnFromPos(hashDirt[0])
@@ -179,7 +188,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				hashDirt = hashDirt[1:]
 			} else { // swapping
 				// fmt.Printf("swapping %v\n", swaprows[h][0])
-				if swaprows[h][0].from == swaprows[h][0].to {
+				if swaprows[h][0].From == swaprows[h][0].To {
 					// TODO should get rid of these upstream
 					// panic("got non-moving swap")
 					swaprows[h] = swaprows[h][1:]
@@ -231,8 +240,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	// fmt.Printf("pretop %s", p.toString())
 	// set new tops
-	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
-	nexTops := make([]polNode, len(nextTopPoss))
+	nextTopPoss, _ := util.GetTopsReverse(nextNumLeaves, ph)
+	nexTops := make([]PolNode, len(nextTopPoss))
 	for i, _ := range nexTops {
 		nt, ntsib, _, err := p.grabPos(nextTopPoss[i])
 		if err != nil {
@@ -257,7 +266,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 }
 
 func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
-	if !inForest(pos, p.numLeaves, p.height()) {
+	if !util.InForest(pos, p.numLeaves, p.height()) {
 		// fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
@@ -265,21 +274,21 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	hn.position = up1(pos, p.height())
+	hn.position = util.Up1(pos, p.height())
 	return hn, nil
 }
 
 // swapNodes swaps the nodes at positions a and b.
 // returns a hashable node with b, bsib, and bpar
-func (p *Pollard) swapNodes(s arrow, height uint8) (*hashableNode, error) {
-	if !inForest(s.from, p.numLeaves, p.height()) ||
-		!inForest(s.to, p.numLeaves, p.height()) {
-		return nil, fmt.Errorf("swapNodes %d %d out of bounds", s.from, s.to)
+func (p *Pollard) swapNodes(s util.Arrow, height uint8) (*hashableNode, error) {
+	if !util.InForest(s.From, p.numLeaves, p.height()) ||
+		!util.InForest(s.To, p.numLeaves, p.height()) {
+		return nil, fmt.Errorf("swapNodes %d %d out of bounds", s.From, s.To)
 	}
 
 	if p.positionMap != nil {
-		a := childMany(s.from, height, p.height())
-		b := childMany(s.to, height, p.height())
+		a := util.ChildMany(s.From, height, p.height())
+		b := util.ChildMany(s.To, height, p.height())
 		run := uint64(1 << height)
 		// happens before the actual swap, so swapping a and b
 		for i := uint64(0); i < run; i++ {
@@ -295,24 +304,24 @@ func (p *Pollard) swapNodes(s arrow, height uint8) (*hashableNode, error) {
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 
-	a, asib, _, err := p.grabPos(s.from)
+	a, asib, _, err := p.grabPos(s.From)
 	if err != nil {
 		return nil, err
 	}
-	b, bsib, bhn, err := p.grabPos(s.to)
+	b, bsib, bhn, err := p.grabPos(s.To)
 	if err != nil {
 		return nil, err
 	}
 	if asib == nil || bsib == nil {
-		return nil, fmt.Errorf("swapNodes %d %d sibling not found", s.from, s.to)
+		return nil, fmt.Errorf("swapNodes %d %d sibling not found", s.From, s.To)
 	}
 	if a == nil || b == nil {
-		return nil, fmt.Errorf("swapNodes %d %d node not found", s.from, s.to)
+		return nil, fmt.Errorf("swapNodes %d %d node not found", s.From, s.To)
 	}
 
 	// fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
 	// r.from, a.data[:4], r.to, b.data[:4])
-	bhn.position = up1(s.to, p.height())
+	bhn.position = util.Up1(s.To, p.height())
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
 	if err != nil {
@@ -329,8 +338,8 @@ func (p *Pollard) swapNodes(s arrow, height uint8) (*hashableNode, error) {
 // And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
-	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
-	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
+	pos uint64) (n, nsib *PolNode, hn *hashableNode, err error) {
+	tree, branchLen, bits := util.DetectOffset(pos, p.numLeaves)
 	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	if tree >= uint8(len(p.tops)) {
 		err = fmt.Errorf("want tree %d but only %d trees", tree, len(p.tops))
@@ -353,7 +362,7 @@ func (p *Pollard) grabPos(
 		}
 		// if a sib doesn't exist, need to create it and hook it in
 		if n.niece[lr^1] == nil {
-			n.niece[lr^1] = new(polNode)
+			n.niece[lr^1] = new(PolNode)
 		}
 		n, nsib = n.niece[lr], n.niece[lr^1]
 		// fmt.Printf("h%d n %x nsib %x npar %x\n",
@@ -370,29 +379,29 @@ func (p *Pollard) grabPos(
 // DescendToPos returns the path to the target node, as well as the sibling
 // path.  Returns paths in bottom-to-top order (backwards)
 // sibs[0] is the node you actually asked for
-func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
+func (p *Pollard) descendToPos(pos uint64) ([]*PolNode, []*PolNode, error) {
 	// interate to descend.  It's like the leafnum, xored with ...1111110
 	// so flip every bit except the last one.
 	// example: I want leaf 12.  That's 1100.  xor to get 0010.
 	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
 	// need to figure out offsets for smaller trees.
 
-	if !inForest(pos, p.numLeaves, p.height()) {
+	if !util.InForest(pos, p.numLeaves, p.height()) {
 		//	if pos >= (p.numLeaves*2)-1 {
 		return nil, nil,
 			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)
 	}
 
 	// first find which tree we're in
-	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
+	tNum, branchLen, bits := util.DetectOffset(pos, p.numLeaves)
 	//	fmt.Printf("DO pos %d top %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
 	n := &p.tops[tNum]
 	if branchLen > 64 {
 		return nil, nil, fmt.Errorf("dtp top %d is nil", tNum)
 	}
 
-	proofs := make([]*polNode, branchLen+1)
-	sibs := make([]*polNode, branchLen+1)
+	proofs := make([]*PolNode, branchLen+1)
+	sibs := make([]*PolNode, branchLen+1)
 	// at the top of the branch, the proof and sib are the same
 	proofs[branchLen], sibs[branchLen] = n, n
 	for h := branchLen - 1; h < 64; h-- {
@@ -501,4 +510,23 @@ func (p *Pollard) equalToForestIfThere(f *Forest) bool {
 		}
 	}
 	return true
+}
+
+// this should work, right?  like the pointeryness?  Because swapnodes doesn't
+// change pointers.  Well it changes niece pointers, but the data itself changes
+// so the data is "there" in a static structure so I can use pointers to it
+// and it won't move around.  hopefully.
+
+func (n *hashableNode) run(wg *sync.WaitGroup) {
+	// fmt.Printf("hasher about to replace %x\n", n.dest.data[:4])
+	n.dest.data = n.sib.auntOp()
+	// fmt.Printf("hasher finished %x %x -> %x\n",
+	// n.sib.niece[0].data[:4], n.sib.niece[1].data[:4], n.dest.data[:4])
+	wg.Done()
+}
+
+func reversePolNodeSlice(a []PolNode) {
+	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+		a[i], a[j] = a[j], a[i]
+	}
 }
