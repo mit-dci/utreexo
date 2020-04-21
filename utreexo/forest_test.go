@@ -277,8 +277,8 @@ func TestSmallRandomForests(t *testing.T) {
 		deletions_uint64 := make([]uint64, len(deletions))
 		i = 0
 		for _, el := range deletions {
-				deletions_uint64[i] = uint64(el)
-				i++
+			deletions_uint64[i] = uint64(el)
+			i++
 		}
 		t.Logf("\nadding (the bool values are whether deletion happens):\n%v\ndeleting:\n%v\n", adds, deletions_uint64)
 
@@ -290,15 +290,15 @@ func TestSmallRandomForests(t *testing.T) {
 		// If the tree we filled isn't empty, and contains a node we didn't delete,
 		// we should be able to make a proof for that leaf
 		if atLeastOneLeafRemains {
-			blockProof, err := f.ProveBlock(
-				[]Hash {
+			blockProof, err := f.ProveBatch(
+				[]Hash{
 					chosenUndeletedLeaf.Hash,
 				})
 			if err != nil {
 				t.Fatalf("proveblock failed proving existing leaf: %v", err)
 			}
 
-			if !(f.VerifyBlockProof(blockProof)) {
+			if !(f.VerifyBatchProof(blockProof)) {
 				t.Fatal("verifyblockproof failed verifying proof for existing leaf")
 			}
 		}
