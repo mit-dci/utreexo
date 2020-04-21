@@ -16,9 +16,9 @@ func TestForestAddDel(t *testing.T) {
 
 	for b := 0; b < 1000; b++ {
 
-		adds, delHashes := sc.NextBlock(numAdds)
+		adds, _, delHashes := sc.NextBlock(numAdds)
 
-		bp, err := f.ProveBlock(delHashes)
+		bp, err := f.ProveBatch(delHashes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,13 +133,13 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	}
 
 	// get block proof
-	bp, err := f.ProveBlock(addHashes[:nDels])
+	bp, err := f.ProveBatch(addHashes[:nDels])
 	if err != nil {
 		return err
 	}
 
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
-	worked, _ := VerifyBlockProof(bp, f.GetTops(), f.numLeaves, f.height)
+	worked, _ := VerifyBatchProof(bp, f.GetTops(), f.numLeaves, f.height)
 	//	worked := f.VerifyBlockProof(bp)
 
 	if !worked {

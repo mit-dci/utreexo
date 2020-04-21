@@ -108,24 +108,24 @@ func NewSimChain(duration uint32) *SimChain {
 }
 
 // BackOne takes the output of NextBlock and undoes the block
-func (s *SimChain) BackOne(leaves []simLeaf, dels []Hash) {
+func (s *SimChain) BackOne(leaves []LeafTXO, durations []int32, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
 	s.ttlSlices =
 		append([][]Hash{dels}, s.ttlSlices[:len(s.ttlSlices)-1]...)
 
 	// Gotta go through the leaves and delete them all from the ttlslices
-	for _, l := range leaves {
-		if l.duration == 0 {
+	for i, l := range leaves {
+		if durations[i] == 0 {
 			continue
 		}
-		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], l.duration)
+		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
 		// everything should be in order, right?
 		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.ttlSlices[l.duration][len(s.ttlSlices[l.duration])-1][:4],
-			l.duration)
-		s.ttlSlices[l.duration] =
-			s.ttlSlices[l.duration][:len(s.ttlSlices[l.duration])-1]
+			s.ttlSlices[durations[i]][len(s.ttlSlices[durations[i]])-1][:4],
+			durations[i])
+		s.ttlSlices[durations[i]] =
+			s.ttlSlices[durations[i]][:len(s.ttlSlices[durations[i]])-1]
 	}
 
 	s.blockHeight--
@@ -146,7 +146,7 @@ func (s *SimChain) ttlString() string {
 }
 
 // NextBlock :
-func (s *SimChain) NextBlock(numAdds uint32) ([]simLeaf, []Hash) {
+func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
 
@@ -154,7 +154,8 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]simLeaf, []Hash) {
 		numAdds = 1
 	}
 	// they're all forgettable
-	adds := make([]simLeaf, numAdds)
+	adds := make([]LeafTXO, numAdds)
+	durations := make([]int32, numAdds)
 
 	// make dels; dels are preset by the ttlMap
 	delHashes := s.ttlSlices[0]
@@ -170,7 +171,8 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]simLeaf, []Hash) {
 		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
 		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
 
-		adds[j].duration = int32(rand.Uint32() & s.durationMask)
+		durations[j] = int32(rand.Uint32() & s.durationMask)
+
 		// with "+1", the duration is 1 to 256, so the forest never gets
 		// big or tall.  Without the +1, the duration is sometimes 0,
 		// which makes a leaf last forever, and the forest will expand
@@ -179,21 +181,21 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]simLeaf, []Hash) {
 		// the first utxo added lives forever.
 		// (prevents leaves from going to 0 which is buggy)
 		if s.blockHeight == 0 {
-			adds[j].duration = 0
+			durations[j] = 0
 		}
 
-		if adds[j].duration != 0 && adds[j].duration < s.lookahead {
+		if durations[j] != 0 && durations[j] < s.lookahead {
 			adds[j].Remember = true
 		}
 
-		if adds[j].duration != 0 {
+		if durations[j] != 0 {
 			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].duration-1)
-			s.ttlSlices[adds[j].duration-1] =
-				append(s.ttlSlices[adds[j].duration-1], adds[j].Hash)
+			s.ttlSlices[durations[j]-1] =
+				append(s.ttlSlices[durations[j]-1], adds[j].Hash)
 		}
 
 		s.leafCounter++
 	}
 
-	return adds, delHashes
+	return adds, durations, delHashes
 }
