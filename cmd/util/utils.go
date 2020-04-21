@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/mit-dci/utreexo/utreexo"
 )
 
 // Hash is just [32]byte
@@ -77,16 +77,48 @@ func CheckNet(net wire.BitcoinNet) {
 // BlockReader is a wrapper around GetRawBlockFromFile so that the process
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with TxToWrite type.
-func BlockReader(
-	blockChan chan BlockToWrite, lastIndexOffsetHeight, height int32, offsetfile string) {
-	for height != lastIndexOffsetHeight {
-		txs, bh, err := GetRawBlockFromFile(height, offsetfile)
+// It also puts in the proofs.  This will run on the archive server, and the
+// data will be sent over the network to the CSN.
+func BlockAndRevReader(
+	blockChan chan BlockAndRev,
+	maxHeight, curHeight int32,
+	offsetfile, revoffsetfile string) {
+	for curHeight != maxHeight {
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
 		if err != nil {
 			panic(err)
 		}
-		send := BlockToWrite{Txs: txs, Height: height, Blockhash: bh}
+
+		rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
+
+		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
+
+		blockChan <- bnr
+		curHeight++
+	}
+}
+
+// BlockReader is a wrapper around GetRawBlockFromFile so that the process
+// can be made into a goroutine. As long as it's running, it keeps sending
+// the entire blocktxs and height to bchan with TxToWrite type.
+// It also puts in the proofs.  This will run on the archive server, and the
+// data will be sent over the network to the CSN.
+func BlockAndProofReader(
+	blockChan chan UBlock,
+	maxHeight, curHeight, lookahead int32) {
+	for curHeight != maxHeight {
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		if err != nil {
+			panic(err)
+		}
+
+		// rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
+
+		send := UBlock{Block: blk, Height: curHeight} //Proof: nil}
+
+		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
 		blockChan <- send
-		height++
+		curHeight++
 	}
 }
 
@@ -95,7 +127,7 @@ func BlockReader(
 // Skips the genesis block. If you search for block 0, it will give you
 // block 1.
 func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
-	txs []*btcutil.Tx, Blockhash [32]byte, err error) {
+	block wire.MsgBlock, err error) {
 
 	var datFile [4]byte
 	var offset [4]byte
@@ -123,21 +155,70 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	f.Seek(int64(BtU32(offset[:])+8), 0)
 
 	// TODO this is probably expensive. fix
-	b := new(wire.MsgBlock)
-	err = b.Deserialize(f)
+	err = block.Deserialize(f)
 	if err != nil {
 		return
 	}
 	f.Close()
 	offsetFile.Close()
 
-	Blockhash = b.BlockHash()
-
-	for _, msgTx := range b.Transactions {
-		txs = append(txs, btcutil.NewTx(msgTx))
-	}
-
 	return
+}
+
+// BlockToAdds turns all the new utxos in a msgblock into leafTxos
+func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []utreexo.LeafTXO) {
+	// bh := bl.Blockhash
+	for coinbaseif0, tx := range blk.Transactions {
+		// cache txid aka txhash
+		txid := tx.TxHash()
+		for i, out := range tx.TxOut {
+			// Skip all the OP_RETURNs
+			if IsUnspendable(out) {
+				continue
+			}
+			var l LeafData
+			// TODO put blockhash back in -- leaving empty for now!
+			// l.BlockHash = bh
+			l.Outpoint.Hash = txid
+			l.Outpoint.Index = uint32(i)
+			l.Height = height
+			if coinbaseif0 == 0 {
+				l.Coinbase = true
+			}
+			l.Amt = out.Value
+			l.PkScript = out.PkScript
+
+			// Don't need to save leafData here
+			// dataleaves = append(dataleaves, l)
+
+			var uleaf utreexo.LeafTXO
+			uleaf.Hash = l.LeafHash()
+			hashleaves = append(hashleaves, uleaf)
+		}
+	}
+	return
+}
+
+// U32tB converts uint32 to 4 bytes.  Always works.
+func PrefixLen16(b []byte) []byte {
+	l := uint16(len(b))
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.BigEndian, l)
+	return append(buf.Bytes(), b...)
+}
+
+func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
+	if len(b) < 2 {
+		return nil, nil, fmt.Errorf("PrefixedLen slice only %d long", len(b))
+	}
+	prefix, payload := b[:2], b[2:]
+	var l uint16
+	buf := bytes.NewBuffer(prefix)
+	binary.Read(buf, binary.BigEndian, &l)
+	if int(l) > len(payload) {
+		return nil, nil, fmt.Errorf("Prefixed %d but payload %d left", l)
+	}
+	return payload[:l], payload[l:], nil
 }
 
 // U32tB converts uint32 to 4 bytes.  Always works.

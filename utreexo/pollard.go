@@ -28,6 +28,15 @@ func (p *Pollard) Stats() string {
 	return s
 }
 
+// TODO remove
+// Temporary -- returns numleaves and height so that batch proofs can be
+// reconstructed and hashes can be matches.
+// Replace this with proofs that do not include the things being proven, and
+// take the proved leaves as a separate argument
+func (p *Pollard) ReconstructStats() (uint64, uint8) {
+	return p.numLeaves, p.height()
+}
+
 // Add a leaf to a pollard.  Not as simple!
 func (p *Pollard) add(adds []LeafTXO) error {
 

@@ -129,14 +129,15 @@ func (f *Forest) VerifyMany(ps []Proof) bool {
 	return true
 }
 
-// ProveBlock gets proofs (in the form of a node slice) for a bunch of utxos.
+// ProveBatch gets proofs (in the form of a node slice) for a bunch of utxos.
 // it gives the full proofs with no filtering.
 // also, more efficient
 // known is a slice of known node positions in the forest; prove up to
 // the intersections
-func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
+// TODO the elements to be proven should not be included in the proof.
+func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	starttime := time.Now()
-	var bp BlockProof
+	var bp BatchProof
 	// skip everything if empty (should this be an error?
 	if len(hs) == 0 {
 		return bp, nil
@@ -168,7 +169,7 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 				fmt.Printf("%x @%d\t", m[:4], p)
 			}
 			return bp, fmt.Errorf(
-				"ProveBlock: got leaf position %d but only %d leaves exist",
+				"ProveBatch: got leaf position %d but only %d leaves exist",
 				pos, f.numLeaves)
 		}
 		bp.Targets[i] = pos
@@ -266,8 +267,8 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	return bp, nil
 }
 
-// VerifyBlockProof :
-func (f *Forest) VerifyBlockProof(bp BlockProof) bool {
-	ok, _ := VerifyBlockProof(bp, f.GetTops(), f.numLeaves, f.height)
+// VerifyBatchProof :
+func (f *Forest) VerifyBatchProof(bp BatchProof) bool {
+	ok, _ := VerifyBatchProof(bp, f.GetTops(), f.numLeaves, f.height)
 	return ok
 }

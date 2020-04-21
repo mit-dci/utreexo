@@ -3,7 +3,6 @@ package csn
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
@@ -11,56 +10,6 @@ import (
 	"github.com/mit-dci/utreexo/utreexo"
 	"github.com/syndtr/goleveldb/leveldb"
 )
-
-// Here we write proofs for all the txs.
-// All the inputs are saved as 32byte sha256 hashes.
-// All the outputs are saved as LeafTXO type.
-func genPollard(
-	tx []*btcutil.Tx,
-	height int32,
-	totalTXOAdded, totalDels *int,
-	lookahead int32,
-	plustime time.Duration,
-	pFile *os.File,
-	pOffsetFile *os.File,
-	lvdb *leveldb.DB,
-	p *utreexo.Pollard) error {
-
-	plusstart := time.Now()
-
-	blockAdds, err := genAdds(tx, lvdb, height, lookahead)
-	*totalTXOAdded += len(blockAdds) // for benchmarking
-
-	donetime := time.Now()
-	plustime += donetime.Sub(plusstart)
-
-	// Grab the proof by height
-	bpBytes, err := getProof(uint32(height), pFile, pOffsetFile)
-	if err != nil {
-		return err
-	}
-
-	// deserialize byte slice to utreexo.BlockProof struct
-	bp, err := utreexo.FromBytesBlockProof(bpBytes)
-	if err != nil {
-		return err
-	}
-	*totalDels += len(bp.Targets) // for benchmarking
-
-	// Fills in the empty(nil) nieces for verification && deletion
-	err = p.IngestBlockProof(bp)
-	if err != nil {
-		return err
-	}
-
-	// Utreexo tree modification. blockAdds are the added txos and
-	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, bp.Targets)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 // genAdds generates txos that are turned into LeafTXOs from the given Txs in a block
 // so it's ready to be added to the tree
@@ -109,8 +58,8 @@ func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
 				blockAdds = append(blockAdds, add)
 			} else {
 				add := utreexo.LeafTXO{
-					Hash:     txo.Txid,
-					Duration: txo.DeathHeight - (height + 1),
+					Hash: txo.Txid,
+					// Duration: txo.DeathHeight - (height + 1),
 					// Only remember if duration is less than the
 					// lookahead value
 					Remember: txo.DeathHeight-(height+1) < lookahead}
@@ -121,8 +70,8 @@ func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
 	return blockAdds, nil
 }
 
-// getProof gets the proof for a given block height
-func getProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, error) {
+// getProof gets the proof for a given block height from the flat files
+func getBlockProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte, error) {
 
 	// offset is always 4 bytes. Doing height * 4 will give you the 4 bytes of
 	// offset information that you want for that block height

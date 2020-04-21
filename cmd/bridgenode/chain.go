@@ -1,4 +1,4 @@
-package bridge
+package bridgenode
 
 import (
 	"fmt"
@@ -41,6 +41,7 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 		if err != nil {
 			return nil, 0, 0, 0, err
 		}
+		fmt.Printf("tip height %d\n", lastIndexOffsetHeight)
 	}
 
 	// Check if the forestdata is present

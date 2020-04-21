@@ -44,12 +44,12 @@ func undoOnceRandom(blocks int32) error {
 	sc.lookahead = 0
 	for b := int32(0); b < blocks; b++ {
 
-		adds, delHashes := sc.NextBlock(rand.Uint32() & 0x03)
+		adds, durations, delHashes := sc.NextBlock(rand.Uint32() & 0x03)
 
 		fmt.Printf("\t\tblock %d del %d add %d - %s\n",
 			sc.blockHeight, len(delHashes), len(adds), f.Stats())
 
-		bp, err := f.ProveBlock(delHashes)
+		bp, err := f.ProveBatch(delHashes)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ func undoOnceRandom(blocks int32) error {
 			for h, p := range f.positionMap {
 				fmt.Printf("%x@%d ", h[:4], p)
 			}
-			sc.BackOne(adds, delHashes)
+			sc.BackOne(adds, durations, delHashes)
 		}
 
 	}
@@ -92,7 +92,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 
 	// --------------- block 0
 	// make starting forest with numStart leaves, and store tops
-	adds, _ := sc.NextBlock(numStart)
+	adds, _, _ := sc.NextBlock(numStart)
 	fmt.Printf("adding %d leaves\n", numStart)
 	_, err := f.Modify(adds, nil)
 	if err != nil {
@@ -112,9 +112,9 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		delHashes[i] = adds[i].Hash
 	}
 	// get some more adds; the dels we already got
-	adds, _ = sc.NextBlock(numAdds)
+	adds, _, _ = sc.NextBlock(numAdds)
 
-	bp, err := f.ProveBlock(delHashes)
+	bp, err := f.ProveBatch(delHashes)
 	if err != nil {
 		return err
 	}
@@ -164,9 +164,9 @@ func undoTestSimChain() error {
 	sc.NextBlock(3)
 	sc.NextBlock(3)
 	fmt.Printf(sc.ttlString())
-	l1, h1 := sc.NextBlock(3)
+	l1, dur, h1 := sc.NextBlock(3)
 	fmt.Printf(sc.ttlString())
-	sc.BackOne(l1, h1)
+	sc.BackOne(l1, dur, h1)
 	fmt.Printf(sc.ttlString())
 	return nil
 }

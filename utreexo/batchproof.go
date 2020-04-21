@@ -6,17 +6,17 @@ import (
 	"fmt"
 )
 
-// BlockProof :
-type BlockProof struct {
+// BatchProof :
+type BatchProof struct {
 	Targets []uint64
 	Proof   []Hash
 	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
 	// the position of the hashes is implied / computable from the leaf positions
 }
 
-// ToBytes give the bytes for a blockproof.  It errors out silently because
+// ToBytes give the bytes for a BatchProof.  It errors out silently because
 // I don't think the binary.Write errors ever actually happen
-func (bp *BlockProof) ToBytes() []byte {
+func (bp *BatchProof) ToBytes() []byte {
 	var buf bytes.Buffer
 
 	// first write the number of targets (4 byte uint32)
@@ -49,7 +49,7 @@ func (bp *BlockProof) ToBytes() []byte {
 }
 
 // ToString for debugging, shows the blockproof
-func (bp *BlockProof) ToString() string {
+func (bp *BatchProof) ToString() string {
 	s := fmt.Sprintf("%d targets: ", len(bp.Targets))
 	for _, t := range bp.Targets {
 		s += fmt.Sprintf("%d\t", t)
@@ -62,9 +62,9 @@ func (bp *BlockProof) ToString() string {
 	return s
 }
 
-// FromBytesBlockProof gives a block proof back from the serialized bytes
-func FromBytesBlockProof(b []byte) (BlockProof, error) {
-	var bp BlockProof
+// FromBytesBatchProof gives a block proof back from the serialized bytes
+func FromBytesBatchProof(b []byte) (BatchProof, error) {
+	var bp BatchProof
 
 	if len(b) < 4 {
 		return bp, fmt.Errorf("blockproof only %d bytes", len(b))
@@ -100,14 +100,14 @@ func FromBytesBlockProof(b []byte) (BlockProof, error) {
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // tops to verify -- just hash up to any populated node!  Saves a ton of CPU!
 
-// VerifyBlockProof takes a block proof and reconstructs / verifies it.
+// VerifyBatchProof takes a block proof and reconstructs / verifies it.
 // takes a blockproof to verify, and the known correct tops to check against.
 // also takes the number of leaves and forest height (those are redundant
 // if we don't do weird stuff with overly-high forests, which we might)
 // it returns a bool of whether the proof worked, and a map of the sparse
 // forest in the blockproof
-func VerifyBlockProof(
-	bp BlockProof, tops []Hash,
+func VerifyBatchProof(
+	bp BatchProof, tops []Hash,
 	numLeaves uint64, height uint8) (bool, map[uint64]Hash) {
 
 	// if nothing to prove, it worked
@@ -212,7 +212,7 @@ func VerifyBlockProof(
 // Reconstruct takes a number of leaves and height, and turns a block proof back
 // into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
 // bp.Targets
-func (bp *BlockProof) Reconstruct(
+func (bp *BatchProof) Reconstruct(
 	numleaves uint64, forestHeight uint8) (map[uint64]Hash, error) {
 
 	if verbose {
