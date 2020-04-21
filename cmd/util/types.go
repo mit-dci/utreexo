@@ -196,7 +196,7 @@ func (bp *UData) ToBytes() (b []byte) {
 	return
 }
 
-func BlockProofFromBytes(b []byte) (bp UData, err error) {
+func UDataFromBytes(b []byte) (ud UData, err error) {
 
 	if len(b) < 4 {
 		err = fmt.Errorf("block proof too short %d bytes", len(b))
@@ -211,28 +211,28 @@ func BlockProofFromBytes(b []byte) (bp UData, err error) {
 	b = b[4:]
 	batchProofBytes := b[:batchLen]
 	leafDataBytes := b[batchLen:]
-	bp.AccProof, err = utreexo.FromBytesBatchProof(batchProofBytes)
+	ud.AccProof, err = utreexo.FromBytesBatchProof(batchProofBytes)
 	if err != nil {
 		return
 	}
 	// got the batch proof part; now populate the leaf data part
 	// first there are as many leafDatas as there are proof targets
-	bp.UtxoData = make([]LeafData, len(bp.AccProof.Targets))
+	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
 
 	var ldb []byte
 	// loop until we've filled in every leafData (or something breaks first)
-	for i, _ := range bp.UtxoData {
+	for i, _ := range ud.UtxoData {
 		ldb, leafDataBytes, err = PopPrefixLen16(leafDataBytes)
 		if err != nil {
 			return
 		}
-		bp.UtxoData[i], err = LeafDataFromBytes(ldb)
+		ud.UtxoData[i], err = LeafDataFromBytes(ldb)
 		if err != nil {
 			return
 		}
 	}
 
-	return bp, nil
+	return ud, nil
 }
 
 // TODO use compact leafDatas in the block proofs -- probably 50%+ space savings
@@ -240,12 +240,12 @@ func BlockProofFromBytes(b []byte) (bp UData, err error) {
 // block proof, you've also got the block, so should always be OK to omit the
 // data that's already in the block.
 
-func BlockProofFromCompactBytes(b []byte) (UData, error) {
-	var bp UData
+func UDataFromCompactBytes(b []byte) (UData, error) {
+	var ud UData
 
-	return bp, nil
+	return ud, nil
 }
 
-func (bp *UData) ToCompactBytes() (b []byte) {
+func (ud *UData) ToCompactBytes() (b []byte) {
 	return
 }

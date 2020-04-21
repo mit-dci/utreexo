@@ -145,20 +145,12 @@ func putBlockInPollard(
 	donetime := time.Now()
 	plustime += donetime.Sub(plusstart)
 
-	// Grab the proof by height
-	// bpBytes, err := getBlockProof(uint32(height), pFile, pOffsetFile)
-	// if err != nil {
-	// return err
-	// }
-
-	// deserialize byte slice to utreexo.BlockProof struct
-	// blkp, err := util.BlockProofFromCompactBytes(bpBytes)
-	// if err != nil {
-	// return err
-	// }
 	*totalDels += len(bnu.ExtraData.AccProof.Targets) // for benchmarking
 
 	// derive leafHashes from leafData
+	if !bnu.ExtraData.Verify(p.ReconstructStats()) {
+		return fmt.Errorf("LeafData / Proof mismatch")
+	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
 	err := p.IngestBatchProof(bnu.ExtraData.AccProof)
