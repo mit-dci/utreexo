@@ -133,10 +133,10 @@ func (p *Pollard) WritePollard(pollardFile *os.File) error {
 
 	// "Overwriting" pollardFile passed in
 	// I feel like this is faster than writing 0s
-	os.Remove(util.PollardFilePath)
+	os.Remove("pollardfile.dat")
 	var err error
 	pollardFile, err = os.OpenFile(
-		util.PollardFilePath, os.O_CREATE|os.O_RDWR, 0600)
+		"pollardfile.dat", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}

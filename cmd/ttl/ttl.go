@@ -18,19 +18,20 @@ type DeathInfo struct {
 }
 
 // WriteBlock sends off ttl info to dbWorker to be written to ttldb
-func WriteBlock(txs util.BlockToWrite,
+func WriteBlock(bnr util.BlockAndRev,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) {
 
 	blockBatch := new(leveldb.Batch)
 
 	// iterate through the transactions in a block
-	for blockindex, tx := range txs.Txs {
+	for blockindex, tx := range bnr.Blk.Transactions {
 		// iterate through individual inputs in a transaction
-		for _, in := range tx.MsgTx().TxIn {
+		for _, in := range tx.TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
 				opString := in.PreviousOutPoint.String()
 				h := util.HashFromString(opString)
-				blockBatch.Put(h[:], util.U32tB(uint32(txs.Height+1)))
+				blockBatch.Put(h[:], util.U32tB(uint32(bnr.Height+1))) // why +1??
+				// TODO ^^^^^ yeah why
 			}
 		}
 	}

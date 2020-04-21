@@ -101,14 +101,14 @@ func putVLQ(target []byte, n uint64) int {
 // deserialized.
 // NOTE: This func is modified from btcd to take in io.Reader as an argument instead
 // of a byte slice
-func deserializeVLQ(r io.Reader) (uint64, int) {
-	var n uint64
+func deserializeVLQ(r io.Reader) (int64, int) {
+	var n int64
 	var size int
 	for {
 		var val [1]byte
 		r.Read(val[:])
 		size++
-		n = (n << 7) | uint64(val[0]&0x7f)
+		n = (n << 7) | int64(val[0]&0x7f)
 		if val[0]&0x80 != 0x80 {
 			break
 		}
@@ -302,7 +302,7 @@ func decodeCompressedScriptSize(r io.Reader) int {
 	}
 
 	scriptSize -= numSpecialScripts
-	scriptSize += uint64(bytesRead)
+	scriptSize += int64(bytesRead)
 	return int(scriptSize)
 }
 
@@ -525,7 +525,7 @@ func compressTxOutAmount(amount uint64) uint64 {
 // decompressTxOutAmount returns the original amount the passed compressed
 // amount represents according to the domain specific compression algorithm
 // described above.
-func decompressTxOutAmount(amount uint64) uint64 {
+func decompressTxOutAmount(amount int64) int64 {
 	// No need to do any work if it's zero.
 	if amount == 0 {
 		return 0
@@ -545,7 +545,7 @@ func decompressTxOutAmount(amount uint64) uint64 {
 	// The decompressed amount is now one of the following two equations:
 	// x = 9*n + d - 1  | where e < 9
 	// x = n - 1        | where e = 9
-	n := uint64(0)
+	n := int64(0)
 	if exponent < 9 {
 		lastDigit := amount%9 + 1
 		amount /= 9

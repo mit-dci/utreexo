@@ -1,4 +1,4 @@
-package bridge
+package bridgenode
 
 import (
 	"bufio"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
 	"github.com/mit-dci/utreexo/tree"
@@ -19,7 +18,7 @@ import (
 
 // build the bridge node / proofs
 func BuildProofs(
-	net wire.BitcoinNet, ttldb string, offsetfile string, sig chan bool) error {
+	net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	done := make(chan bool, 1)
@@ -51,7 +50,7 @@ func BuildProofs(
 	// Open leveldb
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile(ttldb, o)
+	lvdb, err := leveldb.OpenFile(ttlpath, o)
 	if err != nil {
 		panic(err)
 	}
@@ -67,12 +66,13 @@ func BuildProofs(
 	}
 
 	// To send/receive blocks from blockreader()
-	blockReadQueue := make(chan util.BlockToWrite, 10)
+	blockAndRevReadQueue := make(chan util.BlockAndRev, 10)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
-	go util.BlockReader(
-		blockReadQueue, lastIndexOffsetHeight, height, util.OffsetFilePath)
+	go util.BlockAndRevReader(blockAndRevReadQueue,
+		lastIndexOffsetHeight, height,
+		util.OffsetFilePath, util.RevOffsetFilePath)
 
 	// for the pFile
 	proofAndHeightChan := make(chan util.ProofAndHeight, 1)
@@ -103,24 +103,26 @@ func BuildProofs(
 	for ; height != lastIndexOffsetHeight && stop != true; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
-		block := <-blockReadQueue
+		bnr := <-blockAndRevReadQueue
 
 		// Writes the ttl values for each tx to leveldb
-		ttl.WriteBlock(block, batchan, &batchwg)
+		ttl.WriteBlock(bnr, batchan, &batchwg)
 
-		// generate the adds and dels from the transactions passed in
-		// Adds are the TXOs and Dels are the TXINs
-		blockAdds, blockDels := genAddDel(block)
+		// Get the add and remove data needed from the block & undo block
+		blockAdds, delLeaves, delHashes, err := genAddDel(bnr)
+		if err != nil {
+			return err
+		}
 
-		// Verify that the TXINs exist in our forest
-		// This should never fail within the context of our code and setting
-		blockProof, err := genVerifyDels(blockDels, forest, block.Height)
+		// use the accumulator to get inclusion proofs, and produce a block
+		// proof with all data needed to verify the block
+		blkProof, err := genBlockProof(delLeaves, delHashes, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
 
 		// convert blockproof struct to bytes
-		b := blockProof.ToBytes()
+		b := blkProof.ToBytes()
 
 		// Add to WaitGroup and send data to channel to be written
 		// to disk
@@ -131,17 +133,17 @@ func BuildProofs(
 		// to disk
 		fileWait.Add(1)
 		proofAndHeightChan <- util.ProofAndHeight{
-			Proof: b, Height: block.Height}
+			Proof: b, Height: bnr.Height}
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, blockProof.Targets)
+		_, err = forest.Modify(blockAdds, blkProof.AccProof.Targets)
 		if err != nil {
 			return err
 		}
 
-		if block.Height%10000 == 0 {
-			fmt.Println("On block :", block.Height+1)
+		if bnr.Height%10000 == 0 {
+			fmt.Println("On block :", bnr.Height+1)
 		}
 
 		// Check if stopSig is no longer false
@@ -231,77 +233,91 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 
 }
 
-// genVerifyDels is a wrapper around forest.ProveBlock and forest.VerifyBlockProof
-func genVerifyDels(dels []treeutil.Hash, f *tree.Forest, height int32) (
-	tree.BlockProof, error) {
+// genBlockProof calls forest.ProveBatch with the hash data to get a batched
+// inclusion proof from the accumulator.  It then adds on the utxo leaf data,
+// to create a block proof which both proves inclusion and gives all utxo data
+// needed for transaction verification.
+func genBlockProof(delLeaves []util.LeafData, delHashes []treeutil.Hash,
+	f *tree.Forest, height int32) (
+	util.UData, error) {
 
+	var blockP util.UData
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
-	blockProof, err := f.ProveBlock(dels)
+	batchProof, err := f.ProveBatch(delHashes)
 	if err != nil {
-		return blockProof, fmt.Errorf("ProveBlock failed at block %d %s %s",
+		return blockP, fmt.Errorf("ProveBlock failed at block %d %s %s",
 			height+1, f.Stats(), err.Error())
 	}
-
-	// Sanity check. Should never fail
-	ok := f.VerifyBlockProof(blockProof)
-	if !ok {
-		return blockProof,
-			fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
+	if len(batchProof.Targets) != len(delLeaves) {
+		return blockP, fmt.Errorf("ProveBatch %d targets but %d leafData",
+			len(batchProof.Targets), len(delLeaves))
 	}
 
-	return blockProof, nil
+	// Optional Sanity check. Should never fail.
+	// ok := f.VerifyBatchProof(blockProof)
+	// if !ok {
+	// return blockProof,
+	// fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
+	// }
+
+	blockP.AccProof = batchProof
+	blockP.UtxoData = delLeaves
+
+	return blockP, nil
 }
 
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and
 // throws out all the same block spends.
-func genAddDel(block util.BlockToWrite) (
-	blockAdds []treeutil.LeafTXO, blockDels []treeutil.Hash) {
+// It's a little redundant to give back both delLeaves and delHashes, since the
+// latter is just the hash of the former, but if we only return delLeaves we
+// end up hashing them twice which could slow things down.
+func genAddDel(block util.BlockAndRev) (blockAdds []treeutil.LeafTXO,
+	delLeaves []util.LeafData, delHashes []treeutil.Hash, err error) {
 
-	blockDels = genDels(block.Txs)
-	blockAdds = genAdds(block.Txs)
+	delLeaves, delHashes, err = genDels(block)
+	blockAdds = util.BlockToAdds(block.Blk, block.Height)
 
-	// Forget all utxos that get spent on the same block
-	// they are created.
-	treeutil.DedupeHashSlices(&blockAdds, &blockDels)
-	return
-}
-
-// genAdds generates leafTXOs to be added to the Utreexo forest. These are TxOuts
-// Skips all the OP_RETURN transactions
-func genAdds(txs []*btcutil.Tx) (blockAdds []treeutil.LeafTXO) {
-	for _, tx := range txs {
-
-		// cache txid aka txhash
-		txid := tx.MsgTx().TxHash().String()
-
-		for i, out := range tx.MsgTx().TxOut {
-			// Skip all the OP_RETURNs
-			if util.IsUnspendable(out) {
-				continue
-			}
-			utxostring := fmt.Sprintf("%s:%d", txid, i)
-			addData := treeutil.LeafTXO{
-				Hash: treeutil.HashFromString(utxostring)}
-			blockAdds = append(blockAdds, addData)
-		}
-	}
+	utreexo.DedupeHashSlices(&blockAdds, &delHashes)
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func genDels(txs []*btcutil.Tx) (blockDels []treeutil.Hash) {
-	for index, tx := range txs {
-		for _, in := range tx.MsgTx().TxIn {
-			// skip coinbase "spend"
-			if index > 0 {
-				// Grab TXID of the tx that created this TXIN
-				s := in.PreviousOutPoint.String()
-				// Hash. Need 32byte but has index
-				hash := treeutil.HashFromString(s)
-				blockDels = append(blockDels, hash)
+func genDels(bnr util.BlockAndRev) (
+	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
+
+	// make sure same number of txs and rev txs (minus coinbase)
+	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
+		err = fmt.Errorf("block %d %d txs but %d rev txs",
+			bnr.Height, len(bnr.Blk.Transactions), len(bnr.Rev.Txs))
+	}
+	for txinblock, tx := range bnr.Blk.Transactions {
+		if txinblock == 0 {
+			continue
+		}
+		txinblock--
+		// make sure there's the same number of txins
+		if len(tx.TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
+			err = fmt.Errorf("block %d tx %d has %d inputs but %d rev entries",
+				bnr.Height, txinblock+1,
+				len(tx.TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
+		}
+		// loop through inputs
+		for i, txin := range tx.TxIn {
+			// build leaf
+			var l util.LeafData
+
+			l.Outpoint = txin.PreviousOutPoint
+			l.Height = bnr.Rev.Txs[txinblock].TxIn[i].Height
+			// TODO get blockhash from headers here -- empty for now
+			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
+
+			if txinblock == 0 {
+				l.Coinbase = true
 			}
+			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
+			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
 		}
 	}
 	return

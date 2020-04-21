@@ -30,17 +30,10 @@ const MaxMessagePayload = (1024 * 1024 * 32) // 32MB
 // RevBlock is the structure of how a block is stored in the
 // rev*.dat file the Bitcoin Core generates
 type RevBlock struct {
-	Magic [4]byte    // Network magic bytes
-	Size  [4]byte    // size of the BlockUndo record
-	Block *BlockUndo // acutal undo record
-	Hash  [32]byte   // 32 byte double sha256 hash of the block
-}
-
-// BlockUndo is the slice of undo information about transactions
-// Excludes the coinbase transaction
-// see github.com/bitcoin/bitcoin/src/undo.h
-type BlockUndo struct {
-	Tx []*TxUndo
+	Magic [4]byte   // Network magic bytes
+	Size  [4]byte   // size of the BlockUndo record
+	Txs   []*TxUndo // acutal undo record
+	Hash  [32]byte  // 32 byte double sha256 hash of the block
 }
 
 // TxUndo contains the TxInUndo records.
@@ -62,7 +55,7 @@ type TxInUndo struct {
 	PKScript []byte
 
 	// Value of the spent UTXO
-	Amount uint64
+	Amount int64
 
 	// Whether if the TxInUndo is a coinbase or not
 	// Not actually included in the rev*.dat files
@@ -116,14 +109,13 @@ func (rb *RevBlock) Deserialize(r io.Reader) error {
 		return err
 	}
 
-	rb.Block = new(BlockUndo)
 	for i := uint64(0); i < txCount; i++ {
 		var tx TxUndo
 		err := tx.Deserialize(r)
 		if err != nil {
 			return err
 		}
-		rb.Block.Tx = append(rb.Block.Tx, &tx)
+		rb.Txs = append(rb.Txs, &tx)
 	}
 	return nil
 }
@@ -251,8 +243,14 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 
 		// Write the .dat file name and the
 		// offset the block can be found at
-		offsetFile.Write(U32tB(fileNum))
-		offsetFile.Write(U32tB(offset))
+		_, err = offsetFile.Write(U32tB(fileNum))
+		if err != nil {
+			return err
+		}
+		_, err = offsetFile.Write(U32tB(offset))
+		if err != nil {
+			return err
+		}
 
 		// offset for the next block from the current position
 		// skip the 32 bytes of double sha hash of the rev block

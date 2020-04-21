@@ -36,19 +36,19 @@ func pollardFullRandomRemember(blocks int32) error {
 	sn := util.NewSimChain(0x07)
 	sn.Lookahead = 400
 	for b := int32(0); b < blocks; b++ {
-		adds, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
+		adds, _, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
 
 		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
 			sn.BlockHeight, len(delHashes), len(adds), p.Stats())
 
 		// get proof for these deletions (with respect to prev block)
-		bp, err := fp.ProveBlock(delHashes)
+		bp, err := fp.ProveBatch(delHashes)
 		if err != nil {
 			return err
 		}
 
 		// verify proofs on rad node
-		err = p.IngestBlockProof(bp)
+		err = p.IngestBatchProof(bp)
 		if err != nil {
 			return err
 		}

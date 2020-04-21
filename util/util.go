@@ -389,8 +389,21 @@ func SortNodeSlice(s []Node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
-// TODO is there really no way To just... reverse any slice?  Like with
-// interface or something?  it's just pointers and never Touches the actual
+// checkSortedNoDupes returns true for strictly increasing slices
+func checkSortedNoDupes(s []uint64) bool {
+	for i, _ := range s {
+		if i == 0 {
+			continue
+		}
+		if s[i-1] >= s[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TODO is there really no way to just... reverse any slice?  Like with
+// interface or something?  it's just pointers and never touches the actual
 // type...
 
 // reverseArrowSlice does what it says.  Maybe can get rid of if we return

@@ -203,6 +203,8 @@ func (f *Forest) removev4(dels []uint64) error {
 func (f *Forest) swapNodes(s util.Arrow, height uint8) error {
 	if s.From == s.To {
 		// these shouldn't happen, and seems like the don't
+
+		fmt.Printf("%s\nmove %d to %d\n", f.ToString(), s.from, s.to)
 		panic("got non-moving swap")
 	}
 	if height == 0 {
@@ -386,6 +388,14 @@ func (f *Forest) Modify(adds []util.LeafTXO, dels []uint64) (*undoBlock, error) 
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(dels), f.numLeaves)
 	}
+	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
+		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
+	}
+	for _, a := range adds { // check for empty leaves
+		if a.Hash == empty {
+			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")
+		}
+	}
 	// remap to expand the forest if needed
 	for int64(f.numLeaves)+delta > int64(1<<f.height) {
 		// fmt.Printf("current cap %d need %d\n",
@@ -553,15 +563,14 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	return f, nil
 }
 
-func (f *Forest) PrintPositionMap(file *os.File) {
+func (f *Forest) PrintPositionMap() string {
 	var s string
-	for m, pos := range f.positionMap {
-		s += fmt.Sprintf("pos %d, leaf %x\n", pos, m)
+	for pos := uint64(0); pos < f.numLeaves; pos++ {
+		l := f.data.read(pos).Mini()
+		s += fmt.Sprintf("pos %d, leaf %x map to %d\n", pos, l, f.positionMap[l])
 	}
-	_, err := file.WriteString(s)
-	if err != nil {
-		panic(err)
-	}
+
+	return s
 }
 
 // WriteForest writes the numLeaves and height to miscForestFile

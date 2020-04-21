@@ -11,7 +11,7 @@ import (
 func (p *Pollard) IngestBlockProof(bp BlockProof) error {
 	var empty util.Hash
 	// TODO so many things to change
-	ok, proofMap := VerifyBlockProof(
+	ok, proofMap := VerifyBatchProof(
 		bp, p.topHashesReverse(), p.numLeaves, p.height())
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
