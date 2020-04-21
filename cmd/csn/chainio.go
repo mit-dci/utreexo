@@ -5,12 +5,12 @@ import (
 	"sync"
 
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/tree"
 )
 
 // restorePollard restores the pollard from disk to memory.
 // If starting anew, it just returns a empty pollard.
-func restorePollard() (p utreexo.Pollard, err error) {
+func restorePollard() (p tree.Pollard, err error) {
 
 	// Restore Pollard
 	pollardFile, err := os.OpenFile(
@@ -50,7 +50,7 @@ func restorePollardHeight() (height int32, err error) {
 // saveIBDsimData saves the state of ibdsim so that when the
 // user restarts, they'll be able to resume.
 // Saves height for ibdsim and pollard itself
-func saveIBDsimData(height int32, p utreexo.Pollard) error {
+func saveIBDsimData(height int32, p tree.Pollard) error {
 
 	var fileWait sync.WaitGroup
 

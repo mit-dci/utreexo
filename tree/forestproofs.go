@@ -1,19 +1,21 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // Proof :
 type Proof struct {
-	Position uint64 // where at the bottom of the tree it sits
-	Payload  Hash   // hash of the thing itself (what's getting proved)
-	Siblings []Hash // slice of siblings up to a root
+	Position uint64      // where at the bottom of the tree it sits
+	Payload  util.Hash   // hash of the thing itself (what's getting proved)
+	Siblings []util.Hash // slice of siblings up to a root
 }
 
 // Prove :
-func (f *Forest) Prove(wanted Hash) (Proof, error) {
+func (f *Forest) Prove(wanted util.Hash) (Proof, error) {
 	starttime := time.Now()
 
 	var pr Proof
@@ -32,7 +34,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 
 	// build empty proof branch slice of siblings
 	// not full height -- need to figure out which subtree it's in!
-	pr.Siblings = make([]Hash, detectSubTreeHeight(pos, f.numLeaves, f.height))
+	pr.Siblings = make([]util.Hash, util.DetectSubTreeHeight(pos, f.numLeaves, f.height))
 	pr.Payload = f.data.read(pos)
 	if pr.Payload != wanted {
 		return pr, fmt.Errorf(
@@ -53,7 +55,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 				pr.Position, h, pos^1, f.numLeaves)
 		}
 		//		fmt.Printf("sibling %d: pos %d %x\n", h, pos^1, pr.Siblings[h][:4])
-		pos = up1(pos, f.height)
+		pos = util.Up1(pos, f.height)
 
 	}
 
@@ -63,7 +65,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 }
 
 // ProveMany :
-func (f *Forest) ProveMany(hs []Hash) ([]Proof, error) {
+func (f *Forest) ProveMany(hs []util.Hash) ([]Proof, error) {
 	var err error
 	proofs := make([]Proof, len(hs))
 	for i, h := range hs {
@@ -82,7 +84,7 @@ func (f *Forest) Verify(p Proof) bool {
 	n := p.Payload
 	//	fmt.Printf("check position %d %04x inclusion\n", p.Position, n[:4])
 
-	subTreeHeight := detectSubTreeHeight(p.Position, f.numLeaves, f.height)
+	subTreeHeight := util.DetectSubTreeHeight(p.Position, f.numLeaves, f.height)
 	// there should be as many siblings as the height of the sub-tree
 	// (height of 0 means there is no siblings; there is no proof)
 	if uint8(len(p.Siblings)) != subTreeHeight {
@@ -96,16 +98,16 @@ func (f *Forest) Verify(p Proof) bool {
 		// detect current height parity
 		if 1<<uint(h)&p.Position == 0 {
 			//			fmt.Printf("compute %04x %04x -> ", n[:4], sib[:4])
-			n = Parent(n, sib)
+			n = util.Parent(n, sib)
 			//			fmt.Printf("%04x\n", n[:4])
 		} else {
 			//			fmt.Printf("compute %04x %04x -> ", sib[:4], n[:4])
-			n = Parent(sib, n)
+			n = util.Parent(sib, n)
 			//			fmt.Printf("%04x\n", n[:4])
 		}
 	}
 
-	subTreeRootPos := upMany(p.Position, subTreeHeight, f.height)
+	subTreeRootPos := util.UpMany(p.Position, subTreeHeight, f.height)
 
 	if subTreeRootPos >= f.data.size() {
 		fmt.Printf("ERROR don't have root at %d\n", subTreeRootPos)
@@ -134,7 +136,7 @@ func (f *Forest) VerifyMany(ps []Proof) bool {
 // also, more efficient
 // known is a slice of known node positions in the forest; prove up to
 // the intersections
-func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
+func (f *Forest) ProveBlock(hs []util.Hash) (BlockProof, error) {
 	starttime := time.Now()
 	var bp BlockProof
 	// skip everything if empty (should this be an error?
@@ -177,13 +179,13 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 	// NOTE that this is a big deal -- we lose in-block positional information
 	// because of this sorting.  Does that hurt locality or performance?  My
 	// guess is no, but that's untested.
-	sortUint64s(bp.Targets)
+	util.SortUint64s(bp.Targets)
 
 	// TODO feels like you could do all this with just slices and no maps...
 	// that would be better
 	// proofTree is the partially populated tree of everything needed for the
 	// proofs
-	proofTree := make(map[uint64]Hash)
+	proofTree := make(map[uint64]util.Hash)
 
 	// go through each target and add a proof for it up to the intersection
 	for _, pos := range bp.Targets {
@@ -208,8 +210,8 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 		proofTree[pos^1] = f.data.read(pos ^ 1)
 		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
-		treeTop := detectSubTreeHeight(pos, f.numLeaves, f.height)
-		pos = up1(pos, f.height)
+		treeTop := util.DetectSubTreeHeight(pos, f.numLeaves, f.height)
+		pos = util.Up1(pos, f.height)
 		// go bottom to top and add siblings into the partial tree
 		// start at height 1 though; we always populate the bottom leaf and sibling
 		// This either gets to the top, or intersects before that and deletes
@@ -237,27 +239,27 @@ func (f *Forest) ProveBlock(hs []Hash) (BlockProof, error) {
 			}
 			// fmt.Printf("add proof from pos %d\n", pos^1)
 			proofTree[pos^1] = f.data.read(pos ^ 1)
-			pos = up1(pos, f.height)
+			pos = util.Up1(pos, f.height)
 		}
 	}
 
-	var nodeSlice []Node
+	var nodeSlice []util.Node
 
 	// run through partial tree to turn it into a slice
 	for pos, hash := range proofTree {
-		nodeSlice = append(nodeSlice, Node{pos, hash})
+		nodeSlice = append(nodeSlice, util.Node{pos, hash})
 	}
 	// fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
 
 	// sort the slice of nodes (even though we only want the hashes)
-	sortNodeSlice(nodeSlice)
+	util.SortNodeSlice(nodeSlice)
 	// copy the sorted / in-order hashes into a hash slice
-	bp.Proof = make([]Hash, len(nodeSlice))
+	bp.Proof = make([]util.Hash, len(nodeSlice))
 
 	for i, n := range nodeSlice {
 		bp.Proof[i] = n.Val
 	}
-	if verbose {
+	if util.Verbose {
 		fmt.Printf("blockproof targets: %v\n", bp.Targets)
 	}
 

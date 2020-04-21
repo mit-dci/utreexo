@@ -1,9 +1,11 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"math/rand"
 	"testing"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 func TestUndoFixed(t *testing.T) {
@@ -40,14 +42,14 @@ func TestUndoTest(t *testing.T) {
 func undoOnceRandom(blocks int32) error {
 	f := NewForest(nil)
 
-	sc := NewSimChain(0x07)
-	sc.lookahead = 0
+	sc := util.NewSimChain(0x07)
+	sc.Lookahead = 0
 	for b := int32(0); b < blocks; b++ {
 
 		adds, delHashes := sc.NextBlock(rand.Uint32() & 0x03)
 
 		fmt.Printf("\t\tblock %d del %d add %d - %s\n",
-			sc.blockHeight, len(delHashes), len(adds), f.Stats())
+			sc.BlockHeight, len(delHashes), len(adds), f.Stats())
 
 		bp, err := f.ProveBlock(delHashes)
 		if err != nil {
@@ -59,7 +61,7 @@ func undoOnceRandom(blocks int32) error {
 			return err
 		}
 		fmt.Printf(f.ToString())
-		fmt.Printf(sc.ttlString())
+		fmt.Printf(sc.TtlString())
 		for h, p := range f.positionMap {
 			fmt.Printf("%x@%d ", h[:4], p)
 		}
@@ -88,7 +90,7 @@ func undoOnceRandom(blocks int32) error {
 
 func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	f := NewForest(nil)
-	sc := NewSimChain(0xff)
+	sc := util.NewSimChain(0xff)
 
 	// --------------- block 0
 	// make starting forest with numStart leaves, and store tops
@@ -107,7 +109,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	// ---------------- block 1
 	// just delete from the left side for now.  Can try deleting scattered
 	// randomly later
-	delHashes := make([]Hash, numDels)
+	delHashes := make([]util.Hash, numDels)
 	for i, _ := range delHashes {
 		delHashes[i] = adds[i].Hash
 	}
@@ -149,7 +151,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		fmt.Printf("pre %04x post %04x ", beforeTops[i][:4], undoneTops[i][:4])
 		if undoneTops[i] != beforeTops[i] {
 			return fmt.Errorf("block %d top %d mismatch, pre %x post %x",
-				sc.blockHeight, i, beforeTops[i][:4], undoneTops[i][:4])
+				sc.BlockHeight, i, beforeTops[i][:4], undoneTops[i][:4])
 		}
 	}
 	fmt.Printf("\n")
@@ -159,14 +161,14 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 
 func undoTestSimChain() error {
 
-	sc := NewSimChain(7)
+	sc := util.NewSimChain(7)
 	sc.NextBlock(3)
 	sc.NextBlock(3)
 	sc.NextBlock(3)
-	fmt.Printf(sc.ttlString())
+	fmt.Printf(sc.TtlString())
 	l1, h1 := sc.NextBlock(3)
-	fmt.Printf(sc.ttlString())
+	fmt.Printf(sc.TtlString())
 	sc.BackOne(l1, h1)
-	fmt.Printf(sc.ttlString())
+	fmt.Printf(sc.TtlString())
 	return nil
 }

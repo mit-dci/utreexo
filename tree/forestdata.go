@@ -1,19 +1,21 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"os"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // leafSize is a [32]byte hash (sha256).
 // Length is always 32.
 const leafSize = 32
 
-// A forestData is the thing that holds all the hashes in the forest.  Could
+// A forestData is the thing that holds all the hashes in the forest. Could
 // be in a file, or in ram, or maybe something else.
 type ForestData interface {
-	read(pos uint64) Hash
-	write(pos uint64, h Hash)
+	read(pos uint64) util.Hash
+	write(pos uint64, h util.Hash)
 	swapHash(a, b uint64)
 	swapHashRange(a, b, w uint64)
 	size() uint64
@@ -23,14 +25,14 @@ type ForestData interface {
 // ********************************************* forest in ram
 
 type ramForestData struct {
-	m []Hash
+	m []util.Hash
 }
 
 // TODO it reads a lot of empty locations which can't be good
 
 // reads from specified location.  If you read beyond the bounds that's on you
 // and it'll crash
-func (r *ramForestData) read(pos uint64) Hash {
+func (r *ramForestData) read(pos uint64) util.Hash {
 	// if r.m[pos] == empty {
 	// 	fmt.Printf("\tuseless read empty at pos %d\n", pos)
 	// }
@@ -38,7 +40,7 @@ func (r *ramForestData) read(pos uint64) Hash {
 }
 
 // writeHash writes a hash.  Don't go out of bounds.
-func (r *ramForestData) write(pos uint64, h Hash) {
+func (r *ramForestData) write(pos uint64, h util.Hash) {
 	// if h == empty {
 	// 	fmt.Printf("\tWARNING!! write empty at pos %d\n", pos)
 	// }
@@ -53,15 +55,13 @@ func (r *ramForestData) swapHash(a, b uint64) {
 	r.m[a], r.m[b] = r.m[b], r.m[a]
 }
 
-// swapHashRange swaps 2 continuous ranges of hashes.  Don't go out of bounds.
+// swapHashRange swaps 2 continuous ranges of hashes. Don't go out of bounds.
 // could be sped up if you're ok with using more ram.
 func (r *ramForestData) swapHashRange(a, b, w uint64) {
 	// fmt.Printf("swaprange %d %d %d\t", a, b, w)
 	for i := uint64(0); i < w; i++ {
 		r.m[a+i], r.m[b+i] = r.m[b+i], r.m[a+i]
-		// fmt.Printf("swapped %d %d\t", a+i, b+i)
 	}
-
 }
 
 // size gives you the size of the forest
@@ -71,7 +71,7 @@ func (r *ramForestData) size() uint64 {
 
 // resize makes the forest bigger (never gets smaller so don't try)
 func (r *ramForestData) resize(newSize uint64) {
-	r.m = append(r.m, make([]Hash, newSize-r.size())...)
+	r.m = append(r.m, make([]util.Hash, newSize-r.size())...)
 }
 
 // ********************************************* forest on disk
@@ -80,8 +80,8 @@ type diskForestData struct {
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
-func (d *diskForestData) read(pos uint64) Hash {
-	var h Hash
+func (d *diskForestData) read(pos uint64) util.Hash {
+	var h util.Hash
 	_, err := d.f.ReadAt(h[:], int64(pos*leafSize))
 	if err != nil {
 		fmt.Printf("\tWARNING!! read %x pos %d %s\n", h, pos, err.Error())
@@ -90,7 +90,7 @@ func (d *diskForestData) read(pos uint64) Hash {
 }
 
 // writeHash writes a hash.  Don't go out of bounds.
-func (d *diskForestData) write(pos uint64, h Hash) {
+func (d *diskForestData) write(pos uint64, h util.Hash) {
 	_, err := d.f.WriteAt(h[:], int64(pos*leafSize))
 	if err != nil {
 		fmt.Printf("\tWARNING!! write pos %d %s\n", pos, err.Error())

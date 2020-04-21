@@ -1,15 +1,17 @@
-package utreexo
+package tree
 
 import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // BlockProof :
 type BlockProof struct {
 	Targets []uint64
-	Proof   []Hash
+	Proof   []util.Hash
 	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
 	// the position of the hashes is implied / computable from the leaf positions
 }
@@ -89,7 +91,7 @@ func FromBytesBlockProof(b []byte) (BlockProof, error) {
 	if remaining%32 != 0 {
 		return bp, fmt.Errorf("%d bytes left, should be n*32", buf.Len())
 	}
-	bp.Proof = make([]Hash, remaining/32)
+	bp.Proof = make([]util.Hash, remaining/32)
 
 	for i := range bp.Proof {
 		copy(bp.Proof[i][:], buf.Next(32))
@@ -107,8 +109,8 @@ func FromBytesBlockProof(b []byte) (BlockProof, error) {
 // it returns a bool of whether the proof worked, and a map of the sparse
 // forest in the blockproof
 func VerifyBlockProof(
-	bp BlockProof, tops []Hash,
-	numLeaves uint64, height uint8) (bool, map[uint64]Hash) {
+	bp BlockProof, tops []util.Hash,
+	numLeaves uint64, height uint8) (bool, map[uint64]util.Hash) {
 
 	// if nothing to prove, it worked
 	if len(bp.Targets) == 0 {
@@ -122,14 +124,14 @@ func VerifyBlockProof(
 	}
 
 	//	fmt.Printf("Reconstruct complete\n")
-	topposs, topheights := getTopsReverse(numLeaves, height)
+	topposs, topheights := util.GetTopsReverse(numLeaves, height)
 
 	// partial forest is built, go through and hash everything to make sure
 	// you get the right tops
 
 	tagRow := bp.Targets
 	nextRow := []uint64{}
-	sortUint64s(tagRow) // probably don't need to sort
+	util.SortUint64s(tagRow) // probably don't need to sort
 
 	// TODO it's ugly that I keep treating the 0-row as a special case,
 	// and has led to a number of bugs.  It *is* special in a way, in that
@@ -137,7 +139,7 @@ func VerifyBlockProof(
 	// but it'd be nice if it could all be treated uniformly.
 
 	// if proofmap has a 0-root, check it
-	if verbose {
+	if util.Verbose {
 		fmt.Printf("tagrow len %d\n", len(tagRow))
 	}
 
@@ -160,11 +162,11 @@ func VerifyBlockProof(
 			}
 
 			// check for tops
-			if verbose {
+			if util.Verbose {
 				fmt.Printf("left %d toppos %d\n", left, topposs[0])
 			}
 			if left == topposs[0] {
-				if verbose {
+				if util.Verbose {
 					fmt.Printf("one left in tagrow; should be top\n")
 				}
 				computedRoot, ok := proofmap[left]
@@ -184,13 +186,13 @@ func VerifyBlockProof(
 				break
 			}
 
-			parpos := up1(left, height)
-			if verbose {
+			parpos := util.Up1(left, height)
+			if util.Verbose {
 				fmt.Printf("%d %04x %d %04x -> %d\n",
 					left, proofmap[left], right, proofmap[right], parpos)
 			}
 			// this will crash if either is 0000
-			parhash := Parent(proofmap[left], proofmap[right])
+			parhash := util.Parent(proofmap[left], proofmap[right])
 			nextRow = append(nextRow, parpos)
 			proofmap[parpos] = parhash
 		}
@@ -213,23 +215,23 @@ func VerifyBlockProof(
 // into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
 // bp.Targets
 func (bp *BlockProof) Reconstruct(
-	numleaves uint64, forestHeight uint8) (map[uint64]Hash, error) {
+	numleaves uint64, forestHeight uint8) (map[uint64]util.Hash, error) {
 
-	if verbose {
+	if util.Verbose {
 		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fh %d\n",
 			len(bp.Targets), len(bp.Proof), numleaves, forestHeight)
 	}
 
-	proofTree := make(map[uint64]Hash)
+	proofTree := make(map[uint64]util.Hash)
 
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
 	targets := bp.Targets
-	tops, topheights := getTopsReverse(numleaves, forestHeight)
+	tops, topheights := util.GetTopsReverse(numleaves, forestHeight)
 
 	//	fmt.Printf("first needrow len %d\n", len(needRow))
-	if verbose {
+	if util.Verbose {
 		fmt.Printf("%d tops:\t", len(tops))
 		for _, t := range tops {
 			fmt.Printf("%d ", t)
@@ -244,7 +246,7 @@ func (bp *BlockProof) Reconstruct(
 		if targets[0] == tops[0] {
 			// target is a top; this can only happen at row 0;
 			// there's a "proof" but don't need to actually send it
-			if verbose {
+			if util.Verbose {
 				fmt.Printf("placed single proof at %d\n", targets[0])
 			}
 			proofTree[targets[0]] = bp.Proof[0]
@@ -265,9 +267,9 @@ func (bp *BlockProof) Reconstruct(
 
 		proofTree[left] = bp.Proof[0]
 		proofTree[right] = bp.Proof[1]
-		needSibRow = append(needSibRow, up1(targets[0], forestHeight))
+		needSibRow = append(needSibRow, util.Up1(targets[0], forestHeight))
 		// pop em off
-		if verbose {
+		if util.Verbose {
 			fmt.Printf("placed proofs at %d, %d\n", left, right)
 		}
 		bp.Proof = bp.Proof[2:]
@@ -305,7 +307,7 @@ func (bp *BlockProof) Reconstruct(
 				continue
 			}
 			// either way, we'll get the parent
-			nextRow = append(nextRow, up1(needSibRow[0], forestHeight))
+			nextRow = append(nextRow, util.Up1(needSibRow[0], forestHeight))
 
 			// if we have both siblings here, don't need any proof
 			if len(needSibRow) > 1 && needSibRow[0]^1 == needSibRow[1] {

@@ -1,18 +1,19 @@
-package utreexo
+package tree
 
 import (
 	"fmt"
 	"testing"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 func TestForestAddDel(t *testing.T) {
-
 	numAdds := uint32(10)
 
 	f := NewForest(nil)
 
-	sc := NewSimChain(0x07)
-	sc.lookahead = 400
+	sc := util.NewSimChain(0x07)
+	sc.Lookahead = 400
 
 	for b := 0; b < 1000; b++ {
 
@@ -36,9 +37,11 @@ func TestForestAddDel(t *testing.T) {
 func Test2Fwd1Back(t *testing.T) {
 	f := NewForest(nil)
 	var absidx uint32
-	adds := make([]LeafTXO, 2)
+	adds := make([]util.LeafTXO, 2)
 
 	for i := 0; i < 100; i++ {
+		fmt.Println("i: ", i)
+		fmt.Println(f.Stats())
 
 		for j := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0
@@ -114,7 +117,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	}
 
 	f := NewForest(nil)
-	adds := make([]LeafTXO, nAdds)
+	adds := make([]util.LeafTXO, nAdds)
 
 	for j := range adds {
 		adds[j].Hash[0] = uint8(j>>8) | 0xa0
@@ -127,7 +130,7 @@ func AddDelFullBlockProof(nAdds, nDels int) error {
 	if err != nil {
 		return err
 	}
-	addHashes := make([]Hash, len(adds))
+	addHashes := make([]util.Hash, len(adds))
 	for i, h := range adds {
 		addHashes[i] = h.Hash
 	}
