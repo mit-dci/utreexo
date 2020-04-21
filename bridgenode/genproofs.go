@@ -233,7 +233,7 @@ func proofWriterWorker(
 }
 
 // genBlockProof calls forest.ProveBatch with the hash data to get a batched
-// inclusion proof from the accumulator.  It then adds on the utxo leaf data,
+// inclusion proof from the accumulator. It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
 func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
@@ -308,6 +308,7 @@ func genDels(bnr util.BlockAndRev) (
 			bnr.Height, len(bnr.Blk.Transactions), len(bnr.Rev.Txs))
 		return
 	}
+
 	for txinblock, tx := range bnr.Blk.Transactions {
 		if txinblock == 0 {
 			continue

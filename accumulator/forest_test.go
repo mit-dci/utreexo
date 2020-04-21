@@ -119,7 +119,7 @@ func Test2Fwd1Back(t *testing.T) {
 		}
 
 		// delete the first
-		//		err = f.Modify(nil, []Hash{p.Payload})
+		//		err = f.Modify(nil, []util.Hash{p.Payload})
 		//		if err != nil {
 		//			t.Fatal(err)
 		//		}

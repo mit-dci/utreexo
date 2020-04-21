@@ -18,7 +18,21 @@ addressing.  It also might work well for on-disk serialization.
 There might be a better / optimal way to do this but it seems OK for now.
 */
 
-// Forest :
+// Forest is the entire accumulator of the UTXO set as either a:
+// 1) slice if the forest is stored in memory.
+// 2) single file if the forest is stored in disk.
+// A leaf represents a UTXO with additional data for verification.
+// This leaf is numbered from bottom left to right.
+// Example of a forest with 4 numLeaves:
+//
+//	06
+//	|------\
+//	04......05
+//	|---\...|---\
+//	00..01..02..03
+//
+// 04 is the concatenation and the hash of 00 and 01. 06 is the root
+// This tree would have a row of 2.
 type Forest struct {
 	numLeaves uint64 // number of leaves in the forest (bottom row)
 
@@ -46,22 +60,38 @@ type Forest struct {
 	positionMap map[MiniHash]uint64 // map from hashes to positions.
 	// Inverse of forestMap for leaves.
 
-	// -------------------- following are just for testing / benchmarking
-	// how many hashes this forest has computed
+	/*
+	 * below are just for testing / benchmarking
+	 */
+
+	// HistoricHashes represents how many hashes this forest has computed
+	//
+	// Meant for testing / benchmarking
 	HistoricHashes uint64
 
-	// time taken in Remove() function
+	// TimeRem represents how long Remove() function took
+	//
+	// Meant for testing / benchmarking
 	TimeRem time.Duration
-	// of which time in the moveSubTree() function
+
+	// TimeMST represents how long the moveSubTree() function took
+	//
+	// Meant for testing / benchmarking
 	TimeMST time.Duration
 
-	// time taken in hash operations (reHash)
+	// TimeInHash represents how long the hash operations (reHash) took
+	//
+	// Meant for testing / benchmarking
 	TimeInHash time.Duration
 
-	// time taken in Prove operations
+	// TimeInProve represents how long the Prove operations took
+	//
+	// Meant for testing / benchmarking
 	TimeInProve time.Duration
 
-	// the time taken in verify operations
+	// TimeInVerify represents how long the verify operations took
+	//
+	// Meant for testing / benchmarking
 	TimeInVerify time.Duration
 }
 
@@ -652,4 +682,10 @@ func (f *Forest) ToString() string {
 		s += output[z] + "\n"
 	}
 	return s
+}
+
+// FindLeaf finds a leave from the positionMap and returns a bool
+func (f *Forest) FindLeaf(leaf Hash) bool {
+	_, found := f.positionMap[leaf.Mini()]
+	return found
 }

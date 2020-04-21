@@ -328,7 +328,7 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 }
 
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
-// as well as its sibling.  And a hashable node for the position ABOVE pos.
+// as well as its sibling. And a hashable node for the position ABOVE pos.
 // And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
