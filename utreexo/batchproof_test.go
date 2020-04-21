@@ -7,7 +7,7 @@ import (
 
 // TestVerifyBlockProof tests that the computedTop is compared to the top in the
 // Utreexo forest.
-func TestVerifyBlockProof(t *testing.T) {
+func TestVerifyBatchProof(t *testing.T) {
 	// Create forest in memory
 	f := NewForest(nil)
 
@@ -79,7 +79,7 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 		t.Fatal(fmt.Errorf("Modify with initial adds: %v", err))
 	}
 
-	blockProof, err := f.ProveBatch(
+	batchProof, err := f.ProveBatch(
 		[]Hash{
 			adds[proofIndex].Hash,
 		})
@@ -87,7 +87,7 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 		t.Fatal(fmt.Errorf("ProveBlock of existing values: %v", err))
 	}
 
-	if !f.VerifyBatchProof(blockProof) {
+	if !f.VerifyBatchProof(batchProof) {
 		t.Fatal(
 			fmt.Errorf(
 				"proof of %d didn't verify (before deletion)",
@@ -99,7 +99,7 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 		t.Fatal(fmt.Errorf("Modify with deletions: %v", err))
 	}
 
-	if f.VerifyBatchProof(blockProof) {
+	if f.VerifyBatchProof(batchProof) {
 		t.Fatal(
 			fmt.Errorf(
 				"proof of %d is still valid (after deletion)",
