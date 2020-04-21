@@ -8,7 +8,7 @@ import (
 
 // IngestBlockProof populates the Pollard with all needed data to delete the
 // targets in the block proof
-func (p *Pollard) IngestBlockProof(bp BlockProof) error {
+func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty util.Hash
 	// TODO so many things to change
 	ok, proofMap := VerifyBatchProof(

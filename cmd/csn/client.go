@@ -7,7 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/tree"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -135,7 +135,7 @@ func putBlockInPollard(
 	bnu util.UBlock,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
-	p *utreexo.Pollard) error {
+	p *tree.Pollard) error {
 
 	plusstart := time.Now()
 

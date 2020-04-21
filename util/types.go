@@ -126,10 +126,10 @@ func (s *SimChain) BackOne(leaves []LeafTXO, durations []int32, dels []Hash) {
 		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
 		// everything should be in order, right?
 		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.ttlSlices[durations[i]][len(s.ttlSlices[durations[i]])-1][:4],
+			s.TtlSlices[durations[i]][len(s.TtlSlices[durations[i]])-1][:4],
 			durations[i])
-		s.ttlSlices[durations[i]] =
-			s.ttlSlices[durations[i]][:len(s.ttlSlices[durations[i]])-1]
+		s.TtlSlices[durations[i]] =
+			s.TtlSlices[durations[i]][:len(s.TtlSlices[durations[i]])-1]
 	}
 
 	s.BlockHeight--
@@ -151,8 +151,8 @@ func (s *SimChain) TtlString() string {
 
 // NextBlock :
 func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
-	s.blockHeight++
-	fmt.Printf("blockHeight %d\n", s.blockHeight)
+	s.BlockHeight++
+	fmt.Printf("blockHeight %d\n", s.BlockHeight)
 
 	if s.BlockHeight == 0 && numAdds == 0 {
 		numAdds = 1
@@ -175,7 +175,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
 		adds[j].Hash[4] = uint8(s.LeafCounter >> 24)
 		adds[j].Hash[5] = uint8(s.LeafCounter >> 32)
 
-		durations[j] = int32(rand.Uint32() & s.durationMask)
+		durations[j] = int32(rand.Uint32() & s.DurationMask)
 
 		// with "+1", the duration is 1 to 256, so the forest never gets
 		// big or tall.  Without the +1, the duration is sometimes 0,
@@ -184,18 +184,18 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
 
 		// the first utxo added lives forever.
 		// (prevents leaves from going to 0 which is buggy)
-		if s.blockHeight == 0 {
+		if s.BlockHeight == 0 {
 			durations[j] = 0
 		}
 
-		if durations[j] != 0 && durations[j] < s.lookahead {
+		if durations[j] != 0 && durations[j] < s.Lookahead {
 			adds[j].Remember = true
 		}
 
 		if durations[j] != 0 {
 			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].duration-1)
-			s.ttlSlices[durations[j]-1] =
-				append(s.ttlSlices[durations[j]-1], adds[j].Hash)
+			s.TtlSlices[durations[j]-1] =
+				append(s.TtlSlices[durations[j]-1], adds[j].Hash)
 		}
 
 		s.LeafCounter++

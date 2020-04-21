@@ -389,8 +389,8 @@ func SortNodeSlice(s []Node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
-// checkSortedNoDupes returns true for strictly increasing slices
-func checkSortedNoDupes(s []uint64) bool {
+// CheckSortedNoDupes returns true for strictly increasing slices
+func CheckSortedNoDupes(s []uint64) bool {
 	for i, _ := range s {
 		if i == 0 {
 			continue

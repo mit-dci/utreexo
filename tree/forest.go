@@ -204,7 +204,7 @@ func (f *Forest) swapNodes(s util.Arrow, height uint8) error {
 	if s.From == s.To {
 		// these shouldn't happen, and seems like the don't
 
-		fmt.Printf("%s\nmove %d to %d\n", f.ToString(), s.from, s.to)
+		fmt.Printf("%s\nmove %d to %d\n", f.ToString(), s.From, s.To)
 		panic("got non-moving swap")
 	}
 	if height == 0 {
@@ -388,7 +388,7 @@ func (f *Forest) Modify(adds []util.LeafTXO, dels []uint64) (*undoBlock, error) 
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(dels), f.numLeaves)
 	}
-	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
+	if !util.CheckSortedNoDupes(dels) { // check for sorted deletion slice
 		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
 	}
 	for _, a := range adds { // check for empty leaves

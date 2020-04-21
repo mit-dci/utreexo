@@ -49,8 +49,8 @@ func (p *Pollard) PosMapSanity() error {
 // Now getting really obvious that forest and pollard should both satisfy some
 // kind of utreexoy interface.  And maybe forest shouldn't be called forest.
 // Anyway do that after this.
-func (p *Pollard) ProveBlock(hs []util.Hash) (BlockProof, error) {
-	var bp BlockProof
+func (p *Pollard) ProveBlock(hs []util.Hash) (BatchProof, error) {
+	var bp BatchProof
 	// skip everything if empty (should this be an error?
 	if len(hs) == 0 {
 		return bp, nil

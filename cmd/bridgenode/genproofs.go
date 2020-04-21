@@ -279,13 +279,13 @@ func genAddDel(block util.BlockAndRev) (blockAdds []treeutil.LeafTXO,
 	delLeaves, delHashes, err = genDels(block)
 	blockAdds = util.BlockToAdds(block.Blk, block.Height)
 
-	utreexo.DedupeHashSlices(&blockAdds, &delHashes)
+	treeutil.DedupeHashSlices(&blockAdds, &delHashes)
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
 func genDels(bnr util.BlockAndRev) (
-	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
+	delLeaves []util.LeafData, delHashes []treeutil.Hash, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {

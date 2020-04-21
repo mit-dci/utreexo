@@ -136,7 +136,7 @@ func (f *Forest) VerifyMany(ps []Proof) bool {
 // also, more efficient
 // known is a slice of known node positions in the forest; prove up to
 // the intersections
-func (f *Forest) ProveBlock(hs []util.Hash) (BlockProof, error) {
+func (f *Forest) ProveBatch(hs []util.Hash) (BatchProof, error) {
 	starttime := time.Now()
 	var bp BatchProof
 	// skip everything if empty (should this be an error?

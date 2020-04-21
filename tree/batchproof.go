@@ -108,15 +108,9 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // if we don't do weird stuff with overly-high forests, which we might)
 // it returns a bool of whether the proof worked, and a map of the sparse
 // forest in the blockproof
-<<<<<<< HEAD:tree/blockproof.go
-func VerifyBlockProof(
-	bp BlockProof, tops []util.Hash,
-	numLeaves uint64, height uint8) (bool, map[uint64]util.Hash) {
-=======
 func VerifyBatchProof(
-	bp BatchProof, tops []Hash,
-	numLeaves uint64, height uint8) (bool, map[uint64]Hash) {
->>>>>>> master:tree/batchproof.go
+	bp BatchProof, tops []util.Hash,
+	numLeaves uint64, height uint8) (bool, map[uint64]util.Hash) {
 
 	// if nothing to prove, it worked
 	if len(bp.Targets) == 0 {
@@ -220,13 +214,8 @@ func VerifyBatchProof(
 // Reconstruct takes a number of leaves and height, and turns a block proof back
 // into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
 // bp.Targets
-<<<<<<< HEAD:tree/blockproof.go
-func (bp *BlockProof) Reconstruct(
-	numleaves uint64, forestHeight uint8) (map[uint64]util.Hash, error) {
-=======
 func (bp *BatchProof) Reconstruct(
-	numleaves uint64, forestHeight uint8) (map[uint64]Hash, error) {
->>>>>>> master:tree/batchproof.go
+	numleaves uint64, forestHeight uint8) (map[uint64]util.Hash, error) {
 
 	if util.Verbose {
 		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fh %d\n",
