@@ -23,4 +23,4 @@ jobs:
       run: cd cmd; go build -v
 
     - name: Test
-      run: go test -v ./utreexo
+      run: go test -v ./accumulator
