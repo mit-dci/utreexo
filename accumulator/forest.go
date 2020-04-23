@@ -1,12 +1,12 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/mit-dci/utreexo/transform"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/transform"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // For verbosity during testing

@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
-	treeutil "github.com/mit-dci/utreexo/util"
+	treeutil "github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // Hash is just [32]byte

@@ -1,7 +1,7 @@
 package transform
 
 import (
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // RemTrans -- simpler and better -- lets see if it works!

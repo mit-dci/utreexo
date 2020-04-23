@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/tree"
 )
 
 // createOffsetData restores the offsetfile needed to index the
@@ -60,7 +60,7 @@ func restoreLastProofFileOffset() (pOffset int32, err error) {
 }
 
 // createForest initializes forest
-func createForest() (forest *tree.Forest, err error) {
+func createForest() (forest *accumulator.Forest, err error) {
 
 	// Where the forestfile exists
 	forestFile, err := os.OpenFile(
@@ -70,14 +70,14 @@ func createForest() (forest *tree.Forest, err error) {
 	}
 
 	// Restores all the forest data
-	forest = tree.NewForest(forestFile)
+	forest = accumulator.NewForest(forestFile)
 
 	return
 }
 
 // restoreForest restores forest fields based off the existing forestdata
 // on disk.
-func restoreForest() (forest *tree.Forest, err error) {
+func restoreForest() (forest *accumulator.Forest, err error) {
 
 	// Where the forestfile exists
 	forestFile, err := os.OpenFile(
@@ -92,7 +92,7 @@ func restoreForest() (forest *tree.Forest, err error) {
 		return nil, err
 	}
 
-	forest, err = tree.RestoreForest(miscForestFile, forestFile)
+	forest, err = accumulator.RestoreForest(miscForestFile, forestFile)
 	if err != nil {
 		return nil, err
 	}

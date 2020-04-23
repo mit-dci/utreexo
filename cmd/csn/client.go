@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/tree"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -135,7 +135,7 @@ func putBlockInPollard(
 	bnu util.UBlock,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
-	p *tree.Pollard) error {
+	p *accumulator.Pollard) error {
 
 	plusstart := time.Now()
 

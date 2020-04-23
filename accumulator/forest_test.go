@@ -1,4 +1,4 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
@@ -8,14 +8,14 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 func TestDeleteReverseOrder(t *testing.T) {
 	f := NewForest(nil)
-	leaf1 := LeafTXO{Hash: Hash{1}}
-	leaf2 := LeafTXO{Hash: Hash{2}}
-	_, err := f.Modify([]LeafTXO{leaf1, leaf2}, nil)
+	leaf1 := util.LeafTXO{Hash: util.Hash{1}}
+	leaf2 := util.LeafTXO{Hash: util.Hash{2}}
+	_, err := f.Modify([]util.LeafTXO{leaf1, leaf2}, nil)
 	if err != nil {
 		t.Fail()
 	}
@@ -56,7 +56,7 @@ func TestForestFixed(t *testing.T) {
 	f := NewForest(nil)
 	numadds := 5
 	numdels := 3
-	adds := make([]LeafTXO, numadds)
+	adds := make([]util.LeafTXO, numadds)
 	dels := make([]uint64, numdels)
 
 	for j, _ := range adds {
@@ -122,7 +122,7 @@ func Test2Fwd1Back(t *testing.T) {
 		}
 
 		// delete the first
-		//		err = f.Modify(nil, []Hash{p.Payload})
+		//		err = f.Modify(nil, []util.Hash{p.Payload})
 		//		if err != nil {
 		//			t.Fatal(err)
 		//		}
@@ -231,23 +231,23 @@ func TestSmallRandomForests(t *testing.T) {
 		// This is the leaf that we will test proofs for
 		// if we happen to generate testing data that
 		// doesn't leave an empty tree.
-		var chosenUndeletedLeaf LeafTXO
+		var chosenUndeletedLeaf util.LeafTXO
 		atLeastOneLeafRemains := false
 
 		// forest.Modify takes a slice, so we'll copy
 		// adds into this slice:
-		addsSlice := make([]LeafTXO, len(adds))
+		addsSlice := make([]util.LeafTXO, len(adds))
 
 		// This stores the leaves that are to be deleted.
 		// We need to store the LeafTXO's or we won't be able
 		// to find the positions after inserting all items.
-		leavesToDeleteSet := make(map[LeafTXO]struct{})
+		leavesToDeleteSet := make(map[util.LeafTXO]struct{})
 
 		i := 0
 		for firstLeafHashByte, deleteLater := range adds {
 			// We put a one in the hash too, so that we won't
 			// generate an all-zero hash, which is not allowed.
-			leafTxo := LeafTXO{Hash: Hash{firstLeafHashByte, 1}}
+			leafTxo := util.LeafTXO{Hash: util.Hash{firstLeafHashByte, 1}}
 			addsSlice[i] = leafTxo
 			if deleteLater {
 				leavesToDeleteSet[leafTxo] = struct{}{}
@@ -294,7 +294,7 @@ func TestSmallRandomForests(t *testing.T) {
 		// we should be able to make a proof for that leaf
 		if atLeastOneLeafRemains {
 			blockProof, err := f.ProveBatch(
-				[]Hash{
+				[]util.Hash{
 					chosenUndeletedLeaf.Hash,
 				})
 			if err != nil {

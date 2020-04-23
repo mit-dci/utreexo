@@ -1,10 +1,10 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // leafSize is a [32]byte hash (sha256).

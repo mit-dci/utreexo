@@ -1,11 +1,11 @@
-package tree
+package accumulator
 
 import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // BatchProof :

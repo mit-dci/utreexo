@@ -1,10 +1,10 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // Pollard is the sparse representation of the utreexo forest, using

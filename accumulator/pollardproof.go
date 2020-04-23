@@ -1,9 +1,9 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // IngestBlockProof populates the Pollard with all needed data to delete the

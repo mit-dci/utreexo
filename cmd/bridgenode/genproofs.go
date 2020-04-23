@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/accumulator"
+	treeutil "github.com/mit-dci/utreexo/accumulator/util"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/tree"
-	treeutil "github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -238,7 +238,7 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
 func genBlockProof(delLeaves []util.LeafData, delHashes []treeutil.Hash,
-	f *tree.Forest, height int32) (
+	f *accumulator.Forest, height int32) (
 	util.UData, error) {
 
 	var blockP util.UData

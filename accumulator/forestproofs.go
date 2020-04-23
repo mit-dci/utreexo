@@ -1,10 +1,10 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // Proof :

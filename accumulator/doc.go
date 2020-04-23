@@ -88,4 +88,4 @@ Some leaves may be saved for caching purposes but they do not have to be.
 
 Pollard uses binary tree pointers instead of a byte slice.
 */
-package tree
+package accumulator

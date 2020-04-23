@@ -1,10 +1,10 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // TestVerifyBlockProof tests that the computedTop is compared to the top in the
@@ -34,13 +34,8 @@ func TestVerifyBatchProof(t *testing.T) {
 	}
 
 	// create blockProof based on the last add in the slice
-<<<<<<< HEAD:tree/blockproof_test.go
-	blockProof, err := f.ProveBlock(
-		[]util.Hash{adds[lastIdx].Hash})
-=======
 	blockProof, err := f.ProveBatch(
-		[]Hash{adds[lastIdx].Hash})
->>>>>>> master:tree/batchproof_test.go
+		[]util.Hash{adds[lastIdx].Hash})
 
 	if err != nil {
 		t.Fatal(err)
@@ -85,14 +80,8 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(fmt.Errorf("Modify with initial adds: %v", err))
 	}
-
-<<<<<<< HEAD:tree/blockproof_test.go
-	blockProof, err := f.ProveBlock(
-		[]util.Hash{
-=======
 	batchProof, err := f.ProveBatch(
-		[]Hash{
->>>>>>> master:tree/batchproof_test.go
+		[]util.Hash{
 			adds[proofIndex].Hash,
 		})
 	if err != nil {

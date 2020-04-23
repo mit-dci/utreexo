@@ -1,11 +1,11 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"math/rand"
 	"testing"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 func TestPollardRand(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcutil"
+	treeutil "github.com/mit-dci/utreexo/accumulator/util"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
-	treeutil "github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

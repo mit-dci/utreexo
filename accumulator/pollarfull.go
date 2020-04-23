@@ -1,9 +1,9 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 // read is just like forestData read but for pollard
@@ -49,7 +49,7 @@ func (p *Pollard) PosMapSanity() error {
 // Now getting really obvious that forest and pollard should both satisfy some
 // kind of utreexoy interface.  And maybe forest shouldn't be called forest.
 // Anyway do that after this.
-func (p *Pollard) ProveBlock(hs []util.Hash) (BatchProof, error) {
+func (p *Pollard) ProveBatch(hs []util.Hash) (BatchProof, error) {
 	var bp BatchProof
 	// skip everything if empty (should this be an error?
 	if len(hs) == 0 {

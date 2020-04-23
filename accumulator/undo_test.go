@@ -1,11 +1,11 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 	"math/rand"
 	"testing"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 func TestUndoFixed(t *testing.T) {
@@ -166,9 +166,9 @@ func undoTestSimChain() error {
 	sc.NextBlock(3)
 	sc.NextBlock(3)
 	fmt.Printf(sc.TtlString())
-	l1, h1 := sc.NextBlock(3)
+	l1, dur, h1 := sc.NextBlock(3)
 	fmt.Printf(sc.TtlString())
-	sc.BackOne(l1, h1)
+	sc.BackOne(l1, dur, h1)
 	fmt.Printf(sc.TtlString())
 	return nil
 }

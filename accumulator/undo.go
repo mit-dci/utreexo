@@ -1,10 +1,10 @@
-package tree
+package accumulator
 
 import (
 	"fmt"
 
-	"github.com/mit-dci/utreexo/transform"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/transform"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 /* we need to be able to undo blocks!  for bridge nodes at least.

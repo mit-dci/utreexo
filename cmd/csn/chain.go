@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/tree"
 )
 
 // initCSNState attempts to load and initialize the CSN state from the disk.
 // If a CSN state is not present, chain is initialized to the genesis
 func initCSNState() (
-	p tree.Pollard, height int32, lastIndexOffsetHeight int32, err error) {
+	p accumulator.Pollard, height int32, lastIndexOffsetHeight int32, err error) {
 
 	var offsetInitialized, pollardInitialized bool
 
