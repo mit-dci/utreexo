@@ -290,6 +290,7 @@ func genDels(bnr util.BlockAndRev) (
 	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
 		err = fmt.Errorf("block %d %d txs but %d rev txs",
 			bnr.Height, len(bnr.Blk.Transactions), len(bnr.Rev.Txs))
+		return
 	}
 	for txinblock, tx := range bnr.Blk.Transactions {
 		if txinblock == 0 {
