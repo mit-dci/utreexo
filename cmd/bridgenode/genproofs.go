@@ -302,6 +302,7 @@ func genDels(bnr util.BlockAndRev) (
 			err = fmt.Errorf("block %d tx %d has %d inputs but %d rev entries",
 				bnr.Height, txinblock+1,
 				len(tx.TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
+			return
 		}
 		// loop through inputs
 		for i, txin := range tx.TxIn {
