@@ -90,6 +90,9 @@ func BlockAndRevReader(
 		}
 
 		rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
+		if err != nil {
+			panic(err)
+		}
 
 		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
 
