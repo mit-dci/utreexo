@@ -276,6 +276,9 @@ func genAddDel(block util.BlockAndRev) (blockAdds []utreexo.LeafTXO,
 	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
 
 	delLeaves, delHashes, err = genDels(block)
+	if err != nil {
+		return
+	}
 	blockAdds = util.BlockToAdds(block.Blk, block.Height)
 
 	utreexo.DedupeHashSlices(&blockAdds, &delHashes)
