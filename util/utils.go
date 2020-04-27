@@ -81,8 +81,7 @@ func CheckNet(net wire.BitcoinNet) {
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
 	blockChan chan BlockAndRev,
-	maxHeight, curHeight int32,
-	offsetfile, revoffsetfile string) {
+	maxHeight, curHeight int32) {
 	for curHeight != maxHeight {
 		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
 		if err != nil {

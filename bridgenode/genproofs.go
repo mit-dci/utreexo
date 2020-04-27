@@ -71,8 +71,7 @@ func BuildProofs(
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go util.BlockAndRevReader(blockAndRevReadQueue,
-		lastIndexOffsetHeight, height,
-		util.OffsetFilePath, util.RevOffsetFilePath)
+		lastIndexOffsetHeight, height)
 
 	// for the pFile
 	proofAndHeightChan := make(chan util.ProofAndHeight, 1)
