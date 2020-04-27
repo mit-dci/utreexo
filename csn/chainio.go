@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/util"
 )
 
 // restorePollard restores the pollard from disk to memory.

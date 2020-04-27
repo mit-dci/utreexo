@@ -5,7 +5,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/util"
 )
 
 // createOffsetData restores the offsetfile needed to index the

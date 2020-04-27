@@ -6,8 +6,8 @@ import (
 
 	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/cmd/ttl"
-	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/util/ttl"
 
 	"github.com/syndtr/goleveldb/leveldb"
 )

@@ -7,7 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/util"
 )
 
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.

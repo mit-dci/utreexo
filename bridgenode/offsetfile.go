@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/util"
 )
 
 // buildOffsetFile builds an offsetFile which acts as an index

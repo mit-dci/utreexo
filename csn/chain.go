@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/cmd/util"
+	"github.com/mit-dci/utreexo/util"
 )
 
 // initCSNState attempts to load and initialize the CSN state from the disk.
