@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ func TestVerifyBatchProof(t *testing.T) {
 	lastIdx := uint64(7)
 
 	// Generate adds
-	adds := make([]LeafTXO, 8)
+	adds := make([]Leaf, 8)
 	adds[0].Hash = Hash{1}
 	adds[1].Hash = Hash{2}
 	adds[2].Hash = Hash{3}
@@ -47,7 +47,7 @@ func TestVerifyBatchProof(t *testing.T) {
 	}
 
 	// delete last leaf and add a new leaf
-	adds = make([]LeafTXO, 1)
+	adds = make([]Leaf, 1)
 	adds[0].Hash = Hash{9}
 	_, err = f.Modify(adds, []uint64{lastIdx})
 	if err != nil {
@@ -68,7 +68,7 @@ func TestVerifyBatchProof(t *testing.T) {
 
 // Full explanation: https://github.com/mit-dci/utreexo/pull/95#issuecomment-599390850
 func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
-	adds := make([]LeafTXO, 2)
+	adds := make([]Leaf, 2)
 	proofIndex := 1
 	adds[0].Hash = Hash{1} // will be deleted
 	adds[1].Hash = Hash{2} // will be proven

@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/accumulator"
 )
 
 // Hash is just [32]byte
@@ -166,7 +166,7 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 }
 
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
-func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []utreexo.LeafTXO) {
+func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []accumulator.Leaf) {
 	// bh := bl.Blockhash
 	for coinbaseif0, tx := range blk.Transactions {
 		// cache txid aka txhash
@@ -191,7 +191,7 @@ func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []utreexo.LeafTXO)
 			// Don't need to save leafData here
 			// dataleaves = append(dataleaves, l)
 
-			var uleaf utreexo.LeafTXO
+			var uleaf accumulator.Leaf
 			uleaf.Hash = l.LeafHash()
 			hashleaves = append(hashleaves, uleaf)
 		}

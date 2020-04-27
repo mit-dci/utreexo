@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"fmt"
@@ -322,12 +322,12 @@ func (f *Forest) cleanup(overshoot uint64) {
 }
 
 // Add adds leaves to the forest.  This is the easy part.
-func (f *Forest) Add(adds []LeafTXO) {
+func (f *Forest) Add(adds []Leaf) {
 	f.addv2(adds)
 }
 
 // Add adds leaves to the forest.  This is the easy part.
-func (f *Forest) addv2(adds []LeafTXO) {
+func (f *Forest) addv2(adds []Leaf) {
 
 	for _, add := range adds {
 		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
@@ -355,7 +355,7 @@ func (f *Forest) addv2(adds []LeafTXO) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []LeafTXO, dels []uint64) (*undoBlock, error) {
+func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	numdels, numadds := len(dels), len(adds)
 	delta := int64(numadds - numdels) // watch 32/64 bit
 	if int64(f.numLeaves)+delta < 0 {

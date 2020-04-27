@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ var verbose = false
 
 // DedupeHashSlices is for removing txos that get created & spent in the same block
 // as adds are TTLHashes, takes those in for slice a
-func DedupeHashSlices(as *[]LeafTXO, bs *[]Hash) {
+func DedupeHashSlices(as *[]Leaf, bs *[]Hash) {
 	// need to preserve order, so have to do this twice...
 	// build a map and b map
 	ma := make(map[Hash]bool)
@@ -23,7 +23,7 @@ func DedupeHashSlices(as *[]LeafTXO, bs *[]Hash) {
 	for _, b := range *bs {
 		mb[b] = true
 	}
-	var anew []LeafTXO
+	var anew []Leaf
 	var bnew []Hash
 
 	for _, a := range *as {

@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -190,11 +191,11 @@ func pFileWorker(blockProofAndHeight chan util.ProofAndHeight,
 		// U32tB always returns 4 bytes
 		// Later this could also be changed to magic bytes
 		writebyte = append(writebyte,
-			utreexo.U32tB(uint32(bp.Height+1))...)
+			util.U32tB(uint32(bp.Height+1))...)
 
 		// write the size of the proof
 		writebyte = append(writebyte,
-			utreexo.U32tB(uint32(len(bp.Proof)))...)
+			util.U32tB(uint32(len(bp.Proof)))...)
 
 		// Write the actual proof
 		writebyte = append(writebyte, bp.Proof...)
@@ -236,8 +237,8 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 // inclusion proof from the accumulator.  It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
-func genBlockProof(delLeaves []util.LeafData, delHashes []utreexo.Hash,
-	f *utreexo.Forest, height int32) (
+func genBlockProof(delLeaves []util.LeafData, delHashes []accumulator.Hash,
+	f *accumulator.Forest, height int32) (
 	util.UData, error) {
 
 	var blockP util.UData
@@ -272,8 +273,8 @@ func genBlockProof(delLeaves []util.LeafData, delHashes []utreexo.Hash,
 // It's a little redundant to give back both delLeaves and delHashes, since the
 // latter is just the hash of the former, but if we only return delLeaves we
 // end up hashing them twice which could slow things down.
-func genAddDel(block util.BlockAndRev) (blockAdds []utreexo.LeafTXO,
-	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
+func genAddDel(block util.BlockAndRev) (blockAdds []accumulator.Leaf,
+	delLeaves []util.LeafData, delHashes []accumulator.Hash, err error) {
 
 	delLeaves, delHashes, err = genDels(block)
 	if err != nil {
@@ -281,13 +282,13 @@ func genAddDel(block util.BlockAndRev) (blockAdds []utreexo.LeafTXO,
 	}
 	blockAdds = util.BlockToAdds(block.Blk, block.Height)
 
-	utreexo.DedupeHashSlices(&blockAdds, &delHashes)
+	accumulator.DedupeHashSlices(&blockAdds, &delHashes)
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
 func genDels(bnr util.BlockAndRev) (
-	delLeaves []util.LeafData, delHashes []utreexo.Hash, err error) {
+	delLeaves []util.LeafData, delHashes []accumulator.Hash, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {

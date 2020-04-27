@@ -5,16 +5,17 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/cmd/ttl"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // genAdds generates txos that are turned into LeafTXOs from the given Txs in a block
 // so it's ready to be added to the tree
 func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
-	height int32, lookahead int32) (blockAdds []utreexo.LeafTXO, err error) {
+	height int32, lookahead int32) (blockAdds []accumulator.Leaf, err error) {
 
 	// grab all the MsgTx
 	for blockIndex, tx := range txs {
@@ -54,10 +55,10 @@ func genAdds(txs []*btcutil.Tx, db *leveldb.DB,
 			}
 			// 0 means it's a UTXO. Don't remember it
 			if txo.DeathHeight == 0 {
-				add := utreexo.LeafTXO{Hash: txo.Txid}
+				add := accumulator.Leaf{Hash: txo.Txid}
 				blockAdds = append(blockAdds, add)
 			} else {
-				add := utreexo.LeafTXO{
+				add := accumulator.Leaf{
 					Hash: txo.Txid,
 					// Duration: txo.DeathHeight - (height + 1),
 					// Only remember if duration is less than the
@@ -97,7 +98,7 @@ func getBlockProof(height uint32, pFile *os.File, pOffsetFile *os.File) ([]byte,
 	// match the height that was passed as the argument to getProof
 	var compare0, compare1 [4]byte
 	copy(compare0[:], heightbytes[:])
-	copy(compare1[:], utreexo.U32tB(height+1))
+	copy(compare1[:], util.U32tB(height+1))
 	// check if height matches
 	if compare0 != compare1 {
 		fmt.Println("read:, given:", compare0, compare1)

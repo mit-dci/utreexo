@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/utreexo"
+	"github.com/mit-dci/utreexo/accumulator"
 )
 
 type Hash [32]byte
@@ -78,7 +78,7 @@ type UBlock struct {
 }
 
 type UData struct {
-	AccProof       utreexo.BatchProof
+	AccProof       accumulator.BatchProof
 	UtxoData       []LeafData
 	RememberLeaves []bool
 }
@@ -211,7 +211,7 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 	b = b[4:]
 	batchProofBytes := b[:batchLen]
 	leafDataBytes := b[batchLen:]
-	ud.AccProof, err = utreexo.FromBytesBatchProof(batchProofBytes)
+	ud.AccProof, err = accumulator.FromBytesBatchProof(batchProofBytes)
 	if err != nil {
 		return
 	}

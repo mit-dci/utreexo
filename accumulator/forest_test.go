@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"fmt"
@@ -11,9 +11,9 @@ import (
 
 func TestDeleteReverseOrder(t *testing.T) {
 	f := NewForest(nil)
-	leaf1 := LeafTXO{Hash: Hash{1}}
-	leaf2 := LeafTXO{Hash: Hash{2}}
-	_, err := f.Modify([]LeafTXO{leaf1, leaf2}, nil)
+	leaf1 := Leaf{Hash: Hash{1}}
+	leaf2 := Leaf{Hash: Hash{2}}
+	_, err := f.Modify([]Leaf{leaf1, leaf2}, nil)
 	if err != nil {
 		t.Fail()
 	}
@@ -55,7 +55,7 @@ func TestForestFixed(t *testing.T) {
 	f := NewForest(nil)
 	numadds := 5
 	numdels := 3
-	adds := make([]LeafTXO, numadds)
+	adds := make([]Leaf, numadds)
 	dels := make([]uint64, numdels)
 
 	for j, _ := range adds {
@@ -85,7 +85,7 @@ func TestForestFixed(t *testing.T) {
 func Test2Fwd1Back(t *testing.T) {
 	f := NewForest(nil)
 	var absidx uint32
-	adds := make([]LeafTXO, 2)
+	adds := make([]Leaf, 2)
 
 	for i := 0; i < 100; i++ {
 
@@ -163,7 +163,7 @@ func AddDelFullBatchProof(nAdds, nDels int) error {
 	}
 
 	f := NewForest(nil)
-	adds := make([]LeafTXO, nAdds)
+	adds := make([]Leaf, nAdds)
 
 	for j := range adds {
 		adds[j].Hash[0] = uint8(j>>8) | 0xa0
@@ -228,23 +228,23 @@ func TestSmallRandomForests(t *testing.T) {
 		// This is the leaf that we will test proofs for
 		// if we happen to generate testing data that
 		// doesn't leave an empty tree.
-		var chosenUndeletedLeaf LeafTXO
+		var chosenUndeletedLeaf Leaf
 		atLeastOneLeafRemains := false
 
 		// forest.Modify takes a slice, so we'll copy
 		// adds into this slice:
-		addsSlice := make([]LeafTXO, len(adds))
+		addsSlice := make([]Leaf, len(adds))
 
 		// This stores the leaves that are to be deleted.
 		// We need to store the LeafTXO's or we won't be able
 		// to find the positions after inserting all items.
-		leavesToDeleteSet := make(map[LeafTXO]struct{})
+		leavesToDeleteSet := make(map[Leaf]struct{})
 
 		i := 0
 		for firstLeafHashByte, deleteLater := range adds {
 			// We put a one in the hash too, so that we won't
 			// generate an all-zero hash, which is not allowed.
-			leafTxo := LeafTXO{Hash: Hash{firstLeafHashByte, 1}}
+			leafTxo := Leaf{Hash: Hash{firstLeafHashByte, 1}}
 			addsSlice[i] = leafTxo
 			if deleteLater {
 				leavesToDeleteSet[leafTxo] = struct{}{}

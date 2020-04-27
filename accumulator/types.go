@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"crypto/sha256"
@@ -45,7 +45,7 @@ type Node struct {
 }
 
 // LeafTXOs have a hash and a expiry date (block when that utxo gets used)
-type LeafTXO struct {
+type Leaf struct {
 	Hash
 	// During ibdsim, this will dictate whether it is saved to
 	// the memory or not.
@@ -53,7 +53,7 @@ type LeafTXO struct {
 }
 
 type simLeaf struct {
-	LeafTXO
+	Leaf
 	duration int32
 }
 
@@ -108,7 +108,7 @@ func NewSimChain(duration uint32) *SimChain {
 }
 
 // BackOne takes the output of NextBlock and undoes the block
-func (s *SimChain) BackOne(leaves []LeafTXO, durations []int32, dels []Hash) {
+func (s *SimChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
 	s.ttlSlices =
@@ -146,7 +146,7 @@ func (s *SimChain) ttlString() string {
 }
 
 // NextBlock :
-func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
+func (s *SimChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
 
@@ -154,7 +154,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
 		numAdds = 1
 	}
 	// they're all forgettable
-	adds := make([]LeafTXO, numAdds)
+	adds := make([]Leaf, numAdds)
 	durations := make([]int32, numAdds)
 
 	// make dels; dels are preset by the ttlMap

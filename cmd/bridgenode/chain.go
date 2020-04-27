@@ -6,15 +6,15 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/cmd/util"
-	"github.com/mit-dci/utreexo/utreexo"
 )
 
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
-	forest *utreexo.Forest, height int32, lastIndexOffsetHeight int32,
+	forest *accumulator.Forest, height int32, lastIndexOffsetHeight int32,
 	pOffset int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
@@ -76,7 +76,7 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 // user restarts, they'll be able to resume.
 // Saves height, forest fields, and pOffset
 func saveBridgeNodeData(
-	forest *utreexo.Forest, pOffset int32, height int32) error {
+	forest *accumulator.Forest, pOffset int32, height int32) error {
 
 	var fileWait sync.WaitGroup
 	fileWait.Add(1)

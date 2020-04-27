@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 )
 
 // Modify is the main function that deletes then adds elements to the accumulator
-func (p *Pollard) Modify(adds []LeafTXO, dels []uint64) error {
+func (p *Pollard) Modify(adds []Leaf, dels []uint64) error {
 	err := p.rem2(dels)
 	if err != nil {
 		return err
@@ -38,7 +38,7 @@ func (p *Pollard) ReconstructStats() (uint64, uint8) {
 }
 
 // Add a leaf to a pollard.  Not as simple!
-func (p *Pollard) add(adds []LeafTXO) error {
+func (p *Pollard) add(adds []Leaf) error {
 
 	// General algo goes:
 	// 1 make a new node & assign data (no neices; at bottom)

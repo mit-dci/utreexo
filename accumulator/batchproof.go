@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"bytes"

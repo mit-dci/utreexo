@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 import (
 	"fmt"
@@ -139,7 +139,7 @@ func fixedPollard(leaves int32) error {
 	dels := []uint64{2, 5, 6}
 
 	// they're all forgettable
-	adds := make([]LeafTXO, leaves)
+	adds := make([]Leaf, leaves)
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map

@@ -1,4 +1,4 @@
-package utreexo
+package accumulator
 
 /*
 The transform operations can probably be moved into a different package even.
