@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/mit-dci/utreexo/accumulator/transform"
 	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
@@ -25,11 +24,11 @@ That's OK; it helps reduce renumbering nodes and makes it easier to think about
 // This leaf is numbered from bottom left to right.
 // Example of a forest with 4 numLeaves:
 //
-// row: 2      06
-//             |---------\
-// row: 1      04        05
-//             |----\    |---\
-// row: 0      00---01---02---03
+//	06
+//	|------\
+//	04......05
+//	|---\...|---\
+//	00..01..02..03
 //
 // 04 is the concatenation and the hash of 00 and 01. 06 is the root
 // This tree would have a height of 2.
@@ -71,21 +70,33 @@ type Forest struct {
 	 */
 
 	// HistoricHashes represents how many hashes this forest has computed
+	//
+	// Meant for testing / benchmarking
 	HistoricHashes uint64
 
 	// TimeRem represents how long Remove() function took
+	//
+	// Meant for testing / benchmarking
 	TimeRem time.Duration
 
 	// TimeMST represents how long the moveSubTree() function took
+	//
+	// Meant for testing / benchmarking
 	TimeMST time.Duration
 
 	// TimeInHash represents how long the hash operations (reHash) took
+	//
+	// Meant for testing / benchmarking
 	TimeInHash time.Duration
 
 	// TimeInProve represents how long the Prove operations took
+	//
+	// Meant for testing / benchmarking
 	TimeInProve time.Duration
 
 	// TimeInVerify represents how long the verify operations took
+	//
+	// Meant for testing / benchmarking
 	TimeInVerify time.Duration
 }
 
@@ -142,7 +153,7 @@ func (f *Forest) removev4(dels []uint64) error {
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
-	swaprows := transform.RemTrans(dels, f.numLeaves, f.height)
+	swaprows := RemTrans(dels, f.numLeaves, f.height)
 	// loop taken from pollard rem2.  maybe pollard and forest can both
 	// satisfy the same interface..?  maybe?  that could work...
 	// TODO try that ^^^^^^
@@ -682,4 +693,10 @@ func (f *Forest) hashRow(dirtpositions []uint64) error {
 	}
 
 	return nil
+}
+
+// FindLeaf finds a leave from the positionMap and returns a bool
+func (f *Forest) FindLeaf(leaf util.Hash) bool {
+	_, found := f.positionMap[leaf.Mini()]
+	return found
 }

@@ -307,3 +307,8 @@ func TestSmallRandomForests(t *testing.T) {
 		}
 	}
 }
+
+func NewForestExample() {
+	forest := NewForest(nil)
+	fmt.Println(forest)
+}

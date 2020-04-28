@@ -50,10 +50,12 @@ type Node struct {
 
 // LeafTXOs have a hash and a expiry date (block when that utxo gets used)
 type LeafTXO struct {
+	// Hash represents the 32 byte SHA256 hash of a TXO
 	Hash
-	// During ibdsim, this will dictate whether it is saved to
-	// the memory or not.
-	Remember bool // this leaf will be deleted soon, remember it
+
+	// Remember dictates whether the LeafTXO is saved to the cache
+	// or not
+	Remember bool
 }
 
 type simLeaf struct {
@@ -61,7 +63,7 @@ type simLeaf struct {
 	duration int32
 }
 
-// Parent gets you the merkle parent.  So far no committing to height.
+// Parent gets you the merkle parent. So far no committing to height.
 // if the left child is zero it should crash...
 func Parent(l, r Hash) Hash {
 	var empty [32]byte
@@ -92,10 +94,10 @@ func xParent(l, r Hash) Hash {
 	return x
 }
 
-// SimChain is for testing; it spits out "blocks" of adds and deletes
+// SimChain is for testing purposes. Returns "blocks" of adds and deletes
 type SimChain struct {
 	// ttlMap is when the hashes get removed
-	TtlSlices    [][]Hash
+	TTLSlices    [][]Hash
 	BlockHeight  int32
 	LeafCounter  uint64
 	DurationMask uint32
@@ -107,7 +109,7 @@ func NewSimChain(duration uint32) *SimChain {
 	var s SimChain
 	s.BlockHeight = -1
 	s.DurationMask = duration
-	s.TtlSlices = make([][]Hash, s.DurationMask+1)
+	s.TTLSlices = make([][]Hash, s.DurationMask+1)
 	return &s
 }
 
@@ -115,8 +117,8 @@ func NewSimChain(duration uint32) *SimChain {
 func (s *SimChain) BackOne(leaves []LeafTXO, durations []int32, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
-	s.TtlSlices =
-		append([][]Hash{dels}, s.TtlSlices[:len(s.TtlSlices)-1]...)
+	s.TTLSlices =
+		append([][]Hash{dels}, s.TTLSlices[:len(s.TTLSlices)-1]...)
 
 	// Gotta go through the leaves and delete them all from the ttlslices
 	for i, l := range leaves {
@@ -126,19 +128,19 @@ func (s *SimChain) BackOne(leaves []LeafTXO, durations []int32, dels []Hash) {
 		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
 		// everything should be in order, right?
 		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.TtlSlices[durations[i]][len(s.TtlSlices[durations[i]])-1][:4],
+			s.TTLSlices[durations[i]][len(s.TTLSlices[durations[i]])-1][:4],
 			durations[i])
-		s.TtlSlices[durations[i]] =
-			s.TtlSlices[durations[i]][:len(s.TtlSlices[durations[i]])-1]
+		s.TTLSlices[durations[i]] =
+			s.TTLSlices[durations[i]][:len(s.TTLSlices[durations[i]])-1]
 	}
 
 	s.BlockHeight--
 	return
 }
 
-func (s *SimChain) TtlString() string {
+func (s *SimChain) TTLString() string {
 	x := "-------------\n"
-	for i, d := range s.TtlSlices {
+	for i, d := range s.TTLSlices {
 		x += fmt.Sprintf("%d: ", i)
 		for _, h := range d {
 			x += fmt.Sprintf(" %x ", h[:4])
@@ -162,8 +164,8 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
 	durations := make([]int32, numAdds)
 
 	// make dels; dels are preset by the ttlMap
-	delHashes := s.TtlSlices[0]
-	s.TtlSlices = append(s.TtlSlices[1:], []Hash{})
+	delHashes := s.TTLSlices[0]
+	s.TTLSlices = append(s.TTLSlices[1:], []Hash{})
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
@@ -194,8 +196,8 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]LeafTXO, []int32, []Hash) {
 
 		if durations[j] != 0 {
 			// fmt.Printf("put %x at row %d\n", adds[j].Hash[:4], adds[j].duration-1)
-			s.TtlSlices[durations[j]-1] =
-				append(s.TtlSlices[durations[j]-1], adds[j].Hash)
+			s.TTLSlices[durations[j]-1] =
+				append(s.TTLSlices[durations[j]-1], adds[j].Hash)
 		}
 
 		s.LeafCounter++

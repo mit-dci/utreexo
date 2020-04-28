@@ -1,11 +1,10 @@
-package transform
+package accumulator
 
 import (
 	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
-// RemTrans -- simpler and better -- lets see if it works!
-// returns a slice of swapswithHeight in bottom to top order
+// RemTrans returns a slice Arrow in bottom row to top row.
 // also returns all "dirty" positions which need to be hashed after the swaps
 func RemTrans(dels []uint64, numLeaves uint64, fHeight uint8) [][]util.Arrow {
 	// calculate the number of leaves after deletion
@@ -30,19 +29,21 @@ func RemTrans(dels []uint64, numLeaves uint64, fHeight uint8) [][]util.Arrow {
 
 		var twinNextDels, swapNextDels []uint64
 
+		// *** Delroot
+		// TODO would be more elegant not to have this here.  But
+		// easier to just delete the root first...
+
+		// Check for root
 		rootPresent := util.CheckForRoot(numLeaves, h)
 		rootPos := util.TopPos(numLeaves, h, fHeight)
 
-		// *** delroot
-		// TODO would be more elegant not to have this here.  But
-		// easier to just delete the root first...
 		if rootPresent && dels[len(dels)-1] == rootPos {
 			dels = dels[:len(dels)-1] // pop off the last del
 			rootPresent = false
 		}
 		delRemains := len(dels)%2 != 0
 
-		// *** dedupe
+		// *** Twin
 		twinNextDels, dels = util.ExTwin2(dels, fHeight)
 
 		// *** swap

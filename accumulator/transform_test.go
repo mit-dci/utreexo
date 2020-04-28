@@ -1,10 +1,10 @@
-package transform
+package accumulator
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
 func TestExTwin(t *testing.T) {

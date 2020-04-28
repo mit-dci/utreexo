@@ -61,7 +61,7 @@ func undoOnceRandom(blocks int32) error {
 			return err
 		}
 		fmt.Printf(f.ToString())
-		fmt.Printf(sc.TtlString())
+		fmt.Printf(sc.TTLString())
 		for h, p := range f.positionMap {
 			fmt.Printf("%x@%d ", h[:4], p)
 		}
@@ -165,10 +165,10 @@ func undoTestSimChain() error {
 	sc.NextBlock(3)
 	sc.NextBlock(3)
 	sc.NextBlock(3)
-	fmt.Printf(sc.TtlString())
+	fmt.Printf(sc.TTLString())
 	l1, dur, h1 := sc.NextBlock(3)
-	fmt.Printf(sc.TtlString())
+	fmt.Printf(sc.TTLString())
 	sc.BackOne(l1, dur, h1)
-	fmt.Printf(sc.TtlString())
+	fmt.Printf(sc.TTLString())
 	return nil
 }

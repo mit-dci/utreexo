@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mit-dci/utreexo/accumulator/transform"
 	"github.com/mit-dci/utreexo/accumulator/util"
 )
 
@@ -169,7 +168,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 
 	// get all the swaps, then apply them all
-	swaprows := transform.RemTrans(dels, p.numLeaves, ph)
+	swaprows := RemTrans(dels, p.numLeaves, ph)
 	wg := new(sync.WaitGroup)
 	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashDirt, nextHashDirt []uint64
@@ -343,7 +342,7 @@ func (p *Pollard) swapNodes(s util.Arrow, height uint8) (*hashableNode, error) {
 }
 
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
-// as well as its sibling.  And a hashable node for the position ABOVE pos.
+// as well as its sibling. And a hashable node for the position ABOVE pos.
 // And an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
