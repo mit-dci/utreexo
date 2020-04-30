@@ -22,17 +22,17 @@ There might be a better / optimal way to do this but it seems OK for now.
 type Forest struct {
 	numLeaves uint64 // number of leaves in the forest (bottom row)
 
-	// height of the forest.  NON INTUITIVE!
-	// When there is only 1 tree in the forest, it is equal to the height of
-	// that tree (2**h nodes).  If there are multiple trees, height will
-	// be 1 higher than the highest tree in the forest.
-	// While you could just run treeHeight(numLeaves), and pollard does just this,
+	// rows in the forest. (forest height) NON INTUITIVE!
+	// When there is only 1 tree in the forest, it is equal to the rows of
+	// that tree (2**h nodes).  If there are multiple trees, rows will
+	// be 1 more than the tallest tree in the forest.
+	// While you could just run treeRows(numLeaves), and pollard does just this,
 	// here it incurs the cost of a reMap when you cross a power of 2 boundary.
 	// So right now it reMaps on the way up, but NOT on the way down, so the
-	// height can sometimes be higher than it would be as treeHeight(numLeaves)
+	// rows can sometimes be higher than it would be as treeRows(numLeaves)
 	// A little weird; could remove this, but likely would have a performance
 	// penalty if the set dances right above / below a power of 2 leaves.
-	height uint8
+	rows uint8
 
 	// "data" (not the best name but) is an interface to storing the forest
 	// hashes.  There's ram based and disk based for now, maybe if one
@@ -69,7 +69,7 @@ type Forest struct {
 func NewForest(forestFile *os.File) *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
-	f.height = 0
+	f.rows = 0
 
 	if forestFile == nil {
 		// for in-ram
@@ -115,56 +115,56 @@ func (f *Forest) removev4(dels []uint64) error {
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
-	swaprows := remTrans2(dels, f.numLeaves, f.height)
+	swapRows := remTrans2(dels, f.numLeaves, f.rows)
 	// loop taken from pollard rem2.  maybe pollard and forest can both
 	// satisfy the same interface..?  maybe?  that could work...
 	// TODO try that ^^^^^^
-	for h := uint8(0); h < f.height; h++ {
-		var hdestslice []uint64
-		var hashdest uint64
-		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
-		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
+	for r := uint8(0); r < f.rows; r++ {
+		var hDestSlice []uint64
+		var hashDest uint64
+		hashDirt = dedupeSwapDirt(hashDirt, swapRows[r])
+		for len(swapRows[r]) != 0 || len(hashDirt) != 0 {
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
-			if len(swaprows[h]) == 0 ||
-				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
+			if len(swapRows[r]) == 0 ||
+				len(hashDirt) != 0 && hashDirt[0] > swapRows[r][0].to {
 				// re-descending here which isn't great
 				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
-				hashdest = up1(hashDirt[0], f.height)
+				hashDest = parent(hashDirt[0], f.rows)
 				hashDirt = hashDirt[1:]
 			} else { // swapping
 
-				err = f.swapNodes(swaprows[h][0], h)
+				err = f.swapNodes(swapRows[r][0], r)
 				if err != nil {
 					return err
 				}
 				// fmt.Printf("swap %v %x %x\n", swaprows[h][0],
 				// f.data.read(swaprows[h][0].from).Prefix(),
 				// f.data.read(swaprows[h][0].to).Prefix())
-				hashdest = up1(swaprows[h][0].to, f.height)
-				swaprows[h] = swaprows[h][1:]
+				hashDest = parent(swapRows[r][0].to, f.rows)
+				swapRows[r] = swapRows[r][1:]
 			}
-			if !inForest(hashdest, f.numLeaves, f.height) || hashdest == 0 {
+			if !inForest(hashDest, f.numLeaves, f.rows) || hashDest == 0 {
 				continue
 				// TODO would be great to use nextNumLeaves... but tricky
 			}
-			if hashdest == prevHash { // we just did this
+			if hashDest == prevHash { // we just did this
 				// fmt.Printf("just did %d\n", prevHash)
 				continue // TODO this doesn't cover eveything
 			}
-			hdestslice = append(hdestslice, hashdest)
+			hDestSlice = append(hDestSlice, hashDest)
 			// fmt.Printf("added hp %d\n", hashdest)
-			prevHash = hashdest
+			prevHash = hashDest
 			if len(nextHashDirt) == 0 ||
-				(nextHashDirt[len(nextHashDirt)-1] != hashdest) {
+				(nextHashDirt[len(nextHashDirt)-1] != hashDest) {
 				// skip if already on end of slice. redundant?
-				nextHashDirt = append(nextHashDirt, hashdest)
+				nextHashDirt = append(nextHashDirt, hashDest)
 			}
 		}
 		hashDirt = nextHashDirt
 		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
-		err := f.hashRow(hdestslice)
+		err := f.hashRow(hDestSlice)
 		if err != nil {
 			return err
 		}
@@ -174,23 +174,23 @@ func (f *Forest) removev4(dels []uint64) error {
 	return nil
 }
 
-func (f *Forest) swapNodes(s arrow, height uint8) error {
+func (f *Forest) swapNodes(s arrow, row uint8) error {
 	if s.from == s.to {
 		// these shouldn't happen, and seems like the don't
 
 		fmt.Printf("%s\nmove %d to %d\n", f.ToString(), s.from, s.to)
 		panic("got non-moving swap")
 	}
-	if height == 0 {
+	if row == 0 {
 		f.data.swapHash(s.from, s.to)
 		f.positionMap[f.data.read(s.to).Mini()] = s.to
 		f.positionMap[f.data.read(s.from).Mini()] = s.from
 		return nil
 	}
 	// fmt.Printf("swapnodes %v\n", s)
-	a := childMany(s.from, height, f.height)
-	b := childMany(s.to, height, f.height)
-	run := uint64(1 << height)
+	a := childMany(s.from, row, f.rows)
+	b := childMany(s.to, row, f.rows)
+	run := uint64(1 << row)
 
 	// happens before the actual swap, so swapping a and b
 	for i := uint64(0); i < run; i++ {
@@ -199,11 +199,11 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 	}
 
 	// start at the bottom and go to the top
-	for h := uint8(0); h <= height; h++ {
+	for h := uint8(0); h <= row; h++ {
 		// fmt.Printf("shr %d %d %d\n", a, b, run)
 		f.data.swapHashRange(a, b, run)
-		a = up1(a, f.height)
-		b = up1(b, f.height)
+		a = parent(a, f.rows)
+		b = parent(b, f.rows)
 		run >>= 1
 	}
 
@@ -217,32 +217,31 @@ func (f *Forest) swapNodes(s arrow, height uint8) error {
 // TODO: switch the meaning of "dirt" to mean parents with changed children;
 // this will probably make it a lot simpler.
 func (f *Forest) reHash(dirt []uint64) error {
-	if f.height == 0 || len(dirt) == 0 { // nothing to hash
+	if f.rows == 0 || len(dirt) == 0 { // nothing to hash
 		return nil
 	}
-	tops, topheights := getTopsReverse(f.numLeaves, f.height)
-	// fmt.Printf("nl %d f.h %d tops %v\n", f.numLeaves, f.height, tops)
+	rootPositions, rootRows := getRootsReverse(f.numLeaves, f.rows)
 
-	dirty2d := make([][]uint64, f.height)
-	h := uint8(0)
+	dirty2d := make([][]uint64, f.rows)
+	r := uint8(0)
 	dirtyRemaining := 0
 	for _, pos := range dirt {
 		if pos > f.numLeaves {
 			return fmt.Errorf("Dirt %d exceeds numleaves %d", pos, f.numLeaves)
 		}
-		dHeight := detectHeight(pos, f.height)
-		// increase height if needed
-		for h < dHeight {
-			h++
+		dRow := detectRow(pos, f.rows)
+		// increase rows if needed
+		for r < dRow {
+			r++
 		}
-		if h > f.height {
-			return fmt.Errorf("position %d at height %d but forest only %d high",
-				pos, h, f.height)
+		if r > f.rows {
+			return fmt.Errorf("position %d at row %d but forest only %d high",
+				pos, r, f.rows)
 		}
 		// if bridgeVerbose {
 		// fmt.Printf("h %d\n", h)
 		// }
-		dirty2d[h] = append(dirty2d[h], pos)
+		dirty2d[r] = append(dirty2d[r], pos)
 		dirtyRemaining++
 	}
 
@@ -254,17 +253,17 @@ func (f *Forest) reHash(dirt []uint64) error {
 	var currentRow, nextRow []uint64
 
 	// floor by floor
-	for h = uint8(0); h < f.height; h++ {
+	for r = uint8(0); r < f.rows; r++ {
 		if bridgeVerbose {
-			fmt.Printf("dirty %v\ncurrentRow %v\n", dirty2d[h], currentRow)
+			fmt.Printf("dirty %v\ncurrentRow %v\n", dirty2d[r], currentRow)
 		}
 
 		// merge nextRow and the dirtySlice.  They're both sorted so this
 		// should be quick.  Seems like a CS class kindof algo but who knows.
 		// Should be O(n) anyway.
 
-		currentRow = mergeSortedSlices(currentRow, dirty2d[h])
-		dirtyRemaining -= len(dirty2d[h])
+		currentRow = mergeSortedSlices(currentRow, dirty2d[r])
+		dirtyRemaining -= len(dirty2d[r])
 		if dirtyRemaining == 0 && len(currentRow) == 0 {
 			// done hashing early
 			break
@@ -275,34 +274,34 @@ func (f *Forest) reHash(dirt []uint64) error {
 			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
 				continue
 			}
-			if len(tops) == 0 {
+			if len(rootPositions) == 0 {
 				return fmt.Errorf(
 					"currentRow %v no tops remaining, this shouldn't happen",
 					currentRow)
 			}
 			// also skip if this is a top
-			if pos == tops[0] {
+			if pos == rootPositions[0] {
 				continue
 			}
 
 			right := pos | 1
 			left := right ^ 1
-			parpos := up1(left, f.height)
+			parpos := parent(left, f.rows)
 
 			//				fmt.Printf("bridge hash %d %04x, %d %04x -> %d\n",
 			//					left, leftHash[:4], right, rightHash[:4], parpos)
 			if f.data.read(left) == empty || f.data.read(right) == empty {
 				f.data.write(parpos, empty)
 			} else {
-				par := Parent(f.data.read(left), f.data.read(right))
+				par := parentHash(f.data.read(left), f.data.read(right))
 				f.HistoricHashes++
 				f.data.write(parpos, par)
 			}
 			nextRow = append(nextRow, parpos)
 		}
-		if topheights[0] == h {
-			tops = tops[1:]
-			topheights = topheights[1:]
+		if rootRows[0] == r {
+			rootPositions = rootPositions[1:]
+			rootRows = rootRows[1:]
 		}
 		currentRow = nextRow
 		nextRow = []uint64{}
@@ -333,17 +332,17 @@ func (f *Forest) addv2(adds []Leaf) {
 		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
 		f.positionMap[add.Mini()] = f.numLeaves
 
-		tops, _ := getTopsReverse(f.numLeaves, f.height)
+		rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
 		pos := f.numLeaves
 		n := add.Hash
 		f.data.write(pos, n)
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
 			// grab, pop, swap, hash, new
-			top := f.data.read(tops[h]) // grab
+			top := f.data.read(rootPositions[h]) // grab
 			//			fmt.Printf("grabbed %x from %d\n", top[:12], tops[h])
-			n = Parent(top, n)       // hash
-			pos = up1(pos, f.height) // rise
-			f.data.write(pos, n)     // write
+			n = parentHash(top, n)    // hash
+			pos = parent(pos, f.rows) // rise
+			f.data.write(pos, n)      // write
 			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
 		}
 		f.numLeaves++
@@ -371,10 +370,10 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 		}
 	}
 	// remap to expand the forest if needed
-	for int64(f.numLeaves)+delta > int64(1<<f.height) {
+	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
 		// fmt.Printf("current cap %d need %d\n",
-		// 1<<f.height, f.numLeaves+delta)
-		err := f.reMap(f.height + 1)
+		// 1<<f.rows, f.numLeaves+delta)
+		err := f.reMap(f.rows + 1)
 		if err != nil {
 			return nil, err
 		}
@@ -406,34 +405,34 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	return ub, err
 }
 
-// reMap changes the height of the forest
-func (f *Forest) reMap(destHeight uint8) error {
+// reMap changes the rows in the forest
+func (f *Forest) reMap(destRows uint8) error {
 
-	if destHeight == f.height {
+	if destRows == f.rows {
 		return fmt.Errorf("can't remap %d to %d... it's the same",
-			destHeight, destHeight)
+			destRows, destRows)
 	}
 
-	if destHeight > f.height+1 || (f.height > 0 && destHeight < f.height-1) {
-		return fmt.Errorf("changing by more than 1 height not programmed yet")
+	if destRows > f.rows+1 || (f.rows > 0 && destRows < f.rows-1) {
+		return fmt.Errorf("changing by more than 1 not programmed yet")
 	}
 
-	fmt.Printf("remap forest height %d -> %d\n", f.height, destHeight)
+	fmt.Printf("remap forest %d rows -> %d rows\n", f.rows, destRows)
 
-	// for height reduction
-	if destHeight < f.height {
-		return fmt.Errorf("height reduction not implemented")
+	// for row reduction
+	if destRows < f.rows {
+		return fmt.Errorf("row reduction not implemented")
 	}
 	// I don't think you ever need to remap down.  It really doesn't
 	// matter.  Something to program someday if you feel like it for fun.
 	// fmt.Printf("size is %d\n", f.data.size())
-	// height increase
-	f.data.resize(2 << destHeight)
+	// rows increase
+	f.data.resize(2 << destRows)
 	// fmt.Printf("size is %d\n", f.data.size())
-	pos := uint64(1 << destHeight) // leftmost position of row 1
-	reach := pos >> 1              // how much to next row up
+	pos := uint64(1 << destRows) // leftmost position of row 1
+	reach := pos >> 1            // how much to next row up
 	// start on row 1, row 0 doesn't move
-	for h := uint8(1); h < destHeight; h++ {
+	for h := uint8(1); h < destRows; h++ {
 		runLength := reach >> 1
 		for x := uint64(0); x < runLength; x++ {
 			// ok if source position is non-empty
@@ -449,14 +448,14 @@ func (f *Forest) reMap(destHeight uint8) error {
 	}
 
 	// zero out (what is now the) right half of the bottom row
-	//	copy(t.fs[1<<(t.height-1):1<<t.height], make([]Hash, 1<<(t.height-1)))
-	for x := uint64(1 << f.height); x < 1<<destHeight; x++ {
+	//	copy(t.fs[1<<(t.rows-1):1<<t.rows], make([]Hash, 1<<(t.rows-1)))
+	for x := uint64(1 << f.rows); x < 1<<destRows; x++ {
 		// here you may actually need / want to delete?  but numleaves
 		// should still ensure that you're not reading over the edge...
 		f.data.write(x, empty)
 	}
 
-	f.height = destHeight
+	f.rows = destRows
 	return nil
 }
 
@@ -464,15 +463,15 @@ func (f *Forest) reMap(destHeight uint8) error {
 // populated?
 func (f *Forest) sanity() error {
 
-	if f.numLeaves > 1<<f.height {
-		return fmt.Errorf("forest has %d leaves but insufficient height %d",
-			f.numLeaves, f.height)
+	if f.numLeaves > 1<<f.rows {
+		return fmt.Errorf("forest has %d leaves but insufficient rows %d",
+			f.numLeaves, f.rows)
 	}
-	tops, _ := getTopsReverse(f.numLeaves, f.height)
-	for _, t := range tops {
+	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
+	for _, t := range rootPositions {
 		if f.data.read(t) == empty {
-			return fmt.Errorf("Forest has %d leaves %d tops, but top @%d is empty",
-				f.numLeaves, len(tops), t)
+			return fmt.Errorf("Forest has %d leaves %d roots, but top @%d is empty",
+				f.numLeaves, len(rootPositions), t)
 		}
 	}
 	if uint64(len(f.positionMap)) > f.numLeaves {
@@ -495,7 +494,7 @@ func (f *Forest) PosMapSanity() error {
 }
 
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
-// miscForestFile is where numLeaves and height is stored
+// miscForestFile is where numLeaves and rows is stored
 func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error) {
 
 	// Initialize the forest for restore
@@ -534,14 +533,14 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 		return nil, fmt.Errorf("Generated positionMap is nil")
 	}
 
-	// This restores the height
-	var byteHeight [1]byte
-	_, err = miscForestFile.Read(byteHeight[:])
+	// This restores the rows
+	var byteRows [1]byte
+	_, err = miscForestFile.Read(byteRows[:])
 	if err != nil {
 		return nil, err
 	}
-	f.height = BtU8(byteHeight[:])
-	fmt.Println("Forest height:", f.height)
+	f.rows = BtU8(byteRows[:])
+	fmt.Println("Forest rows:", f.rows)
 	fmt.Println("Done restoring forest")
 
 	return f, nil
@@ -557,11 +556,11 @@ func (f *Forest) PrintPositionMap() string {
 	return s
 }
 
-// WriteForest writes the numLeaves and height to miscForestFile
+// WriteForest writes the numLeaves and rows to miscForestFile
 func (f *Forest) WriteForest(miscForestFile *os.File) error {
 	fmt.Println("numLeaves=", f.numLeaves)
-	fmt.Println("f.height=", f.height)
-	_, err := miscForestFile.WriteAt(append(U64tB(f.numLeaves), U8tB(f.height)...), 0)
+	fmt.Println("f.rows=", f.rows)
+	_, err := miscForestFile.WriteAt(append(U64tB(f.numLeaves), U8tB(f.rows)...), 0)
 	if err != nil {
 		return err
 	}
@@ -571,11 +570,11 @@ func (f *Forest) WriteForest(miscForestFile *os.File) error {
 // GetTops returns all the tops of the trees
 func (f *Forest) GetTops() []Hash {
 
-	topposs, _ := getTopsReverse(f.numLeaves, f.height)
-	tops := make([]Hash, len(topposs))
+	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
+	tops := make([]Hash, len(rootPositions))
 
 	for i := range tops {
-		tops[i] = f.data.read(topposs[i])
+		tops[i] = f.data.read(rootPositions[i])
 	}
 
 	return tops
@@ -596,8 +595,8 @@ func (f *Forest) Stats() string {
 // ToString prints out the whole thing.  Only viable for small forests
 func (f *Forest) ToString() string {
 
-	fh := f.height
-	// tree height should be 6 or less
+	fh := f.rows
+	// tree rows should be 6 or less
 	if fh > 6 {
 		return "forest too big to print "
 	}

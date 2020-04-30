@@ -29,12 +29,12 @@ func (p *Pollard) Stats() string {
 }
 
 // TODO remove
-// Temporary -- returns numleaves and height so that batch proofs can be
+// Temporary -- returns numleaves and row so that batch proofs can be
 // reconstructed and hashes can be matches.
 // Replace this with proofs that do not include the things being proven, and
 // take the proved leaves as a separate argument
 func (p *Pollard) ReconstructStats() (uint64, uint8) {
-	return p.numLeaves, p.height()
+	return p.numLeaves, p.rows()
 }
 
 // Add a leaf to a pollard.  Not as simple!
@@ -42,7 +42,7 @@ func (p *Pollard) add(adds []Leaf) error {
 
 	// General algo goes:
 	// 1 make a new node & assign data (no neices; at bottom)
-	// 2 if this node is on a height where there's already a top,
+	// 2 if this node is on a row where there's already a top,
 	// then swap neices with that top, hash the two datas, and build a new
 	// node 1 higher pointing to them.
 	// goto 2.
@@ -114,7 +114,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		leftTop := p.tops[len(p.tops)-1]                           // grab
 		p.tops = p.tops[:len(p.tops)-1]                            // pop
 		leftTop.niece, n.niece = n.niece, leftTop.niece            // swap
-		nHash := Parent(leftTop.data, n.data)                      // hash
+		nHash := parentHash(leftTop.data, n.data)                  // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{&leftTop, n}} // new
 		p.hashesEver++
 
@@ -141,7 +141,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 // So the sequence is: Swap row 0, hash row 1, swap row 1, hash row 2,
 // swap row 2... etc.
 // The tricky part is that we have a big for loop with h being the current
-// height.  When h=0 and we're swapping things on the bottom, we can hash
+// row.  When h=0 and we're swapping things on the bottom, we can hash
 // things at row 1 (h+1).  Before we start swapping row 1, we need to be sure
 // that all hashing for row 1 has finished.
 
@@ -150,7 +150,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	if len(dels) == 0 {
 		return nil // that was quick
 	}
-	ph := p.height() // height of pollard
+	ph := p.rows() // rows of pollard
 	nextNumLeaves := p.numLeaves - uint64(len(dels))
 
 	if p.positionMap != nil { // if fulpol, remove hashes from posMap
@@ -240,7 +240,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	// fmt.Printf("pretop %s", p.toString())
 	// set new tops
-	nextTopPoss, _ := getTopsReverse(nextNumLeaves, ph)
+	nextTopPoss, _ := getRootsReverse(nextNumLeaves, ph)
 	nexTops := make([]polNode, len(nextTopPoss))
 	for i, _ := range nexTops {
 		nt, ntsib, _, err := p.grabPos(nextTopPoss[i])
@@ -266,7 +266,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 }
 
 func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
-	if !inForest(pos, p.numLeaves, p.height()) {
+	if !inForest(pos, p.numLeaves, p.rows()) {
 		// fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
@@ -274,22 +274,22 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	hn.position = up1(pos, p.height())
+	hn.position = parent(pos, p.rows())
 	return hn, nil
 }
 
 // swapNodes swaps the nodes at positions a and b.
 // returns a hashable node with b, bsib, and bpar
-func (p *Pollard) swapNodes(s arrow, height uint8) (*hashableNode, error) {
-	if !inForest(s.from, p.numLeaves, p.height()) ||
-		!inForest(s.to, p.numLeaves, p.height()) {
+func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
+	if !inForest(s.from, p.numLeaves, p.rows()) ||
+		!inForest(s.to, p.numLeaves, p.rows()) {
 		return nil, fmt.Errorf("swapNodes %d %d out of bounds", s.from, s.to)
 	}
 
 	if p.positionMap != nil {
-		a := childMany(s.from, height, p.height())
-		b := childMany(s.to, height, p.height())
-		run := uint64(1 << height)
+		a := childMany(s.from, row, p.rows())
+		b := childMany(s.to, row, p.rows())
+		run := uint64(1 << row)
 		// happens before the actual swap, so swapping a and b
 		for i := uint64(0); i < run; i++ {
 			p.positionMap[p.read(a+i).Mini()] = b + i
@@ -321,7 +321,7 @@ func (p *Pollard) swapNodes(s arrow, height uint8) (*hashableNode, error) {
 
 	// fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
 	// r.from, a.data[:4], r.to, b.data[:4])
-	bhn.position = up1(s.to, p.height())
+	bhn.position = parent(s.to, p.rows())
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)
 	if err != nil {
@@ -369,7 +369,7 @@ func (p *Pollard) grabPos(
 		// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
 		if n == nil {
 			// if a node doesn't exist, crash
-			err = fmt.Errorf("grab %d nil neice at height %d", pos, h)
+			err = fmt.Errorf("grab %d nil neice on row %d", pos, h)
 			return
 		}
 	}
@@ -386,7 +386,7 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
 	// need to figure out offsets for smaller trees.
 
-	if !inForest(pos, p.numLeaves, p.height()) {
+	if !inForest(pos, p.numLeaves, p.rows()) {
 		//	if pos >= (p.numLeaves*2)-1 {
 		return nil, nil,
 			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)
@@ -404,22 +404,22 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	sibs := make([]*polNode, branchLen+1)
 	// at the top of the branch, the proof and sib are the same
 	proofs[branchLen], sibs[branchLen] = n, n
-	for h := branchLen - 1; h < 64; h-- {
-		lr := (bits >> h) & 1
+	for r := branchLen - 1; r < 64; r-- {
+		lr := (bits >> r) & 1
 
 		sib := n.niece[lr^1]
 		n = n.niece[lr]
 
-		if n == nil && h != 0 {
+		if n == nil && r != 0 {
 			return nil, nil, fmt.Errorf(
-				"descend pos %d nil neice at height %d", pos, h)
+				"descend pos %d nil neice at row %d", pos, r)
 		}
 
 		if n != nil {
 			// fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
 		}
 
-		proofs[h], sibs[h] = n, sib
+		proofs[r], sibs[r] = n, sib
 
 	}
 	//	fmt.Printf("\n")
@@ -433,17 +433,17 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 func (p *Pollard) toFull() (*Forest, error) {
 
 	ff := NewForest(nil)
-	ff.height = p.height()
+	ff.rows = p.rows()
 	ff.numLeaves = p.numLeaves
 	ff.data = new(ramForestData)
-	ff.data.resize(2 << ff.height)
+	ff.data.resize(2 << ff.rows)
 	if p.numLeaves == 0 {
 		return ff, nil
 	}
 
 	//	for topIdx, top := range p.tops {
 	//	}
-	for i := uint64(0); i < (2<<ff.height)-1; i++ {
+	for i := uint64(0); i < (2<<ff.rows)-1; i++ {
 		_, sib, err := p.descendToPos(i)
 		if err != nil {
 			//	fmt.Printf("can't get pos %d: %s\n", i, err.Error())

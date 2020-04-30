@@ -10,7 +10,7 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty Hash
 	// TODO so many things to change
 	ok, proofMap := VerifyBatchProof(
-		bp, p.topHashesReverse(), p.numLeaves, p.height())
+		bp, p.topHashesReverse(), p.numLeaves, p.rows())
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
 	}
@@ -25,14 +25,14 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 		}
 		node := &p.tops[tNum]
 		h := branchLen - 1
-		pos := upMany(target, branchLen, p.height()) // this works but...
+		pos := parentMany(target, branchLen, p.rows()) // this works but...
 		// we should have a way to get the top positions from just p.tops
 
 		// fmt.Printf("ingest adding target %d to top %04x h %d brlen %d bits %04b\n",
 		// target, node.data[:4], h, branchLen, bits&((2<<h)-1))
 
 		lr := (bits >> h) & 1
-		pos = (child(pos, p.height())) | lr
+		pos = (child(pos, p.rows())) | lr
 		// descend until we hit the bottom, populating as we go
 		// also populate siblings...
 		for {
@@ -60,7 +60,7 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 			h--
 			node = node.niece[lr]
 			lr = (bits >> h) & 1
-			pos = (child(pos, p.height()) ^ 2) | lr
+			pos = (child(pos, p.rows()) ^ 2) | lr
 		}
 
 		// TODO do you need this at all?  If the Verify part already happened, maybe not?

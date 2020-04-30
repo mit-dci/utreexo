@@ -26,7 +26,7 @@ func NewFullPollard() Pollard {
 
 // VerifyBatchProof :
 func (p *Pollard) VerifyBatchProof(bp BatchProof) bool {
-	ok, _ := VerifyBatchProof(bp, p.topHashesReverse(), p.numLeaves, p.height())
+	ok, _ := VerifyBatchProof(bp, p.topHashesReverse(), p.numLeaves, p.rows())
 	return ok
 }
 
@@ -120,8 +120,8 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 		proofTree[pos^1] = p.read(pos ^ 1)
 		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
-		treeTop := detectSubTreeHeight(pos, p.numLeaves, p.height())
-		pos = up1(pos, p.height())
+		treeTop := detectSubTreeRows(pos, p.numLeaves, p.rows())
+		pos = parent(pos, p.rows())
 		// go bottom to top and add siblings into the partial tree
 		// start at height 1 though; we always populate the bottom leaf and sibling
 		// This either gets to the top, or intersects before that and deletes
@@ -149,15 +149,15 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 			}
 			// fmt.Printf("add proof from pos %d\n", pos^1)
 			proofTree[pos^1] = p.read(pos ^ 1)
-			pos = up1(pos, p.height())
+			pos = parent(pos, p.rows())
 		}
 	}
 
-	var nodeSlice []Node
+	var nodeSlice []node
 
 	// run through partial tree to turn it into a slice
 	for pos, hash := range proofTree {
-		nodeSlice = append(nodeSlice, Node{pos, hash})
+		nodeSlice = append(nodeSlice, node{pos, hash})
 	}
 	// fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
 

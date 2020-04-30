@@ -31,8 +31,8 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	}
 
 	// build empty proof branch slice of siblings
-	// not full height -- need to figure out which subtree it's in!
-	pr.Siblings = make([]Hash, detectSubTreeHeight(pos, f.numLeaves, f.height))
+	// not full rows -- need to figure out which subtree it's in!
+	pr.Siblings = make([]Hash, detectSubTreeRows(pos, f.numLeaves, f.rows))
 	pr.Payload = f.data.read(pos)
 	if pr.Payload != wanted {
 		return pr, fmt.Errorf(
@@ -49,11 +49,11 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 		if pr.Siblings[h] == empty {
 			fmt.Printf(f.ToString())
 			return pr, fmt.Errorf(
-				"prove: got empty hash proving leaf %d height %d pos %d nl %d",
+				"prove: got empty hash proving leaf %d row %d pos %d nl %d",
 				pr.Position, h, pos^1, f.numLeaves)
 		}
 		//		fmt.Printf("sibling %d: pos %d %x\n", h, pos^1, pr.Siblings[h][:4])
-		pos = up1(pos, f.height)
+		pos = parent(pos, f.rows)
 
 	}
 
@@ -82,30 +82,30 @@ func (f *Forest) Verify(p Proof) bool {
 	n := p.Payload
 	//	fmt.Printf("check position %d %04x inclusion\n", p.Position, n[:4])
 
-	subTreeHeight := detectSubTreeHeight(p.Position, f.numLeaves, f.height)
-	// there should be as many siblings as the height of the sub-tree
-	// (height of 0 means there is no siblings; there is no proof)
-	if uint8(len(p.Siblings)) != subTreeHeight {
+	subTreeRows := detectSubTreeRows(p.Position, f.numLeaves, f.rows)
+	// there should be as many siblings as the rows of the sub-tree
+	// (0 rows means there are no siblings; there is no proof)
+	if uint8(len(p.Siblings)) != subTreeRows {
 		fmt.Printf("proof wrong size, expect %d got %d\n",
-			subTreeHeight, len(p.Siblings))
+			subTreeRows, len(p.Siblings))
 		return false
 	}
 	//	fmt.Printf("verify %04x\n", n[:4])
 	for h, sib := range p.Siblings {
 		// fmt.Printf("%04x ", sib[:4])
-		// detect current height parity
+		// detect current row parity
 		if 1<<uint(h)&p.Position == 0 {
 			//			fmt.Printf("compute %04x %04x -> ", n[:4], sib[:4])
-			n = Parent(n, sib)
+			n = parentHash(n, sib)
 			//			fmt.Printf("%04x\n", n[:4])
 		} else {
 			//			fmt.Printf("compute %04x %04x -> ", sib[:4], n[:4])
-			n = Parent(sib, n)
+			n = parentHash(sib, n)
 			//			fmt.Printf("%04x\n", n[:4])
 		}
 	}
 
-	subTreeRootPos := upMany(p.Position, subTreeHeight, f.height)
+	subTreeRootPos := parentMany(p.Position, subTreeRows, f.rows)
 
 	if subTreeRootPos >= f.data.size() {
 		fmt.Printf("ERROR don't have root at %d\n", subTreeRootPos)
@@ -209,10 +209,10 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 		proofTree[pos^1] = f.data.read(pos ^ 1)
 		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
-		treeTop := detectSubTreeHeight(pos, f.numLeaves, f.height)
-		pos = up1(pos, f.height)
+		treeTop := detectSubTreeRows(pos, f.numLeaves, f.rows)
+		pos = parent(pos, f.rows)
 		// go bottom to top and add siblings into the partial tree
-		// start at height 1 though; we always populate the bottom leaf and sibling
+		// start at row 1 though; we always populate the bottom leaf and sibling
 		// This either gets to the top, or intersects before that and deletes
 		// something
 		for h := uint8(1); h < treeTop; h++ {
@@ -238,15 +238,15 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 			}
 			// fmt.Printf("add proof from pos %d\n", pos^1)
 			proofTree[pos^1] = f.data.read(pos ^ 1)
-			pos = up1(pos, f.height)
+			pos = parent(pos, f.rows)
 		}
 	}
 
-	var nodeSlice []Node
+	var nodeSlice []node
 
 	// run through partial tree to turn it into a slice
 	for pos, hash := range proofTree {
-		nodeSlice = append(nodeSlice, Node{pos, hash})
+		nodeSlice = append(nodeSlice, node{pos, hash})
 	}
 	// fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
 
@@ -269,6 +269,6 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 
 // VerifyBatchProof :
 func (f *Forest) VerifyBatchProof(bp BatchProof) bool {
-	ok, _ := VerifyBatchProof(bp, f.GetTops(), f.numLeaves, f.height)
+	ok, _ := VerifyBatchProof(bp, f.GetTops(), f.numLeaves, f.rows)
 	return ok
 }

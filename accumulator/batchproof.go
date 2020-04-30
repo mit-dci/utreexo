@@ -108,21 +108,21 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // forest in the blockproof
 func VerifyBatchProof(
 	bp BatchProof, tops []Hash,
-	numLeaves uint64, height uint8) (bool, map[uint64]Hash) {
+	numLeaves uint64, forestRows uint8) (bool, map[uint64]Hash) {
 
 	// if nothing to prove, it worked
 	if len(bp.Targets) == 0 {
 		return true, nil
 	}
 
-	proofmap, err := bp.Reconstruct(numLeaves, height)
+	proofmap, err := bp.Reconstruct(numLeaves, forestRows)
 	if err != nil {
 		fmt.Printf("VerifyBlockProof Reconstruct ERROR %s\n", err.Error())
 		return false, proofmap
 	}
 
 	//	fmt.Printf("Reconstruct complete\n")
-	topposs, topheights := getTopsReverse(numLeaves, height)
+	rootPositions, rootRows := getRootsReverse(numLeaves, forestRows)
 
 	// partial forest is built, go through and hash everything to make sure
 	// you get the right tops
@@ -144,7 +144,7 @@ func VerifyBatchProof(
 	var left, right uint64
 	// iterate through height
 
-	for h := uint8(0); h <= height; h++ {
+	for r := uint8(0); r <= forestRows; r++ {
 		// iterate through tagged positions in this row
 
 		for len(tagRow) > 0 {
@@ -159,13 +159,13 @@ func VerifyBatchProof(
 				tagRow = tagRow[1:]
 			}
 
-			// check for tops
+			// check for roots
 			if verbose {
-				fmt.Printf("left %d toppos %d\n", left, topposs[0])
+				fmt.Printf("left %d rootPoss %d\n", left, rootPositions[0])
 			}
-			if left == topposs[0] {
+			if left == rootPositions[0] {
 				if verbose {
-					fmt.Printf("one left in tagrow; should be top\n")
+					fmt.Printf("one left in tagrow; should be root\n")
 				}
 				computedRoot, ok := proofmap[left]
 				if !ok {
@@ -173,24 +173,24 @@ func VerifyBatchProof(
 					return false, nil
 				}
 				if computedRoot != tops[0] {
-					fmt.Printf("height %d top, pos %d expect %04x got %04x\n",
-						h, left, tops[0][:4], computedRoot[:4])
+					fmt.Printf("height %d root, pos %d expect %04x got %04x\n",
+						r, left, tops[0][:4], computedRoot[:4])
 					return false, nil
 				}
 				// otherwise OK and pop of the top
 				tops = tops[1:]
-				topposs = topposs[1:]
-				topheights = topheights[1:]
+				rootPositions = rootPositions[1:]
+				rootRows = rootRows[1:]
 				break
 			}
 
-			parpos := up1(left, height)
+			parpos := parent(left, forestRows)
 			if verbose {
 				fmt.Printf("%d %04x %d %04x -> %d\n",
 					left, proofmap[left], right, proofmap[right], parpos)
 			}
 			// this will crash if either is 0000
-			parhash := Parent(proofmap[left], proofmap[right])
+			parhash := parentHash(proofmap[left], proofmap[right])
 			nextRow = append(nextRow, parpos)
 			proofmap[parpos] = parhash
 		}
@@ -198,11 +198,11 @@ func VerifyBatchProof(
 		tagRow = nextRow
 		nextRow = []uint64{}
 		// if done with row and there's a top left on this row, remove it
-		if len(topheights) > 0 && topheights[0] == h {
+		if len(rootRows) > 0 && rootRows[0] == r {
 			// bit ugly to do these all separately eh
 			tops = tops[1:]
-			topposs = topposs[1:]
-			topheights = topheights[1:]
+			rootPositions = rootPositions[1:]
+			rootRows = rootRows[1:]
 		}
 	}
 
@@ -213,11 +213,11 @@ func VerifyBatchProof(
 // into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
 // bp.Targets
 func (bp *BatchProof) Reconstruct(
-	numleaves uint64, forestHeight uint8) (map[uint64]Hash, error) {
+	numleaves uint64, forestRows uint8) (map[uint64]Hash, error) {
 
 	if verbose {
-		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fh %d\n",
-			len(bp.Targets), len(bp.Proof), numleaves, forestHeight)
+		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fr %d\n",
+			len(bp.Targets), len(bp.Proof), numleaves, forestRows)
 	}
 
 	proofTree := make(map[uint64]Hash)
@@ -226,12 +226,12 @@ func (bp *BatchProof) Reconstruct(
 		return proofTree, nil
 	}
 	targets := bp.Targets
-	tops, topheights := getTopsReverse(numleaves, forestHeight)
+	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
 
 	//	fmt.Printf("first needrow len %d\n", len(needRow))
 	if verbose {
-		fmt.Printf("%d tops:\t", len(tops))
-		for _, t := range tops {
+		fmt.Printf("%d tops:\t", len(rootPositions))
+		for _, t := range rootPositions {
 			fmt.Printf("%d ", t)
 		}
 	}
@@ -241,7 +241,7 @@ func (bp *BatchProof) Reconstruct(
 	// a bit strange; pop off 2 hashes at a time, and either 1 or 2 positions
 	for len(bp.Proof) > 0 && len(targets) > 0 {
 
-		if targets[0] == tops[0] {
+		if targets[0] == rootPositions[0] {
 			// target is a top; this can only happen at row 0;
 			// there's a "proof" but don't need to actually send it
 			if verbose {
@@ -265,7 +265,7 @@ func (bp *BatchProof) Reconstruct(
 
 		proofTree[left] = bp.Proof[0]
 		proofTree[right] = bp.Proof[1]
-		needSibRow = append(needSibRow, up1(targets[0], forestHeight))
+		needSibRow = append(needSibRow, parent(targets[0], forestRows))
 		// pop em off
 		if verbose {
 			fmt.Printf("placed proofs at %d, %d\n", left, right)
@@ -282,13 +282,13 @@ func (bp *BatchProof) Reconstruct(
 	}
 
 	// deal with 0-row root, regardless of whether it was used or not
-	if topheights[0] == 0 {
-		tops = tops[1:]
-		topheights = topheights[1:]
+	if rootRows[0] == 0 {
+		rootPositions = rootPositions[1:]
+		rootRows = rootRows[1:]
 	}
 
 	// now all that's left is the proofs. go bottom to top and iterate the haveRow
-	for h := uint8(1); h < forestHeight; h++ {
+	for h := uint8(1); h < forestRows; h++ {
 		//		fmt.Printf("h %d needrow:\t", h)
 		//		for _, np := range needRow {
 		//			fmt.Printf(" %d", np)
@@ -297,15 +297,15 @@ func (bp *BatchProof) Reconstruct(
 
 		for len(needSibRow) > 0 {
 			// if this is a top, it's not needed or given
-			if needSibRow[0] == tops[0] {
+			if needSibRow[0] == rootPositions[0] {
 				//				fmt.Printf("\t\tzzz pos %d is h %d top\n", needSibRow[0], h)
 				needSibRow = needSibRow[1:]
-				tops = tops[1:]
-				topheights = topheights[1:]
+				rootPositions = rootPositions[1:]
+				rootRows = rootRows[1:]
 				continue
 			}
 			// either way, we'll get the parent
-			nextRow = append(nextRow, up1(needSibRow[0], forestHeight))
+			nextRow = append(nextRow, parent(needSibRow[0], forestRows))
 
 			// if we have both siblings here, don't need any proof
 			if len(needSibRow) > 1 && needSibRow[0]^1 == needSibRow[1] {
@@ -314,7 +314,7 @@ func (bp *BatchProof) Reconstruct(
 			} else {
 				// return error if we need a proof and can't get it
 				if len(bp.Proof) == 0 {
-					fmt.Printf("tops %v needsibrow %v\n", tops, needSibRow)
+					fmt.Printf("roots %v needsibrow %v\n", rootPositions, needSibRow)
 					return nil, fmt.Errorf("h %d no proofs left at pos %d ",
 						h, needSibRow[0]^1)
 				}
@@ -328,9 +328,9 @@ func (bp *BatchProof) Reconstruct(
 		}
 
 		// there could be a top at this height that we don't need / use; if so pop it
-		if len(topheights) > 0 && topheights[0] == h {
-			tops = tops[1:]
-			topheights = topheights[1:]
+		if len(rootRows) > 0 && rootRows[0] == h {
+			rootPositions = rootPositions[1:]
+			rootRows = rootRows[1:]
 		}
 
 		needSibRow = nextRow

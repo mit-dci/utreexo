@@ -33,13 +33,8 @@ type arrow struct {
 	from, to uint64
 }
 
-type arrowh struct {
-	from, to uint64
-	ht       uint8
-}
-
 // Node :
-type Node struct {
+type node struct {
 	Pos uint64
 	Val Hash
 }
@@ -59,7 +54,7 @@ type simLeaf struct {
 
 // Parent gets you the merkle parent.  So far no committing to height.
 // if the left child is zero it should crash...
-func Parent(l, r Hash) Hash {
+func parentHash(l, r Hash) Hash {
 	var empty [32]byte
 	if l == empty {
 		panic("got a left empty here. ")
@@ -68,24 +63,6 @@ func Parent(l, r Hash) Hash {
 		panic("got a right empty here. ")
 	}
 	return sha256.Sum256(append(l[:], r[:]...))
-}
-
-// XORParent is just xor, it's faster and works the same if non-adversarial
-func xParent(l, r Hash) Hash {
-	var x [32]byte
-	if l == x {
-		panic("got a left empty here. ")
-	}
-	if r == x {
-		panic("got a right empty here. ")
-	}
-
-	for i := range l {
-		x[i] = l[i] ^ r[i]
-	}
-	// just xor, it's faster and works the same if just testing
-
-	return x
 }
 
 // SimChain is for testing; it spits out "blocks" of adds and deletes

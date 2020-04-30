@@ -31,7 +31,7 @@ type hashNpos struct {
 func hashOne(l, r Hash, p uint64, hchan chan hashNpos) {
 	var hnp hashNpos
 	hnp.pos = p
-	hnp.result = Parent(l, r)
+	hnp.result = parentHash(l, r)
 	hchan <- hnp
 }
 
@@ -40,8 +40,8 @@ func (f *Forest) hashRow(dirtpositions []uint64) error {
 	hchan := make(chan hashNpos, 256) // probably don't need that big a buffer
 
 	for _, hp := range dirtpositions {
-		l := f.data.read(child(hp, f.height))
-		r := f.data.read(child(hp, f.height) | 1)
+		l := f.data.read(child(hp, f.rows))
+		r := f.data.read(child(hp, f.rows) | 1)
 		// fmt.Printf("hash pos %d l %x r %x\n", hp, l[:4], r[:4])
 		go hashOne(l, r, hp, hchan)
 	}

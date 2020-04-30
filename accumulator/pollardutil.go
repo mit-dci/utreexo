@@ -37,7 +37,7 @@ type polNode struct {
 
 // auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
 func (n *polNode) auntOp() Hash {
-	return Parent(n.niece[0].data, n.niece[1].data)
+	return parentHash(n.niece[0].data, n.niece[1].data)
 }
 
 // auntable tells you if you can call auntOp on a node
@@ -114,7 +114,7 @@ func polSwap(a, asib, b, bsib *polNode) error {
 	return nil
 }
 
-func (p *Pollard) height() uint8 { return treeHeight(p.numLeaves) }
+func (p *Pollard) rows() uint8 { return treeRows(p.numLeaves) }
 
 // TopHashesReverse is ugly and returns the top hashes in reverse order
 // ... which is the order full forest is using until I can refactor that code

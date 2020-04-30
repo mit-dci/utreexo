@@ -41,7 +41,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// how many leaves were there at the last block?
 	prevNumLeaves := f.numLeaves + prevDels - prevAdds
 	// run the transform to figure out where things came from
-	leafMoves := floorTransform(ub.positions, prevNumLeaves, f.height)
+	leafMoves := floorTransform(ub.positions, prevNumLeaves, f.rows)
 	reverseArrowSlice(leafMoves)
 	// first undo the leaves added in the last block
 	f.numLeaves -= prevAdds

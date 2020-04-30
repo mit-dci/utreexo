@@ -54,31 +54,12 @@ func PopCount(i uint64) uint8 {
 	return count
 }
 
-// ExtractTwins takes a slice of ints and extracts the adjacent ints
-// which differ only in the LSB.  It then returns two slices: one of the
-// *even* twins (no odds), and one of the ints with no siblings
-func ExtractTwins(nodes []uint64) (twins, onlychildren []uint64) {
-	// "twins" are siblings where both are deleted (I guess)
-
-	// run through the slice of deletions, and 'dedupe' by extracting siblings
-	// (if both siblings are being deleted, nothing needs to move on that row)
-	for i := 0; i < len(nodes); i++ {
-		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
-			twins = append(twins, nodes[i])
-			i++ // skip one here
-		} else {
-			onlychildren = append(onlychildren, nodes[i])
-		}
-	}
-	return
-}
-
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
-func ExTwin2(nodes []uint64, height uint8) (parents, dels []uint64) {
+func ExtractTwins(nodes []uint64, height uint8) (parents, dels []uint64) {
 	for i := 0; i < len(nodes); i++ {
 		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
-			parents = append(parents, up1(nodes[i], height))
+			parents = append(parents, parent(nodes[i], height))
 			i++ // skip one here
 		} else {
 			dels = append(dels, nodes[i])
@@ -87,50 +68,30 @@ func ExTwin2(nodes []uint64, height uint8) (parents, dels []uint64) {
 	return
 }
 
-// tree height 0 means there's 1 lead.  Tree height 1 means 2 leaves.
-// so it's 1<<height leaves.  ... pretty sure about this
-
-// detectSubTreeHight finds the height of the subtree a given LEAF position and
-// the number of leaves (& the forest height which is redundant)
+// detectSubTreeHight finds the rows of the subtree a given LEAF position and
+// the number of leaves (& the forest rows which is redundant)
 // This thing is a tricky one.  Makes a weird serpinski fractal thing if
 // you map it out in a table.
 // Oh wait it's pretty simple.  Go left to right through the bits of numLeaves,
 // and subtract that from position until it goes negative.
 // (Does not work for nodes not at the bottom)
-func detectSubTreeHeight(
-	position uint64, numLeaves uint64, forestHeight uint8) (h uint8) {
-	for h = forestHeight; position >= (1<<h)&numLeaves; h-- {
+func detectSubTreeRows(
+	position uint64, numLeaves uint64, forestRows uint8) (h uint8) {
+	for h = forestRows; position >= (1<<h)&numLeaves; h-- {
 		position -= (1 << h) & numLeaves
 	}
 	return
 }
 
 // TODO optimization if it's worth it --
-// in many cases detectHeight is called often and you're only looking for a
-// change in height.  So we could instead have a "higher" function
+// in many cases detectRow is called often and you're only looking for a
+// change in row.  So we could instead have a "higher" function
 // where it just looks for a different number of leading 0s.
-// Actually I will write that function here
 
-// higher returns how much higher position is than h.  if position is at height
-// h, it returns 0.  if position is lower than h it's undefined (probably 0)
-// untested
-func higher(position uint64, h, forestHeight uint8) uint8 {
-	mask := uint64(2<<forestHeight) - 1
-	mask &= mask << h // puts 0s on the right
-	if position < mask {
-		return 0
-	}
-	marker := uint64(1 << forestHeight)
-	for ; position&marker != 0; h++ {
-		marker >>= 1
-	}
-	return h
-}
-
-// detectHeight finds the current height of your node given the node
-// position and the total forest height.. counts preceding 1 bits.
-func detectHeight(position uint64, forestHeight uint8) uint8 {
-	marker := uint64(1 << forestHeight)
+// detectRow finds the current row of your node given the node
+// position and the total forest rows.. counts preceding 1 bits.
+func detectRow(position uint64, forestRows uint8) uint8 {
+	marker := uint64(1 << forestRows)
 	var h uint8
 	for h = 0; position&marker != 0; h++ {
 		marker >>= 1
@@ -144,13 +105,13 @@ func detectHeight(position uint64, forestHeight uint8) uint8 {
 // we return the opposite of bits, because we always invert em...
 func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// TODO replace ?
-	// similarities to detectSubTreeHeight() with more features
-	// maybe replace detectSubTreeHeight with this
+	// similarities to detectSubTreeRows() with more features
+	// maybe replace detectSubTreeRows with this
 
-	// th = tree height
-	th := treeHeight(numLeaves)
-	// nh = target node height
-	nh := detectHeight(position, th) // there's probably a fancier way with bits...
+	// th = tree rows
+	tr := treeRows(numLeaves)
+	// nh = target node row
+	nr := detectRow(position, tr) // there's probably a fancier way with bits...
 
 	var biggerTrees uint8
 
@@ -165,13 +126,13 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// B: mask
 	// C: 1<<th & numleaves (treeSize)
 	// The predicate is then if (A&B >= C)
-	// A is position up-shifted by the height of the node we're targeting.
+	// A is position up-shifted by the row of the node we're targeting.
 	// B is the "mask" we use in other functions; a bunch of 0s at the MSB side
 	// and then a bunch of 1s on the LSB side, such that we can use bitwise AND
 	// to discard high bits.  Together, A&B is shifting position up by nh bits,
 	// and then discarding (zeroing out) the high bits.  This is the same as in
 	// childMany.  C checks for whether a tree exists at the current tree
-	// height.  If there is no tree at th, C is 0.  If there is a tree, it will
+	// rows.  If there is no tree at th, C is 0.  If there is a tree, it will
 	// return a power of 2: the base size of that tree.
 	// The C term actually is used 3 times here, which is ugly; it's redefined
 	// right on the next line.
@@ -180,37 +141,37 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// covered by that tree from the position, and proceed to the next tree,
 	// skipping trees that don't exist.
 
-	for ; (position<<nh)&((2<<th)-1) >= (1<<th)&numLeaves; th-- {
-		treeSize := (1 << th) & numLeaves
+	for ; (position<<nr)&((2<<tr)-1) >= (1<<tr)&numLeaves; tr-- {
+		treeSize := (1 << tr) & numLeaves
 		if treeSize != 0 {
 			position -= treeSize
 			biggerTrees++
 		}
 	}
-	return biggerTrees, th - nh, ^position
+	return biggerTrees, tr - nr, ^position
 }
 
 // child gives you the left child (LSB will be 0)
-func child(position uint64, forestHeight uint8) uint64 {
-	mask := uint64(2<<forestHeight) - 1
+func child(position uint64, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
 	return (position << 1) & mask
 }
 
 // go down drop times (always left; LSBs will be 0) and return position
-func childMany(position uint64, drop, forestHeight uint8) uint64 {
-	mask := uint64(2<<forestHeight) - 1
+func childMany(position uint64, drop, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
 	return (position << drop) & mask
 }
 
 // Return the position of the parent of this position
-func up1(position uint64, forestHeight uint8) uint64 {
-	return (position >> 1) | (1 << forestHeight)
+func parent(position uint64, forestRows uint8) uint64 {
+	return (position >> 1) | (1 << forestRows)
 }
 
 // go up rise times and return the position
-func upMany(position uint64, rise, forestHeight uint8) uint64 {
-	mask := uint64(2<<forestHeight) - 1
-	return (position>>rise | (mask << uint64(forestHeight-(rise-1)))) & mask
+func parentMany(position uint64, rise, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
+	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
 }
 
 // cousin returns a cousin: the child of the parent's sibling.
@@ -228,12 +189,12 @@ func cousin(position uint64) uint64 {
 // go down and right until reaching the bottom, then check if over numleaves
 // (same as childmany)
 // TODO fix.  says 14 is inforest with 5 leaves...
-func inForest(pos, numLeaves uint64, forestHeight uint8) bool {
+func inForest(pos, numLeaves uint64, forestRows uint8) bool {
 	// quick yes:
 	if pos < numLeaves {
 		return true
 	}
-	marker := uint64(1 << forestHeight)
+	marker := uint64(1 << forestRows)
 	mask := (marker << 1) - 1
 	if pos >= mask {
 		return false
@@ -246,63 +207,63 @@ func inForest(pos, numLeaves uint64, forestHeight uint8) bool {
 
 // given n leaves, how deep is the tree?
 // iterate shifting left until greater than n
-func treeHeight(n uint64) (e uint8) {
+func treeRows(n uint64) (e uint8) {
 	for ; (1 << e) < n; e++ {
 	}
 	return
 }
 
-// topPos: given a number of leaves and a height, find the position of the
-// root at that height.  Does not return an error if there's no root at that
-// height so watch out and check first.  Checking is easy: leaves & (1<<h)
-func topPos(leaves uint64, h, forestHeight uint8) uint64 {
-	mask := uint64(2<<forestHeight) - 1
+// topPos: given a number of leaves and a row, find the position of the
+// root at that row.  Does not return an error if there's no root at that
+// row so watch out and check first.  Checking is easy: leaves & (1<<h)
+func topPos(leaves uint64, h, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
 	before := leaves & (mask << (h + 1))
-	shifted := (before >> h) | (mask << (forestHeight - (h - 1)))
+	shifted := (before >> h) | (mask << (forestRows - (h - 1)))
 	return shifted & mask
 }
 
-// getTops gives you the positions of the tree tops, given a number of leaves.
+// getroots gives you the positions of the tree roots, given a number of leaves.
 // LOWEST first (right to left) (blarg change this)
-func getTopsReverse(leaves uint64, forestHeight uint8) (tops []uint64, heights []uint8) {
+func getRootsReverse(leaves uint64, forestRows uint8) (roots []uint64, rows []uint8) {
 	position := uint64(0)
 
-	// go left to right.  But append in reverse so that the tops are low to high
+	// go left to right.  But append in reverse so that the roots are low to high
 	// run though all bit positions.  if there's a 1, build a tree atop
 	// the current position, and move to the right.
-	for height := forestHeight; position < leaves; height-- {
-		if (1<<height)&leaves != 0 {
+	for row := forestRows; position < leaves; row-- {
+		if (1<<row)&leaves != 0 {
 			// build a tree here
-			top := upMany(position, height, forestHeight)
-			tops = append([]uint64{top}, tops...)
-			heights = append([]uint8{height}, heights...)
-			position += 1 << height
+			root := parentMany(position, row, forestRows)
+			roots = append([]uint64{root}, roots...)
+			rows = append([]uint8{row}, rows...)
+			position += 1 << row
 		}
 	}
 	return
 }
 
-// subTreePositions takes in a node position and forestHeight and returns the
+// subTreePositions takes in a node position and forestRows and returns the
 // positions of all children that need to move AND THE NODE ITSELF.  (it works nicer that way)
 // Also it returns where they should move to, given the destination of the
 // sub-tree root.
 // can also be used with the "to" return discarded to just enumerate a subtree
 // swap tells whether to activate the sibling swap to try to preserve order
 func subTreePositions(
-	subroot uint64, moveTo uint64, forestHeight uint8) (as []arrow) {
+	subroot uint64, moveTo uint64, forestRows uint8) (as []arrow) {
 
-	subHeight := detectHeight(subroot, forestHeight)
-	//	fmt.Printf("node %d height %d\n", subroot, subHeight)
+	subRow := detectRow(subroot, forestRows)
+	//	fmt.Printf("node %d row %d\n", subroot, subRow)
 	rootDelta := int64(moveTo) - int64(subroot)
 	// do this with nested loops instead of recursion ... because that's
 	// more fun.
-	// h is out height in the forest
+	// r is out row in the forest
 	// start at the bottom and ascend
-	for height := uint8(0); height <= subHeight; height++ {
-		// find leftmost child at this height; also calculate the
+	for r := uint8(0); r <= subRow; r++ {
+		// find leftmost child on this row; also calculate the
 		// delta (movement) for this row
-		depth := subHeight - height
-		leftmost := childMany(subroot, depth, forestHeight)
+		depth := subRow - r
+		leftmost := childMany(subroot, depth, forestRows)
 		rowDelta := rootDelta << depth // usually negative
 		for i := uint64(0); i < 1<<depth; i++ {
 			// loop left to right
@@ -318,10 +279,10 @@ func subTreePositions(
 // TODO: unused? useless?
 // subTreeLeafRange gives the range of leaves under a node
 func subTreeLeafRange(
-	subroot uint64, forestHeight uint8) (uint64, uint64) {
+	subroot uint64, forestRows uint8) (uint64, uint64) {
 
-	h := detectHeight(subroot, forestHeight)
-	left := childMany(subroot, h, forestHeight)
+	h := detectRow(subroot, forestRows)
+	left := childMany(subroot, h, forestRows)
 	run := uint64(1 << h)
 
 	return left, run
@@ -329,14 +290,14 @@ func subTreeLeafRange(
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrow) toLeaves(h, forestHeight uint8) []arrow {
+func (a *arrow) toLeaves(h, forestRows uint8) []arrow {
 	if h == 0 {
 		return []arrow{*a}
 	}
 
 	run := uint64(1 << h)
-	fromStart := childMany(a.from, h, forestHeight)
-	toStart := childMany(a.to, h, forestHeight)
+	fromStart := childMany(a.from, h, forestRows)
+	toStart := childMany(a.to, h, forestRows)
 
 	leaves := make([]arrow, run)
 	for i := uint64(0); i < run; i++ {
@@ -351,7 +312,7 @@ func sortUint64s(s []uint64) {
 	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
 }
 
-func sortNodeSlice(s []Node) {
+func sortNodeSlice(s []node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
@@ -393,32 +354,6 @@ func reversePolNodeSlice(a []polNode) {
 		a[i], a[j] = a[j], a[i]
 	}
 }
-
-// topUp takes a slice of arrows (in order) and returns an expanded slice of
-// arrows that contains all the parents of the given slice up to roots
-func topUp(rows [][]uint64, fh uint8) {
-	// kindof inefficient since we actually start at row 1 and rows[0] is
-	// always empty when we call this... but mergeSortedSlices has the
-	// shortcut so shouldn't matter
-	nextrow := []uint64{}
-	for h := uint8(0); h <= fh; h++ { // go through each row
-		fmt.Printf("h %d merge %v and %v\n", h, rows[h], nextrow)
-		rows[h] = mergeSortedSlices(rows[h], nextrow)
-		nextrow = []uint64{} // clear nextrow
-		for i := 0; i < len(rows[h]); i++ {
-			nextrow = append(nextrow, up1(rows[h][i], fh))
-			// skip the next one if it's a sibling
-			if i+1 < len(rows[h]) && rows[h][i]|1 == rows[h][i+1] {
-				i++
-			}
-		}
-	}
-}
-
-// sortArrows sorts them by from
-// func sortArrows(s []arrow) {
-// 	sort.Slice(s, func(a, b int) bool { return s[a].from < s[b].from })
-// }
 
 // mergeSortedSlices takes two slices (of uint64s; though this seems
 // genericizable in that it's just < and > operators) and merges them into
@@ -503,9 +438,9 @@ func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
 
 // BinString prints out the whole thing.  Only viable for small forests
 func BinString(leaves uint64) string {
-	fh := treeHeight(leaves)
+	fh := treeRows(leaves)
 
-	// tree height should be 6 or less
+	// tree rows should be 6 or less
 	if fh > 6 {
 		return "forest too big to print "
 	}
