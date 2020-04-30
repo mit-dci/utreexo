@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/btcsuite/btcd/wire"
-	bridge "github.com/mit-dci/utreexo/cmd/bridgenode"
-	"github.com/mit-dci/utreexo/cmd/csn"
+	bridge "github.com/mit-dci/utreexo/bridgenode"
+	"github.com/mit-dci/utreexo/csn"
 )
 
 var msg = `
