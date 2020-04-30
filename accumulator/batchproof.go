@@ -106,7 +106,7 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // if we don't do weird stuff with overly-high forests, which we might)
 // it returns a bool of whether the proof worked, and a map of the sparse
 // forest in the blockproof
-func VerifyBatchProof(
+func verifyBatchProof(
 	bp BatchProof, roots []Hash,
 	numLeaves uint64, forestRows uint8) (bool, map[uint64]Hash) {
 

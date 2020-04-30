@@ -42,21 +42,9 @@ func DedupeHashSlices(as *[]Leaf, bs *[]Hash) {
 	*bs = bnew
 }
 
-// PopCount returns the number of 1 bits in a uint64
-func PopCount(i uint64) uint8 {
-	var count uint8
-	for i != 0 {
-		if i&1 == 1 {
-			count++
-		}
-		i >>= 1
-	}
-	return count
-}
-
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
-func ExtractTwins(nodes []uint64, row uint8) (parents, dels []uint64) {
+func extractTwins(nodes []uint64, row uint8) (parents, dels []uint64) {
 	for i := 0; i < len(nodes); i++ {
 		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
 			parents = append(parents, parent(nodes[i], row))

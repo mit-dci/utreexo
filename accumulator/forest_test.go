@@ -147,7 +147,7 @@ func Test2Fwd1Back(t *testing.T) {
 func TestAddxDelyLeftFullBatchProof(t *testing.T) {
 	for x := 0; x < 10; x++ {
 		for y := 0; y < x; y++ {
-			err := AddDelFullBatchProof(x, y)
+			err := addDelFullBatchProof(x, y)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +157,7 @@ func TestAddxDelyLeftFullBatchProof(t *testing.T) {
 }
 
 // Add x, delete y, construct & reconstruct blockproof
-func AddDelFullBatchProof(nAdds, nDels int) error {
+func addDelFullBatchProof(nAdds, nDels int) error {
 	if nDels > nAdds-1 {
 		return fmt.Errorf("too many deletes")
 	}
@@ -188,7 +188,7 @@ func AddDelFullBatchProof(nAdds, nDels int) error {
 	}
 
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
-	worked, _ := VerifyBatchProof(bp, f.getRoots(), f.numLeaves, f.rows)
+	worked, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, f.rows)
 	//	worked := f.VerifyBatchProof(bp)
 
 	if !worked {

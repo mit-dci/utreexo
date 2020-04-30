@@ -26,7 +26,7 @@ func NewFullPollard() Pollard {
 
 // VerifyBatchProof :
 func (p *Pollard) VerifyBatchProof(bp BatchProof) bool {
-	ok, _ := VerifyBatchProof(bp, p.rootHashesReverse(), p.numLeaves, p.rows())
+	ok, _ := verifyBatchProof(bp, p.rootHashesReverse(), p.numLeaves, p.rows())
 	return ok
 }
 

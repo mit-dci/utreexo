@@ -9,7 +9,7 @@ import (
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty Hash
 	// TODO so many things to change
-	ok, proofMap := VerifyBatchProof(
+	ok, proofMap := verifyBatchProof(
 		bp, p.rootHashesReverse(), p.numLeaves, p.rows())
 	if !ok {
 		return fmt.Errorf("block proof mismatch")

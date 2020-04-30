@@ -11,7 +11,7 @@ func TestExTwin(t *testing.T) {
 
 	dels := []uint64{0, 1, 2, 3, 9}
 
-	parents, dels := ExtractTwins(dels, 4)
+	parents, dels := extractTwins(dels, 4)
 
 	fmt.Printf("parents %v dels %v\n", parents, dels)
 }

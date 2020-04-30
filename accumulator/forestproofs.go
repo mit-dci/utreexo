@@ -269,6 +269,6 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 
 // VerifyBatchProof :
 func (f *Forest) VerifyBatchProof(bp BatchProof) bool {
-	ok, _ := VerifyBatchProof(bp, f.getRoots(), f.numLeaves, f.rows)
+	ok, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, f.rows)
 	return ok
 }

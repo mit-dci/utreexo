@@ -49,7 +49,7 @@ func remTrans2(
 		delRemains := len(dels)%2 != 0
 
 		// *** dedupe
-		twinNextDels, dels = ExtractTwins(dels, forestRows)
+		twinNextDels, dels = extractTwins(dels, forestRows)
 		// *** swap
 		for len(dels) > 1 {
 			swaps[r] = append(swaps[r],
