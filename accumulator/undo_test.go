@@ -99,7 +99,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		return err
 	}
 	fmt.Printf(f.ToString())
-	beforeTops := f.GetTops()
+	beforeTops := f.getRoots()
 	for i, h := range beforeTops {
 		fmt.Printf("beforeTops %d %x\n", i, h)
 	}
@@ -127,7 +127,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	}
 	fmt.Printf(f.ToString())
 	fmt.Printf(ub.ToString())
-	afterTops := f.GetTops()
+	afterTops := f.getRoots()
 	for i, h := range afterTops {
 		fmt.Printf("afterTops %d %x\n", i, h)
 	}
@@ -137,7 +137,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		return err
 	}
 
-	undoneTops := f.GetTops()
+	undoneTops := f.getRoots()
 	for i, h := range undoneTops {
 		fmt.Printf("undoneTops %d %x\n", i, h)
 	}

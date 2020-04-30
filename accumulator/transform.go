@@ -22,35 +22,27 @@ Maybe modify removeTransform to do this; that might make leaftransform easier
 */
 
 // remTrans2 -- simpler and better -- lets see if it works!
-// returns a slice of swapswithHeight in bottom to top order
-// also returns all "dirty" positions which need to be hashed after the swaps
-
 func remTrans2(
 	dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 	nextNumLeaves := numLeaves - uint64(len(dels))
-	// fHeight := treeHeight(numLeaves)
-	// var swaps, collapses []arrowh
 	swaps := make([][]arrow, forestRows)
 	// a bit ugly: collapses also [][], but only have 1 or 0 things per row
 	collapses := make([][]arrow, forestRows)
-	// fmt.Printf("rt2 on %v\n", dels)
 	// per row: sort / extract / swap / root / promote
 	for r := uint8(0); r < forestRows; r++ {
 		// start with nil swap slice, not a single {0, 0}
 		swaps[r] = nil
-		// fmt.Printf("del %v col %v h %d\n", dels, collapses, h)
 		if len(dels) == 0 { // if there's nothing to delete, we're done
 			break
 		}
 		var twinNextDels, swapNextDels []uint64
 		rootPresent := numLeaves&(1<<r) != 0
-		rootPos := topPos(numLeaves, r, forestRows)
+		rootPos := rootPosition(numLeaves, r, forestRows)
 
 		// *** delroot
 		// TODO would be more elegant not to have this here.  But
 		// easier to just delete the root first...
 		if rootPresent && dels[len(dels)-1] == rootPos {
-			// fmt.Printf("deleting root %d\n", rootPos)
 			dels = dels[:len(dels)-1] // pop off the last del
 			rootPresent = false
 		}
@@ -58,7 +50,6 @@ func remTrans2(
 
 		// *** dedupe
 		twinNextDels, dels = ExtractTwins(dels, forestRows)
-		// fmt.Printf("tnd %v dels %v\n", twinNextDels, dels)
 		// *** swap
 		for len(dels) > 1 {
 			swaps[r] = append(swaps[r],
@@ -77,18 +68,16 @@ func remTrans2(
 		// these are special cases, need to run collapseCheck
 		// on the collapses with later rows of swaps
 		if rootPresent && !delRemains { // stash root (collapses)
-			rootSrc := topPos(numLeaves, r, forestRows)
-			rootDest := topPos(nextNumLeaves, r, forestRows)
+			rootSrc := rootPosition(numLeaves, r, forestRows)
+			rootDest := rootPosition(nextNumLeaves, r, forestRows)
 			collapses[r] = []arrow{arrow{from: rootSrc, to: rootDest}}
-			// fmt.Printf("%d root, collapse to %d\n", rootSrc, rootDest)
 		}
 		// no root but 1 del: sibling becomes root & collapses
 		// in this case, mark as deleted
 		if !rootPresent && delRemains {
 			rootSrc := dels[0] ^ 1
-			rootDest := topPos(nextNumLeaves, r, forestRows)
+			rootDest := rootPosition(nextNumLeaves, r, forestRows)
 			collapses[r] = []arrow{arrow{from: rootSrc, to: rootDest}}
-			// fmt.Printf("%d promote to root, collapse to %d\n", rootSrc, rootDest)
 			swapNextDels = append(swapNextDels, parent(dels[0], forestRows))
 		}
 
@@ -96,10 +85,7 @@ func remTrans2(
 		// done with this row, move dels and proceed up to next row
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
-	// fmt.Printf("swaps %v\n", swaps)
-	// fmt.Printf("collapses: %v\n", collapses)
 	swapCollapses(swaps, collapses, forestRows)
-	// fmt.Printf("rt2 swaps %v collapses %v\n", swaps, collapses)
 
 	// merge slice of collapses, placing the collapses at the end of the row
 	// ... is that the right place to put them....?
@@ -108,7 +94,6 @@ func remTrans2(
 			swaps[i] = append(swaps[i], c[0])
 		}
 	}
-	// topUp(fHeight)
 	return swaps
 }
 
@@ -118,7 +103,7 @@ func swapCollapses(swaps, collapses [][]arrow, forestRows uint8) {
 		return
 	}
 	for r := uint8(len(collapses)) - 1; r != 0; r-- {
-		// go through through swaps at this height
+		// go through through swaps on this row
 		// fmt.Printf("h %d swaps %v\n", h, swaps)
 		for _, s := range swaps[r] {
 			for cr := uint8(0); cr < r; cr++ {
@@ -155,7 +140,7 @@ func swapCollapses(swaps, collapses [][]arrow, forestRows uint8) {
 }
 
 // swapIfDescendant checks if a.to or a.from is above b
-// ah= height of a, bh=height of b, fh= forest height
+// ar= row of a, br=row of b
 // if a.to xor a.from is above b, it will also calculates the new position of b
 // were it swapped to being below the other one.  Returns what to xor b.to.
 func swapIfDescendant(a, b arrow, ar, br, forestRows uint8) (subMask uint64) {
@@ -167,8 +152,8 @@ func swapIfDescendant(a, b arrow, ar, br, forestRows uint8) (subMask uint64) {
 	bup := parentMany(b.to, hdiff, forestRows)
 	if (bup == a.from) != (bup == a.to) {
 		// b.to is below one but not both, swap it
-		topMask := a.from ^ a.to
-		subMask = topMask << hdiff
+		rootMask := a.from ^ a.to
+		subMask = rootMask << hdiff
 		// fmt.Printf("collapse %d->%d to %d->%d because of %v\n",
 		// b.from, b.to, b.from, b.to^subMask, a)
 
@@ -182,7 +167,7 @@ func swapIfDescendant(a, b arrow, ar, br, forestRows uint8) (subMask uint64) {
 // floorTransform calls remTrans2 and expands it to give all leaf swaps
 func floorTransform(
 	dels []uint64, numLeaves uint64, forestRows uint8) []arrow {
-	// fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, fHeight)
+	// fmt.Printf("(undo) call remTr %v nl %d fh %d\n", dels, numLeaves, forestRows)
 	swaprows := remTrans2(dels, numLeaves, forestRows)
 	// fmt.Printf("td output %v\n", swaprows)
 	var floor []arrow

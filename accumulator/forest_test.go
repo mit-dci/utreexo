@@ -188,7 +188,7 @@ func AddDelFullBatchProof(nAdds, nDels int) error {
 	}
 
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
-	worked, _ := VerifyBatchProof(bp, f.GetTops(), f.numLeaves, f.rows)
+	worked, _ := VerifyBatchProof(bp, f.getRoots(), f.numLeaves, f.rows)
 	//	worked := f.VerifyBatchProof(bp)
 
 	if !worked {

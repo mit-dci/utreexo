@@ -10,7 +10,7 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty Hash
 	// TODO so many things to change
 	ok, proofMap := VerifyBatchProof(
-		bp, p.topHashesReverse(), p.numLeaves, p.rows())
+		bp, p.rootHashesReverse(), p.numLeaves, p.rows())
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
 	}
@@ -23,13 +23,10 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 			// if there's no branch (1-tree) nothing to prove
 			continue
 		}
-		node := &p.tops[tNum]
+		node := &p.roots[tNum]
 		h := branchLen - 1
 		pos := parentMany(target, branchLen, p.rows()) // this works but...
-		// we should have a way to get the top positions from just p.tops
-
-		// fmt.Printf("ingest adding target %d to top %04x h %d brlen %d bits %04b\n",
-		// target, node.data[:4], h, branchLen, bits&((2<<h)-1))
+		// we should have a way to get the root positions from just p.roots
 
 		lr := (bits >> h) & 1
 		pos = (child(pos, p.rows())) | lr

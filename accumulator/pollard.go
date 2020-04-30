@@ -23,8 +23,8 @@ func (p *Pollard) Modify(adds []Leaf, dels []uint64) error {
 
 // Stats :
 func (p *Pollard) Stats() string {
-	s := fmt.Sprintf("pol nl %d tops %d he %d re %d ow %d \n",
-		p.numLeaves, len(p.tops), p.hashesEver, p.rememberEver, p.overWire)
+	s := fmt.Sprintf("pol nl %d roots %d he %d re %d ow %d \n",
+		p.numLeaves, len(p.roots), p.hashesEver, p.rememberEver, p.overWire)
 	return s
 }
 
@@ -42,8 +42,8 @@ func (p *Pollard) add(adds []Leaf) error {
 
 	// General algo goes:
 	// 1 make a new node & assign data (no neices; at bottom)
-	// 2 if this node is on a row where there's already a top,
-	// then swap neices with that top, hash the two datas, and build a new
+	// 2 if this node is on a row where there's already a root,
+	// then swap neices with that root, hash the two datas, and build a new
 	// node 1 higher pointing to them.
 	// goto 2.
 
@@ -66,27 +66,21 @@ func (p *Pollard) add(adds []Leaf) error {
 			return err
 		}
 	}
-	//	fmt.Printf("added %d, nl %d tops %d\n", len(adds), p.numLeaves, len(p.tops))
+	//	fmt.Printf("added %d, nl %d roots %d\n", len(adds), p.numLeaves, len(p.roots))
 	return nil
 }
 
 /*
 Algo explanation with catchy terms: grab, swap, hash, new, pop
-we're iterating through the tops of the pollard.  Tops correspond with 1-bits
-in numLeaves.  As soon as we hit a 0 (no top), we're done.
+we're iterating through the roots of the pollard.  Roots correspond with 1-bits
+in numLeaves.  As soon as we hit a 0 (no root), we're done.
 
-grab: Grab the lowest top.
-pop: pop off the lowest top.
+grab: Grab the lowest root.
+pop: pop off the lowest root.
 swap: swap the neices of the node we grabbed and our new node
-hash: calculate the hashes of the old top and new node
-new: create a new parent node, with the hash as data, and the old top / prev new node
+hash: calculate the hashes of the old root and new node
+new: create a new parent node, with the hash as data, and the old root / prev new node
 as neices (not neices though, children)
-
-It's pretty dense: very little code but a bunch going on.
-
-Not that `p.tops = p.tops[:len(p.tops)-1]` would be a memory leak (I guess?)
-but that leftTop is still being pointed to anyway do it's OK.
-
 */
 
 // add a single leaf to a pollard
@@ -108,25 +102,25 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 	// if add is forgetable, forget all the new nodes made
 	var h uint8
-	// loop until we find a zero; destroy tops until you make one
+	// loop until we find a zero; destroy roots until you make one
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
-		leftTop := p.tops[len(p.tops)-1]                           // grab
-		p.tops = p.tops[:len(p.tops)-1]                            // pop
-		leftTop.niece, n.niece = n.niece, leftTop.niece            // swap
-		nHash := parentHash(leftTop.data, n.data)                  // hash
-		n = &polNode{data: nHash, niece: [2]*polNode{&leftTop, n}} // new
+		leftRoot := p.roots[len(p.roots)-1]                         // grab
+		p.roots = p.roots[:len(p.roots)-1]                          // pop
+		leftRoot.niece, n.niece = n.niece, leftRoot.niece           // swap
+		nHash := parentHash(leftRoot.data, n.data)                  // hash
+		n = &polNode{data: nHash, niece: [2]*polNode{&leftRoot, n}} // new
 		p.hashesEver++
 
 		n.prune()
 
 	}
 
-	// the new tops are all the 1 bits above where we got to, and nothing below where
-	// we got to.  We've already deleted all the lower tops, so append the new
+	// the new roots are all the 1 bits above where we got to, and nothing below where
+	// we got to.  We've already deleted all the lower roots, so append the new
 	// one we just made onto the end.
 
-	p.tops = append(p.tops, *n)
+	p.roots = append(p.roots, *n)
 	p.numLeaves++
 	return nil
 }
@@ -135,7 +129,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 // descend to the place you already just decended to perform swapNodes.
 
 // rem2 outline:
-// perform swaps & hash, then select new tops.
+// perform swaps & hash, then select new roots.
 
 // swap & hash is row based.  Swaps on row 0 cause hashing on row 1.
 // So the sequence is: Swap row 0, hash row 1, swap row 1, hash row 2,
@@ -238,30 +232,30 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
-	// fmt.Printf("pretop %s", p.toString())
-	// set new tops
-	nextTopPoss, _ := getRootsReverse(nextNumLeaves, ph)
-	nexTops := make([]polNode, len(nextTopPoss))
-	for i, _ := range nexTops {
-		nt, ntsib, _, err := p.grabPos(nextTopPoss[i])
+	// fmt.Printf("preroot %s", p.toString())
+	// set new roots
+	nextRootPositions, _ := getRootsReverse(nextNumLeaves, ph)
+	nextRoots := make([]polNode, len(nextRootPositions))
+	for i, _ := range nextRoots {
+		nt, ntsib, _, err := p.grabPos(nextRootPositions[i])
 		if err != nil {
 			return err
 		}
 		if nt == nil {
-			return fmt.Errorf("want top %d at %d but nil", i, nextTopPoss[i])
+			return fmt.Errorf("want root %d at %d but nil", i, nextRootPositions[i])
 		}
 		if ntsib == nil {
-			// when turning a node into a top, it's "nieces" are really children,
+			// when turning a node into a root, it's "nieces" are really children,
 			// so should become it's sibling's nieces.
 			nt.chop()
 		} else {
 			nt.niece = ntsib.niece
 		}
-		nexTops[i] = *nt
+		nextRoots[i] = *nt
 	}
 	p.numLeaves = nextNumLeaves
-	reversePolNodeSlice(nexTops)
-	p.tops = nexTops
+	reversePolNodeSlice(nextRoots)
+	p.roots = nextRoots
 	return nil
 }
 
@@ -341,11 +335,11 @@ func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
-	if tree >= uint8(len(p.tops)) {
-		err = fmt.Errorf("want tree %d but only %d trees", tree, len(p.tops))
+	if tree >= uint8(len(p.roots)) {
+		err = fmt.Errorf("want tree %d but only %d trees", tree, len(p.roots))
 		return
 	}
-	n, nsib = &p.tops[tree], &p.tops[tree]
+	n, nsib = &p.roots[tree], &p.roots[tree]
 	hn = &hashableNode{dest: n, sib: nsib}
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
@@ -373,7 +367,7 @@ func (p *Pollard) grabPos(
 			return
 		}
 	}
-	return // only happens when returning a top
+	return // only happens when returning a root
 }
 
 // DescendToPos returns the path to the target node, as well as the sibling
@@ -394,10 +388,10 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 
 	// first find which tree we're in
 	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
-	//	fmt.Printf("DO pos %d top %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
-	n := &p.tops[tNum]
+	//	fmt.Printf("DO pos %d root %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
+	n := &p.roots[tNum]
 	if branchLen > 64 {
-		return nil, nil, fmt.Errorf("dtp top %d is nil", tNum)
+		return nil, nil, fmt.Errorf("dtp root %d is nil", tNum)
 	}
 
 	proofs := make([]*polNode, branchLen+1)
@@ -441,8 +435,6 @@ func (p *Pollard) toFull() (*Forest, error) {
 		return ff, nil
 	}
 
-	//	for topIdx, top := range p.tops {
-	//	}
 	for i := uint64(0); i < (2<<ff.rows)-1; i++ {
 		_, sib, err := p.descendToPos(i)
 		if err != nil {
@@ -470,7 +462,7 @@ func (p *Pollard) ToString() string {
 }
 
 // equalToForest checks if the pollard has the same leaves as the forest.
-// doesn't check tops and stuff
+// doesn't check roots and stuff
 func (p *Pollard) equalToForest(f *Forest) bool {
 	if p.numLeaves != f.numLeaves {
 		return false

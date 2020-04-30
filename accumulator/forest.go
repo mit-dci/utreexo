@@ -199,7 +199,7 @@ func (f *Forest) swapNodes(s arrow, row uint8) error {
 	}
 
 	// start at the bottom and go to the top
-	for h := uint8(0); h <= row; h++ {
+	for r := uint8(0); r <= row; r++ {
 		// fmt.Printf("shr %d %d %d\n", a, b, run)
 		f.data.swapHashRange(a, b, run)
 		a = parent(a, f.rows)
@@ -276,10 +276,10 @@ func (f *Forest) reHash(dirt []uint64) error {
 			}
 			if len(rootPositions) == 0 {
 				return fmt.Errorf(
-					"currentRow %v no tops remaining, this shouldn't happen",
+					"currentRow %v no roots remaining, this shouldn't happen",
 					currentRow)
 			}
-			// also skip if this is a top
+			// also skip if this is a root
 			if pos == rootPositions[0] {
 				continue
 			}
@@ -338,9 +338,9 @@ func (f *Forest) addv2(adds []Leaf) {
 		f.data.write(pos, n)
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
 			// grab, pop, swap, hash, new
-			top := f.data.read(rootPositions[h]) // grab
-			//			fmt.Printf("grabbed %x from %d\n", top[:12], tops[h])
-			n = parentHash(top, n)    // hash
+			root := f.data.read(rootPositions[h]) // grab
+			//			fmt.Printf("grabbed %x from %d\n", root[:12], roots[h])
+			n = parentHash(root, n)   // hash
 			pos = parent(pos, f.rows) // rise
 			f.data.write(pos, n)      // write
 			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
@@ -459,7 +459,7 @@ func (f *Forest) reMap(destRows uint8) error {
 	return nil
 }
 
-// sanity checks forest sanity: does numleaves make sense, and are the tops
+// sanity checks forest sanity: does numleaves make sense, and are the roots
 // populated?
 func (f *Forest) sanity() error {
 
@@ -470,7 +470,7 @@ func (f *Forest) sanity() error {
 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
 	for _, t := range rootPositions {
 		if f.data.read(t) == empty {
-			return fmt.Errorf("Forest has %d leaves %d roots, but top @%d is empty",
+			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
 				f.numLeaves, len(rootPositions), t)
 		}
 	}
@@ -567,17 +567,17 @@ func (f *Forest) WriteForest(miscForestFile *os.File) error {
 	return nil
 }
 
-// GetTops returns all the tops of the trees
-func (f *Forest) GetTops() []Hash {
+// getRoots returns all the roots of the trees
+func (f *Forest) getRoots() []Hash {
 
 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
-	tops := make([]Hash, len(rootPositions))
+	roots := make([]Hash, len(rootPositions))
 
-	for i := range tops {
-		tops[i] = f.data.read(rootPositions[i])
+	for i := range roots {
+		roots[i] = f.data.read(rootPositions[i])
 	}
 
-	return tops
+	return roots
 }
 
 // Stats :

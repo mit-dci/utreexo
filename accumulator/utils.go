@@ -56,10 +56,10 @@ func PopCount(i uint64) uint8 {
 
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
-func ExtractTwins(nodes []uint64, height uint8) (parents, dels []uint64) {
+func ExtractTwins(nodes []uint64, row uint8) (parents, dels []uint64) {
 	for i := 0; i < len(nodes); i++ {
 		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
-			parents = append(parents, parent(nodes[i], height))
+			parents = append(parents, parent(nodes[i], row))
 			i++ // skip one here
 		} else {
 			dels = append(dels, nodes[i])
@@ -213,10 +213,10 @@ func treeRows(n uint64) (e uint8) {
 	return
 }
 
-// topPos: given a number of leaves and a row, find the position of the
+// rootPosition: given a number of leaves and a row, find the position of the
 // root at that row.  Does not return an error if there's no root at that
 // row so watch out and check first.  Checking is easy: leaves & (1<<h)
-func topPos(leaves uint64, h, forestRows uint8) uint64 {
+func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 	mask := uint64(2<<forestRows) - 1
 	before := leaves & (mask << (h + 1))
 	shifted := (before >> h) | (mask << (forestRows - (h - 1)))

@@ -26,7 +26,7 @@ func NewFullPollard() Pollard {
 
 // VerifyBatchProof :
 func (p *Pollard) VerifyBatchProof(bp BatchProof) bool {
-	ok, _ := VerifyBatchProof(bp, p.topHashesReverse(), p.numLeaves, p.rows())
+	ok, _ := VerifyBatchProof(bp, p.rootHashesReverse(), p.numLeaves, p.rows())
 	return ok
 }
 
@@ -120,13 +120,13 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 		proofTree[pos^1] = p.read(pos ^ 1)
 		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
 
-		treeTop := detectSubTreeRows(pos, p.numLeaves, p.rows())
+		treeRoot := detectSubTreeRows(pos, p.numLeaves, p.rows())
 		pos = parent(pos, p.rows())
 		// go bottom to top and add siblings into the partial tree
-		// start at height 1 though; we always populate the bottom leaf and sibling
+		// start at row 1 though; we always populate the bottom leaf and sibling
 		// This either gets to the top, or intersects before that and deletes
 		// something
-		for h := uint8(1); h < treeTop; h++ {
+		for r := uint8(1); r < treeRoot; r++ {
 			// check if the sibling is already there, in which case we're done
 			// also check if the parent itself is there, in which case we delete it!
 			// I think this with the early ignore at the bottom make it optimal

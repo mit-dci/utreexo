@@ -107,8 +107,8 @@ func pollardRandomRemember(blocks int32) error {
 			return fmt.Errorf("pollard and forest leaves differ")
 		}
 
-		fullTops := f.GetTops()
-		polTops := p.topHashesReverse()
+		fullTops := f.getRoots()
+		polTops := p.rootHashesReverse()
 
 		// check that tops match
 		if len(fullTops) != len(polTops) {
