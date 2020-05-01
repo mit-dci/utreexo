@@ -322,8 +322,15 @@ func genDels(bnr util.BlockAndRev) (
 			}
 			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
 			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
+			delLeaves = append(delLeaves, l)
 		}
 	}
+
+	delHashes = make([]accumulator.Hash, len(delLeaves))
+	for i, l := range delLeaves {
+		delHashes[i] = l.LeafHash()
+	}
+
 	return
 }
 
