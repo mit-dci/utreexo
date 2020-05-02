@@ -130,7 +130,11 @@ func BlockAndProofReader(
 // block 1.
 func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	block wire.MsgBlock, err error) {
-
+	if tipnum == 0 {
+		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		return
+	}
+	tipnum--
 	var datFile [4]byte
 	var offset [4]byte
 
@@ -189,13 +193,12 @@ func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []accumulator.Leaf
 			}
 			l.Amt = out.Value
 			l.PkScript = out.PkScript
-
 			// Don't need to save leafData here
 			// dataleaves = append(dataleaves, l)
-
 			var uleaf accumulator.Leaf
 			uleaf.Hash = l.LeafHash()
 			hashleaves = append(hashleaves, uleaf)
+			// fmt.Printf("add %s\n", l.ToString())
 		}
 	}
 	return

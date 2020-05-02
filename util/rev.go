@@ -65,6 +65,11 @@ type TxInUndo struct {
 // GetRevBlock gets a single block from the rev*.dat file given the height
 func GetRevBlock(height int32, revOffsetFileName string) (
 	rBlock RevBlock, err error) {
+	if height == 0 {
+		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		return
+	}
+	height--
 
 	var datFile [4]byte
 	var offset [4]byte

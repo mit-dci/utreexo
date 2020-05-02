@@ -246,7 +246,7 @@ func genBlockProof(delLeaves []util.LeafData, delHashes []accumulator.Hash,
 	// blk*.dat files which have already been vetted by Bitcoin Core
 	batchProof, err := f.ProveBatch(delHashes)
 	if err != nil {
-		return blockP, fmt.Errorf("ProveBlock failed at block %d %s %s",
+		return blockP, fmt.Errorf("ProveBatch failed at block %d %s %s",
 			height+1, f.Stats(), err.Error())
 	}
 	if len(batchProof.Targets) != len(delLeaves) {
@@ -291,7 +291,7 @@ func genDels(bnr util.BlockAndRev) (
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
-		err = fmt.Errorf("block %d %d txs but %d rev txs",
+		err = fmt.Errorf("genDels block %d %d txs but %d rev txs",
 			bnr.Height, len(bnr.Blk.Transactions), len(bnr.Rev.Txs))
 		return
 	}
@@ -302,7 +302,7 @@ func genDels(bnr util.BlockAndRev) (
 		txinblock--
 		// make sure there's the same number of txins
 		if len(tx.TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
-			err = fmt.Errorf("block %d tx %d has %d inputs but %d rev entries",
+			err = fmt.Errorf("genDels block %d tx %d has %d inputs but %d rev entries",
 				bnr.Height, txinblock+1,
 				len(tx.TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
 			return
@@ -314,12 +314,9 @@ func genDels(bnr util.BlockAndRev) (
 
 			l.Outpoint = txin.PreviousOutPoint
 			l.Height = bnr.Rev.Txs[txinblock].TxIn[i].Height
+			l.Coinbase = bnr.Rev.Txs[txinblock].TxIn[i].Coinbase
 			// TODO get blockhash from headers here -- empty for now
 			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
-
-			if txinblock == 0 {
-				l.Coinbase = true
-			}
 			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
 			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
 			delLeaves = append(delLeaves, l)
@@ -329,6 +326,7 @@ func genDels(bnr util.BlockAndRev) (
 	delHashes = make([]accumulator.Hash, len(delLeaves))
 	for i, l := range delLeaves {
 		delHashes[i] = l.LeafHash()
+		// fmt.Printf("del %s\n", l.ToString())
 	}
 
 	return

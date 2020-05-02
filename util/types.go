@@ -93,6 +93,18 @@ type LeafData struct {
 	PkScript  []byte
 }
 
+// turn a LeafData into bytes
+func (l *LeafData) ToString() (s string) {
+	s = l.Outpoint.String()
+	// s += fmt.Sprintf(" bh %x ", l.BlockHash)
+	s += fmt.Sprintf("h %d ", l.Height)
+	s += fmt.Sprintf("cb %v ", l.Coinbase)
+	s += fmt.Sprintf("amt %d ", l.Amt)
+	s += fmt.Sprintf("pks %x ", l.PkScript)
+	s += fmt.Sprintf("%x", l.LeafHash())
+	return
+}
+
 func LeafDataFromBytes(b []byte) (LeafData, error) {
 	var l LeafData
 	if len(b) < 80 {
@@ -116,11 +128,11 @@ func LeafDataFromBytes(b []byte) (LeafData, error) {
 func (l *LeafData) ToBytes() (b []byte) {
 	b = append(l.BlockHash[:], l.Outpoint.Hash[:]...)
 	b = append(b, U32tB(l.Outpoint.Index)...)
-	l.Height <<= 1
+	hcb := l.Height << 1
 	if l.Coinbase {
-		l.Height |= 1
+		hcb |= 1
 	}
-	b = append(b, I32tB(l.Height)...)
+	b = append(b, I32tB(hcb)...)
 	b = append(b, I64tB(l.Amt)...)
 	b = append(b, l.PkScript...)
 	return

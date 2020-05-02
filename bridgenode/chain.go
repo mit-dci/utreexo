@@ -64,6 +64,7 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 		var err error
 		fmt.Println("Creating new forestdata")
 		forest, err = createForest()
+		height = 1 // note that blocks start at 1, block 0 doesn't go into set
 		if err != nil {
 			return nil, 0, 0, 0, err
 		}
