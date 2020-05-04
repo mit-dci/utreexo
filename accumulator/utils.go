@@ -10,38 +10,6 @@ import (
 // "verbose" is a global const to get lots of printfs for debugging
 var verbose = false
 
-// DedupeHashSlices is for removing txos that get created & spent in the same block
-// as adds are TTLHashes, takes those in for slice a
-func DedupeHashSlices(as *[]Leaf, bs *[]Hash) {
-	// need to preserve order, so have to do this twice...
-	// build a map and b map
-	ma := make(map[Hash]bool)
-	for _, a := range *as {
-		ma[a.Hash] = true
-	}
-	mb := make(map[Hash]bool)
-	for _, b := range *bs {
-		mb[b] = true
-	}
-	var anew []Leaf
-	var bnew []Hash
-
-	for _, a := range *as {
-		_, there := mb[a.Hash]
-		if !there {
-			anew = append(anew, a)
-		}
-	}
-	for _, b := range *bs {
-		_, there := ma[b]
-		if !there {
-			bnew = append(bnew, b)
-		}
-	}
-	*as = anew
-	*bs = bnew
-}
-
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
 func extractTwins(nodes []uint64, row uint8) (parents, dels []uint64) {

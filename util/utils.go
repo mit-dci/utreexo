@@ -172,7 +172,10 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 }
 
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
-func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []accumulator.Leaf) {
+func BlockToAddLeaves(
+	blk wire.MsgBlock, remember []bool, height int32) (leaves []accumulator.Leaf) {
+
+	txonum := 0
 	// bh := bl.Blockhash
 	for coinbaseif0, tx := range blk.Transactions {
 		// cache txid aka txhash
@@ -195,13 +198,51 @@ func BlockToAdds(blk wire.MsgBlock, height int32) (hashleaves []accumulator.Leaf
 			l.PkScript = out.PkScript
 			// Don't need to save leafData here
 			// dataleaves = append(dataleaves, l)
-			var uleaf accumulator.Leaf
-			uleaf.Hash = l.LeafHash()
-			hashleaves = append(hashleaves, uleaf)
+			uleaf := accumulator.Leaf{Hash: l.LeafHash()}
+			if len(remember) > txonum {
+				uleaf.Remember = remember[txonum]
+			}
+			leaves = append(leaves, uleaf)
 			// fmt.Printf("add %s\n", l.ToString())
+			txonum++
 		}
 	}
 	return
+}
+
+// DedupeBlockTxos is for removing txos that get created & spent in the same block
+// as adds are TTLHashes, takes those in for slice a
+func DedupeBlockTxos(as *[]accumulator.Leaf, bs *[]LeafData) {
+	// need to preserve order, so have to do this twice...
+	// build a map and b map, of hashes
+	ma := make(map[accumulator.Hash]bool)
+	for _, a := range *as {
+		ma[a.Hash] = true
+	}
+	mb := make(map[accumulator.Hash]bool)
+	for _, b := range *bs {
+		mb[b.LeafHash()] = true
+	}
+	// make new slices which will be returned
+	var anew []accumulator.Leaf
+	var bnew []LeafData
+
+	// range through a map, looking for dupes in b map
+	for _, a := range *as {
+		_, there := mb[a.Hash]
+		if !there {
+			anew = append(anew, a)
+		}
+	}
+	// range through b map, looking for dupes in a map
+	for _, b := range *bs {
+		_, there := ma[b.LeafHash()]
+		if !there {
+			bnew = append(bnew, b)
+		}
+	}
+	*as = anew
+	*bs = bnew
 }
 
 // U32tB converts uint32 to 4 bytes.  Always works.

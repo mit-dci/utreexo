@@ -140,7 +140,8 @@ func putBlockInPollard(
 
 	plusstart := time.Now()
 
-	blockAdds := util.BlockToAdds(bnu.Block, bnu.Height)
+	blockAdds := util.BlockToAddLeaves(
+		bnu.Block, bnu.ExtraData.RememberLeaves, bnu.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	donetime := time.Now()

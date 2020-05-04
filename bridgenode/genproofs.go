@@ -108,14 +108,14 @@ func BuildProofs(
 		ttl.WriteBlock(bnr, batchan, &batchwg)
 
 		// Get the add and remove data needed from the block & undo block
-		blockAdds, delLeaves, delHashes, err := genAddDel(bnr)
+		blockAdds, delLeaves, err := genAddDel(bnr)
 		if err != nil {
 			return err
 		}
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
-		blkProof, err := genBlockProof(delLeaves, delHashes, forest, bnr.Height)
+		blkProof, err := genBlockProof(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
@@ -236,21 +236,26 @@ func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
 // inclusion proof from the accumulator.  It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
-func genBlockProof(delLeaves []util.LeafData, delHashes []accumulator.Hash,
-	f *accumulator.Forest, height int32) (
+func genBlockProof(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	util.UData, error) {
 
 	var blockP util.UData
+
+	// make slice of hashes from leafdata
+	delHashes := make([]accumulator.Hash, len(delLeaves))
+	for i, _ := range delLeaves {
+		delHashes[i] = delLeaves[i].LeafHash()
+	}
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
 	batchProof, err := f.ProveBatch(delHashes)
 	if err != nil {
-		return blockP, fmt.Errorf("ProveBatch failed at block %d %s %s",
+		return blockP, fmt.Errorf("genBlockProof failed at block %d %s %s",
 			height+1, f.Stats(), err.Error())
 	}
 	if len(batchProof.Targets) != len(delLeaves) {
-		return blockP, fmt.Errorf("ProveBatch %d targets but %d leafData",
+		return blockP, fmt.Errorf("genBlockProof %d targets but %d leafData",
 			len(batchProof.Targets), len(delLeaves))
 	}
 
@@ -273,21 +278,22 @@ func genBlockProof(delLeaves []util.LeafData, delHashes []accumulator.Hash,
 // latter is just the hash of the former, but if we only return delLeaves we
 // end up hashing them twice which could slow things down.
 func genAddDel(block util.BlockAndRev) (blockAdds []accumulator.Leaf,
-	delLeaves []util.LeafData, delHashes []accumulator.Hash, err error) {
+	delLeaves []util.LeafData, err error) {
 
-	delLeaves, delHashes, err = genDels(block)
+	delLeaves, err = genDels(block)
 	if err != nil {
 		return
 	}
-	blockAdds = util.BlockToAdds(block.Blk, block.Height)
 
-	accumulator.DedupeHashSlices(&blockAdds, &delHashes)
+	// this is bridgenode, so don't need to deal with memorable leaves
+	blockAdds = util.BlockToAddLeaves(block.Blk, nil, block.Height)
+	util.DedupeBlockTxos(&blockAdds, &delLeaves)
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
 func genDels(bnr util.BlockAndRev) (
-	delLeaves []util.LeafData, delHashes []accumulator.Hash, err error) {
+	delLeaves []util.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
@@ -321,12 +327,6 @@ func genDels(bnr util.BlockAndRev) (
 			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
 			delLeaves = append(delLeaves, l)
 		}
-	}
-
-	delHashes = make([]accumulator.Hash, len(delLeaves))
-	for i, l := range delLeaves {
-		delHashes[i] = l.LeafHash()
-		// fmt.Printf("del %s\n", l.ToString())
 	}
 
 	return
