@@ -13,9 +13,9 @@ import (
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
-func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
-	forest *accumulator.Forest, height int32, lastIndexOffsetHeight int32,
-	pOffset int32, err error) {
+func initBridgeNodeState(
+	net wire.BitcoinNet, offsetFinished chan bool) (forest *accumulator.Forest,
+	height int32, lastIndexOffsetHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
 	// if they have new blk*.dat files to sync
@@ -27,46 +27,38 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
 	if util.HasAccess(util.OffsetFilePath) && util.HasAccess(
 		util.RevOffsetFilePath) {
-		var err error
 		lastIndexOffsetHeight, err = restoreLastIndexOffsetHeight(
 			offsetFinished)
 		if err != nil {
-			return nil, 0, 0, 0, err
+			return
 		}
 	} else {
-		var err error
 		fmt.Println("Offsetfile not present or half present." +
 			"Indexing offset for blocks blk*.dat files...")
 		lastIndexOffsetHeight, err = createOffsetData(net, offsetFinished)
 		if err != nil {
-			return nil, 0, 0, 0, err
+			return
 		}
 		fmt.Printf("tip height %d\n", lastIndexOffsetHeight)
 	}
 
 	// Check if the forestdata is present
 	if util.HasAccess(util.ForestFilePath) {
-		var err error
 		fmt.Println("Has access to forestdata, resuming")
 		forest, err = restoreForest()
 		if err != nil {
-			return nil, 0, 0, 0, err
+			return
 		}
 		height, err = restoreHeight()
 		if err != nil {
-			return nil, 0, 0, 0, err
-		}
-		pOffset, err = restoreLastProofFileOffset()
-		if err != nil {
-			return nil, 0, 0, 0, err
+			return
 		}
 	} else {
-		var err error
 		fmt.Println("Creating new forestdata")
 		forest, err = createForest()
 		height = 1 // note that blocks start at 1, block 0 doesn't go into set
 		if err != nil {
-			return nil, 0, 0, 0, err
+			return
 		}
 	}
 
@@ -77,7 +69,7 @@ func initBridgeNodeState(net wire.BitcoinNet, offsetFinished chan bool) (
 // user restarts, they'll be able to resume.
 // Saves height, forest fields, and pOffset
 func saveBridgeNodeData(
-	forest *accumulator.Forest, pOffset int32, height int32) error {
+	forest *accumulator.Forest, height int32) error {
 
 	var fileWait sync.WaitGroup
 	fileWait.Add(1)
@@ -104,22 +96,6 @@ func saveBridgeNodeData(
 			return err
 		}
 		err = forest.WriteForest(miscForestFile)
-		if err != nil {
-			return err
-		}
-		fileWait.Done()
-		return nil
-	}()
-	fileWait.Add(1)
-	// write pOffset
-	go func() error {
-		lastPOffsetFile, err := os.OpenFile(
-			util.LastPOffsetFilePath, os.O_CREATE|os.O_RDWR, 0600)
-		if err != nil {
-			return err
-		}
-		_, err = lastPOffsetFile.WriteAt(
-			util.I32tB(pOffset), 0)
 		if err != nil {
 			return err
 		}

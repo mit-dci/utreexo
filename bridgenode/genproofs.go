@@ -1,7 +1,7 @@
 package bridgenode
 
 import (
-	"bufio"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
@@ -41,7 +41,7 @@ func BuildProofs(
 	util.MakePaths()
 
 	// Init forest and variables. Resumes if the data directory exists
-	forest, height, lastIndexOffsetHeight, pOffset, err :=
+	forest, height, lastIndexOffsetHeight, err :=
 		initBridgeNodeState(net, offsetFinished)
 	if err != nil {
 		panic(err)
@@ -72,28 +72,9 @@ func BuildProofs(
 	// Reads util the lastIndexOffsetHeight
 	go util.BlockAndRevReader(blockAndRevReadQueue,
 		lastIndexOffsetHeight, height)
-
-	// for the pFile
-	proofAndHeightChan := make(chan util.ProofAndHeight, 1)
-	pFile, err := os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-	pFileBuf := bufio.NewWriter(pFile) // buffered write to file
-
-	// for pOffsetFile
-	proofChan := make(chan []byte, 1)
-	pOffsetFile, err := os.OpenFile(
-		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		panic(err)
-	}
-	pOffsetFileBuf := bufio.NewWriter(pOffsetFile) // buffered write to file
-
+	proofChan := make(chan []byte, 10)
 	var fileWait sync.WaitGroup
-	go pFileWorker(proofAndHeightChan, pFileBuf, &fileWait, done)
-	go pOffsetFileWorker(proofChan, &pOffset, pOffsetFileBuf, &fileWait, done)
+	go proofWriterWorker(proofChan, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -115,28 +96,22 @@ func BuildProofs(
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
-		blkProof, err := genBlockProof(delLeaves, forest, bnr.Height)
+		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
 
-		// convert blockproof struct to bytes
-		b := blkProof.ToBytes()
+		// convert UData struct to bytes
+		b := ud.ToBytes()
 
 		// Add to WaitGroup and send data to channel to be written
 		// to disk
 		fileWait.Add(1)
 		proofChan <- b
 
-		// Add to WaitGroup and send data to channel to be written
-		// to disk
-		fileWait.Add(1)
-		proofAndHeightChan <- util.ProofAndHeight{
-			Proof: b, Height: bnr.Height}
-
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, blkProof.AccProof.Targets)
+		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
@@ -159,11 +134,9 @@ func BuildProofs(
 
 	// Wait for the file workers to finish
 	fileWait.Wait()
-	pFileBuf.Flush()
-	pOffsetFileBuf.Flush()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, pOffset, height)
+	err = saveBridgeNodeData(forest, height)
 	if err != nil {
 		panic(err)
 	}
@@ -176,70 +149,89 @@ func BuildProofs(
 
 }
 
+/*
+Proof file format is somewhat like the blk.dat and rev.dat files.  But it's
+always in order!  The offset file is in 8 byte chunks, so to find the proof
+data for block 100 (really 101), seek to byte 800 and read 8 bytes.
+
+The proof file is: 4 bytes empty (zeros for now, could do something else later)
+4 bytes proof length, then the proof data.
+
+Offset file is: 8 byte int64 offset.  Right now it's all 1 big file, can
+change to 4 byte which file and 4 byte offset within file like the blk/rev but
+we're not running on fat32 so works OK for now.
+*/
+
 // pFileWorker takes in blockproof and height information from the channel
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
-func pFileWorker(blockProofAndHeight chan util.ProofAndHeight,
-	pFileBuf *bufio.Writer, fileWait *sync.WaitGroup, done chan bool) {
+func proofWriterWorker(
+	proofChan chan []byte, fileWait *sync.WaitGroup) {
 
-	for {
-
-		bp := <-blockProofAndHeight
-
-		var writebyte []byte
-		// U32tB always returns 4 bytes
-		// Later this could also be changed to magic bytes
-		writebyte = append(writebyte,
-			util.U32tB(uint32(bp.Height+1))...)
-
-		// write the size of the proof
-		writebyte = append(writebyte,
-			util.U32tB(uint32(len(bp.Proof)))...)
-
-		// Write the actual proof
-		writebyte = append(writebyte, bp.Proof...)
-
-		_, err := pFileBuf.Write(writebyte)
-		if err != nil {
-			panic(err)
-		}
-		fileWait.Done()
-	}
-}
-
-// pOffsetFileWorker receives proofs from the channel and writes to disk
-// aynschornously. MUST NOT have more than one worker as the proofoffsets need to be
-// in order.
-func pOffsetFileWorker(proofChan chan []byte, pOffset *int32,
-	pOffsetFileBuf *bufio.Writer, fileWait *sync.WaitGroup, done chan bool) {
-
-	for {
-		bp := <-proofChan
-
-		var writebyte []byte
-		writebyte = append(writebyte, util.I32tB(*pOffset)...)
-
-		// Updates the global proof offset. Need for resuming purposes
-		*pOffset += int32(len(bp)) + int32(8) // add 8 for height bytes and load size
-
-		_, err := pOffsetFileBuf.Write(writebyte)
-		if err != nil {
-			panic(err)
-		}
-
-		fileWait.Done()
+	// for the pFile
+	proofFile, err := os.OpenFile(
+		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
 	}
 
+	offsetFile, err := os.OpenFile(
+		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = offsetFile.Seek(0, 2)
+	if err != nil {
+		panic(err)
+	}
+
+	proofFileLocation, err := proofFile.Seek(0, 2)
+	if err != nil {
+		panic(err)
+
+	}
+	// TODO: optimization - don't write anything to proof file for blocks with
+	// no deletions (inputs).  Lots of em in testnet.  Not so many on mainnet
+	// I guess.  But in testnet would save millions *8 bytes.
+	for {
+		pbytes := <-proofChan
+		// write to offset file first
+		err = binary.Write(offsetFile, binary.BigEndian, proofFileLocation)
+		if err != nil {
+			fmt.Printf(err.Error())
+			return
+		}
+
+		// write to proof file
+		// first write big endian proof size int64
+		err = binary.Write(proofFile, binary.BigEndian, int64(len(pbytes)))
+		if err != nil {
+			fmt.Printf(err.Error())
+			return
+		}
+		proofFileLocation += 8
+
+		// then write the proof
+		written, err := proofFile.Write(pbytes)
+		if err != nil {
+			fmt.Printf(err.Error())
+			return
+		}
+		proofFileLocation += int64(written)
+
+		fileWait.Done()
+	}
 }
 
 // genBlockProof calls forest.ProveBatch with the hash data to get a batched
 // inclusion proof from the accumulator.  It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
-func genBlockProof(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
+func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	util.UData, error) {
 
-	var blockP util.UData
+	var ud util.UData
 
 	// make slice of hashes from leafdata
 	delHashes := make([]accumulator.Hash, len(delLeaves))
@@ -251,11 +243,11 @@ func genBlockProof(delLeaves []util.LeafData, f *accumulator.Forest, height int3
 	// blk*.dat files which have already been vetted by Bitcoin Core
 	batchProof, err := f.ProveBatch(delHashes)
 	if err != nil {
-		return blockP, fmt.Errorf("genBlockProof failed at block %d %s %s",
+		return ud, fmt.Errorf("genBlockProof failed at block %d %s %s",
 			height+1, f.Stats(), err.Error())
 	}
 	if len(batchProof.Targets) != len(delLeaves) {
-		return blockP, fmt.Errorf("genBlockProof %d targets but %d leafData",
+		return ud, fmt.Errorf("genBlockProof %d targets but %d leafData",
 			len(batchProof.Targets), len(delLeaves))
 	}
 
@@ -266,10 +258,10 @@ func genBlockProof(delLeaves []util.LeafData, f *accumulator.Forest, height int3
 	// fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
 	// }
 
-	blockP.AccProof = batchProof
-	blockP.UtxoData = delLeaves
+	ud.AccProof = batchProof
+	ud.UtxoData = delLeaves
 
-	return blockP, nil
+	return ud, nil
 }
 
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and

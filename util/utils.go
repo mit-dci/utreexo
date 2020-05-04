@@ -105,7 +105,33 @@ func BlockAndRevReader(
 // the entire blocktxs and height to bchan with TxToWrite type.
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
-func BlockAndProofReader(
+func UBlockReader(
+	blockChan chan UBlock, maxHeight, curHeight, lookahead int32) {
+	for curHeight != maxHeight {
+
+		// pFile, POffsetFile *os.File
+
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		if err != nil {
+			panic(err)
+		}
+
+		ud, err := GetUDataFromFile(curHeight)
+		if err != nil {
+			panic(err)
+		}
+
+		send := UBlock{Block: blk, Height: curHeight, ExtraData: ud} //Proof: nil}
+
+		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
+		blockChan <- send
+		curHeight++
+	}
+}
+
+// UblockNetworkReader gets Ublocks from the remote host and puts em in the
+// channel.  It'll try to fill the channel buffer.
+func UblockNetworkReader(
 	blockChan chan UBlock,
 	maxHeight, curHeight, lookahead int32) {
 	for curHeight != maxHeight {
@@ -135,8 +161,8 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 		return
 	}
 	tipnum--
-	var datFile [4]byte
-	var offset [4]byte
+
+	var datFile, offset uint32
 
 	offsetFile, err := os.Open(offsetFileName)
 	if err != nil {
@@ -148,17 +174,23 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	offsetFile.Seek(int64(8*tipnum), 0)
 
 	// Read file and offset for the block
-	offsetFile.Read(datFile[:])
-	offsetFile.Read(offset[:])
+	err = binary.Read(offsetFile, binary.BigEndian, &datFile)
+	if err != nil {
+		return
+	}
+	err = binary.Read(offsetFile, binary.BigEndian, &offset)
+	if err != nil {
+		return
+	}
 
-	fileName := fmt.Sprintf("blk%05d.dat", int(BtU32(datFile[:])))
+	fileName := fmt.Sprintf("blk%05d.dat", datFile)
 	// Channel to alert stopParse() that offset
 	f, err := os.Open(fileName)
 	if err != nil {
 		return
 	}
 	// +8 skips the 8 bytes of magicbytes and load size
-	f.Seek(int64(BtU32(offset[:])+8), 0)
+	f.Seek(int64(offset)+8, 0)
 
 	// TODO this is probably expensive. fix
 	err = block.Deserialize(f)
@@ -167,6 +199,63 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 	}
 	f.Close()
 	offsetFile.Close()
+
+	return
+}
+
+// GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat
+// and gives the proof & utxo data back.
+// Don't ask for block 0, there is no proof of that.
+func GetUDataFromFile(tipnum int32) (ud UData, err error) {
+	if tipnum == 0 {
+		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		return
+	}
+	tipnum--
+	var offset int64
+	var size uint32
+	offsetFile, err := os.Open(POffsetFilePath)
+	if err != nil {
+		return
+	}
+
+	proofFile, err := os.Open(PFilePath)
+	if err != nil {
+		return
+	}
+
+	// offset file consists of 8 bytes per block
+	// tipnum * 8 gives us the correct position for that block
+	// Note it's currently a int64, can go down to int32 for split files
+	offsetFile.Seek(int64(8*tipnum), 0)
+	err = binary.Read(offsetFile, binary.BigEndian, &offset)
+	if err != nil {
+		return
+	}
+
+	// +4 because it has an empty 4 non-magic bytes in front now
+	_, err = proofFile.Seek(offset+4, 0)
+	if err != nil {
+		return
+	}
+	err = binary.Read(proofFile, binary.BigEndian, &size)
+	if err != nil {
+		return
+	}
+
+	// +8 skips the 8 bytes of magicbytes and load size
+	// proofFile.Seek(int64(BtU32(offset[:])+8), 0)
+	ubytes := make([]byte, size)
+
+	_, err = proofFile.Read(ubytes)
+	if err != nil {
+		return
+	}
+
+	ud, err = UDataFromBytes(ubytes)
+	if err != nil {
+		return
+	}
 
 	return
 }
@@ -245,7 +334,7 @@ func DedupeBlockTxos(as *[]accumulator.Leaf, bs *[]LeafData) {
 	*bs = bnew
 }
 
-// U32tB converts uint32 to 4 bytes.  Always works.
+// PrefixLen16 puts a 2 byte length prefix in front of a byte slice
 func PrefixLen16(b []byte) []byte {
 	l := uint16(len(b))
 	var buf bytes.Buffer

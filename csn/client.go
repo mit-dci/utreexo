@@ -45,7 +45,7 @@ func IBDClient(net wire.BitcoinNet,
 	// Make neccesary directories
 	util.MakePaths()
 
-	p, height, lastIndexOffsetHeight, err := initCSNState()
+	p, height, knownTipHeight, err := initCSNState()
 	if err != nil {
 		panic(err)
 	}
@@ -59,7 +59,7 @@ func IBDClient(net wire.BitcoinNet,
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	blockQueue := make(chan util.UBlock, 10)
+	ublockQueue := make(chan util.UBlock, 10)
 
 	pFile, err := os.OpenFile(
 		util.PFilePath, os.O_RDONLY, 0400)
@@ -75,17 +75,16 @@ func IBDClient(net wire.BitcoinNet,
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go util.BlockAndProofReader(blockQueue,
-		lastIndexOffsetHeight, height, lookahead)
+	go util.UBlockReader(ublockQueue, knownTipHeight, height, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
 
 	// bool for stopping the below for loop
 	var stop bool
-	for ; height != lastIndexOffsetHeight && stop != true; height++ {
+	for ; height != knownTipHeight && stop != true; height++ {
 
-		blocknproof := <-blockQueue
+		blocknproof := <-ublockQueue
 
 		err = putBlockInPollard(blocknproof,
 			&totalTXOAdded, &totalDels, plustime, &p)
@@ -158,6 +157,10 @@ func putBlockInPollard(
 	err := p.IngestBatchProof(bnu.ExtraData.AccProof)
 	if err != nil {
 		return err
+	}
+
+	for _, a := range blockAdds {
+		fmt.Printf("%v ", a.Remember)
 	}
 
 	// Utreexo tree modification. blockAdds are the added txos and

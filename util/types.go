@@ -192,15 +192,15 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 // batch proof length (4 bytes)
 // batch proof
 // Bunch of LeafDatas, prefixed with 2-byte lengths
-func (bp *UData) ToBytes() (b []byte) {
+func (ud *UData) ToBytes() (b []byte) {
 
 	// first stick the batch proof on the beginning
-	batchBytes := bp.AccProof.ToBytes()
+	batchBytes := ud.AccProof.ToBytes()
 	b = U32tB(uint32(len(batchBytes)))
 	b = append(b, batchBytes...)
 
 	// next, all the leafDatas
-	for _, ld := range bp.UtxoData {
+	for _, ld := range ud.UtxoData {
 		ldb := ld.ToBytes()
 		b = append(b, PrefixLen16(ldb)...)
 	}
