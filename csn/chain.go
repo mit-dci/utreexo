@@ -21,14 +21,14 @@ func initCSNState() (
 	// We expect the offsetdata to be present
 	// TODO this will be depreciated in the future
 	if offsetInitialized {
-		var err error
 		lastIndexOffsetHeight, err = restoreLastIndexOffsetHeight()
 		if err != nil {
 			return p, 0, 0, err
 		}
 	} else {
-		return p, 0, 0, fmt.Errorf("No offsetdata present. " +
+		err = fmt.Errorf("No offsetdata present. " +
 			"Please run `genproofs` first and try again")
+		return
 	}
 
 	// bool to check if the pollarddata is present
@@ -36,29 +36,29 @@ func initCSNState() (
 
 	if pollardInitialized {
 		fmt.Println("Has access to forestdata, resuming")
-		var err error
 		p, err = restorePollard()
 		if err != nil {
-			return p, 0, 0, err
+			return
 		}
 		height, err = restorePollardHeight()
 		if err != nil {
-			return p, 0, 0, err
+			return
 		}
 
 	} else {
 		fmt.Println("Creating new pollarddata")
-
+		// start at height 1
+		height = 1
 		// Create files needed for pollard
-		_, err := os.OpenFile(
+		_, err = os.OpenFile(
 			util.PollardHeightFilePath, os.O_CREATE, 0600)
 		if err != nil {
-			return p, height, lastIndexOffsetHeight, err
+			return
 		}
 		_, err = os.OpenFile(
 			util.PollardFilePath, os.O_CREATE, 0600)
 		if err != nil {
-			return p, height, lastIndexOffsetHeight, err
+			return
 		}
 	}
 
