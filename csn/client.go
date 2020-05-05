@@ -143,7 +143,7 @@ func putBlockInPollard(
 		ub.Block, nil, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
-	util.DedupeBlockTxos(&blockAdds, &delLeaves)
+	// util.DedupeBlockTxos(&blockAdds, &delLeaves)
 
 	donetime := time.Now()
 	plustime += donetime.Sub(plusstart)
