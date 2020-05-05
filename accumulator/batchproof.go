@@ -105,7 +105,7 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
 
-// VerifyBatchProof takes a block proof and reconstructs / verifies it.
+// verifyBatchProof takes a block proof and reconstructs / verifies it.
 // takes a blockproof to verify, and the known correct roots to check against.
 // also takes the number of leaves and forest rows (those are redundant
 // if we don't do weird stuff with overly-high forests, which we might)

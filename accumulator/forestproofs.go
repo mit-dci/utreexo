@@ -145,10 +145,6 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 		return bp, nil
 	}
 
-	// for h, p := range f.positionMap {
-	// 	fmt.Printf("%x@%d ", h[:4], p)
-	// }
-
 	// first get all the leaf positions
 	// there shouldn't be any duplicates in hs, but if there are I guess
 	// it's not an error.

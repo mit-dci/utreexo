@@ -1,3 +1,5 @@
+package util
+
 /*
  * Taken from github.com/btcsuite/btcd/blockchain/compress.go with
  * commit f3ec13030e4e828869954472cbc51ac36bee5c1d
@@ -5,7 +7,6 @@
  * deserialize functions have been modified to take io.Reader as an argument
  * instead of a byte slice.
  */
-package util
 
 // Copyright (c) 2015-2016 The btcsuite developers
 // Use of this source code is governed by an ISC
