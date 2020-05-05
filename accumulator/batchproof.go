@@ -215,8 +215,7 @@ func verifyBatchProof(
 }
 
 // Reconstruct takes a number of leaves and rows, and turns a block proof back
-// into a partial proof tree.  Destroys the bp.Proofs slice but leaves the
-// bp.Targets
+// into a partial proof tree.  Should leave bp intact
 func (bp *BatchProof) Reconstruct(
 	numleaves uint64, forestRows uint8) (map[uint64]Hash, error) {
 
@@ -224,7 +223,8 @@ func (bp *BatchProof) Reconstruct(
 		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fr %d\n",
 			len(bp.Targets), len(bp.Proof), numleaves, forestRows)
 	}
-
+	proofCopy := make([]Hash, len(bp.Proof))
+	copy(proofCopy, bp.Proof)
 	proofTree := make(map[uint64]Hash)
 
 	if len(bp.Targets) == 0 {
@@ -344,6 +344,6 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Proof) != 0 {
 		return nil, fmt.Errorf("too many proofs, %d remain", len(bp.Proof))
 	}
-
+	bp.Proof = proofCopy
 	return proofTree, nil
 }

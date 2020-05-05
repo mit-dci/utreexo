@@ -2,8 +2,6 @@ package util
 
 import (
 	"fmt"
-
-	"github.com/mit-dci/utreexo/accumulator"
 )
 
 // Verify checks the consistency of uData: that the utxos are proven in the
@@ -14,9 +12,8 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	// destroying it while verifying...
 
 	presort := make([]uint64, len(ud.AccProof.Targets))
-	hashstash := make([]accumulator.Hash, len(ud.AccProof.Proof))
 	copy(presort, ud.AccProof.Targets)
-	copy(hashstash, ud.AccProof.Proof)
+
 	ud.AccProof.SortTargets()
 	mp, err := ud.AccProof.Reconstruct(nl, h)
 	if err != nil {
@@ -51,6 +48,5 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	}
 	// return to presorted target list
 	ud.AccProof.Targets = presort
-	ud.AccProof.Proof = hashstash
 	return true
 }

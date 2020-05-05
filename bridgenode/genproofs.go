@@ -41,11 +41,14 @@ func BuildProofs(
 	util.MakePaths()
 
 	// Init forest and variables. Resumes if the data directory exists
-	forest, height, lastIndexOffsetHeight, err :=
+	forest, height, knownTipHeight, err :=
 		initBridgeNodeState(net, offsetFinished)
 	if err != nil {
 		panic(err)
 	}
+
+	// TEMP only go to block 1000
+	knownTipHeight = 390
 
 	// Open leveldb
 	o := new(opt.Options)
@@ -71,7 +74,7 @@ func BuildProofs(
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go util.BlockAndRevReader(blockAndRevReadQueue,
-		lastIndexOffsetHeight, height)
+		knownTipHeight, height)
 	proofChan := make(chan []byte, 10)
 	var fileWait sync.WaitGroup
 	go proofWriterWorker(proofChan, &fileWait)
@@ -80,7 +83,7 @@ func BuildProofs(
 
 	var stop bool // bool for stopping the main loop
 
-	for ; height != lastIndexOffsetHeight && stop != true; height++ {
+	for ; height != knownTipHeight && stop != true; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
@@ -110,6 +113,9 @@ func BuildProofs(
 		proofChan <- b
 
 		ud.AccProof.SortTargets()
+
+		fmt.Printf("h %d adds %d targets %d\n",
+			height, len(blockAdds), len(ud.AccProof.Targets))
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
@@ -257,10 +263,14 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 
 	// fmt.Printf(batchProof.ToString())
 	// Optional Sanity check. Should never fail.
-	// ok := f.VerifyBatchProof(batchProof)
-	// if !ok {
-	// 	return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
-	// }
+	unsort := make([]uint64, len(ud.AccProof.Targets))
+	copy(unsort, ud.AccProof.Targets)
+	ud.AccProof.SortTargets()
+	ok := f.VerifyBatchProof(ud.AccProof)
+	if !ok {
+		return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
+	}
+	ud.AccProof.Targets = unsort
 
 	if !ud.Verify(f.ReconstructStats()) {
 		err = fmt.Errorf("height %d LeafData / Proof mismatch", height)

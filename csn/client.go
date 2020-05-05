@@ -140,8 +140,10 @@ func putBlockInPollard(
 	plusstart := time.Now()
 
 	blockAdds := util.BlockToAddLeaves(
-		ub.Block, ub.ExtraData.RememberLeaves, ub.Height)
+		ub.Block, nil, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
+
+	util.DedupeBlockTxos(&blockAdds, &delLeaves)
 
 	donetime := time.Now()
 	plustime += donetime.Sub(plusstart)
@@ -157,8 +159,12 @@ func putBlockInPollard(
 	// Fills in the empty(nil) nieces for verification && deletion
 	err := p.IngestBatchProof(ub.ExtraData.AccProof)
 	if err != nil {
+		fmt.Printf("height %d ingest error\n", ub.Height)
 		return err
 	}
+
+	fmt.Printf("h %d adds %d targets %d\n",
+		ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
@@ -166,5 +172,6 @@ func putBlockInPollard(
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
