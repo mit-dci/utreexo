@@ -2,11 +2,15 @@ package util
 
 import "fmt"
 
+// Verify checks the consistency of uData: that the utxos are proven in the
+// batchproof
 func (ud *UData) Verify(nl uint64, h uint8) bool {
-
+	presort := make([]uint64, len(ud.AccProof.Targets))
+	copy(presort, ud.AccProof.Targets)
+	ud.AccProof.SortTargets()
 	mp, err := ud.AccProof.Reconstruct(nl, h)
 	if err != nil {
-		fmt.Printf(" Reconstruct failed %s\n")
+		fmt.Printf(" Reconstruct failed %s\n", err.Error())
 		return false
 	}
 
@@ -22,7 +26,7 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	// 	fmt.Printf("%d %x\t", i, h[:4])
 	// }
 
-	for i, pos := range ud.AccProof.Targets {
+	for i, pos := range presort {
 		hashInProof, exists := mp[pos]
 		if !exists {
 			fmt.Printf("Verify failed: Target %d not in map\n", pos)
@@ -40,5 +44,7 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 			return false
 		}
 	}
+	// return to presorted target list
+	ud.AccProof.Targets = presort
 	return true
 }

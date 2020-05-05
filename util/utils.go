@@ -256,7 +256,8 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 	if err != nil {
 		return
 	}
-
+	fmt.Printf("read %d byte udata targets %v hashes: %d \n",
+		len(ubytes), ud.AccProof.Targets, len(ud.AccProof.Proof))
 	return
 }
 

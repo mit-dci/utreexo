@@ -48,7 +48,7 @@ func BuildProofs(
 	}
 
 	// temp: only go to block 500
-	lastIndexOffsetHeight = 400
+	lastIndexOffsetHeight = 385
 
 	// Open leveldb
 	o := new(opt.Options)
@@ -111,6 +111,8 @@ func BuildProofs(
 		// to disk
 		fileWait.Add(1)
 		proofChan <- b
+
+		ud.AccProof.SortTargets()
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
@@ -232,43 +234,47 @@ func proofWriterWorker(
 // to create a block proof which both proves inclusion and gives all utxo data
 // needed for transaction verification.
 func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
-	util.UData, error) {
+	ud util.UData, err error) {
 
-	var ud util.UData
-
+	ud.UtxoData = delLeaves
 	// make slice of hashes from leafdata
-	delHashes := make([]accumulator.Hash, len(delLeaves))
-	for i, _ := range delLeaves {
-		delHashes[i] = delLeaves[i].LeafHash()
-		fmt.Printf("%s -> %x\n", delLeaves[i].Outpoint.String(), delHashes[i][:4])
+	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
+	for i, _ := range ud.UtxoData {
+		delHashes[i] = ud.UtxoData[i].LeafHash()
+		fmt.Printf("%s -> %x\n", ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
 	}
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
-	batchProof, err := f.ProveBatch(delHashes)
+	ud.AccProof, err = f.ProveBatch(delHashes)
 	if err != nil {
-		return ud, fmt.Errorf("genBlockProof failed at block %d %s %s",
+		err = fmt.Errorf("genBlockProof failed at block %d %s %s",
 			height, f.Stats(), err.Error())
+		return
 	}
-	if len(batchProof.Targets) != len(delLeaves) {
-		return ud, fmt.Errorf("genBlockProof %d targets but %d leafData",
-			len(batchProof.Targets), len(delLeaves))
+
+	if len(ud.AccProof.Targets) != len(delLeaves) {
+		err = fmt.Errorf("genBlockProof %d targets but %d leafData",
+			len(ud.AccProof.Targets), len(delLeaves))
+		return
 	}
-	fmt.Printf(batchProof.ToString())
+
+	// fmt.Printf(batchProof.ToString())
 	// Optional Sanity check. Should never fail.
 	// ok := f.VerifyBatchProof(batchProof)
 	// if !ok {
 	// 	return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
 	// }
-
-	ud.AccProof = batchProof
-	ud.UtxoData = delLeaves
+	fmt.Printf("block %d, %d targets, %d proof hashes\n",
+		height, len(ud.AccProof.Targets), len(ud.AccProof.Proof))
 
 	if !ud.Verify(f.ReconstructStats()) {
-		return ud, fmt.Errorf("height %d LeafData / Proof mismatch", height)
+		err = fmt.Errorf("height %d LeafData / Proof mismatch", height)
+		return
 	}
-
-	return ud, nil
+	fmt.Printf("block %d, %d targets, %d proof hashes\n",
+		height, len(ud.AccProof.Targets), len(ud.AccProof.Proof))
+	return
 }
 
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and
