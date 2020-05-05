@@ -86,6 +86,11 @@ func NewForest(forestFile *os.File) *Forest {
 	return f
 }
 
+// TODO remove, only here for testing
+func (f *Forest) ReconstructStats() (uint64, uint8) {
+	return f.numLeaves, f.rows
+}
+
 const sibSwap = false
 const bridgeVerbose = false
 

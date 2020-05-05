@@ -59,7 +59,7 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-
+		bp.SortTargets()
 		// verify proofs on rad node
 		err = p.IngestBatchProof(bp)
 		if err != nil {

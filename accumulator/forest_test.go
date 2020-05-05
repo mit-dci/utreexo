@@ -41,7 +41,7 @@ func TestForestAddDel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
+		bp.SortTargets()
 		_, err = f.Modify(adds, bp.Targets)
 		if err != nil {
 			t.Fatal(err)
@@ -186,7 +186,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 	if err != nil {
 		return err
 	}
-
+	bp.SortTargets()
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
 	worked, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, f.rows)
 	//	worked := f.VerifyBatchProof(bp)

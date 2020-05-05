@@ -132,7 +132,7 @@ func IBDClient(net wire.BitcoinNet,
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as LeafTXO type.
 func putBlockInPollard(
-	bnu util.UBlock,
+	ub util.UBlock,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
 	p *accumulator.Pollard) error {
@@ -140,32 +140,28 @@ func putBlockInPollard(
 	plusstart := time.Now()
 
 	blockAdds := util.BlockToAddLeaves(
-		bnu.Block, bnu.ExtraData.RememberLeaves, bnu.Height)
+		ub.Block, ub.ExtraData.RememberLeaves, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	donetime := time.Now()
 	plustime += donetime.Sub(plusstart)
 
-	*totalDels += len(bnu.ExtraData.AccProof.Targets) // for benchmarking
+	*totalDels += len(ub.ExtraData.AccProof.Targets) // for benchmarking
 
 	// derive leafHashes from leafData
-	if !bnu.ExtraData.Verify(p.ReconstructStats()) {
-		return fmt.Errorf("LeafData / Proof mismatch")
+	if !ub.ExtraData.Verify(p.ReconstructStats()) {
+		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := p.IngestBatchProof(bnu.ExtraData.AccProof)
+	err := p.IngestBatchProof(ub.ExtraData.AccProof)
 	if err != nil {
 		return err
 	}
 
-	for _, a := range blockAdds {
-		fmt.Printf("%v ", a.Remember)
-	}
-
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, bnu.ExtraData.AccProof.Targets)
+	err = p.Modify(blockAdds, ub.ExtraData.AccProof.Targets)
 	if err != nil {
 		return err
 	}

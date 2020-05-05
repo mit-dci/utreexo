@@ -17,6 +17,11 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 			len(ud.AccProof.Targets), len(ud.UtxoData))
 	}
 
+	// fmt.Printf("%d proofs ", len(ud.AccProof.Proof))
+	// for i, h := range ud.AccProof.Proof {
+	// 	fmt.Printf("%d %x\t", i, h[:4])
+	// }
+
 	for i, pos := range ud.AccProof.Targets {
 		hashInProof, exists := mp[pos]
 		if !exists {
@@ -25,8 +30,13 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 		}
 		// check if leafdata hashes to the hash in the proof at the target
 		if ud.UtxoData[i].LeafHash() != hashInProof {
-			fmt.Printf("Verify failed: %d leafdata %x proof %x\n",
-				pos, ud.UtxoData[i].LeafHash(), hashInProof)
+			fmt.Printf("Verify failed: txo %s position %d leafdata %x proof %x\n",
+				ud.UtxoData[i].Outpoint.String(), pos,
+				ud.UtxoData[i].LeafHash(), hashInProof)
+			sib, exists := mp[pos^1]
+			if exists {
+				fmt.Printf("sib exists, %x\n", sib)
+			}
 			return false
 		}
 	}

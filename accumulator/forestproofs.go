@@ -129,11 +129,10 @@ func (f *Forest) VerifyMany(ps []Proof) bool {
 	return true
 }
 
-// ProveBatch gets proofs (in the form of a node slice) for a bunch of utxos.
-// it gives the full proofs with no filtering.
-// also, more efficient
-// known is a slice of known node positions in the forest; prove up to
-// the intersections
+// ProveBatch gets proofs (in the form of a node slice) for a bunch of leaves
+// The ordering of Targets is the same as the ordering of hashes given as
+// argument.
+// NOTE However targets will need to be sorted before using the proof!
 // TODO the elements to be proven should not be included in the proof.
 func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	starttime := time.Now()
@@ -178,7 +177,9 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	// NOTE that this is a big deal -- we lose in-block positional information
 	// because of this sorting.  Does that hurt locality or performance?  My
 	// guess is no, but that's untested.
-	sortUint64s(bp.Targets)
+	sortedTargets := make([]uint64, len(bp.Targets))
+	copy(sortedTargets, bp.Targets)
+	sortUint64s(sortedTargets)
 
 	// TODO feels like you could do all this with just slices and no maps...
 	// that would be better
@@ -187,7 +188,7 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	proofTree := make(map[uint64]Hash)
 
 	// go through each target and add a proof for it up to the intersection
-	for _, pos := range bp.Targets {
+	for _, pos := range sortedTargets {
 		// add hash for the deletion itself and its sibling
 		// if they already exist, skip the whole thing
 		_, alreadyThere := proofTree[pos]

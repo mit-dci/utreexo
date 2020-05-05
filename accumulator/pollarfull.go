@@ -24,12 +24,6 @@ func NewFullPollard() Pollard {
 	return p
 }
 
-// VerifyBatchProof :
-func (p *Pollard) VerifyBatchProof(bp BatchProof) bool {
-	ok, _ := verifyBatchProof(bp, p.rootHashesReverse(), p.numLeaves, p.rows())
-	return ok
-}
-
 // PosMapSanity is costly / slow: check that everything in posMap is correct
 func (p *Pollard) PosMapSanity() error {
 	for i := uint64(0); i < p.numLeaves; i++ {

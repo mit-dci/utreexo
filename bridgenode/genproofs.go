@@ -47,6 +47,9 @@ func BuildProofs(
 		panic(err)
 	}
 
+	// temp: only go to block 500
+	lastIndexOffsetHeight = 400
+
 	// Open leveldb
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
@@ -237,6 +240,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	delHashes := make([]accumulator.Hash, len(delLeaves))
 	for i, _ := range delLeaves {
 		delHashes[i] = delLeaves[i].LeafHash()
+		fmt.Printf("%s -> %x\n", delLeaves[i].Outpoint.String(), delHashes[i][:4])
 	}
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
@@ -244,22 +248,25 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	batchProof, err := f.ProveBatch(delHashes)
 	if err != nil {
 		return ud, fmt.Errorf("genBlockProof failed at block %d %s %s",
-			height+1, f.Stats(), err.Error())
+			height, f.Stats(), err.Error())
 	}
 	if len(batchProof.Targets) != len(delLeaves) {
 		return ud, fmt.Errorf("genBlockProof %d targets but %d leafData",
 			len(batchProof.Targets), len(delLeaves))
 	}
-
+	fmt.Printf(batchProof.ToString())
 	// Optional Sanity check. Should never fail.
-	// ok := f.VerifyBatchProof(blockProof)
+	// ok := f.VerifyBatchProof(batchProof)
 	// if !ok {
-	// return blockProof,
-	// fmt.Errorf("VerifyBlockProof failed at block %d", height+1)
+	// 	return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
 	// }
 
 	ud.AccProof = batchProof
 	ud.UtxoData = delLeaves
+
+	if !ud.Verify(f.ReconstructStats()) {
+		return ud, fmt.Errorf("height %d LeafData / Proof mismatch", height)
+	}
 
 	return ud, nil
 }

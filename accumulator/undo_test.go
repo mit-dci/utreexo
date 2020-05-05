@@ -53,7 +53,7 @@ func undoOnceRandom(blocks int32) error {
 		if err != nil {
 			return err
 		}
-
+		bp.SortTargets()
 		ub, err := f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err

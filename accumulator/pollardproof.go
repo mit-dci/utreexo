@@ -8,6 +8,7 @@ import (
 // targets in the block proof
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty Hash
+
 	// TODO so many things to change
 	ok, proofMap := verifyBatchProof(
 		bp, p.rootHashesReverse(), p.numLeaves, p.rows())

@@ -49,6 +49,11 @@ func (bp *BatchProof) ToBytes() []byte {
 }
 
 // ToString for debugging, shows the blockproof
+func (bp *BatchProof) SortTargets() {
+	sortUint64s(bp.Targets)
+}
+
+// ToString for debugging, shows the blockproof
 func (bp *BatchProof) ToString() string {
 	s := fmt.Sprintf("%d targets: ", len(bp.Targets))
 	for _, t := range bp.Targets {
