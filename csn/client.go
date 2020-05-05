@@ -101,7 +101,7 @@ func IBDClient(net wire.BitcoinNet,
 
 		if height%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
-				height+1, totalTXOAdded, totalDels, p.Stats(),
+				height, totalTXOAdded, totalDels, p.Stats(),
 				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 		}
 
@@ -152,7 +152,8 @@ func putBlockInPollard(
 	if !ub.ExtraData.Verify(p.ReconstructStats()) {
 		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
 	}
-
+	// sort before ingestion; verify up above unsorts...
+	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
 	err := p.IngestBatchProof(ub.ExtraData.AccProof)
 	if err != nil {

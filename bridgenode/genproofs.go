@@ -47,9 +47,6 @@ func BuildProofs(
 		panic(err)
 	}
 
-	// temp: only go to block 500
-	lastIndexOffsetHeight = 385
-
 	// Open leveldb
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
@@ -241,7 +238,6 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
 	for i, _ := range ud.UtxoData {
 		delHashes[i] = ud.UtxoData[i].LeafHash()
-		fmt.Printf("%s -> %x\n", ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
 	}
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
@@ -265,15 +261,11 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	// if !ok {
 	// 	return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
 	// }
-	fmt.Printf("block %d, %d targets, %d proof hashes\n",
-		height, len(ud.AccProof.Targets), len(ud.AccProof.Proof))
 
 	if !ud.Verify(f.ReconstructStats()) {
 		err = fmt.Errorf("height %d LeafData / Proof mismatch", height)
 		return
 	}
-	fmt.Printf("block %d, %d targets, %d proof hashes\n",
-		height, len(ud.AccProof.Targets), len(ud.AccProof.Proof))
 	return
 }
 

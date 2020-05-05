@@ -118,10 +118,11 @@ func UBlockReader(
 
 		ud, err := GetUDataFromFile(curHeight)
 		if err != nil {
+			fmt.Printf("GetUDataFromFile ")
 			panic(err)
 		}
 
-		send := UBlock{Block: blk, Height: curHeight, ExtraData: ud} //Proof: nil}
+		send := UBlock{Block: blk, Height: curHeight, ExtraData: ud}
 
 		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
 		blockChan <- send
@@ -227,15 +228,22 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 	// offset file consists of 8 bytes per block
 	// tipnum * 8 gives us the correct position for that block
 	// Note it's currently a int64, can go down to int32 for split files
-	offsetFile.Seek(int64(8*tipnum), 0)
+	_, err = offsetFile.Seek(int64(8*tipnum), 0)
+	if err != nil {
+		err = fmt.Errorf("offsetFile.Seek %s", err.Error())
+		return
+	}
+
 	err = binary.Read(offsetFile, binary.BigEndian, &offset)
 	if err != nil {
+		err = fmt.Errorf("binary.Read offset %d %s", tipnum, err.Error())
 		return
 	}
 
 	// +4 because it has an empty 4 non-magic bytes in front now
 	_, err = proofFile.Seek(offset+4, 0)
 	if err != nil {
+		err = fmt.Errorf("proofFile.Seek %s", err.Error())
 		return
 	}
 	err = binary.Read(proofFile, binary.BigEndian, &size)
@@ -249,11 +257,13 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 
 	_, err = proofFile.Read(ubytes)
 	if err != nil {
+		err = fmt.Errorf("proofFile.Read(ubytes) %s", err.Error())
 		return
 	}
 
 	ud, err = UDataFromBytes(ubytes)
 	if err != nil {
+		err = fmt.Errorf("UDataFromBytes %s", err.Error())
 		return
 	}
 	fmt.Printf("read %d byte udata targets %v hashes: %d \n",

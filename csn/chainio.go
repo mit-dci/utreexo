@@ -89,28 +89,3 @@ func saveIBDsimData(height int32, p accumulator.Pollard) error {
 	fileWait.Wait()
 	return nil
 }
-
-// restoreLastIndexOffsetHeight restores the lastIndexOffsetHeight
-func restoreLastIndexOffsetHeight() (int32, error) {
-
-	var lastIndexOffsetHeight int32
-
-	// grab the last block height from currentoffsetheight
-	// currentoffsetheight saves the last height from the offsetfile
-	var lastIndexOffsetHeightByte [4]byte
-
-	f, err := os.OpenFile(
-		util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return 0, err
-	}
-	_, err = f.Read(lastIndexOffsetHeightByte[:])
-	if err != nil {
-		return 0, err
-	}
-
-	f.Read(lastIndexOffsetHeightByte[:])
-	lastIndexOffsetHeight = util.BtI32(lastIndexOffsetHeightByte[:])
-
-	return lastIndexOffsetHeight, nil
-}
