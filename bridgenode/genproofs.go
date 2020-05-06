@@ -46,9 +46,6 @@ func BuildProofs(
 		panic(err)
 	}
 
-	// TEMP only go to block 1000
-	knownTipHeight = 990
-
 	// Open leveldb
 	o := new(opt.Options)
 	o.CompactionTableSizeMultiplier = 8
@@ -113,8 +110,8 @@ func BuildProofs(
 
 		ud.AccProof.SortTargets()
 
-		fmt.Printf("h %d adds %d targets %d\n",
-			height, len(blockAdds), len(ud.AccProof.Targets))
+		// fmt.Printf("h %d adds %d targets %d\n",
+		// 	height, len(blockAdds), len(ud.AccProof.Targets))
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
@@ -168,7 +165,8 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
 	for i, _ := range ud.UtxoData {
 		delHashes[i] = ud.UtxoData[i].LeafHash()
-		fmt.Printf("del %s -> %x\n", ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
+		// fmt.Printf("del %s -> %x\n",
+		// ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
 	}
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
@@ -217,19 +215,19 @@ func blockToAddDel(bnr util.BlockAndRev) (blockAdds []accumulator.Leaf,
 
 	inskip, outskip := util.DedupeBlock(&bnr.Blk)
 	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
-	delLeaves, err = genDels(bnr, inskip)
+	delLeaves, err = blockNRevToDelLeaves(bnr, inskip)
 	if err != nil {
 		return
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
 	blockAdds = util.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
-	// util.DedupeBlock(&blockAdds, &delLeaves)
+
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func genDels(bnr util.BlockAndRev, skiplist []uint32) (
+func blockNRevToDelLeaves(bnr util.BlockAndRev, skiplist []uint32) (
 	delLeaves []util.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
@@ -257,7 +255,7 @@ func genDels(bnr util.BlockAndRev, skiplist []uint32) (
 		for i, txin := range tx.TxIn {
 			// check if on skiplist.  If so, don't make leaf
 			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
-				fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
+				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
 				skiplist = skiplist[1:]
 				blockInIdx++
 				continue
@@ -277,7 +275,6 @@ func genDels(bnr util.BlockAndRev, skiplist []uint32) (
 			blockInIdx++
 		}
 	}
-
 	return
 }
 

@@ -36,29 +36,6 @@ func createOffsetData(
 	return
 }
 
-// restoreLastProofFileOffset restores POffset from util.LastPOffsetFilePath
-// pOffset represents the location of where a particular block height's proofs
-// are. Basically an index.
-func restoreLastProofFileOffset() (pOffset int32, err error) {
-
-	if util.HasAccess(util.LastPOffsetFilePath) {
-		f, err := os.OpenFile(
-			util.LastPOffsetFilePath,
-			os.O_CREATE|os.O_RDWR, 0600)
-		if err != nil {
-			return 0, err
-		}
-		var pOffsetByte [4]byte
-		_, err = f.ReadAt(pOffsetByte[:], 0)
-		if err != nil {
-			return 0, err
-		}
-		pOffset = util.BtI32(pOffsetByte[:])
-
-	}
-	return
-}
-
 // createForest initializes forest
 func createForest() (forest *accumulator.Forest, err error) {
 

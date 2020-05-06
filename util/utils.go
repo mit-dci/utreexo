@@ -75,6 +75,9 @@ func CheckNet(net wire.BitcoinNet) {
 	}
 }
 
+// TODO all these readers -- BlockAndRevReader, UBlockReader
+// keep opening and closing files which is inefficient
+
 // BlockReader is a wrapper around GetRawBlockFromFile so that the process
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with TxToWrite type.
@@ -110,22 +113,20 @@ func UBlockReader(
 	blockChan chan UBlock, maxHeight, curHeight, lookahead int32) {
 	for curHeight != maxHeight {
 
-		// pFile, POffsetFile *os.File
-
-		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
-		if err != nil {
-			panic(err)
-		}
-
 		ud, err := GetUDataFromFile(curHeight)
 		if err != nil {
 			fmt.Printf("GetUDataFromFile ")
 			panic(err)
 		}
 
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		if err != nil {
+			fmt.Printf("GetRawBlockFromFile ")
+			panic(err)
+		}
+
 		send := UBlock{Block: blk, Height: curHeight, ExtraData: ud}
 
-		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
 		blockChan <- send
 		curHeight++
 	}
@@ -173,7 +174,10 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 
 	// offset file consists of 8 bytes per block
 	// tipnum * 8 gives us the correct position for that block
-	offsetFile.Seek(int64(8*tipnum), 0)
+	_, err = offsetFile.Seek(int64(8*tipnum), 0)
+	if err != nil {
+		return
+	}
 
 	// Read file and offset for the block
 	err = binary.Read(offsetFile, binary.BigEndian, &datFile)
@@ -185,22 +189,34 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string) (
 		return
 	}
 
-	fileName := fmt.Sprintf("blk%05d.dat", datFile)
+	blockFileName := fmt.Sprintf("blk%05d.dat", datFile)
 	// Channel to alert stopParse() that offset
-	f, err := os.Open(fileName)
+	// fmt.Printf("opened %s ", blockFileName)
+	blockFile, err := os.Open(blockFileName)
 	if err != nil {
 		return
 	}
 	// +8 skips the 8 bytes of magicbytes and load size
-	f.Seek(int64(offset)+8, 0)
-
-	// TODO this is probably expensive. fix
-	err = block.Deserialize(f)
+	_, err = blockFile.Seek(int64(offset)+8, 0)
 	if err != nil {
 		return
 	}
-	f.Close()
-	offsetFile.Close()
+
+	// TODO this is probably expensive. fix
+	err = block.Deserialize(blockFile)
+	if err != nil {
+		return
+	}
+
+	// fmt.Printf("closed %s ", blockFileName)
+	err = blockFile.Close()
+	if err != nil {
+		return
+	}
+	err = offsetFile.Close()
+	if err != nil {
+		return
+	}
 
 	return
 }
@@ -268,6 +284,14 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 		return
 	}
 
+	err = offsetFile.Close()
+	if err != nil {
+		return
+	}
+	err = proofFile.Close()
+	if err != nil {
+		return
+	}
 	return
 }
 
@@ -313,8 +337,38 @@ func BlockToAddLeaves(blk wire.MsgBlock,
 			}
 			leaves = append(leaves, uleaf)
 			// fmt.Printf("add %s\n", l.ToString())
-			fmt.Printf("add %s -> %x\n", l.Outpoint.String(), l.LeafHash())
+			// fmt.Printf("add %s -> %x\n", l.Outpoint.String(), l.LeafHash())
 			txonum++
+		}
+	}
+	return
+}
+
+// blockToDelOPs gives all the UTXOs in a block that need proofs in order to be
+// deleted.  All txinputs except for the coinbase input and utxos created
+// within the same block (on the skiplist)
+func blockToDelOPs(
+	blk *wire.MsgBlock, skiplist []uint32) (delOPs []wire.OutPoint) {
+
+	var blockInIdx uint32
+	for txinblock, tx := range blk.Transactions {
+		if txinblock == 0 {
+			blockInIdx++ // coinbase tx always has 1 input
+			continue
+		}
+
+		// loop through inputs
+		for _, txin := range tx.TxIn {
+			// check if on skiplist.  If so, don't make leaf
+			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
+				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
+				skiplist = skiplist[1:]
+				blockInIdx++
+				continue
+			}
+
+			delOPs = append(delOPs, txin.PreviousOutPoint)
+			blockInIdx++
 		}
 	}
 	return

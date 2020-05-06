@@ -139,19 +139,10 @@ func putBlockInPollard(
 
 	plusstart := time.Now()
 
-	_, outskip := util.DedupeBlock(&ub.Block)
-
-	// need to make sure every txin in ub.Block is either in inskip
-	// or provided in ub.ExtraData.UtxoData
-
-	blockAdds := util.BlockToAddLeaves(
-		ub.Block, nil, outskip, ub.Height)
-	*totalTXOAdded += len(blockAdds) // for benchmarking
-
-	// util.DedupeBlockTxos(&blockAdds, &delLeaves)
-
-	donetime := time.Now()
-	plustime += donetime.Sub(plusstart)
+	inskip, outskip := util.DedupeBlock(&ub.Block)
+	if !ub.ProofsProveBlock(inskip) {
+		return fmt.Errorf("uData missing utxo data for block %d", ub.Height)
+	}
 
 	*totalDels += len(ub.ExtraData.AccProof.Targets) // for benchmarking
 
@@ -168,8 +159,13 @@ func putBlockInPollard(
 		return err
 	}
 
-	fmt.Printf("h %d adds %d targets %d\n",
-		ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
+	// fmt.Printf("h %d adds %d targets %d\n",
+	// 	ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
+
+	// get hashes to add into the accumulator
+	blockAdds := util.BlockToAddLeaves(
+		ub.Block, nil, outskip, ub.Height)
+	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
@@ -177,6 +173,9 @@ func putBlockInPollard(
 	if err != nil {
 		return err
 	}
+
+	donetime := time.Now()
+	plustime += donetime.Sub(plusstart)
 
 	return nil
 }

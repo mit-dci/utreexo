@@ -4,6 +4,28 @@ import (
 	"fmt"
 )
 
+// ProofsProveBlock checks the consistency of a UBlock.  Does the proof prove
+// all the inputs in the block?
+func (ub *UBlock) ProofsProveBlock(inputSkipList []uint32) bool {
+	// get the outpoints that need proof
+	proveOPs := blockToDelOPs(&ub.Block, inputSkipList)
+
+	// ensure that all outpoints are provided in the extradata
+	if len(proveOPs) != len(ub.ExtraData.UtxoData) {
+		fmt.Printf("%d outpoints need proofs but only %d proven\n",
+			len(proveOPs), len(ub.ExtraData.UtxoData))
+		return false
+	}
+	for i, _ := range ub.ExtraData.UtxoData {
+		if proveOPs[i] != ub.ExtraData.UtxoData[i].Outpoint {
+			fmt.Printf("block/utxoData mismatch %s v %s\n",
+				proveOPs[i].String(), ub.ExtraData.UtxoData[i].Outpoint.String())
+			return false
+		}
+	}
+	return true
+}
+
 // Verify checks the consistency of uData: that the utxos are proven in the
 // batchproof
 func (ud *UData) Verify(nl uint64, h uint8) bool {
