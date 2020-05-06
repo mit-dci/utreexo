@@ -139,8 +139,13 @@ func putBlockInPollard(
 
 	plusstart := time.Now()
 
+	_, outskip := util.DedupeBlock(&ub.Block)
+
+	// need to make sure every txin in ub.Block is either in inskip
+	// or provided in ub.ExtraData.UtxoData
+
 	blockAdds := util.BlockToAddLeaves(
-		ub.Block, nil, ub.Height)
+		ub.Block, nil, outskip, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// util.DedupeBlockTxos(&blockAdds, &delLeaves)

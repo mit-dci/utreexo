@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -271,10 +272,13 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 }
 
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
-func BlockToAddLeaves(
-	blk wire.MsgBlock, remember []bool, height int32) (leaves []accumulator.Leaf) {
+// uses remember slice up to number of txos, but doesn't check that it's the
+// right lenght.  Similar with skiplist, doesn't check it.
+func BlockToAddLeaves(blk wire.MsgBlock,
+	remember []bool, skiplist []uint32,
+	height int32) (leaves []accumulator.Leaf) {
 
-	txonum := 0
+	var txonum uint32
 	// bh := bl.Blockhash
 	for coinbaseif0, tx := range blk.Transactions {
 		// cache txid aka txhash
@@ -282,8 +286,16 @@ func BlockToAddLeaves(
 		for i, out := range tx.TxOut {
 			// Skip all the OP_RETURNs
 			if IsUnspendable(out) {
+				txonum++
 				continue
 			}
+			// Skip txos on the skip list
+			if len(skiplist) > 0 && skiplist[0] == txonum {
+				skiplist = skiplist[1:]
+				txonum++
+				continue
+			}
+
 			var l LeafData
 			// TODO put blockhash back in -- leaving empty for now!
 			// l.BlockHash = bh
@@ -295,53 +307,73 @@ func BlockToAddLeaves(
 			}
 			l.Amt = out.Value
 			l.PkScript = out.PkScript
-			// Don't need to save leafData here
-			// dataleaves = append(dataleaves, l)
 			uleaf := accumulator.Leaf{Hash: l.LeafHash()}
-			if len(remember) > txonum {
+			if uint32(len(remember)) > txonum {
 				uleaf.Remember = remember[txonum]
 			}
 			leaves = append(leaves, uleaf)
 			// fmt.Printf("add %s\n", l.ToString())
+			fmt.Printf("add %s -> %x\n", l.Outpoint.String(), l.LeafHash())
 			txonum++
 		}
 	}
 	return
 }
 
-// DedupeBlockTxos is for removing txos that get created & spent in the same block
-// as adds are TTLHashes, takes those in for slice a
-func DedupeBlockTxos(as *[]accumulator.Leaf, bs *[]LeafData) {
-	// need to preserve order, so have to do this twice...
-	// build a map and b map, of hashes
-	ma := make(map[accumulator.Hash]bool)
-	for _, a := range *as {
-		ma[a.Hash] = true
-	}
-	mb := make(map[accumulator.Hash]bool)
-	for _, b := range *bs {
-		mb[b.LeafHash()] = true
-	}
-	// make new slices which will be returned
-	var anew []accumulator.Leaf
-	var bnew []LeafData
+// DedupeBlock takes a bitcoin block, and returns two int slices: the indexes of
+// inputs, and idexes of outputs which can be removed.  These are indexes
+// within the block as a whole, even the coinbase tx.
+// So the coinbase tx in & output numbers affect the skip lists even though
+// the coinbase ins/outs can never be deduped.  it's simpler that way.
+func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
 
-	// range through a map, looking for dupes in b map
-	for _, a := range *as {
-		_, there := mb[a.Hash]
-		if !there {
-			anew = append(anew, a)
+	var i uint32
+	// wire.Outpoints are comparable with == which is nice.
+	inmap := make(map[wire.OutPoint]uint32)
+
+	// go through txs then inputs building map
+	for cbif0, tx := range blk.Transactions {
+		if cbif0 == 0 { // coinbase tx can't be deduped
+			i++
+			continue
+		}
+		for _, in := range tx.TxIn {
+			// fmt.Printf("%s into inmap\n", in.PreviousOutPoint.String())
+			inmap[in.PreviousOutPoint] = i
+			i++
 		}
 	}
-	// range through b map, looking for dupes in a map
-	for _, b := range *bs {
-		_, there := ma[b.LeafHash()]
-		if !there {
-			bnew = append(bnew, b)
+
+	i = 0
+	// start over, go through outputs finding skips
+	for cbif0, tx := range blk.Transactions {
+		if cbif0 == 0 { // coinbase tx can't be deduped
+			i += uint32(len(tx.TxOut))
+			continue
+		}
+		txid := tx.TxHash()
+
+		for outidx, _ := range tx.TxOut {
+			op := wire.OutPoint{Hash: txid, Index: uint32(outidx)}
+			// fmt.Printf("%s check for inmap... ", op.String())
+			inpos, exists := inmap[op]
+			if exists {
+				// fmt.Printf("hit")
+				inskip = append(inskip, inpos)
+				outskip = append(outskip, i)
+			}
+			// fmt.Printf("\n")
+			i++
 		}
 	}
-	*as = anew
-	*bs = bnew
+	// sort inskip list, as it's built in order consumed not created
+	sortUint32s(inskip)
+	return
+}
+
+// it'd be cool if you just had .sort() methods on slices of builtin types...
+func sortUint32s(s []uint32) {
+	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
 }
 
 // PrefixLen16 puts a 2 byte length prefix in front of a byte slice

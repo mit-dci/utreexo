@@ -1,7 +1,6 @@
 package bridgenode
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
@@ -48,7 +47,7 @@ func BuildProofs(
 	}
 
 	// TEMP only go to block 1000
-	knownTipHeight = 390
+	knownTipHeight = 990
 
 	// Open leveldb
 	o := new(opt.Options)
@@ -92,7 +91,7 @@ func BuildProofs(
 		ttl.WriteBlock(bnr, batchan, &batchwg)
 
 		// Get the add and remove data needed from the block & undo block
-		blockAdds, delLeaves, err := genAddDel(bnr)
+		blockAdds, delLeaves, err := blockToAddDel(bnr)
 		if err != nil {
 			return err
 		}
@@ -157,81 +156,6 @@ func BuildProofs(
 
 }
 
-/*
-Proof file format is somewhat like the blk.dat and rev.dat files.  But it's
-always in order!  The offset file is in 8 byte chunks, so to find the proof
-data for block 100 (really 101), seek to byte 800 and read 8 bytes.
-
-The proof file is: 4 bytes empty (zeros for now, could do something else later)
-4 bytes proof length, then the proof data.
-
-Offset file is: 8 byte int64 offset.  Right now it's all 1 big file, can
-change to 4 byte which file and 4 byte offset within file like the blk/rev but
-we're not running on fat32 so works OK for now.
-*/
-
-// pFileWorker takes in blockproof and height information from the channel
-// and writes to disk. MUST NOT have more than one worker as the proofs need to be
-// in order
-func proofWriterWorker(
-	proofChan chan []byte, fileWait *sync.WaitGroup) {
-
-	// for the pFile
-	proofFile, err := os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	offsetFile, err := os.OpenFile(
-		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = offsetFile.Seek(0, 2)
-	if err != nil {
-		panic(err)
-	}
-
-	proofFileLocation, err := proofFile.Seek(0, 2)
-	if err != nil {
-		panic(err)
-
-	}
-	// TODO: optimization - don't write anything to proof file for blocks with
-	// no deletions (inputs).  Lots of em in testnet.  Not so many on mainnet
-	// I guess.  But in testnet would save millions *8 bytes.
-	for {
-		pbytes := <-proofChan
-		// write to offset file first
-		err = binary.Write(offsetFile, binary.BigEndian, proofFileLocation)
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-
-		// write to proof file
-		// first write big endian proof size int64
-		err = binary.Write(proofFile, binary.BigEndian, int64(len(pbytes)))
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-		proofFileLocation += 8
-
-		// then write the proof
-		written, err := proofFile.Write(pbytes)
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-		proofFileLocation += int64(written)
-
-		fileWait.Done()
-	}
-}
-
 // genBlockProof calls forest.ProveBatch with the hash data to get a batched
 // inclusion proof from the accumulator. It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
@@ -244,38 +168,42 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
 	for i, _ := range ud.UtxoData {
 		delHashes[i] = ud.UtxoData[i].LeafHash()
+		fmt.Printf("del %s -> %x\n", ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
 	}
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
 	ud.AccProof, err = f.ProveBatch(delHashes)
 	if err != nil {
-		err = fmt.Errorf("genBlockProof failed at block %d %s %s",
+		err = fmt.Errorf("genUData failed at block %d %s %s",
 			height, f.Stats(), err.Error())
 		return
 	}
 
 	if len(ud.AccProof.Targets) != len(delLeaves) {
-		err = fmt.Errorf("genBlockProof %d targets but %d leafData",
+		err = fmt.Errorf("genUData %d targets but %d leafData",
 			len(ud.AccProof.Targets), len(delLeaves))
 		return
 	}
 
 	// fmt.Printf(batchProof.ToString())
 	// Optional Sanity check. Should never fail.
-	unsort := make([]uint64, len(ud.AccProof.Targets))
-	copy(unsort, ud.AccProof.Targets)
-	ud.AccProof.SortTargets()
-	ok := f.VerifyBatchProof(ud.AccProof)
-	if !ok {
-		return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
-	}
-	ud.AccProof.Targets = unsort
 
-	if !ud.Verify(f.ReconstructStats()) {
-		err = fmt.Errorf("height %d LeafData / Proof mismatch", height)
-		return
-	}
+	// unsort := make([]uint64, len(ud.AccProof.Targets))
+	// copy(unsort, ud.AccProof.Targets)
+	// ud.AccProof.SortTargets()
+	// ok := f.VerifyBatchProof(ud.AccProof)
+	// if !ok {
+	// 	return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
+	// }
+	// ud.AccProof.Targets = unsort
+
+	// also optional, no reason to do this other than bug checking
+
+	// if !ud.Verify(f.ReconstructStats()) {
+	// 	err = fmt.Errorf("height %d LeafData / Proof mismatch", height)
+	// 	return
+	// }
 	return
 }
 
@@ -284,22 +212,24 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 // It's a little redundant to give back both delLeaves and delHashes, since the
 // latter is just the hash of the former, but if we only return delLeaves we
 // end up hashing them twice which could slow things down.
-func genAddDel(block util.BlockAndRev) (blockAdds []accumulator.Leaf,
+func blockToAddDel(bnr util.BlockAndRev) (blockAdds []accumulator.Leaf,
 	delLeaves []util.LeafData, err error) {
 
-	delLeaves, err = genDels(block)
+	inskip, outskip := util.DedupeBlock(&bnr.Blk)
+	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
+	delLeaves, err = genDels(bnr, inskip)
 	if err != nil {
 		return
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = util.BlockToAddLeaves(block.Blk, nil, block.Height)
-	util.DedupeBlockTxos(&blockAdds, &delLeaves)
+	blockAdds = util.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
+	// util.DedupeBlock(&blockAdds, &delLeaves)
 	return
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func genDels(bnr util.BlockAndRev) (
+func genDels(bnr util.BlockAndRev, skiplist []uint32) (
 	delLeaves []util.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
@@ -309,8 +239,10 @@ func genDels(bnr util.BlockAndRev) (
 		return
 	}
 
+	var blockInIdx uint32
 	for txinblock, tx := range bnr.Blk.Transactions {
 		if txinblock == 0 {
+			blockInIdx++ // coinbase tx always has 1 input
 			continue
 		}
 		txinblock--
@@ -323,6 +255,14 @@ func genDels(bnr util.BlockAndRev) (
 		}
 		// loop through inputs
 		for i, txin := range tx.TxIn {
+			// check if on skiplist.  If so, don't make leaf
+			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
+				fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
+				skiplist = skiplist[1:]
+				blockInIdx++
+				continue
+			}
+
 			// build leaf
 			var l util.LeafData
 
@@ -334,6 +274,7 @@ func genDels(bnr util.BlockAndRev) (
 			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
 			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
 			delLeaves = append(delLeaves, l)
+			blockInIdx++
 		}
 	}
 
