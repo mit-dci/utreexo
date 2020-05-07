@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -135,22 +137,34 @@ func UBlockReader(
 // UblockNetworkReader gets Ublocks from the remote host and puts em in the
 // channel.  It'll try to fill the channel buffer.
 func UblockNetworkReader(
-	blockChan chan UBlock,
+	blockChan chan UBlock, remoteServer string,
 	maxHeight, curHeight, lookahead int32) {
+
+	d := net.Dialer{Timeout: 2 * time.Second}
+	con, err := d.Dial("tcp", "127.0.0.1:8338")
+	if err != nil {
+		panic(err)
+	}
+
 	for curHeight != maxHeight {
-		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		ub, err := GetUblockFromNet(con)
 		if err != nil {
 			panic(err)
 		}
 
-		// rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
-
-		send := UBlock{Block: blk, Height: curHeight} //Proof: nil}
-
-		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
-		blockChan <- send
+		blockChan <- ub
 		curHeight++
 	}
+}
+
+func GetUblockFromNet(c net.Conn) (ub UBlock, err error) {
+	err = ub.Block.Deserialize(c)
+	if err != nil {
+		return
+	}
+	ub.ExtraData.ToBytes()
+
+	return
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and

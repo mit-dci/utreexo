@@ -2,7 +2,9 @@ package util
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -205,6 +207,53 @@ func (ud *UData) ToBytes() (b []byte) {
 		b = append(b, PrefixLen16(ldb)...)
 	}
 
+	return
+}
+
+// network serialization for UBlocks (regular block with udata)
+// First 4 bytes is (big endian) lenght of the udata.
+// Then there's just a wire.MsgBlock with the regular serialization.
+// So basically udata, then a block, that's it.
+
+// Looks like "height" doesn't get sent over this way, but maybe that's OK.
+
+func (ub *UBlock) Deserialize(r io.Reader) (err error) {
+	var udatalen uint32
+
+	err = binary.Read(r, binary.BigEndian, &udatalen)
+	if err != nil {
+		return
+	}
+
+	udataBytes := make([]byte, udatalen)
+
+	_, err = r.Read(udataBytes)
+	if err != nil {
+		return
+	}
+
+	ub.ExtraData, err = UDataFromBytes(udataBytes)
+	if err != nil {
+		return
+	}
+
+	err = ub.Block.Deserialize(r)
+	return
+}
+
+func (ub *UBlock) Serialize(w io.Writer) (err error) {
+	udataBytes := ub.ExtraData.ToBytes()
+	err = binary.Write(w, binary.BigEndian, uint32(len(udataBytes)))
+	if err != nil {
+		return
+	}
+
+	_, err = w.Write(udataBytes)
+	if err != nil {
+		return
+	}
+
+	err = ub.Block.Serialize(w)
 	return
 }
 
