@@ -147,7 +147,8 @@ func UblockNetworkReader(
 	}
 
 	for curHeight != maxHeight {
-		ub, err := GetUblockFromNet(con)
+		var ub UBlock
+		err = ub.Deserialize(con)
 		if err != nil {
 			panic(err)
 		}
@@ -157,14 +158,41 @@ func UblockNetworkReader(
 	}
 }
 
-func GetUblockFromNet(c net.Conn) (ub UBlock, err error) {
-	err = ub.Block.Deserialize(c)
-	if err != nil {
-		return
-	}
-	ub.ExtraData.ToBytes()
+// UblockNetworkReader gets Ublocks from the remote host and puts em in the
+// channel.  It'll try to fill the channel buffer.
+func UblockNetworkServer(curHeight, maxHeight int32) {
 
-	return
+	listener, err := net.Listen("tcp", "127.0.0.1:8338")
+	if err != nil {
+		panic(err)
+	}
+	con, err := listener.Accept()
+	if err != nil {
+		panic(err)
+	}
+
+	for ; curHeight != maxHeight; curHeight++ {
+		ud, err := GetUDataFromFile(curHeight)
+		if err != nil {
+			fmt.Printf("GetUDataFromFile ")
+			panic(err)
+		}
+
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		if err != nil {
+			fmt.Printf("GetRawBlockFromFile ")
+			panic(err)
+		}
+
+		// put proofs & block together, send that over
+		ub := UBlock{ExtraData: ud, Block: blk}
+		err = ub.Serialize(con)
+		if err != nil {
+			fmt.Printf("ub.Serialize ")
+			panic(err)
+		}
+
+	}
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and
