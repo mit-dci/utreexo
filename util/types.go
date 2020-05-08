@@ -110,7 +110,7 @@ func (l *LeafData) ToString() (s string) {
 func LeafDataFromBytes(b []byte) (LeafData, error) {
 	var l LeafData
 	if len(b) < 80 {
-		return l, fmt.Errorf("Not long enough for leafdata, need 80 bytes")
+		return l, fmt.Errorf("%x for leafdata, need 80 bytes", b)
 	}
 	copy(l.BlockHash[:], b[0:32])
 	copy(l.Outpoint.Hash[:], b[32:64])
@@ -204,6 +204,9 @@ func (ud *UData) ToBytes() (b []byte) {
 	// next, all the leafDatas
 	for _, ld := range ud.UtxoData {
 		ldb := ld.ToBytes()
+		if len(ldb) < 80 {
+			fmt.Printf("short utxo %s %x\n", ld.Outpoint.String(), ldb)
+		}
 		b = append(b, PrefixLen16(ldb)...)
 	}
 
@@ -291,6 +294,7 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 		if err != nil {
 			return
 		}
+		fmt.Printf("%s ok ", ud.UtxoData[i].Outpoint.String())
 	}
 
 	return ud, nil

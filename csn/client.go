@@ -57,7 +57,7 @@ func IBDClient(net wire.BitcoinNet,
 
 	// bool for stopping the below for loop
 	var stop bool
-	for ; height != knownTipHeight && stop != true; height++ {
+	for ; height != knownTipHeight && !stop; height++ {
 
 		blocknproof := <-ublockQueue
 
@@ -66,13 +66,6 @@ func IBDClient(net wire.BitcoinNet,
 		if err != nil {
 			panic(err)
 		}
-
-		//if height%10000 == 0 {
-		//	fmt.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
-		//		height, newForest.Stats(),
-		//		plustime.Seconds(), time.Now().Sub(starttime).Seconds(),
-		//		totalProofNodes)
-		//}
 
 		if height%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
@@ -132,13 +125,13 @@ func putBlockInPollard(
 		return err
 	}
 
-	// fmt.Printf("h %d adds %d targets %d\n",
-	// 	ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
-
 	// get hashes to add into the accumulator
 	blockAdds := util.BlockToAddLeaves(
 		ub.Block, nil, outskip, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
+
+	// fmt.Printf("h %d adds %d targets %d\n",
+	// ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
