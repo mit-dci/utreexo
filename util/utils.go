@@ -153,7 +153,6 @@ func UblockNetworkReader(
 			panic(err)
 		}
 
-		fmt.Printf("got block %d\n", curHeight)
 		ub.Height = curHeight
 		blockChan <- ub
 	}
@@ -193,7 +192,6 @@ func UblockNetworkServer(curHeight, maxHeight int32) error {
 			fmt.Printf("ub.Serialize ")
 			return err
 		}
-		fmt.Printf("sent block %d\n", curHeight)
 	}
 	return nil
 }

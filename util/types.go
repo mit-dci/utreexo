@@ -204,9 +204,6 @@ func (ud *UData) ToBytes() (b []byte) {
 	// next, all the leafDatas
 	for _, ld := range ud.UtxoData {
 		ldb := ld.ToBytes()
-		if len(ldb) < 80 {
-			fmt.Printf("short utxo %s %x\n", ld.Outpoint.String(), ldb)
-		}
 		b = append(b, PrefixLen16(ldb)...)
 	}
 
@@ -221,30 +218,39 @@ func (ud *UData) ToBytes() (b []byte) {
 // Looks like "height" doesn't get sent over this way, but maybe that's OK.
 
 func (ub *UBlock) Deserialize(r io.Reader) (err error) {
-	var udatalen uint32
-
-	err = binary.Read(r, binary.BigEndian, &udatalen)
+	err = ub.Block.Deserialize(r)
 	if err != nil {
 		return
 	}
 
-	udataBytes := make([]byte, udatalen)
+	var uDataLen, bytesRead uint32
+	var n int
 
-	_, err = r.Read(udataBytes)
+	err = binary.Read(r, binary.BigEndian, &uDataLen)
 	if err != nil {
 		return
+	}
+
+	udataBytes := make([]byte, uDataLen)
+
+	for bytesRead < uDataLen {
+		n, err = r.Read(udataBytes[bytesRead:])
+		if err != nil {
+			return
+		}
+		bytesRead += uint32(n)
 	}
 
 	ub.ExtraData, err = UDataFromBytes(udataBytes)
-	if err != nil {
-		return
-	}
-
-	err = ub.Block.Deserialize(r)
 	return
 }
 
 func (ub *UBlock) Serialize(w io.Writer) (err error) {
+	err = ub.Block.Serialize(w)
+	if err != nil {
+		return
+	}
+
 	udataBytes := ub.ExtraData.ToBytes()
 	err = binary.Write(w, binary.BigEndian, uint32(len(udataBytes)))
 	if err != nil {
@@ -252,11 +258,7 @@ func (ub *UBlock) Serialize(w io.Writer) (err error) {
 	}
 
 	_, err = w.Write(udataBytes)
-	if err != nil {
-		return
-	}
 
-	err = ub.Block.Serialize(w)
 	return
 }
 
@@ -282,10 +284,10 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 	// got the batch proof part; now populate the leaf data part
 	// first there are as many leafDatas as there are proof targets
 	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
-
 	var ldb []byte
 	// loop until we've filled in every leafData (or something breaks first)
 	for i, _ := range ud.UtxoData {
+		// fmt.Printf("leaf %d dataBytes %x ", i, leafDataBytes)
 		ldb, leafDataBytes, err = PopPrefixLen16(leafDataBytes)
 		if err != nil {
 			return
@@ -294,7 +296,6 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 		if err != nil {
 			return
 		}
-		fmt.Printf("%s ok ", ud.UtxoData[i].Outpoint.String())
 	}
 
 	return ud, nil
