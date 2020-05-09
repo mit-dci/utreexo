@@ -116,6 +116,17 @@ func putBlockInPollard(
 	if !ub.ExtraData.Verify(p.ReconstructStats()) {
 		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
 	}
+
+	// **************************************
+	// check transactions and signatures here
+	// TODO: it'd be better to do it after IngestBatchProof(),
+	// or really in the middle of IngestBatchProof(), after it does
+	// verifyBatchProof(), but before it actually starts populating / modifying
+	// the pollard.  This is because verifying the proof should be faster than
+	// checking all the signatures in the block, so we'd rather do the fast
+	// thing first.  (Especially since that thing isn't committed to in the
+	// PoW, but the signatures are...
+
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
