@@ -95,6 +95,16 @@ func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 	return swaps
 }
 
+func swapInRow(s arrow, collapses [][]arrow, r uint8, forestRows uint8) {
+	for cr := uint8(0); cr < r; cr++ {
+		if len(collapses[cr]) == 0 {
+			continue
+		}
+		mask := swapIfDescendant(s, collapses[cr][0], r, cr, forestRows)
+		collapses[cr][0].to ^= mask
+	}
+}
+
 // swapCollapses applies all swaps to lower collapses.
 func swapCollapses(swaps, collapses [][]arrow, forestRows uint8) {
 	// If there is nothing to collapse, we're done
@@ -106,17 +116,7 @@ func swapCollapses(swaps, collapses [][]arrow, forestRows uint8) {
 	for r := uint8(len(collapses)) - 1; r != 0; r-- {
 		// go through through swaps at this row
 		for _, s := range swaps[r] {
-			for cr := uint8(0); cr < r; cr++ {
-				if len(collapses[cr]) == 0 {
-					continue
-				}
-				mask := swapIfDescendant(s, collapses[cr][0], r, cr, forestRows)
-				if mask != 0 {
-					// fmt.Printf("****col %v becomes ", c)
-					collapses[cr][0].to ^= mask
-					// fmt.Printf("%v due to %v\n", collapses[cr], s)
-				}
-			}
+			swapInRow(s, collapses, r, forestRows)
 		}
 
 		if len(collapses[r]) == 0 {
@@ -125,19 +125,7 @@ func swapCollapses(swaps, collapses [][]arrow, forestRows uint8) {
 		// exists / non-nil; affect lower collapses
 		rowcol := collapses[r][0]
 		// do collapse on lower collapses
-		for cr := uint8(0); cr < r; cr++ {
-			if len(collapses[cr]) == 0 {
-				continue
-			}
-
-			mask := swapIfDescendant(rowcol, collapses[cr][0], r, cr, forestRows)
-
-			if mask != 0 {
-				// fmt.Printf("****col %v becomes ", collapses[cr])
-				collapses[cr][0].to ^= mask
-				// fmt.Printf("%v due to %v\n", collapses[cr], rowcol)
-			}
-		}
+		swapInRow(rowcol, collapses, r, forestRows)
 	}
 }
 
