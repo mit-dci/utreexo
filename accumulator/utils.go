@@ -115,6 +115,12 @@ func child(position uint64, forestRows uint8) uint64 {
 
 // go down drop times (always left; LSBs will be 0) and return position
 func childMany(position uint64, drop, forestRows uint8) uint64 {
+	if drop == 0 {
+		return position
+	}
+	if drop > forestRows {
+		panic("childMany drop > forestRows")
+	}
 	mask := uint64(2<<forestRows) - 1
 	return (position << drop) & mask
 }
@@ -126,6 +132,12 @@ func parent(position uint64, forestRows uint8) uint64 {
 
 // go up rise times and return the position
 func parentMany(position uint64, rise, forestRows uint8) uint64 {
+	if rise == 0 {
+		return position
+	}
+	if rise > forestRows {
+		panic("parentMany rise > forestRows")
+	}
 	mask := uint64(2<<forestRows) - 1
 	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
 }
