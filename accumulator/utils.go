@@ -181,6 +181,17 @@ func treeRows(n uint64) (e uint8) {
 	return
 }
 
+// numRoots is just a popCount function, returning the number of 1 bits
+func numRoots(n uint64) (r uint8) {
+	for n > 0 {
+		if n&1 == 1 {
+			r++
+		}
+		n >>= 1
+	}
+	return
+}
+
 // rootPosition: given a number of leaves and a row, find the position of the
 // root at that row.  Does not return an error if there's no root at that
 // row so watch out and check first.  Checking is easy: leaves & (1<<h)

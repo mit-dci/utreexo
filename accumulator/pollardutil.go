@@ -1,8 +1,9 @@
 package accumulator
 
 import (
+	"encoding/binary"
 	"fmt"
-	"os"
+	"io"
 )
 
 // Pollard is the sparse representation of the utreexo forest, using
@@ -127,59 +128,47 @@ func (p *Pollard) rootHashesReverse() []Hash {
 	return rHashes
 }
 
-func (p *Pollard) WritePollard(pollardFile *os.File) error {
+//  ------------------ pollard serialization
+// currently saving /restoring pollard to disk only does the roots.
+// so you lose all the caching
+// TODO have the option to save restore sparse pollards.  Could use the same
+// idea as verifyBatchProof
 
-	// "Overwriting" pollardFile passed in
-	// I feel like this is faster than writing 0s
-	os.Remove("pollardfile.dat")
+// current serialization is just 8byte numleaves, followed by all the hashes
+// (in small to big order)
+
+func (p *Pollard) WritePollard(w io.Writer) error {
 	var err error
-	pollardFile, err = os.OpenFile(
-		"pollardfile.dat", os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	// The Hash of all the roots appended
-	var allRoots []byte
-	for _, t := range p.roots {
-		allRoots = append(allRoots, t.data[:]...)
-	}
-
-	_, err = pollardFile.WriteAt(append(U64tB(p.numLeaves), allRoots...), 0)
+	err = binary.Write(w, binary.BigEndian, p.numLeaves)
 	if err != nil {
 		return err
+	}
+	for _, t := range p.roots {
+		_, err = w.Write(t.data[:])
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Println("Pollard leaves:", p.numLeaves)
 	return nil
 }
 
-func (p *Pollard) RestorePollard(pollardFile *os.File) error {
+func (p *Pollard) RestorePollard(r io.Reader) error {
 	fmt.Println("Restoring Pollard Roots...")
-
-	var byteLeaves [8]byte
-	_, err := pollardFile.Read(byteLeaves[:])
+	err := binary.Read(r, binary.BigEndian, &p.numLeaves)
 	if err != nil {
-		panic(err)
-	}
-	p.numLeaves = BtU64(byteLeaves[:])
-	fmt.Println("Pollard Leaves:", p.numLeaves)
-
-	pstat, err := pollardFile.Stat()
-	if err != nil {
-		panic(err)
+		return err
 	}
 
-	pos := int64(8)
-	for i := int(0); pos != pstat.Size(); i++ {
-		var h Hash
-		_, err := pollardFile.Read(h[:])
-		if err != nil {
-			panic(err)
+	p.roots = make([]polNode, numRoots(p.numLeaves))
+	fmt.Printf("%d leaves %d roots ", p.numLeaves, len(p.roots))
+	for i, _ := range p.roots {
+		bytesRead, err := r.Read(p.roots[i].data[:])
+		// ignore EOF error at the end of successful reading
+		if err != nil && !(bytesRead == 32 && err == io.EOF) {
+			fmt.Printf("on hash %d read %d ", i, bytesRead)
+			return err
 		}
-		n := new(polNode)
-		n.data = h
-		p.roots = append(p.roots, *n)
-		pos += 32
 	}
 	fmt.Println("Finished restoring pollard")
 	return nil

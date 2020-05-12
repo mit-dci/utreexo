@@ -11,32 +11,9 @@ import (
 // initCSNState attempts to load and initialize the CSN state from the disk.
 // If a CSN state is not present, chain is initialized to the genesis
 func initCSNState() (
-	p accumulator.Pollard, height int32, knownTipHeight int32, err error) {
+	p accumulator.Pollard, height int32, err error) {
 
-	var offsetInitialized, pollardInitialized bool
-
-	// bool to check if the offsetfile is present
-	offsetInitialized = util.HasAccess(util.OffsetFilePath)
-
-	// We expect the offsetdata to be present
-	// TODO this will be depreciated in the future
-	if offsetInitialized {
-		var info os.FileInfo
-		info, err = os.Stat(util.POffsetFilePath)
-		if err != nil {
-			return
-		}
-		if info.Size()%8 != 0 {
-			err = fmt.Errorf("offsetfile %d bytes, not multiple of 8",
-				info.Size())
-			return
-		}
-		knownTipHeight = int32(info.Size() / 8)
-	} else {
-		err = fmt.Errorf("No offsetdata present. " +
-			"Please run `genproofs` first and try again")
-		return
-	}
+	var pollardInitialized bool
 
 	// bool to check if the pollarddata is present
 	pollardInitialized = util.HasAccess(util.PollardFilePath)

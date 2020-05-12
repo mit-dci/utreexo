@@ -148,7 +148,7 @@ func BuildProofs(
 	fmt.Println("Done writing")
 
 	// should be a goroutine..?  isn't right now
-	blockServer(1, knownTipHeight)
+	blockServer(knownTipHeight)
 
 	// Tell stopBuildProofs that it's ok to exit
 	finish <- true
