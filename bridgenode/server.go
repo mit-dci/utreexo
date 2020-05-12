@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/mit-dci/utreexo/util"
 )
@@ -11,34 +12,48 @@ import (
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
 
-func blockServer(endHeight int32) {
+func blockServer(endHeight int32, haltRequest, haltAccept chan bool) {
+
+	listenAdr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8338")
+	if err != nil {
+		fmt.Printf(err.Error())
+		return
+	}
+
+	listener, err := net.ListenTCP("tcp", listenAdr)
+	if err != nil {
+		fmt.Printf(err.Error())
+		return
+	}
+
 	for {
-		fmt.Printf("starting UblockNetworkServer... ")
-		err := UblockNetworkServer()
-		if err != nil {
-			fmt.Printf("UblockNetworkServer error: %s\n", err.Error())
+		var con net.Conn
+		select {
+		case <-haltRequest:
+			listener.Close()
+			haltAccept <- true
+			return
+		default:
 		}
+		// this... is how you do it?  Seems dumb to have an arbitrary timeout
+		// here and not be able to somehow put the blocking listener.Accept()
+		// itself in the select statement... huh.
+		err = listener.SetDeadline(time.Now().Add(time.Second))
+		if err != nil {
+			fmt.Printf(err.Error())
+			return
+		}
+
+		con, err = listener.Accept()
+		if err != nil {
+			if err.(*net.OpError).Timeout() {
+				continue
+			}
+			fmt.Printf("blockServer accept error: %s\n", err.Error())
+			continue
+		}
+		go pushBlocks(con)
 	}
-}
-
-// UblockNetworkReader gets Ublocks from the remote host and puts em in the
-// channel.  It'll try to fill the channel buffer.
-func UblockNetworkServer() error {
-
-	listener, err := net.Listen("tcp", "127.0.0.1:8338")
-	if err != nil {
-		return err
-	}
-	con, err := listener.Accept()
-	if err != nil {
-		return err
-	}
-
-	go pushBlocks(con)
-
-	defer listener.Close()
-
-	return nil
 }
 
 func pushBlocks(c net.Conn) {

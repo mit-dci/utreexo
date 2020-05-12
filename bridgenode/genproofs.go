@@ -20,17 +20,17 @@ func BuildProofs(
 	net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
-	done := make(chan bool, 1)
+	haltRequest := make(chan bool, 1)
 
 	// Waitgroup to alert stopBuildProofs() that revoffet and offset has
 	// been finished
 	offsetFinished := make(chan bool, 1)
 
 	// Channel for stopBuildProofs() to wait
-	finish := make(chan bool, 1)
+	haltAccept := make(chan bool, 1)
 
 	// Handle user interruptions
-	go stopBuildProofs(sig, offsetFinished, done, finish)
+	go stopBuildProofs(sig, offsetFinished, haltRequest, haltAccept)
 
 	// If given the option testnet=true, check if the blk00000.dat file
 	// in the directory is a testnet file. Vise-versa for mainnet
@@ -127,7 +127,7 @@ func BuildProofs(
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
 		select {
-		case stop = <-done: // receives true from stopBuildProofs()
+		case stop = <-haltRequest: // receives true from stopBuildProofs()
 		default:
 		}
 	}
@@ -148,10 +148,10 @@ func BuildProofs(
 	fmt.Println("Done writing")
 
 	// should be a goroutine..?  isn't right now
-	blockServer(knownTipHeight)
+	blockServer(knownTipHeight, haltRequest, haltAccept)
 
 	// Tell stopBuildProofs that it's ok to exit
-	finish <- true
+	haltAccept <- true
 	return nil
 
 }
@@ -283,7 +283,7 @@ func blockNRevToDelLeaves(bnr util.BlockAndRev, skiplist []uint32) (
 
 // stopBuildProofs listens for the signal from the OS and initiates an exit squence
 func stopBuildProofs(
-	sig, offsetfinished, done, finish chan bool) {
+	sig, offsetfinished, haltRequest, haltAccept chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
@@ -304,7 +304,7 @@ func stopBuildProofs(
 	case <-offsetfinished:
 		select {
 		default:
-			done <- true
+			haltRequest <- true
 		}
 	// If nothing is received, delete offsetfile and other directories
 	// Don't wait for done channel from the main BuildProofs() for loop
@@ -327,6 +327,6 @@ func stopBuildProofs(
 	}
 
 	// Wait until BuildProofs() or buildOffsetFile() says it's ok to exit
-	<-finish
+	<-haltAccept
 	os.Exit(0)
 }
