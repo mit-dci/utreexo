@@ -2,7 +2,9 @@ package util
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -108,7 +110,7 @@ func (l *LeafData) ToString() (s string) {
 func LeafDataFromBytes(b []byte) (LeafData, error) {
 	var l LeafData
 	if len(b) < 80 {
-		return l, fmt.Errorf("Not long enough for leafdata, need 80 bytes")
+		return l, fmt.Errorf("%x for leafdata, need 80 bytes", b)
 	}
 	copy(l.BlockHash[:], b[0:32])
 	copy(l.Outpoint.Hash[:], b[32:64])
@@ -208,6 +210,58 @@ func (ud *UData) ToBytes() (b []byte) {
 	return
 }
 
+// network serialization for UBlocks (regular block with udata)
+// First 4 bytes is (big endian) lenght of the udata.
+// Then there's just a wire.MsgBlock with the regular serialization.
+// So basically udata, then a block, that's it.
+
+// Looks like "height" doesn't get sent over this way, but maybe that's OK.
+
+func (ub *UBlock) Deserialize(r io.Reader) (err error) {
+	err = ub.Block.Deserialize(r)
+	if err != nil {
+		return
+	}
+
+	var uDataLen, bytesRead uint32
+	var n int
+
+	err = binary.Read(r, binary.BigEndian, &uDataLen)
+	if err != nil {
+		return
+	}
+
+	udataBytes := make([]byte, uDataLen)
+
+	for bytesRead < uDataLen {
+		n, err = r.Read(udataBytes[bytesRead:])
+		if err != nil {
+			return
+		}
+		bytesRead += uint32(n)
+	}
+
+	ub.ExtraData, err = UDataFromBytes(udataBytes)
+	return
+}
+
+func (ub *UBlock) Serialize(w io.Writer) (err error) {
+	err = ub.Block.Serialize(w)
+	if err != nil {
+		return
+	}
+
+	udataBytes := ub.ExtraData.ToBytes()
+	err = binary.Write(w, binary.BigEndian, uint32(len(udataBytes)))
+	if err != nil {
+		return
+	}
+
+	_, err = w.Write(udataBytes)
+
+	return
+}
+
 func UDataFromBytes(b []byte) (ud UData, err error) {
 
 	if len(b) < 4 {
@@ -230,10 +284,10 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 	// got the batch proof part; now populate the leaf data part
 	// first there are as many leafDatas as there are proof targets
 	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
-
 	var ldb []byte
 	// loop until we've filled in every leafData (or something breaks first)
 	for i, _ := range ud.UtxoData {
+		// fmt.Printf("leaf %d dataBytes %x ", i, leafDataBytes)
 		ldb, leafDataBytes, err = PopPrefixLen16(leafDataBytes)
 		if err != nil {
 			return

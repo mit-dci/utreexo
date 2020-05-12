@@ -2,15 +2,11 @@ package csn
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
-
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // run IBD from block proof data
@@ -32,16 +28,6 @@ func IBDClient(net wire.BitcoinNet,
 	// file corresponding to net
 	util.CheckNet(net)
 
-	// open database
-	o := new(opt.Options)
-	o.CompactionTableSizeMultiplier = 8
-	o.ReadOnly = true
-	lvdb, err := leveldb.OpenFile(ttldb, o)
-	if err != nil {
-		panic(err)
-	}
-	defer lvdb.Close()
-
 	// Make neccesary directories
 	util.MakePaths()
 
@@ -61,28 +47,17 @@ func IBDClient(net wire.BitcoinNet,
 	// disk but it should be the exact same thing
 	ublockQueue := make(chan util.UBlock, 10)
 
-	pFile, err := os.OpenFile(
-		util.PFilePath, os.O_RDONLY, 0400)
-	if err != nil {
-		return err
-	}
-
-	pOffsetFile, err := os.OpenFile(
-		util.POffsetFilePath, os.O_RDONLY, 0400)
-	if err != nil {
-		return err
-	}
-
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go util.UBlockReader(ublockQueue, knownTipHeight, height, lookahead)
+	go util.UblockNetworkReader(
+		ublockQueue, "127.0.0.1:8338", knownTipHeight, height, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
 
 	// bool for stopping the below for loop
 	var stop bool
-	for ; height != knownTipHeight && stop != true; height++ {
+	for ; height != knownTipHeight && !stop; height++ {
 
 		blocknproof := <-ublockQueue
 
@@ -91,13 +66,6 @@ func IBDClient(net wire.BitcoinNet,
 		if err != nil {
 			panic(err)
 		}
-
-		//if height%10000 == 0 {
-		//	fmt.Printf("Block %d %s plus %.2f total %.2f proofnodes %d \n",
-		//		height, newForest.Stats(),
-		//		plustime.Seconds(), time.Now().Sub(starttime).Seconds(),
-		//		totalProofNodes)
-		//}
 
 		if height%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
@@ -111,10 +79,8 @@ func IBDClient(net wire.BitcoinNet,
 		case stop = <-stopGoing:
 		default:
 		}
-	}
-	pFile.Close()
-	pOffsetFile.Close()
 
+	}
 	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 		height, totalTXOAdded, totalDels, p.Stats(),
 		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
@@ -150,6 +116,17 @@ func putBlockInPollard(
 	if !ub.ExtraData.Verify(p.ReconstructStats()) {
 		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
 	}
+
+	// **************************************
+	// check transactions and signatures here
+	// TODO: it'd be better to do it after IngestBatchProof(),
+	// or really in the middle of IngestBatchProof(), after it does
+	// verifyBatchProof(), but before it actually starts populating / modifying
+	// the pollard.  This is because verifying the proof should be faster than
+	// checking all the signatures in the block, so we'd rather do the fast
+	// thing first.  (Especially since that thing isn't committed to in the
+	// PoW, but the signatures are...
+
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
@@ -159,13 +136,13 @@ func putBlockInPollard(
 		return err
 	}
 
-	// fmt.Printf("h %d adds %d targets %d\n",
-	// 	ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
-
 	// get hashes to add into the accumulator
 	blockAdds := util.BlockToAddLeaves(
 		ub.Block, nil, outskip, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
+
+	// fmt.Printf("h %d adds %d targets %d\n",
+	// ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete

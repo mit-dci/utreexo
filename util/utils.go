@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -135,22 +137,63 @@ func UBlockReader(
 // UblockNetworkReader gets Ublocks from the remote host and puts em in the
 // channel.  It'll try to fill the channel buffer.
 func UblockNetworkReader(
-	blockChan chan UBlock,
+	blockChan chan UBlock, remoteServer string,
 	maxHeight, curHeight, lookahead int32) {
-	for curHeight != maxHeight {
-		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+
+	d := net.Dialer{Timeout: 2 * time.Second}
+	con, err := d.Dial("tcp", "127.0.0.1:8338")
+	if err != nil {
+		panic(err)
+	}
+
+	for ; curHeight != maxHeight; curHeight++ {
+		var ub UBlock
+		err = ub.Deserialize(con)
 		if err != nil {
 			panic(err)
 		}
 
-		// rb, err := GetRevBlock(curHeight, RevOffsetFilePath)
-
-		send := UBlock{Block: blk, Height: curHeight} //Proof: nil}
-
-		// Txs: txs, Height: curHeight, Blockhash: bh, Rev: rb}
-		blockChan <- send
-		curHeight++
+		ub.Height = curHeight
+		blockChan <- ub
 	}
+}
+
+// UblockNetworkReader gets Ublocks from the remote host and puts em in the
+// channel.  It'll try to fill the channel buffer.
+func UblockNetworkServer(curHeight, maxHeight int32) error {
+
+	listener, err := net.Listen("tcp", "127.0.0.1:8338")
+	if err != nil {
+		return err
+	}
+	con, err := listener.Accept()
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+
+	for ; curHeight != maxHeight; curHeight++ {
+		ud, err := GetUDataFromFile(curHeight)
+		if err != nil {
+			fmt.Printf("GetUDataFromFile ")
+			return err
+		}
+
+		blk, err := GetRawBlockFromFile(curHeight, OffsetFilePath)
+		if err != nil {
+			fmt.Printf("GetRawBlockFromFile ")
+			return err
+		}
+
+		// put proofs & block together, send that over
+		ub := UBlock{ExtraData: ud, Block: blk}
+		err = ub.Serialize(con)
+		if err != nil {
+			fmt.Printf("ub.Serialize ")
+			return err
+		}
+	}
+	return nil
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and
