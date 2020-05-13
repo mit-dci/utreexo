@@ -31,7 +31,7 @@ func IBDClient(net wire.BitcoinNet,
 	// Make neccesary directories
 	util.MakePaths()
 
-	p, height, knownTipHeight, err := initCSNState()
+	p, height, err := initCSNState()
 	if err != nil {
 		panic(err)
 	}
@@ -50,14 +50,14 @@ func IBDClient(net wire.BitcoinNet,
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
 	go util.UblockNetworkReader(
-		ublockQueue, "127.0.0.1:8338", knownTipHeight, height, lookahead)
+		ublockQueue, "127.0.0.1:8338", height, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
 
 	// bool for stopping the below for loop
 	var stop bool
-	for ; height != knownTipHeight && !stop; height++ {
+	for ; !stop; height++ {
 
 		blocknproof := <-ublockQueue
 
