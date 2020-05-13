@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 )
 
 // Pollard is the sparse representation of the utreexo forest, using
@@ -32,13 +33,25 @@ type Pollard struct {
 
 // PolNode is a node in the pollard forest
 type polNode struct {
-	data  Hash
-	niece [2]*polNode
+	data    Hash
+	dataMtx sync.Mutex
+	niece   [2]*polNode
 }
 
 // auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
 func (n *polNode) auntOp() Hash {
+	// we don't need to mtx on read, only write
 	return parentHash(n.niece[0].data, n.niece[1].data)
+}
+
+// safeAssignData assigns the Hash to the data member of the polNode.
+// This is threadsafe. TODO: use an atomic Value instead of a Hash and benchmark
+// performance - there might be a performance benefit, but probably only if we
+// don't read more than write data from polNodes
+func (n *polNode) safeAssignData(newData Hash) {
+	n.dataMtx.Lock()
+	n.data = newData
+	n.dataMtx.Unlock()
 }
 
 // auntable tells you if you can call auntOp on a node

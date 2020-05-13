@@ -17,7 +17,8 @@ type hashableNode struct {
 
 func (n *hashableNode) run(wg *sync.WaitGroup) {
 	// fmt.Printf("hasher about to replace %x\n", n.dest.data[:4])
-	n.dest.data = n.sib.auntOp()
+	n.dest.safeAssignData(n.sib.auntOp())
+	// n.dest.data = n.sib.auntOp()
 	// fmt.Printf("hasher finished %x %x -> %x\n",
 	// n.sib.niece[0].data[:4], n.sib.niece[1].data[:4], n.dest.data[:4])
 	wg.Done()
