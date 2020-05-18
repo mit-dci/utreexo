@@ -23,7 +23,7 @@ func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 			break
 		}
 
-		var twinNextDels, swapNextDels []uint64
+		var twinNextDels []uint64
 
 		// *** Delroot
 		// TODO would be more elegant not to have this here.  But
@@ -40,46 +40,15 @@ func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 			dels = dels[:len(dels)-1] // pop off the last del
 			rootPresent = false
 		}
-
 		delRemains := len(dels)%2 != 0
 
 		// *** Twin
 		twinNextDels, dels = extractTwins(dels, forestRows)
+		swaps[r] = makeSwaps(dels, delRemains, rootPresent, rootPos)
+		collapses[r] = makeCollapse(dels, delRemains, rootPresent, r, numLeaves, nextNumLeaves, forestRows)
 
-		// *** swap
-		for len(dels) > 1 {
-			swaps[r] = append(swaps[r],
-				arrow{from: dels[1] ^ 1, to: dels[0]})
-			// deletion promotes to next row
-			swapNextDels = append(swapNextDels, parent(dels[1], forestRows))
-			dels = dels[2:]
-		}
-
-		// *** root
-		if rootPresent && delRemains { // root to del, no collapse / upper del
-			swaps[r] = append(swaps[r], arrow{from: rootPos, to: dels[0]})
-		}
-
-		// root but no del, and del but no root
-		// these are special cases, need to run collapseCheck
-		// on the collapses with later rows of swaps
-		if rootPresent && !delRemains { // stash root (collapses)
-			rootSrc := rootPosition(numLeaves, r, forestRows)
-			rootDest := rootPosition(nextNumLeaves, r, forestRows)
-			collapses[r] = []arrow{arrow{from: rootSrc, to: rootDest}}
-		}
-		// no root but 1 del: sibling becomes root & collapses
-		// in this case, mark as deleted
-		if !rootPresent && delRemains {
-			rootSrc := dels[0] ^ 1
-			rootDest := rootPosition(nextNumLeaves, r, forestRows)
-			collapses[r] = []arrow{arrow{from: rootSrc, to: rootDest}}
-
-			swapNextDels = append(swapNextDels, parent(dels[0], forestRows))
-		}
-
-		// if neither haveDel nor rootPresent, nothing to do.
 		// done with this row, move dels and proceed up to next row
+		swapNextDels := makeSwapNextDels(dels, delRemains, rootPresent, forestRows)
 		dels = mergeSortedSlices(twinNextDels, swapNextDels)
 	}
 	swapCollapses(swaps, collapses, forestRows)
@@ -93,6 +62,63 @@ func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 	}
 
 	return swaps
+}
+
+func makeCollapse(dels []uint64, delRemains, rootPresent bool, r uint8, numLeaves, nextNumLeaves uint64, forestRows uint8) []arrow {
+	rootDest := rootPosition(nextNumLeaves, r, forestRows)
+	switch {
+	// root but no del, and del but no root
+	// these are special cases, need to run collapseCheck
+	// on the collapses with later rows of swaps
+	case !delRemains && rootPresent:
+		rootSrc := rootPosition(numLeaves, r, forestRows)
+		return []arrow{arrow{from: rootSrc, to: rootDest}}
+	case delRemains && !rootPresent:
+		// no root but 1 del: sibling becomes root & collapses
+		// in this case, mark as deleted
+		rootSrc := dels[len(dels)-1] ^ 1
+		return []arrow{arrow{from: rootSrc, to: rootDest}}
+	default:
+		return nil
+	}
+}
+
+func makeSwapNextDels(dels []uint64, delRemains, rootPresent bool, forestRows uint8) []uint64 {
+	numSwaps := len(dels) >> 1
+	if delRemains && !rootPresent {
+		numSwaps++
+	}
+	swapNextDels := make([]uint64, numSwaps)
+	i := 0
+	for ; len(dels) > 1; dels = dels[2:] {
+		swapNextDels[i] = parent(dels[1], forestRows)
+		i++
+	}
+	if delRemains && !rootPresent {
+		// deletion promotes to next row
+		swapNextDels[i] = parent(dels[0], forestRows)
+	}
+	return swapNextDels
+}
+
+func makeSwaps(dels []uint64, delRemains, rootPresent bool, rootPos uint64) []arrow {
+	numSwaps := len(dels) >> 1
+	if delRemains && rootPresent {
+		numSwaps++
+	}
+	rowSwaps := make([]arrow, numSwaps)
+	// *** swap
+	i := 0
+	for ; len(dels) > 1; dels = dels[2:] {
+		rowSwaps[i] = arrow{from: dels[1] ^ 1, to: dels[0]}
+		i++
+	}
+	// *** root
+	if delRemains && rootPresent {
+		// root to del, no collapse / upper del
+		rowSwaps[i] = arrow{from: rootPos, to: dels[0]}
+	}
+	return rowSwaps
 }
 
 func swapInRow(s arrow, collapses [][]arrow, r uint8, forestRows uint8) {
