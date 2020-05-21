@@ -11,12 +11,20 @@ import (
 	"github.com/mit-dci/utreexo/util"
 )
 
-func RunIBD(net wire.BitcoinNet, offsetfile string, ttldb string, sig chan bool) error {
+func RunIBD(p *chaincfg.Params, offsetfile string, ttldb string, sig chan bool) error {
 
-	// c := new(Csn)
+	pol, h, err := initCSNState()
+	if err != nil {
+		return err
+	}
+	c := new(Csn)
+	c.pollard = pol
 
+	c.Start(h, "127.0.0.1:8338", "compactstate", "", p)
 	// start client & connect
-	return IBDClient(net, offsetfile, ttldb, sig)
+	go IBD(sig)
+
+	return nil
 }
 
 // Start starts up a compact state node, and returns channels for txs and

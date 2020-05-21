@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg"
+
 	bridge "github.com/mit-dci/utreexo/bridgenode"
 	"github.com/mit-dci/utreexo/csn"
 	"github.com/mit-dci/utreexo/util"
@@ -46,6 +47,7 @@ func main() {
 	}
 
 	optionCmd.Parse(os.Args[2:])
+<<<<<<< HEAD
 	// set datadir
 	var dataDir string
 	if *dataDirCmd == "" { // No custom datadir given by the user
@@ -66,10 +68,21 @@ func main() {
 		offsetfile = "regtest-offsetfile"
 		dataDir = filepath.Join(dataDir, "regtest")
 		net = wire.TestNet // yes, this is the name of regtest in lit
+=======
+	var param chaincfg.Params // wire.BitcoinNet
+	if *netCmd == "testnet" {
+		ttldb = "testnet-ttldb"
+		offsetfile = "testnet-offsetfile"
+		param = chaincfg.TestNet3Params
+	} else if *netCmd == "regtest" {
+		ttldb = "regtest-ttldb"
+		offsetfile = "regtest-offsetfile"
+		param = chaincfg.RegressionNetParams
+>>>>>>> use coin params instead of just wire.net
 	} else if *netCmd == "mainnet" {
 		ttldb = "ttldb"
 		offsetfile = "offsetfile"
-		net = wire.MainNet
+		param = chaincfg.MainNetParams
 	} else {
 		fmt.Println("Invalid net flag given.")
 		fmt.Println(msg)
@@ -81,12 +94,16 @@ func main() {
 
 	switch os.Args[1] {
 	case "ibdsim":
-		err := csn.RunIBD(net, offsetfile, ttldb, sig)
+		err := csn.RunIBD(&param, offsetfile, ttldb, sig)
 		if err != nil {
 			panic(err)
 		}
 	case "genproofs":
+<<<<<<< HEAD
 		err := bridge.BuildProofs(dataDir, net, ttldb, offsetfile, sig)
+=======
+		err := bridge.BuildProofs(param, ttldb, offsetfile, sig)
+>>>>>>> use coin params instead of just wire.net
 		if err != nil {
 			panic(err)
 		}

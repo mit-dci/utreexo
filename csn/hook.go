@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/accumulator"
 )
 
 /*
@@ -36,8 +37,10 @@ a separate unconfirmed TX channel if there's interest in that...e
 // It keeps track of what block its on and what transactions it's looking for
 type Csn struct {
 	CurrentHeight int32
-	WatchOPs      map[wire.OutPoint]bool
-	WatchAdrs     map[[20]byte]bool
+	pollard       accumulator.Pollard
+
+	WatchOPs  map[wire.OutPoint]bool
+	WatchAdrs map[[20]byte]bool
 	// TODO use better addresses, either []byte or something fancy
 	TxChan     chan wire.MsgTx
 	HeightChan chan int32

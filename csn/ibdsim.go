@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-func IBDClient(net wire.BitcoinNet,
-	offsetfile string, ttldb string, sig chan bool) error {
+func IBD(sig chan bool) {
 
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
@@ -83,8 +81,6 @@ func IBDClient(net wire.BitcoinNet,
 	fmt.Println("Done Writing")
 
 	haltAccept <- true
-
-	return nil
 }
 
 // Here we write proofs for all the txs.
