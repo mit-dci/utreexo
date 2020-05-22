@@ -45,9 +45,7 @@ func (n *polNode) auntOp() Hash {
 }
 
 // safeAssignData assigns the Hash to the data member of the polNode.
-// This is threadsafe. TODO: use an atomic Value instead of a Hash and benchmark
-// performance - there might be a performance benefit, but probably only if we
-// don't read more than write data from polNodes
+// This is threadsafe. TODO: remove Mutex from polNode, fix duplicate hashing
 func (n *polNode) safeAssignData(newData Hash) {
 	n.dataMtx.Lock()
 	n.data = newData
