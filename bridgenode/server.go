@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/mit-dci/utreexo/util"
 )
@@ -26,33 +25,38 @@ func blockServer(endHeight int32, haltRequest, haltAccept chan bool) {
 		return
 	}
 
+	cons := make(chan net.Conn)
+	go acceptConnections(listener, cons)
+
 	for {
-		var con net.Conn
 		select {
 		case <-haltRequest:
 			listener.Close()
 			haltAccept <- true
+			close(cons)
+			return
+		case con := <-cons:
+			go pushBlocks(con)
+		}
+	}
+}
+
+func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
+	for {
+		select {
+		case <-cons:
+			// cons got closed, stop accepting new connections
 			return
 		default:
 		}
-		// this... is how you do it?  Seems dumb to have an arbitrary timeout
-		// here and not be able to somehow put the blocking listener.Accept()
-		// itself in the select statement... huh.
-		err = listener.SetDeadline(time.Now().Add(time.Second))
+
+		con, err := listener.Accept()
 		if err != nil {
-			fmt.Printf(err.Error())
+			fmt.Printf("blockServer accept error: %s\n", err.Error())
 			return
 		}
 
-		con, err = listener.Accept()
-		if err != nil {
-			if err.(*net.OpError).Timeout() {
-				continue
-			}
-			fmt.Printf("blockServer accept error: %s\n", err.Error())
-			continue
-		}
-		go pushBlocks(con)
+		cons <- con
 	}
 }
 
