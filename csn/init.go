@@ -11,7 +11,7 @@ import (
 	"github.com/mit-dci/utreexo/util"
 )
 
-func RunIBD(p *chaincfg.Params, offsetfile string, ttldb string, sig chan bool) error {
+func RunIBD(p *chaincfg.Params, sig chan bool) error {
 
 	pol, h, err := initCSNState()
 	if err != nil {
