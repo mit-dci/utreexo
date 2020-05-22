@@ -147,59 +147,18 @@ func (f *Forest) removev4(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 	}
-	var hashDirt, nextHashDirt []uint64
-	var prevHash uint64
-	var err error
+	var hashDirt []uint64
 	swapRows := remTrans2(dels, f.numLeaves, f.rows)
 	// loop taken from pollard rem2.  maybe pollard and forest can both
 	// satisfy the same interface..?  maybe?  that could work...
 	// TODO try that ^^^^^^
 	for r := uint8(0); r < f.rows; r++ {
-		var hDestSlice []uint64
-		var hashDest uint64
-		hashDirt = dedupeSwapDirt(hashDirt, swapRows[r])
-		for len(swapRows[r]) != 0 || len(hashDirt) != 0 {
-			// check if doing dirt. if not dirt, swap.
-			// (maybe a little clever here...)
-			if len(swapRows[r]) == 0 ||
-				len(hashDirt) != 0 && hashDirt[0] > swapRows[r][0].to {
-				// re-descending here which isn't great
-				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
-				hashDest = parent(hashDirt[0], f.rows)
-				hashDirt = hashDirt[1:]
-			} else { // swapping
-
-				err = f.swapNodes(swapRows[r][0], r)
-				if err != nil {
-					return err
-				}
-				// fmt.Printf("swap %v %x %x\n", swaprows[h][0],
-				// f.data.read(swaprows[h][0].from).Prefix(),
-				// f.data.read(swaprows[h][0].to).Prefix())
-				hashDest = parent(swapRows[r][0].to, f.rows)
-				swapRows[r] = swapRows[r][1:]
-			}
-			if !inForest(hashDest, f.numLeaves, f.rows) || hashDest == 0 {
-				continue
-				// TODO would be great to use nextNumLeaves... but tricky
-			}
-			if hashDest == prevHash { // we just did this
-				// fmt.Printf("just did %d\n", prevHash)
-				continue // TODO this doesn't cover eveything
-			}
-			hDestSlice = append(hDestSlice, hashDest)
-			// fmt.Printf("added hp %d\n", hashdest)
-			prevHash = hashDest
-			if len(nextHashDirt) == 0 ||
-				(nextHashDirt[len(nextHashDirt)-1] != hashDest) {
-				// skip if already on end of slice. redundant?
-				nextHashDirt = append(nextHashDirt, hashDest)
-			}
+		hashDirt = updateDirt(hashDirt, swapRows[r], f.numLeaves, f.rows)
+		for _, swap := range swapRows[r] {
+			f.swapNodes(swap, r)
 		}
-		hashDirt = nextHashDirt
-		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
-		err := f.hashRow(hDestSlice)
+		err := f.hashRow(hashDirt)
 		if err != nil {
 			return err
 		}
@@ -209,7 +168,46 @@ func (f *Forest) removev4(dels []uint64) error {
 	return nil
 }
 
-func (f *Forest) swapNodes(s arrow, row uint8) error {
+func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8) (nextHashDirt []uint64) {
+	var prevHash uint64
+	hashDirt = dedupeSwapDirt(hashDirt, swapRow)
+	for len(swapRow) != 0 || len(hashDirt) != 0 {
+		// check if doing dirt. if not dirt, swap.
+		// (maybe a little clever here...)
+		popSwap, hashDest := makeDestInRow(swapRow, hashDirt, rows)
+		if popSwap {
+			swapRow = swapRow[1:]
+		} else {
+			hashDirt = hashDirt[1:]
+		}
+		if !inForest(hashDest, numLeaves, rows) ||
+			hashDest == 0 || // TODO would be great to use nextNumLeaves... but tricky
+			hashDest == prevHash { // TODO this doesn't cover eveything
+			continue
+		}
+		prevHash = hashDest
+		if len(nextHashDirt) == 0 ||
+			(nextHashDirt[len(nextHashDirt)-1] != hashDest) {
+			// skip if already on end of slice. redundant?
+			nextHashDirt = append(nextHashDirt, hashDest)
+		}
+	}
+	return nextHashDirt
+}
+
+func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uint64) {
+	if len(maybeArrow) == 0 || len(hashDirt) != 0 && hashDirt[0] > maybeArrow[0].to {
+		// re-descending here which isn't great
+		hashDest := parent(hashDirt[0], rows)
+		return false, hashDest
+	} else {
+		// swapping
+		hashDest := parent(maybeArrow[0].to, rows)
+		return true, hashDest
+	}
+}
+
+func (f *Forest) swapNodes(s arrow, row uint8) {
 	if s.from == s.to {
 		// these shouldn't happen, and seems like the don't
 
@@ -220,7 +218,7 @@ func (f *Forest) swapNodes(s arrow, row uint8) error {
 		f.data.swapHash(s.from, s.to)
 		f.positionMap[f.data.read(s.to).Mini()] = s.to
 		f.positionMap[f.data.read(s.from).Mini()] = s.from
-		return nil
+		return
 	}
 	// fmt.Printf("swapnodes %v\n", s)
 	a := childMany(s.from, row, f.rows)
@@ -243,7 +241,7 @@ func (f *Forest) swapNodes(s arrow, row uint8) error {
 	}
 
 	// for
-	return nil
+	return
 }
 
 // reHash hashes new data in the forest based on dirty positions.
