@@ -15,16 +15,7 @@ import (
 )
 
 // build the bridge node / proofs
-<<<<<<< HEAD
-func BuildProofs(
-<<<<<<< HEAD
-	dataDir string, net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
-=======
-	net chaincfg.Params, ttlpath, offsetfile string, sig chan bool) error {
->>>>>>> use coin params instead of just wire.net
-=======
-func BuildProofs(param chaincfg.Params, sig chan bool) error {
->>>>>>> simplify arguments to RunIBD, BuildProofs
+func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -39,23 +30,12 @@ func BuildProofs(param chaincfg.Params, sig chan bool) error {
 	// Handle user interruptions
 	go stopBuildProofs(sig, offsetFinished, haltRequest, haltAccept)
 
-<<<<<<< HEAD
-=======
-	// If given the option testnet=true, check if the blk00000.dat file
-	// in the directory is a testnet file. Vise-versa for mainnet
-	util.CheckNet(param)
-
->>>>>>> simplify arguments to RunIBD, BuildProofs
 	// Creates all the directories needed for bridgenode
 	util.MakePaths()
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-<<<<<<< HEAD
-		initBridgeNodeState(dataDir, net, offsetFinished)
-=======
 		initBridgeNodeState(param, offsetFinished)
->>>>>>> simplify arguments to RunIBD, BuildProofs
 	if err != nil {
 		panic(err)
 	}

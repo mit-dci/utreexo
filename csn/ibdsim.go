@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
 
@@ -81,67 +80,4 @@ func IBD(sig chan bool) {
 	fmt.Println("Done Writing")
 
 	haltAccept <- true
-}
-
-// Here we write proofs for all the txs.
-// All the inputs are saved as 32byte sha256 hashes.
-// All the outputs are saved as LeafTXO type.
-func putBlockInPollard(
-	ub util.UBlock,
-	totalTXOAdded, totalDels *int,
-	plustime time.Duration,
-	p *accumulator.Pollard) error {
-
-	plusstart := time.Now()
-
-	inskip, outskip := util.DedupeBlock(&ub.Block)
-	if !ub.ProofsProveBlock(inskip) {
-		return fmt.Errorf("uData missing utxo data for block %d", ub.Height)
-	}
-
-	*totalDels += len(ub.ExtraData.AccProof.Targets) // for benchmarking
-
-	// derive leafHashes from leafData
-	if !ub.ExtraData.Verify(p.ReconstructStats()) {
-		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
-	}
-
-	// **************************************
-	// check transactions and signatures here
-	// TODO: it'd be better to do it after IngestBatchProof(),
-	// or really in the middle of IngestBatchProof(), after it does
-	// verifyBatchProof(), but before it actually starts populating / modifying
-	// the pollard.  This is because verifying the proof should be faster than
-	// checking all the signatures in the block, so we'd rather do the fast
-	// thing first.  (Especially since that thing isn't committed to in the
-	// PoW, but the signatures are...
-
-	// sort before ingestion; verify up above unsorts...
-	ub.ExtraData.AccProof.SortTargets()
-	// Fills in the empty(nil) nieces for verification && deletion
-	err := p.IngestBatchProof(ub.ExtraData.AccProof)
-	if err != nil {
-		fmt.Printf("height %d ingest error\n", ub.Height)
-		return err
-	}
-
-	// get hashes to add into the accumulator
-	blockAdds := util.BlockToAddLeaves(
-		ub.Block, nil, outskip, ub.Height)
-	*totalTXOAdded += len(blockAdds) // for benchmarking
-
-	// fmt.Printf("h %d adds %d targets %d\n",
-	// ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
-
-	// Utreexo tree modification. blockAdds are the added txos and
-	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, ub.ExtraData.AccProof.Targets)
-	if err != nil {
-		return err
-	}
-
-	donetime := time.Now()
-	plustime += donetime.Sub(plusstart)
-
-	return nil
 }

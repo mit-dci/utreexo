@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -34,8 +33,8 @@ OPTIONS:
 
 // bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
-var netCmd = optionCmd.String("net", "mainnet",
-	"Target testnet or regtest instead of mainnet. Usage: '-net=regtest' or '-net=testnet'")
+var netCmd = optionCmd.String("net", "testnet",
+	"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
 var dataDirCmd = optionCmd.String("datadir", "",
 	`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 
@@ -45,12 +44,7 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
-<<<<<<< HEAD
-
-=======
->>>>>>> simplify arguments to RunIBD, BuildProofs
 	optionCmd.Parse(os.Args[2:])
-<<<<<<< HEAD
 	// set datadir
 	var dataDir string
 	if *dataDirCmd == "" { // No custom datadir given by the user
@@ -59,25 +53,11 @@ func main() {
 		dataDir = *dataDirCmd // set dataDir to the one set by the user
 	}
 
-	var ttldb, offsetfile string
-	var net wire.BitcoinNet
-	if *netCmd == "testnet" {
-		ttldb = "testnet-ttldb"
-		offsetfile = "testnet-offsetfile"
-		dataDir = filepath.Join(dataDir, "testnet3")
-		net = wire.TestNet3
-	} else if *netCmd == "regtest" {
-		ttldb = "regtest-ttldb"
-		offsetfile = "regtest-offsetfile"
-		dataDir = filepath.Join(dataDir, "regtest")
-		net = wire.TestNet // yes, this is the name of regtest in lit
-=======
 	var param chaincfg.Params // wire.BitcoinNet
 	if *netCmd == "testnet" {
 		param = chaincfg.TestNet3Params
 	} else if *netCmd == "regtest" {
 		param = chaincfg.RegressionNetParams
->>>>>>> use coin params instead of just wire.net
 	} else if *netCmd == "mainnet" {
 		param = chaincfg.MainNetParams
 	} else {
@@ -96,15 +76,7 @@ func main() {
 			panic(err)
 		}
 	case "genproofs":
-<<<<<<< HEAD
-<<<<<<< HEAD
-		err := bridge.BuildProofs(dataDir, net, ttldb, offsetfile, sig)
-=======
-		err := bridge.BuildProofs(param, ttldb, offsetfile, sig)
->>>>>>> use coin params instead of just wire.net
-=======
-		err := bridge.BuildProofs(param, sig)
->>>>>>> simplify arguments to RunIBD, BuildProofs
+		err := bridge.BuildProofs(param, dataDir, sig)
 		if err != nil {
 			panic(err)
 		}

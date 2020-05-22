@@ -15,11 +15,7 @@ import (
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(
-<<<<<<< HEAD
-	dataDir string, net wire.BitcoinNet, offsetFinished chan bool) (forest *accumulator.Forest,
-=======
 	p chaincfg.Params, offsetFinished chan bool) (forest *accumulator.Forest,
->>>>>>> use coin params instead of just wire.net
 	height int32, lastIndexOffsetHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
@@ -39,12 +35,7 @@ func initBridgeNodeState(
 	} else {
 		fmt.Println("Offsetfile not present or half present." +
 			"Indexing offset for blocks blk*.dat files...")
-<<<<<<< HEAD
-		lastIndexOffsetHeight, err = createOffsetData(
-			dataDir, net, offsetFinished)
-=======
 		lastIndexOffsetHeight, err = createOffsetData(p, offsetFinished)
->>>>>>> use coin params instead of just wire.net
 		if err != nil {
 			return
 		}
