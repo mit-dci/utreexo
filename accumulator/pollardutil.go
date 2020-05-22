@@ -93,16 +93,6 @@ func (n *polNode) prune() {
 	}
 }
 
-// leafPrune is the prune method for leaves.  You don't want to chop off a leaf
-// just because it's not memorable; it might be there because its sibling is
-// memorable.  Call this at row 1 (not 0)
-func (n *polNode) leafPrune() {
-	if n.niece[0] != nil && n.niece[1] != nil &&
-		n.niece[0].deadEnd() && n.niece[1].deadEnd() {
-		n.chop()
-	}
-}
-
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
 // need their siblings so that the siblings' neices can swap.
 // for a root, just say the root's sibling is itself and it should work.
