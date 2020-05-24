@@ -400,7 +400,7 @@ func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
 	idxb := 0
 	for j := 0; j < maxa; j++ {
 		// skip over swap destinations less than current dirt
-		for idxb < maxb && a[j] < b[idxb].to {
+		for idxb < maxb && b[idxb].to < a[j] {
 			idxb++
 		}
 		if idxb == maxb { // done
