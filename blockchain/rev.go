@@ -1,4 +1,4 @@
-package util
+package blockchain
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/util"
 )
 
 // Wire Protocol version
@@ -87,21 +88,29 @@ func GetRevBlock(height int32, revOffsetFileName string) (
 	offsetFile.Read(datFile[:])
 	offsetFile.Read(offset[:])
 
-	fileName := fmt.Sprintf("rev%05d.dat", int(BtU32(datFile[:])))
+	fileName := fmt.Sprintf("rev%05d.dat", int(util.BtU32(datFile[:])))
 
 	f, err := os.Open(fileName)
 	if err != nil {
 		return rBlock, err
 	}
 	// +8 skips the 8 bytes of magicbytes and load size
-	f.Seek(int64(BtU32(offset[:])+8), 0)
+	f.Seek(int64(util.BtU32(offset[:])+8), 0)
 
 	err = rBlock.Deserialize(f)
 	if err != nil {
 		return rBlock, err
 	}
-	f.Close()
-	offsetFile.Close()
+
+	err = f.Close()
+	if err != nil {
+		return
+	}
+
+	err = offsetFile.Close()
+	if err != nil {
+		return
+	}
 
 	return
 }
@@ -181,7 +190,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 // BuildRevOffsetFile builds an offset file for rev*.dat files
 // Just an index.
 func BuildRevOffsetFile() error {
-	offsetFile, err := os.OpenFile(RevOffsetFilePath,
+	offsetFile, err := os.OpenFile(util.RevOffsetFilePath,
 		os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -235,7 +244,7 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 		if err != nil {
 			panic(err)
 		}
-		if CheckMagicByte(magicbytes) == false {
+		if util.CheckMagicByte(magicbytes) == false {
 			break
 		}
 
@@ -248,18 +257,18 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 
 		// Write the .dat file name and the
 		// offset the block can be found at
-		_, err = offsetFile.Write(U32tB(fileNum))
+		_, err = offsetFile.Write(util.U32tB(fileNum))
 		if err != nil {
 			return err
 		}
-		_, err = offsetFile.Write(U32tB(offset))
+		_, err = offsetFile.Write(util.U32tB(offset))
 		if err != nil {
 			return err
 		}
 
 		// offset for the next block from the current position
 		// skip the 32 bytes of double sha hash of the rev block
-		loc, err = f.Seek(int64(LBtU32(size[:]))+32, 1)
+		loc, err = f.Seek(int64(util.LBtU32(size[:]))+32, 1)
 		if err != nil {
 			return err
 		}

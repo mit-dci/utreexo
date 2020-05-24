@@ -39,7 +39,7 @@ type node struct {
 	Val Hash
 }
 
-// LeafTXOs have a hash and a expiry date (block when that utxo gets used)
+// Leaf has a hash and a expiry date (block when that utxo gets used)
 type Leaf struct {
 	Hash
 	// During ibdsim, this will dictate whether it is saved to

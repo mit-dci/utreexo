@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
+	"github.com/mit-dci/utreexo/blockchain"
 	"github.com/mit-dci/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -59,7 +60,7 @@ func IBDClient(net wire.BitcoinNet,
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	ublockQueue := make(chan util.UBlock, 10)
+	ublockQueue := make(chan blockchain.Block, 10)
 
 	pFile, err := os.OpenFile(
 		util.PFilePath, os.O_RDONLY, 0400)
@@ -75,7 +76,7 @@ func IBDClient(net wire.BitcoinNet,
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go util.UBlockReader(ublockQueue, knownTipHeight, height, lookahead)
+	go blockchain.UBlockReader(ublockQueue, knownTipHeight, height, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
@@ -132,44 +133,44 @@ func IBDClient(net wire.BitcoinNet,
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as LeafTXO type.
 func putBlockInPollard(
-	ub util.UBlock,
+	block blockchain.Block,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
 	p *accumulator.Pollard) error {
 
 	plusstart := time.Now()
 
-	inskip, outskip := util.DedupeBlock(&ub.Block)
-	if !ub.ProofsProveBlock(inskip) {
-		return fmt.Errorf("uData missing utxo data for block %d", ub.Height)
+	inskip, outskip := blockchain.DedupeBlock(block.Transactions)
+	if !block.ProofsProveBlock(inskip) {
+		return fmt.Errorf("uData missing utxo data for block %d", block.Height)
 	}
 
-	*totalDels += len(ub.ExtraData.AccProof.Targets) // for benchmarking
+	*totalDels += len(block.AccData.AccProof.Targets) // for benchmarking
 
 	// derive leafHashes from leafData
-	if !ub.ExtraData.Verify(p.ReconstructStats()) {
-		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
+	if !block.AccData.Verify(p.ReconstructStats()) {
+		return fmt.Errorf("height %d LeafData / Proof mismatch", block.Height)
 	}
 	// sort before ingestion; verify up above unsorts...
-	ub.ExtraData.AccProof.SortTargets()
+	block.AccData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := p.IngestBatchProof(ub.ExtraData.AccProof)
+	err := p.IngestBatchProof(block.AccData.AccProof)
 	if err != nil {
-		fmt.Printf("height %d ingest error\n", ub.Height)
+		fmt.Printf("height %d ingest error\n", block.Height)
 		return err
 	}
 
 	// fmt.Printf("h %d adds %d targets %d\n",
-	// 	ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
+	// 	block.Height, len(blockAdds), len(block.ExtraData.AccProof.Targets))
 
 	// get hashes to add into the accumulator
 	blockAdds := util.BlockToAddLeaves(
-		ub.Block, nil, outskip, ub.Height)
+		block.Block, nil, outskip, block.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, ub.ExtraData.AccProof.Targets)
+	err = p.Modify(blockAdds, block.AccData.AccProof.Targets)
 	if err != nil {
 		return err
 	}

@@ -213,7 +213,11 @@ func (p *Pollard) rem2(dels []uint64) error {
 		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
 		wg.Add(len(hnslice))
-		for _, hn := range hnslice {
+		fmt.Println("hnslice len:", len(hnslice))
+		fmt.Println(hnslice)
+		hnMap := make(map[uint64]bool)
+		destMap := make(map[*polNode]bool)
+		for i, hn := range hnslice {
 			// skip hashes we can't compute
 			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
 				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
@@ -226,6 +230,21 @@ func (p *Pollard) rem2(dels []uint64) error {
 			}
 			// fmt.Printf("giving hasher %d %x %x\n",
 			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
+			fmt.Println("times #", i)
+			fmt.Println("my position is", hn.position)
+			x := hnMap[hn.position]
+			if x == false {
+				hnMap[hn.position] = true
+			} else {
+				fmt.Println("duplicate. Pos:", hn.position)
+			}
+
+			y := destMap[hn.dest]
+			if y == false {
+				destMap[hn.dest] = true
+			} else {
+				fmt.Println("duplicate. Dest:", hn.dest)
+			}
 			go hn.run(wg)
 		}
 		wg.Wait() // wait for all hashing to finish at end of each row

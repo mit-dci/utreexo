@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/mit-dci/utreexo/blockchain"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -18,19 +19,19 @@ type DeathInfo struct {
 }
 
 // WriteBlock sends off ttl info to dbWorker to be written to ttldb
-func WriteBlock(bnr util.BlockAndRev,
+func WriteBlock(b blockchain.Block,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) {
 
 	blockBatch := new(leveldb.Batch)
 
 	// iterate through the transactions in a block
-	for blockindex, tx := range bnr.Blk.Transactions {
+	for blockindex, tx := range b.Transactions {
 		// iterate through individual inputs in a transaction
-		for _, in := range tx.TxIn {
+		for _, in := range tx.BtcTx.MsgTx().TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
 				opString := in.PreviousOutPoint.String()
 				h := util.HashFromString(opString)
-				blockBatch.Put(h[:], util.U32tB(uint32(bnr.Height+1))) // why +1??
+				blockBatch.Put(h[:], util.U32tB(uint32(b.Height+1))) // why +1??
 				// TODO ^^^^^ yeah why
 			}
 		}

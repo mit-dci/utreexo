@@ -11,7 +11,7 @@ import (
 // initCSNState attempts to load and initialize the CSN state from the disk.
 // If a CSN state is not present, chain is initialized to the genesis
 func initCSNState() (
-	p accumulator.Pollard, height int32, knownTipHeight int32, err error) {
+	p acumulator.Pollard, height int32, knownTipHeight int32, err error) {
 
 	var offsetInitialized, pollardInitialized bool
 
