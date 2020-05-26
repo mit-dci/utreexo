@@ -2,6 +2,8 @@ package util
 
 import (
 	"fmt"
+
+	"github.com/btcsuite/btcd/blockchain"
 )
 
 // ProofsProveBlock checks the consistency of a UBlock.  Does the proof prove
@@ -71,4 +73,18 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	// return to presorted target list
 	ud.AccProof.Targets = presort
 	return true
+}
+
+func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
+	v := blockchain.NewUtxoViewpoint()
+	m := v.Entries()
+	// loop through leafDatas and convert them into UtxoEntries (pretty much the
+	// same thing
+	for _, ld := range ud.UtxoData {
+		utxo := blockchain.NewUtxoEntry(
+			ld.Amt, ld.PkScript, ld.Height, ld.Coinbase)
+		m[ld.Outpoint] = utxo
+	}
+
+	return v
 }
