@@ -196,7 +196,7 @@ func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8
 }
 
 func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uint64) {
-	if len(maybeArrow) == 0 || len(hashDirt) != 0 && hashDirt[0] > maybeArrow[0].to {
+	if len(maybeArrow) == 0 {
 		// re-descending here which isn't great
 		hashDest := parent(hashDirt[0], rows)
 		return false, hashDest
