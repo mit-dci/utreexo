@@ -7,13 +7,19 @@
 
 BITCOIN_DATA=$HOME/.bitcoin
 BITCOIN_CONF=$HOME/.bitcoin/bitcoin.conf
-TIMESTAMP=`date "+%Y-%m-%d %H:%M:%S"`
 # number of blocks with dummy transactions in them
 # increase this to generate more utxos
-BLOCKS=0
+BLOCKS=10
+# coins send to this address won't be spend
+# used to create long lasting UTXOs
+UNSPENDABLE_ADDR="bcrt1qduc2gmuwkun9wnlcfp6ak8zzphmyee4dakgnlk"
+
+timestamp() {
+	date "+%Y-%m-%d %H:%M:%S"
+}
 
 log() {
-	echo "[$TIMESTAMP] $1"
+	echo "$(timestamp) $1"
 }
 
 # prints "faiL: $1" to stderr and exits if $? indicates an error.
@@ -22,7 +28,7 @@ print_on_failure() {
 	then
 		bitcoin-cli -conf=$BITCOIN_CONF stop
 
-		echo "[$TIMESTAMP] fail: $1" >&2
+		echo "$(timestamp) fail: $1" >&2
 		exit 1
 	fi
 }
@@ -34,12 +40,21 @@ mine_blocks() {
 	print_on_failure "could not mine blocks"
 }
 
-# creates utxos by sending coins to unspendable addresses.
+# creates UTXOs/sends transactions
+# 50% of these UTXOs will not be spend by future blocks.
 # TODO: find a better way to create lots of utxos
 create_utxos() {
-	log "creating 1000 utxos"
-	outputs=$(cat unspendable_outputs.json)
-	bitcoin-cli -conf=$BITCOIN_CONF sendmany "" "$outputs" > /dev/null
+	#outputs=$(cat unspendable_outputs.json)
+	for ((i=0;i<10;i++))
+	do
+		if (("$i" < 5))
+		then
+			bitcoin-cli -conf=$BITCOIN_CONF sendtoaddress "$(bitcoin-cli -conf=$BITCOIN_CONF getnewaddress)" 0.01 > /dev/null &
+		else
+			bitcoin-cli -conf=$BITCOIN_CONF sendtoaddress "$UNSPENDABLE_ADDR" 0.01 > /dev/null &
+		fi
+	done
+	wait
 }
 
 # create/override a bitcoin config for this test
@@ -64,10 +79,11 @@ print_on_failure "could not start bitcoind."
 log "Waiting for bitcoind to start"
 sleep 5
 
-# mine 101 bocks to have 50 spenable coins
-mine_blocks 101
+# mine 200 blocks to have u bunch of spendable coins
+mine_blocks 200
 
-# create utxos, then mine a block over and over again
+# create blocks, with some transactions in them
+log "Creating $BLOCKS blocks"
 for ((n=0;n<$BLOCKS;n++))
 do
 	create_utxos
@@ -75,6 +91,7 @@ do
 	log "Mined block $n"
 done
 
+log "Done creating blocks"
 bitcoin-cli -conf=$BITCOIN_CONF gettxoutsetinfo
 
 # stop bitcoin-core
@@ -83,7 +100,6 @@ print_on_failure "could not stop bitcoind."
 
 # run genproofs
 (cd $BITCOIN_DATA/regtest/blocks; utreexo genproofs -net=regtest)
-print_on_failure "genproofs failed"
 
 # TODO: run ibdsim
 
