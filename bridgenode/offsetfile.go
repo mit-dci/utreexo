@@ -187,7 +187,7 @@ func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
 		var blockheader [80]byte
 		f.Read(blockheader[:])
 
-		copy(b.Prevhash[:], blockheader[4:32])
+		copy(b.Prevhash[:], blockheader[4:32+4])
 
 		// create block hash
 		// double sha256 needed with Bitcoin
