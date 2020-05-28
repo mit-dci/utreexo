@@ -314,7 +314,7 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
 // uses remember slice up to number of txos, but doesn't check that it's the
-// right lenght.  Similar with skiplist, doesn't check it.
+// right length.  Similar with skiplist, doesn't check it.
 func BlockToAddLeaves(blk wire.MsgBlock,
 	remember []bool, skiplist []uint32,
 	height int32) (leaves []accumulator.Leaf) {

@@ -130,7 +130,7 @@ func putBlockInPollard(
 	// thing first.  (Especially since that thing isn't committed to in the
 	// PoW, but the signatures are...
 
-	if !ub.CheckBlock() {
+	if !ub.CheckBlock(outskip) {
 		return fmt.Errorf("height %d hash %s block invalid",
 			ub.Height, ub.Block.BlockHash().String())
 	}

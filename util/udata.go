@@ -3,6 +3,8 @@ package util
 import (
 	"fmt"
 
+	"github.com/btcsuite/btcd/wire"
+
 	"github.com/btcsuite/btcd/chaincfg"
 
 	"github.com/btcsuite/btcutil"
@@ -79,6 +81,9 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	return true
 }
 
+// ToUtxoView converts a UData into a btcd blockchain.UtxoViewpoint
+// all the data is there, just a bit different format.
+// Note that this needs blockchain.NewUtxoEntry() in btcd
 func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 	v := blockchain.NewUtxoViewpoint()
 	m := v.Entries()
@@ -93,13 +98,40 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 	return v
 }
 
+/*
+blockchain.NewUtxoEntry() looks like this:
+// NewUtxoEntry returns a new UtxoEntry built from the arguments.
+func NewUtxoEntry(
+	amount int64, pkScript []byte, blockHeight int32, isCoinbase bool) *UtxoEntry {
+	var cbFlag txoFlags
+	if isCoinbase {
+		cbFlag |= tfCoinBase
+	}
+
+	return &UtxoEntry{
+		amount:      amount,
+		pkScript:    pkScript,
+		blockHeight: blockHeight,
+		packedFlags: cbFlag,
+	}
+}
+*/
+
 // CheckBlock does all internal block checks for a UBlock
 // right now checks the signatures
-func (ub *UBlock) CheckBlock() bool {
+func (ub *UBlock) CheckBlock(outskip []uint32) bool {
 
 	view := ub.ExtraData.ToUtxoView()
+	viewMap := view.Entries()
+	var txonum uint32
 
-	for _, tx := range ub.Block.Transactions {
+	for txnum, tx := range ub.Block.Transactions {
+		outputsInTx := uint32(len(tx.TxOut))
+		if txnum == 0 {
+			txonum += outputsInTx
+			continue // skip checks for coinbase TX for now.  Or maybe it'll work?
+		}
+
 		utilTx := btcutil.NewTx(tx)
 		// hardcoded testnet3 for now
 		_, err := blockchain.CheckTransactionInputs(
@@ -109,6 +141,20 @@ func (ub *UBlock) CheckBlock() bool {
 				utilTx.Hash().String(), err.Error())
 			return false
 		}
+
+		// add txos to the UtxoView if they're also consumed in this block
+		// (will be on the output skiplist from DedupeBlock)
+		// The order we do this in should ensure that a incorrectly ordered
+		// sequence (tx 5 spending tx 8) will fail here.
+		for len(outskip) > 0 && outskip[0] < txonum+outputsInTx {
+			idx := outskip[0] - txonum
+			skippedTxo := blockchain.NewUtxoEntry(
+				tx.TxOut[idx].Value, tx.TxOut[idx].PkScript, ub.Height, false)
+			skippedOutpoint := wire.OutPoint{Hash: tx.TxHash(), Index: idx}
+			viewMap[skippedOutpoint] = skippedTxo
+			outskip = outskip[1:] // pop off from output skiplist
+		}
+		txonum += outputsInTx
 	}
 
 	return true
