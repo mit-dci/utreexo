@@ -3,6 +3,8 @@ package util
 import (
 	"fmt"
 
+	"github.com/btcsuite/btcd/txscript"
+
 	"github.com/btcsuite/btcd/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -125,6 +127,9 @@ func (ub *UBlock) CheckBlock(outskip []uint32) bool {
 	viewMap := view.Entries()
 	var txonum uint32
 
+	sigCache := txscript.NewSigCache(8192)
+	hashCache := txscript.NewHashCache(8192)
+
 	for txnum, tx := range ub.Block.Transactions {
 		outputsInTx := uint32(len(tx.TxOut))
 		if txnum == 0 {
@@ -138,6 +143,15 @@ func (ub *UBlock) CheckBlock(outskip []uint32) bool {
 			utilTx, ub.Height, view, &chaincfg.TestNet3Params)
 		if err != nil {
 			fmt.Printf("Tx %s fails CheckTransactionInputs: %s\n",
+				utilTx.Hash().String(), err.Error())
+			return false
+		}
+
+		// no scriptflags for now
+		err = blockchain.ValidateTransactionScripts(
+			utilTx, view, 0, sigCache, hashCache)
+		if err != nil {
+			fmt.Printf("Tx %s fails ValidateTransactionScripts: %s\n",
 				utilTx.Hash().String(), err.Error())
 			return false
 		}
