@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
@@ -156,6 +157,10 @@ func UblockNetworkReader(
 		var ub UBlock
 		err = ub.Deserialize(con)
 		if err != nil {
+			if err == io.EOF {
+				close(blockChan)
+				break
+			}
 			panic(err)
 		}
 

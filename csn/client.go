@@ -59,7 +59,10 @@ func IBDClient(net wire.BitcoinNet,
 	var stop bool
 	for ; !stop; height++ {
 
-		blocknproof := <-ublockQueue
+		blocknproof, closed := <-ublockQueue
+		if closed {
+			break
+		}
 
 		err = putBlockInPollard(blocknproof,
 			&totalTXOAdded, &totalDels, plustime, &p)
