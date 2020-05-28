@@ -3,6 +3,10 @@ package util
 import (
 	"fmt"
 
+	"github.com/btcsuite/btcd/chaincfg"
+
+	"github.com/btcsuite/btcutil"
+
 	"github.com/btcsuite/btcd/blockchain"
 )
 
@@ -87,4 +91,25 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 	}
 
 	return v
+}
+
+// CheckBlock does all internal block checks for a UBlock
+// right now checks the signatures
+func (ub *UBlock) CheckBlock() bool {
+
+	view := ub.ExtraData.ToUtxoView()
+
+	for _, tx := range ub.Block.Transactions {
+		utilTx := btcutil.NewTx(tx)
+		// hardcoded testnet3 for now
+		_, err := blockchain.CheckTransactionInputs(
+			utilTx, ub.Height, view, &chaincfg.TestNet3Params)
+		if err != nil {
+			fmt.Printf("Tx %s fails CheckTransactionInputs: %s\n",
+				utilTx.Hash().String(), err.Error())
+			return false
+		}
+	}
+
+	return true
 }

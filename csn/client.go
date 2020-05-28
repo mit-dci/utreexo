@@ -130,6 +130,11 @@ func putBlockInPollard(
 	// thing first.  (Especially since that thing isn't committed to in the
 	// PoW, but the signatures are...
 
+	if !ub.CheckBlock() {
+		return fmt.Errorf("height %d hash %s block invalid",
+			ub.Height, ub.Block.BlockHash().String())
+	}
+
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
