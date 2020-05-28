@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
+	"github.com/mit-dci/utreexo/consensus"
 	"github.com/mit-dci/utreexo/util"
 )
 
@@ -117,6 +118,11 @@ func putBlockInPollard(
 		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
 	}
 
+	err := consensus.ValidateUBlock(ub)
+	if err != nil {
+		return err
+	}
+
 	// **************************************
 	// check transactions and signatures here
 	// TODO: it'd be better to do it after IngestBatchProof(),
@@ -130,7 +136,7 @@ func putBlockInPollard(
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := p.IngestBatchProof(ub.ExtraData.AccProof)
+	err = p.IngestBatchProof(ub.ExtraData.AccProof)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.Height)
 		return err
