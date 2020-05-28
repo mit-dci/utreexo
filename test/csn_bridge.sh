@@ -3,6 +3,8 @@
 # Assumes that `the following binaries exist:
 # 	`bitcoind`, `bitcoin-cli, `utreexo`
 
+set -Eeuo pipefail
+
 TEST_DATA=$(mktemp -d)
 BITCOIN_DATA=$TEST_DATA/.bitcoin
 BITCOIN_CONF=$BITCOIN_DATA/bitcoin.conf
@@ -22,22 +24,21 @@ log() {
 }
 
 # prints "faiL: $1" to stderr and exits if $? indicates an error.
-print_on_failure() {
-	if [ $? -ne 0 ]
-	then
-		# stop bitcoin core if its running but ignore if this fails.
-		bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1
-
-		echo "$(timestamp) $(tput setaf 1)FAIL$(tput sgr0): \"$1\", test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
-		exit 1
-	fi
+failure() {
+	echo "$(timestamp) $(tput setaf 1)FAILURE$(tput sgr0) on line ${BASH_LINENO[0]}: test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
+	# stop bitcoin core if its running but ignore if this fails.
+	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
+	# print genproofs and ibdsim logs
+	tail $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log 2> /dev/null || true
 }
+
+trap "failure" ERR
+trap "kill 0" EXIT
 
 # mines n=$1 blocks
 mine_blocks() {
 	local mine_addr=$(bitcoin-cli -conf=$BITCOIN_CONF getnewaddress)
 	bitcoin-cli -conf=$BITCOIN_CONF generatetoaddress $1 $mine_addr > /dev/null
-	print_on_failure "could not mine blocks"
 }
 
 # creates UTXOs/sends transactions
@@ -75,7 +76,6 @@ rm -rf $BITCOIN_DATA/regtest
 
 # start bitcoin-core in regtest mode
 bitcoind -datadir=$BITCOIN_DATA -conf=$BITCOIN_CONF
-print_on_failure "could not start bitcoind."
 log "Waiting for bitcoind to start"
 sleep 5
 
@@ -96,12 +96,10 @@ bitcoin-cli -conf=$BITCOIN_CONF gettxoutsetinfo
 
 # stop bitcoin-core
 bitcoin-cli -conf=$BITCOIN_CONF stop
-print_on_failure "could not stop bitcoind."
 
 # run genproofs
 log "running genproofs..."
 (cd $BITCOIN_DATA/regtest/blocks; utreexo genproofs -net=regtest > $TEST_DATA/genproofs.log 2>&1) &
-genproof_id=$!
 
 log "waiting for genproofs to start the blocks server..."
 while :
@@ -109,17 +107,15 @@ do
 	if jobs %% > /dev/null 2>&1; then
 		nc localhost 8338 < /dev/null && break
 	else
-		# 
-		echo "======genproof.log======"
-		tail $TEST_DATA/genproofs.log
-		echo "======genproof.log======"
-		wait $genproof_id
-		print_on_failure "genproofs exited before starting the block server"
+		# genproofs failed => exit
 		exit 1
 	fi
 	sleep 1
 done
 log "genproofs started the block server"
 
-# TODO: run ibdsim
-log "starting idbsim..."
+# run ibdsim
+log "running idbsim..."
+(cd $BITCOIN_DATA/regtest/blocks; utreexo ibdsim -net=regtest > $TEST_DATA/ibdsim.log 2>&1)
+
+echo "$(timestamp) $(tput setaf 2)SUCCESS$(tput sgr0): everything seems to be working. test data(logs, regtest files, ...) can be found here: $TEST_DATA"
