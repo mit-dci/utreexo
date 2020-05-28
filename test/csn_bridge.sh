@@ -1,12 +1,11 @@
 #!/bin/bash
 # Integration test script for the csn and bridge node.
-# WARNING: The bitcoin config at $BITCOIN_CONF will be overridden.
-# WARNING: Regtest data at $BITCOIN_DATA/regtest will be deleted
 # Assumes that `the following binaries exist:
 # 	`bitcoind`, `bitcoin-cli, `utreexo`
 
-BITCOIN_DATA=$HOME/.bitcoin
-BITCOIN_CONF=$HOME/.bitcoin/bitcoin.conf
+TEST_DATA=$(mktemp -d)
+BITCOIN_DATA=$TEST_DATA/.bitcoin
+BITCOIN_CONF=$BITCOIN_DATA/bitcoin.conf
 # number of blocks with dummy transactions in them
 # increase this to generate more utxos
 BLOCKS=10
@@ -26,9 +25,10 @@ log() {
 print_on_failure() {
 	if [ $? -ne 0 ]
 	then
-		bitcoin-cli -conf=$BITCOIN_CONF stop
+		# stop bitcoin core if its running but ignore if this fails.
+		bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1
 
-		echo "$(timestamp) fail: $1" >&2
+		echo "$(timestamp) $(tput setaf 1)FAIL$(tput sgr0): \"$1\", test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
 		exit 1
 	fi
 }
@@ -99,7 +99,27 @@ bitcoin-cli -conf=$BITCOIN_CONF stop
 print_on_failure "could not stop bitcoind."
 
 # run genproofs
-(cd $BITCOIN_DATA/regtest/blocks; utreexo genproofs -net=regtest)
+log "running genproofs..."
+(cd $BITCOIN_DATA/regtest/blocks; utreexo genproofs -net=regtest > $TEST_DATA/genproofs.log 2>&1) &
+genproof_id=$!
+
+log "waiting for genproofs to start the blocks server..."
+while :
+do
+	if jobs %% > /dev/null 2>&1; then
+		nc localhost 8338 < /dev/null && break
+	else
+		# 
+		echo "======genproof.log======"
+		tail $TEST_DATA/genproofs.log
+		echo "======genproof.log======"
+		wait $genproof_id
+		print_on_failure "genproofs exited before starting the block server"
+		exit 1
+	fi
+	sleep 1
+done
+log "genproofs started the block server"
 
 # TODO: run ibdsim
-
+log "starting idbsim..."
