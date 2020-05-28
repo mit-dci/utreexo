@@ -566,7 +566,8 @@ func I64tB(i int64) []byte {
 // Checks only for testnet3 and mainnet
 func CheckMagicByte(bytesgiven [4]byte) bool {
 	if bytesgiven != [4]byte{0x0b, 0x11, 0x09, 0x07} && //testnet
-		bytesgiven != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} { // mainnet
+		bytesgiven != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} && // mainnet
+		bytesgiven != [4]byte{0xfa, 0xbf, 0xb5, 0xda} { // regtest
 		fmt.Printf("got non magic bytes %x, finishing\n", bytesgiven)
 		return false
 	} else {
