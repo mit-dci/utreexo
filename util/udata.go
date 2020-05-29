@@ -92,8 +92,8 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 	// loop through leafDatas and convert them into UtxoEntries (pretty much the
 	// same thing
 	for _, ld := range ud.UtxoData {
-		utxo := blockchain.NewUtxoEntry(
-			ld.Amt, ld.PkScript, ld.Height, ld.Coinbase)
+		txo := wire.NewTxOut(ld.Amt, ld.PkScript)
+		utxo := blockchain.NewUtxoEntry(txo, ld.Height, ld.Coinbase)
 		m[ld.Outpoint] = utxo
 	}
 
@@ -104,15 +104,15 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 blockchain.NewUtxoEntry() looks like this:
 // NewUtxoEntry returns a new UtxoEntry built from the arguments.
 func NewUtxoEntry(
-	amount int64, pkScript []byte, blockHeight int32, isCoinbase bool) *UtxoEntry {
+	txOut *wire.TxOut, blockHeight int32, isCoinbase bool) *UtxoEntry {
 	var cbFlag txoFlags
 	if isCoinbase {
 		cbFlag |= tfCoinBase
 	}
 
 	return &UtxoEntry{
-		amount:      amount,
-		pkScript:    pkScript,
+		amount:      txOut.Value,
+		pkScript:    txOut.PkScript,
 		blockHeight: blockHeight,
 		packedFlags: cbFlag,
 	}
@@ -162,10 +162,10 @@ func (ub *UBlock) CheckBlock(outskip []uint32) bool {
 		// sequence (tx 5 spending tx 8) will fail here.
 		for len(outskip) > 0 && outskip[0] < txonum+outputsInTx {
 			idx := outskip[0] - txonum
-			skippedTxo := blockchain.NewUtxoEntry(
-				tx.TxOut[idx].Value, tx.TxOut[idx].PkScript, ub.Height, false)
+			skipTxo := wire.NewTxOut(tx.TxOut[idx].Value, tx.TxOut[idx].PkScript)
+			skippedEntry := blockchain.NewUtxoEntry(skipTxo, ub.Height, false)
 			skippedOutpoint := wire.OutPoint{Hash: tx.TxHash(), Index: idx}
-			viewMap[skippedOutpoint] = skippedTxo
+			viewMap[skippedOutpoint] = skippedEntry
 			outskip = outskip[1:] // pop off from output skiplist
 		}
 		txonum += outputsInTx
