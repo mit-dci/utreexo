@@ -8,16 +8,6 @@ Currently under active development.  If you're interested and have questions, ch
 
 Logs for freenode are [here](http://gnusha.org/utreexo/)
 
-## folders
-
-### cmd
-
-subfolders with implementation
-
-### utreexo
-
-the utreexo libraries
-
 ### walkthrough
 
 Here's how to get utreexo running to test out what it can do.  This currently is testing/research level code and should not be expected to be stable or secure.  But it also should work, and if it doesn't please report bugs!
@@ -67,8 +57,9 @@ $ ./cmd genproofs -net=testnet # -net=testnet flag needed for testnet. Leave out
 [To resume, just do `./cmd genproofs -net=testnet` again]
 ```
 
-* `genproofs` should take a few hours. It does two things. First, it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk. Second, it saves each TXO and height with LevelDB to make a TXO time-to-live (basically how long each TXO lasts until it is spent) for caching purposes. This is what the bridge node and archive node would do in a real node.  Next, you can run `cmd ibdsim -net=testnet`; it will perform IBD (initial block download) as a compact node which maintains only a reduced state, and accepts proofs (which are created in the `proof.dat` file during the previous step)
+* `genproofs` should take a few hours. It does two things. First, it goes through the blockchain, maintains the full merkle forest, and saves proofs for each block to disk. Second, it saves each TXO and height with LevelDB to make a TXO time-to-live (basically how long each TXO lasts until it is spent) for caching purposes. This is what the bridge node and archive node would do in a real node.  Next, you can run `cmd ibdsim -net=testnet`; it will perform IBD (initial block download) as a compact node which maintains only a reduced state, and accepts proofs (which are created in the `proof.dat` file during the previous step).
 
+After genproofs has generated the proofs, it will start a local server to serve the blocks to ibdsim. With genproofs running, run the following:
 
 ```
 $ cd ~/.bitcoin/testnet3/blocks
@@ -77,5 +68,7 @@ $ ./cmd ibdsim -net=testnet # -net=testnet flag needed for testnet. Leave out fo
 [ibdsim is able to resume from where it left off. Use ctrl+c to stop it.]
 [To resume, just do `./cmd ibdsim -net=testnet` again]
 ```
+
+* `ibdsim` is the CSN node and it will call genproofs and ask for blocks with the Utreexo accumulator proofs. It will receive the proofs and validate the inclusion.
 
 Note that your folders or filenames might be different, but this should give you the idea and work on default Linux/golang setups.  If you've tried this and it doesn't work and you'd like to help out, you can either fix the code or documentation so that it works and make a pull request, or open an issue describing what doesn't work.
