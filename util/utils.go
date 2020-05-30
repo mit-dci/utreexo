@@ -463,7 +463,7 @@ func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
 	buf := bytes.NewBuffer(prefix)
 	binary.Read(buf, binary.BigEndian, &l)
 	if int(l) > len(payload) {
-		return nil, nil, fmt.Errorf("Prefixed %d but payload %d left", l)
+		return nil, nil, fmt.Errorf("Prefixed %d but payload %d left", l, len(payload))
 	}
 	return payload[:l], payload[l:], nil
 }

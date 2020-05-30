@@ -23,10 +23,10 @@ func TestGetRevBlocks(t *testing.T) {
 	}
 
 	// Gets blocks 1 ~ 300,001
-	for i := int32(0); i < 300000; i++ {
-		rb, err := GetRevBlock(i, RevOffsetFilePath)
+	for i := int32(1); i < 300000; i++ {
+		_, err := GetRevBlock(i, RevOffsetFilePath)
 		if err != nil {
-			t.Log("Failed at height:", i+1)
+			t.Log("Failed at height:", i)
 			// If it does fail, delete the created directories
 			os.RemoveAll(OffsetDirPath)
 			os.RemoveAll(ProofDirPath)
@@ -34,13 +34,6 @@ func TestGetRevBlocks(t *testing.T) {
 			os.RemoveAll(PollardDirPath)
 			os.RemoveAll(RevOffsetDirPath)
 			t.Fatal(err)
-		}
-		fmt.Println("height", i+1)
-		for _, tx := range rb.Block.Tx {
-			for i, txin := range tx.TxIn {
-				fmt.Println("txcount:", i)
-				fmt.Println(txin)
-			}
 		}
 
 	}
@@ -63,13 +56,13 @@ func TestGetOneRevBlock(t *testing.T) {
 	// Any arbitrary block will do here for testing
 	// 382 actually fetches block 383
 	rb, err := GetRevBlock(382, RevOffsetFilePath)
-	for _, tx := range rb.Block.Tx {
+	for _, tx := range rb.Txs {
 		for _, txin := range tx.TxIn {
 			fmt.Println(txin)
 		}
 	}
 	if err != nil {
-		t.Log("Failed at height:", 382+1)
+		t.Log("Failed at height:", 382)
 		os.RemoveAll(OffsetDirPath)
 		os.RemoveAll(ProofDirPath)
 		os.RemoveAll(ForestDirPath)
