@@ -59,8 +59,8 @@ func IBDClient(net wire.BitcoinNet,
 	var stop bool
 	for ; !stop; height++ {
 
-		blocknproof, closed := <-ublockQueue
-		if closed {
+		blocknproof, open := <-ublockQueue
+		if !open {
 			break
 		}
 
