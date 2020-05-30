@@ -1,6 +1,7 @@
 package csn
 
 import (
+	"encoding/binary"
 	"os"
 	"sync"
 
@@ -37,12 +38,11 @@ func restorePollardHeight() (height int32, err error) {
 	if err != nil {
 		return 0, err
 	}
-	var t [4]byte
-	_, err = pHeightFile.Read(t[:])
+
+	err = binary.Read(pHeightFile, binary.BigEndian, &height)
 	if err != nil {
 		return 0, err
 	}
-	height = util.BtI32(t[:])
 
 	return
 }
@@ -62,7 +62,7 @@ func saveIBDsimData(height int32, p accumulator.Pollard) error {
 			return err
 		}
 		// write to the heightfile
-		_, err = pHeightFile.WriteAt(util.U32tB(uint32(height)), 0)
+		err = binary.Write(pHeightFile, binary.BigEndian, height)
 		if err != nil {
 			return err
 		}

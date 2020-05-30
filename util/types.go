@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -114,30 +115,35 @@ func LeafDataFromBytes(b []byte) (LeafData, error) {
 	}
 	copy(l.BlockHash[:], b[0:32])
 	copy(l.Outpoint.Hash[:], b[32:64])
-	l.Outpoint.Index = BtU32(b[64:68])
-	l.Height = BtI32(b[68:72])
+	l.Outpoint.Index = binary.BigEndian.Uint32(b[64:68])
+	l.Height = int32(binary.BigEndian.Uint32(b[68:72]))
 	if l.Height&1 == 1 {
 		l.Coinbase = true
 	}
 	l.Height >>= 1
-	l.Amt = BtI64(b[72:80])
+	l.Amt = int64(binary.BigEndian.Uint64(b[72:80]))
 	l.PkScript = b[80:]
 
 	return l, nil
 }
 
-// turn a LeafData into bytes
-func (l *LeafData) ToBytes() (b []byte) {
-	b = append(l.BlockHash[:], l.Outpoint.Hash[:]...)
-	b = append(b, U32tB(l.Outpoint.Index)...)
+// ToBytes turns LeafData into bytes
+func (l *LeafData) ToBytes() []byte {
 	hcb := l.Height << 1
 	if l.Coinbase {
 		hcb |= 1
 	}
-	b = append(b, I32tB(hcb)...)
-	b = append(b, I64tB(l.Amt)...)
-	b = append(b, l.PkScript...)
-	return
+
+	var buf bytes.Buffer
+
+	buf.Write(l.BlockHash[:])
+	buf.Write(l.Outpoint.Hash[:])
+	binary.Write(&buf, binary.BigEndian, l.Outpoint.Index)
+	binary.Write(&buf, binary.BigEndian, hcb)
+	binary.Write(&buf, binary.BigEndian, l.Amt)
+	buf.Write(l.PkScript)
+
+	return buf.Bytes()
 }
 
 // compact serialization for LeafData:
@@ -148,15 +154,19 @@ func (l *LeafData) ToBytes() (b []byte) {
 
 // turn a LeafData into bytes (compact, for sending in blockProof) -
 // don't hash this, it doesn't commit to everything
-func (l *LeafData) ToCompactBytes() (b []byte) {
+func (l *LeafData) ToCompactBytes() []byte {
 	l.Height <<= 1
 	if l.Coinbase {
 		l.Height |= 1
 	}
-	b = append(b, I32tB(l.Height)...)
-	b = append(b, I64tB(l.Amt)...)
-	b = append(b, l.PkScript...)
-	return
+
+	var buf bytes.Buffer
+
+	binary.Write(&buf, binary.BigEndian, l.Height)
+	binary.Write(&buf, binary.BigEndian, l.Amt)
+	buf.Write(l.PkScript)
+
+	return buf.Bytes()
 }
 
 // LeafDataFromCompactBytes doesn't fill in blockhash, outpoint, and in
@@ -166,12 +176,12 @@ func LeafDataFromCompactBytes(b []byte) (LeafData, error) {
 	if len(b) < 13 {
 		return l, fmt.Errorf("Not long enough for leafdata, need 80 bytes")
 	}
-	l.Height = BtI32(b[0:4])
+	l.Height = int32(binary.BigEndian.Uint32(b[0:4]))
 	if l.Height&1 == 1 {
 		l.Coinbase = true
 	}
 	l.Height >>= 1
-	l.Amt = BtI64(b[4:12])
+	l.Amt = int64(binary.BigEndian.Uint64(b[4:12]))
 	l.PkScript = b[12:]
 
 	return l, nil
@@ -195,11 +205,11 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 // batch proof
 // Bunch of LeafDatas, prefixed with 2-byte lengths
 func (ud *UData) ToBytes() (b []byte) {
-
-	// first stick the batch proof on the beginning
 	batchBytes := ud.AccProof.ToBytes()
-	b = U32tB(uint32(len(batchBytes)))
-	b = append(b, batchBytes...)
+	b = make([]byte, 4 /*len(batchBytes)*/ +len(batchBytes))
+	// first stick the batch proof on the beginning
+	binary.BigEndian.PutUint32(b, uint32(len(batchBytes)))
+	copy(b[4:], batchBytes)
 
 	// next, all the leafDatas
 	for _, ld := range ud.UtxoData {
@@ -268,7 +278,7 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 		err = fmt.Errorf("block proof too short %d bytes", len(b))
 		return
 	}
-	batchLen := BtU32(b[:4])
+	batchLen := binary.BigEndian.Uint32(b[:4])
 	if batchLen > uint32(len(b)-4) {
 		err = fmt.Errorf("block proof says %d bytes but %d remain",
 			batchLen, len(b)-4)

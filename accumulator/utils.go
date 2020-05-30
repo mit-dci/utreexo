@@ -1,8 +1,6 @@
 package accumulator
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sort"
 )
@@ -463,61 +461,4 @@ func BinString(leaves uint64) string {
 		s += output[z] + "\n"
 	}
 	return s
-}
-
-// BtU32 : 4 byte slice to uint32.  Returns ffffffff if something doesn't work.
-func BtU32(b []byte) uint32 {
-	if len(b) != 4 {
-		fmt.Printf("Got %x to BtU32 (%d bytes)\n", b, len(b))
-		return 0xffffffff
-	}
-	var i uint32
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// U32tB : uint32 to 4 bytes.  Always works.
-func U32tB(i uint32) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
-
-// BtU64 : 8 bytes to uint64.  returns ffff. if it doesn't work.
-func BtU64(b []byte) uint64 {
-	if len(b) != 8 {
-		fmt.Printf("Got %x to BtU64 (%d bytes)\n", b, len(b))
-		return 0xffffffffffffffff
-	}
-	var i uint64
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// U64tB : uint64 to 8 bytes.  Always works.
-func U64tB(i uint64) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
-
-// BtU8 : 1 byte to uint8.  returns ffff. if it doesn't work.
-func BtU8(b []byte) uint8 {
-	if len(b) != 1 {
-		fmt.Printf("Got %x to BtU8 (%d bytes)\n", b, len(b))
-		return 0xff
-	}
-	var i uint8
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// U8tB : uint8 to a byte.  Always works.
-func U8tB(i uint8) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
 }

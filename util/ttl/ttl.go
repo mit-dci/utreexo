@@ -1,6 +1,7 @@
 package ttl
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -30,8 +31,13 @@ func WriteBlock(bnr util.BlockAndRev,
 			if blockindex > 0 { // skip coinbase "spend"
 				opString := in.PreviousOutPoint.String()
 				h := util.HashFromString(opString)
-				blockBatch.Put(h[:], util.U32tB(uint32(bnr.Height+1))) // why +1??
+				heightBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(
+					heightBytes,
+					uint32(bnr.Height+1), // why +1??
+				)
 				// TODO ^^^^^ yeah why
+				blockBatch.Put(h[:], heightBytes)
 			}
 		}
 	}
