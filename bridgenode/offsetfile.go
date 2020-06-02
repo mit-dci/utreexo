@@ -62,7 +62,11 @@ func buildOffsetFile(tip util.Hash) (int32, error) {
 	if err != nil {
 		panic(err)
 	}
-	LastIndexOffsetHeightFile.Write(util.U32tB(uint32(lastOffsetHeight))[:])
+
+	err = binary.Write(LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
+	if err != nil {
+		panic(err)
+	}
 	LastIndexOffsetHeightFile.Close()
 
 	return lastOffsetHeight, nil
@@ -167,8 +171,8 @@ func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
 	// until offset is at the end of the file
 	for loc != fSize {
 		b := new(util.RawHeaderData)
-		copy(b.FileNum[:], util.U32tB(fileNum))
-		copy(b.Offset[:], util.U32tB(offset))
+		binary.BigEndian.PutUint32(b.FileNum[:], fileNum)
+		binary.BigEndian.PutUint32(b.Offset[:], offset)
 
 		// check if Bitcoin magic bytes were read
 		var magicbytes [4]byte
@@ -178,11 +182,11 @@ func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
 		}
 
 		// read the 4 byte size of the load of the block
-		var size [4]byte
-		f.Read(size[:])
+		var size uint32
+		binary.Read(f, binary.LittleEndian, &size)
 
 		// add 8bytes for the magic bytes (4bytes) and size (4bytes)
-		offset = offset + util.LBtU32(size[:]) + uint32(8)
+		offset = offset + size + uint32(8)
 
 		var blockheader [80]byte
 		f.Read(blockheader[:])
@@ -195,7 +199,7 @@ func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
 		b.CurrentHeaderHash = sha256.Sum256(first[:])
 
 		// offset for the next block from the current position
-		loc, err = f.Seek(int64(util.LBtU32(size[:]))-80, 1)
+		loc, err = f.Seek(int64(size)-80, 1)
 		if err != nil {
 			return nil, err
 		}

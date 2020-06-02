@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"encoding/binary"
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
@@ -89,12 +90,10 @@ func restoreHeight() (height int32, err error) {
 		if err != nil {
 			return 0, err
 		}
-		var t [4]byte
-		_, err = heightFile.Read(t[:])
+		err = binary.Read(heightFile, binary.BigEndian, &height)
 		if err != nil {
 			return 0, err
 		}
-		height = util.BtI32(t[:])
 	}
 	return
 }
@@ -103,23 +102,18 @@ func restoreHeight() (height int32, err error) {
 func restoreLastIndexOffsetHeight(offsetFinished chan bool) (
 	lastIndexOffsetHeight int32, err error) {
 
-	// grab the last block height from currentoffsetheight
-	// currentoffsetheight saves the last height from the offsetfile
-	var lastIndexOffsetHeightByte [4]byte
-
 	f, err := os.OpenFile(
 		util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return 0, err
 	}
-	_, err = f.Read(lastIndexOffsetHeightByte[:])
+
+	// grab the last block height from currentoffsetheight
+	// currentoffsetheight saves the last height from the offsetfile
+	err = binary.Read(f, binary.BigEndian, &lastIndexOffsetHeight)
 	if err != nil {
 		return 0, err
 	}
-
-	f.Read(lastIndexOffsetHeightByte[:])
-	lastIndexOffsetHeight = util.BtI32(lastIndexOffsetHeightByte[:])
-
 	// if there is a offset file, we should pass true to offsetFinished
 	// to let stopParse() know that it shouldn't delete offsetfile
 	offsetFinished <- true

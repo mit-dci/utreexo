@@ -62,9 +62,10 @@ func CheckNet(net wire.BitcoinNet) {
 	var magicbytes [4]byte
 	f.Read(magicbytes[:])
 
-	bytesToMatch := U32tLB(uint32(net))
+	var bytesToMatch [4]byte
+	binary.LittleEndian.PutUint32(bytesToMatch[:], uint32(net))
 
-	if bytes.Compare(magicbytes[:], bytesToMatch) != 0 {
+	if bytes.Compare(magicbytes[:], bytesToMatch[:]) != 0 {
 		switch net {
 		case wire.TestNet3:
 			fmt.Println("Option -net=testnet given but .dat file is NOT a testnet file.")
@@ -285,7 +286,7 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 	}
 
 	// +8 skips the 8 bytes of magicbytes and load size
-	// proofFile.Seek(int64(BtU32(offset[:])+8), 0)
+	// proofFile.Seek(int64(binary.BigEndian.Uint32(offset[:])+8), 0)
 	ubytes := make([]byte, size)
 
 	_, err = proofFile.Read(ubytes)
@@ -466,104 +467,6 @@ func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("Prefixed %d but payload %d left", l, len(payload))
 	}
 	return payload[:l], payload[l:], nil
-}
-
-// U32tB converts uint32 to 4 bytes.  Always works.
-func U32tB(i uint32) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
-
-// TODO make actual error return here
-// 4 byte Big Endian slice to uint32.  Returns ffffffff if something doesn't work.
-func BtU32(b []byte) uint32 {
-	if len(b) != 4 {
-		fmt.Printf("Got %x to BtU32 (%d bytes)\n", b, len(b))
-		return 0xffffffff
-	}
-	var i uint32
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// int32 to 4 bytes (Big Endian).  Always works.
-func I32tB(i int32) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
-
-// TODO make actual error return here
-// 4 byte Big Endian slice to uint32.  Returns ffffffff if something doesn't work.
-func BtI32(b []byte) int32 {
-	if len(b) != 4 {
-		fmt.Printf("Got %x to ItU32 (%d bytes)\n", b, len(b))
-		return -0x7fffffff
-	}
-	var i int32
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// uint32 to 4 bytes (Little Endian).  Always works.
-func U32tLB(i uint32) []byte {
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, i)
-	return b
-}
-
-// Converts 4 byte Little Endian slices to uint32.
-// Returns ffffffff if something doesn't work.
-func LBtU32(b []byte) uint32 {
-	if len(b) != 4 {
-		fmt.Printf("Got %x to LBtU32 (%d bytes)\n", b, len(b))
-		return 0xffffffff
-	}
-	var i uint32
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.LittleEndian, &i)
-	return i
-}
-
-// BtU64 : 8 bytes to uint64.  returns ffff. if it doesn't work.
-func BtU64(b []byte) uint64 {
-	if len(b) != 8 {
-		fmt.Printf("Got %x to BtU64 (%d bytes)\n", b, len(b))
-		return 0xffffffffffffffff
-	}
-	var i uint64
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// U64tB : uint64 to 8 bytes.  Always works.
-func U64tB(i uint64) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
-}
-
-// BtI64 : 8 bytes to int64.  returns ffff. if it doesn't work.
-func BtI64(b []byte) int64 {
-	if len(b) != 8 {
-		fmt.Printf("Got %x to BtI64 (%d bytes)\n", b, len(b))
-		return -0x7fffffffffffffff
-	}
-	var i int64
-	buf := bytes.NewBuffer(b)
-	binary.Read(buf, binary.BigEndian, &i)
-	return i
-}
-
-// I64tB : int64 to 8 bytes.  Always works.
-func I64tB(i int64) []byte {
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.BigEndian, i)
-	return buf.Bytes()
 }
 
 // CheckMagicByte checks for the Bitcoin magic bytes.

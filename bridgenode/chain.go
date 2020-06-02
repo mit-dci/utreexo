@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
@@ -80,7 +81,7 @@ func saveBridgeNodeData(
 		if err != nil {
 			return err
 		}
-		_, err = heightFile.WriteAt(util.I32tB(height), 0)
+		err = binary.Write(heightFile, binary.BigEndian, height)
 		if err != nil {
 			return err
 		}

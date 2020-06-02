@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"time"
@@ -544,12 +545,10 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	f.positionMap = make(map[MiniHash]uint64)
 
 	// This restores the numLeaves
-	var byteLeaves [8]byte
-	_, err := miscForestFile.Read(byteLeaves[:])
+	err := binary.Read(miscForestFile, binary.BigEndian, &f.numLeaves)
 	if err != nil {
 		return nil, err
 	}
-	f.numLeaves = BtU64(byteLeaves[:])
 	fmt.Println("Forest leaves:", f.numLeaves)
 
 	// This restores the positionMap
@@ -567,12 +566,10 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	}
 
 	// This restores the rows
-	var byteRows [1]byte
-	_, err = miscForestFile.Read(byteRows[:])
+	binary.Read(miscForestFile, binary.BigEndian, &f.rows)
 	if err != nil {
 		return nil, err
 	}
-	f.rows = BtU8(byteRows[:])
 	fmt.Println("Forest rows:", f.rows)
 	fmt.Println("Done restoring forest")
 
@@ -593,10 +590,17 @@ func (f *Forest) PrintPositionMap() string {
 func (f *Forest) WriteForest(miscForestFile *os.File) error {
 	fmt.Println("numLeaves=", f.numLeaves)
 	fmt.Println("f.rows=", f.rows)
-	_, err := miscForestFile.WriteAt(append(U64tB(f.numLeaves), U8tB(f.rows)...), 0)
+
+	err := binary.Write(miscForestFile, binary.BigEndian, f.numLeaves)
 	if err != nil {
 		return err
 	}
+
+	err = binary.Write(miscForestFile, binary.BigEndian, f.rows)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

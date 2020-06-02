@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -71,8 +72,8 @@ func GetRevBlock(height int32, revOffsetFileName string) (
 	}
 	height--
 
-	var datFile [4]byte
-	var offset [4]byte
+	var datFile uint32
+	var offset uint32
 
 	offsetFile, err := os.Open(revOffsetFileName)
 	if err != nil {
@@ -84,17 +85,17 @@ func GetRevBlock(height int32, revOffsetFileName string) (
 	offsetFile.Seek(int64(8*height), 0)
 
 	// Read file and offset for the block
-	offsetFile.Read(datFile[:])
-	offsetFile.Read(offset[:])
+	binary.Read(offsetFile, binary.BigEndian, &datFile)
+	binary.Read(offsetFile, binary.BigEndian, &offset)
 
-	fileName := fmt.Sprintf("rev%05d.dat", int(BtU32(datFile[:])))
+	fileName := fmt.Sprintf("rev%05d.dat", int(datFile))
 
 	f, err := os.Open(fileName)
 	if err != nil {
 		return rBlock, err
 	}
 	// +8 skips the 8 bytes of magicbytes and load size
-	f.Seek(int64(BtU32(offset[:])+8), 0)
+	f.Seek(int64(offset+8), 0)
 
 	err = rBlock.Deserialize(f)
 	if err != nil {
@@ -240,26 +241,26 @@ func writeOffset(fileNum uint32, offsetFile *os.File) error {
 		}
 
 		// read the 4 byte size of the load of the block
-		var size [4]byte
-		_, err = f.Read(size[:])
+		var size uint32
+		err = binary.Read(f, binary.LittleEndian, &size)
 		if err != nil {
 			return err
 		}
 
 		// Write the .dat file name and the
 		// offset the block can be found at
-		_, err = offsetFile.Write(U32tB(fileNum))
+		err = binary.Write(offsetFile, binary.BigEndian, fileNum)
 		if err != nil {
 			return err
 		}
-		_, err = offsetFile.Write(U32tB(offset))
+		err = binary.Write(offsetFile, binary.BigEndian, offset)
 		if err != nil {
 			return err
 		}
 
 		// offset for the next block from the current position
 		// skip the 32 bytes of double sha hash of the rev block
-		loc, err = f.Seek(int64(LBtU32(size[:]))+32, 1)
+		loc, err = f.Seek(int64(size)+32, 1)
 		if err != nil {
 			return err
 		}
