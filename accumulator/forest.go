@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -187,10 +188,15 @@ func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8
 			continue
 		}
 		prevHash = hashDest
-		if len(nextHashDirt) == 0 ||
-			(nextHashDirt[len(nextHashDirt)-1] != hashDest) {
-			// skip if already on end of slice. redundant?
-			nextHashDirt = append(nextHashDirt, hashDest)
+		i := sort.Search(len(nextHashDirt), func(i int) bool {
+			return nextHashDirt[i] >= hashDest
+		})
+		if i >= len(nextHashDirt) || nextHashDirt[i] != hashDest {
+			// hashDest was not in the list, and i is where
+			// it should be inserted
+			nextHashDirt = append(nextHashDirt, 0)
+			copy(nextHashDirt[i+1:], nextHashDirt[i:])
+			nextHashDirt[i] = hashDest
 		}
 	}
 	return nextHashDirt
