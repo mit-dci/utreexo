@@ -1,10 +1,15 @@
 #!/bin/bash
 # Integration test script for the csn and bridge node.
 # Assumes that `the following binaries exist:
-# 	`bitcoind`, `bitcoin-cli, `utreexo`
-
+# 	`bitcoind`, `bitcoin-cli`
+#
+# Receives the path to the genproofs and ibdsim command.
+# Example:
+#   ./csn_bridge.sh "./cmd genproofs" "./cmd ibdsim"
 set -Eeuo pipefail
 
+GENPROOFS="$1"
+IBDSIM="$2"
 TEST_DATA=$(mktemp -d)
 BITCOIN_DATA=$TEST_DATA/.bitcoin
 BITCOIN_CONF=$BITCOIN_DATA/bitcoin.conf
@@ -18,6 +23,38 @@ UTX_PER_BLOCK=5
 # coins send to this address won't be spend
 # used to create long lasting UTXOs
 UNSPENDABLE_ADDR="bcrt1qduc2gmuwkun9wnlcfp6ak8zzphmyee4dakgnlk"
+
+# sadly `realpath` does not exist on macOS, so this is a lazy replacement.
+# does not resolve .. in paths.
+realpath() {
+    [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+}
+
+# checks that all required binaries exist
+check_binaries() {
+	log "checking if required binaries exist..."
+	# check genproofs
+	read -ra split <<< $GENPROOFS
+	absolute_path=$(realpath ${split[0]})
+	command -v $absolute_path
+	split[0]=$absolute_path
+	GENPROOFS=$(echo ${split[@]})
+
+ 	# check ibdsim
+	read -ra split <<< $IBDSIM
+	absolute_path=$(realpath ${split[0]})
+	command -v $absolute_path
+	split[0]=$absolute_path
+	IBDSIM=$(echo ${split[@]})
+
+	# check bitcoind
+	command -v bitcoind
+	#	check bitcoin-cli
+	command -v bitcoin-cli
+	# check netcat
+	command -v nc
+	log "all binaries found"
+}
 
 timestamp() {
 	date "+%Y-%m-%d %H:%M:%S"
@@ -88,7 +125,7 @@ create_blocks() {
 run_utreexo() {
 	# run genproofs
 	log "running genproofs..."
-	utreexo genproofs -net=regtest > $TEST_DATA/genproofs.log 2>&1 &
+	eval "$GENPROOFS -net=regtest > $TEST_DATA/genproofs.log 2>&1 &"
 	genproofs_id=$!
 
 	log "waiting for genproofs to start the blocks server..."
@@ -106,13 +143,15 @@ run_utreexo() {
 
 	# run ibdsim
 	log "running idbsim..."
-	utreexo ibdsim -net=regtest > $TEST_DATA/ibdsim.log 2>&1
+	eval "$IBDSIM -net=regtest > $TEST_DATA/ibdsim.log 2>&1"
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
 
 	log "utreexo output:"
 	tail -n +1 $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log
 }
+
+check_binaries
 
 # create/override a bitcoin config for this test
 mkdir -p $BITCOIN_DATA
