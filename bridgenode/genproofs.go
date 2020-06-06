@@ -9,7 +9,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
-	"github.com/mit-dci/utreexo/util/ttl"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -17,7 +16,7 @@ import (
 
 // build the bridge node / proofs
 func BuildProofs(
-	net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
+	dataDir string, net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -32,24 +31,19 @@ func BuildProofs(
 	// Handle user interruptions
 	go stopBuildProofs(sig, offsetFinished, haltRequest, haltAccept)
 
-	// If given the option testnet=true, check if the blk00000.dat file
-	// in the directory is a testnet file. Vise-versa for mainnet
-	util.CheckNet(net)
-
 	// Creates all the directories needed for bridgenode
 	util.MakePaths()
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(net, offsetFinished)
+		initBridgeNodeState(dataDir, net, offsetFinished)
 	if err != nil {
 		panic(err)
 	}
 
 	// Open leveldb
-	o := new(opt.Options)
-	o.CompactionTableSizeMultiplier = 8
-	lvdb, err := leveldb.OpenFile(ttlpath, o)
+	o := opt.Options{CompactionTableSizeMultiplier: 8}
+	lvdb, err := leveldb.OpenFile(ttlpath, &o)
 	if err != nil {
 		panic(err)
 	}
@@ -61,15 +55,15 @@ func BuildProofs(
 
 	// Start 16 workers. Just an arbitrary number
 	for j := 0; j < 16; j++ {
-		go ttl.DbWorker(batchan, lvdb, &batchwg)
+		go DbWorker(batchan, lvdb, &batchwg)
 	}
 
 	// To send/receive blocks from blockreader()
-	blockAndRevReadQueue := make(chan util.BlockAndRev, 10)
+	blockAndRevReadQueue := make(chan BlockAndRev, 10)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
-	go util.BlockAndRevReader(blockAndRevReadQueue,
+	go BlockAndRevReader(blockAndRevReadQueue, dataDir, "",
 		knownTipHeight, height)
 	proofChan := make(chan []byte, 10)
 	var fileWait sync.WaitGroup
@@ -85,7 +79,7 @@ func BuildProofs(
 		bnr := <-blockAndRevReadQueue
 
 		// Writes the ttl values for each tx to leveldb
-		ttl.WriteBlock(bnr, batchan, &batchwg)
+		WriteBlock(bnr, batchan, &batchwg)
 
 		// Get the add and remove data needed from the block & undo block
 		blockAdds, delLeaves, err := blockToAddDel(bnr)
@@ -155,7 +149,7 @@ func BuildProofs(
 	}
 
 	// should be a goroutine..?  isn't right now
-	blockServer(knownTipHeight, haltRequest, haltAccept)
+	blockServer(knownTipHeight, dataDir, haltRequest, haltAccept)
 
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true
@@ -220,7 +214,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 // It's a little redundant to give back both delLeaves and delHashes, since the
 // latter is just the hash of the former, but if we only return delLeaves we
 // end up hashing them twice which could slow things down.
-func blockToAddDel(bnr util.BlockAndRev) (blockAdds []accumulator.Leaf,
+func blockToAddDel(bnr BlockAndRev) (blockAdds []accumulator.Leaf,
 	delLeaves []util.LeafData, err error) {
 
 	inskip, outskip := util.DedupeBlock(&bnr.Blk)
@@ -237,7 +231,7 @@ func blockToAddDel(bnr util.BlockAndRev) (blockAdds []accumulator.Leaf,
 }
 
 // genDels generates txs to be deleted from the Utreexo forest. These are TxIns
-func blockNRevToDelLeaves(bnr util.BlockAndRev, skiplist []uint32) (
+func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 	delLeaves []util.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
@@ -323,10 +317,6 @@ func stopBuildProofs(
 			err := os.RemoveAll(util.OffsetDirPath)
 			if err != nil {
 				fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
-			}
-			err = os.RemoveAll(util.RevOffsetDirPath)
-			if err != nil {
-				fmt.Println("ERR. revdata/ directory not removed. Please manually remove it.")
 			}
 			fmt.Println("Exiting...")
 			os.Exit(0)

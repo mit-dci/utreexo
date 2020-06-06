@@ -12,7 +12,7 @@ import (
 // createOffsetData restores the offsetfile needed to index the
 // blocks in the raw blk*.dat and raw rev*.dat files.
 func createOffsetData(
-	net wire.BitcoinNet, offsetFinished chan bool) (
+	dataDir string, net wire.BitcoinNet, offsetFinished chan bool) (
 	lastIndexOffsetHeight int32, err error) {
 
 	// Set the Block Header hash
@@ -23,11 +23,9 @@ func createOffsetData(
 		return 0, err
 	}
 
-	err = util.BuildRevOffsetFile()
-	if err != nil {
-		return 0, err
-	}
-	lastIndexOffsetHeight, err = buildOffsetFile(*hash)
+	// TODO allow the user to pass a custom offsetfile path and
+	// custom lastOffsetHeight path instead of just ""
+	lastIndexOffsetHeight, err = buildOffsetFile(dataDir, *hash, "", "")
 	if err != nil {
 		return 0, err
 	}

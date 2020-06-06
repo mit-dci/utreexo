@@ -5,9 +5,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/mit-dci/utreexo/util"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // buildOffsetFile builds an offsetFile which acts as an index
@@ -19,55 +21,97 @@ import (
 // Fairly quick process with one blk*.dat file taking a few seconds.
 //
 // Returns the last block height that it processed.
-func buildOffsetFile(tip util.Hash) (int32, error) {
+func buildOffsetFile(dataDir string, tip util.Hash,
+	cOffsetFile, cLastOffsetHeightFile string) (int32, error) {
 
 	// Map to store Block Header Hashes for sorting purposes
 	// blk*.dat files aren't in block order so this is needed
 	nextMap := make(map[[32]byte]util.RawHeaderData)
 
-	offsetFile, err := os.OpenFile(util.OffsetFilePath,
-		os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
+	var offsetFile *os.File
+
+	// If empty string is given, just use the default path
+	// If not, then use the custom one given
+	if cOffsetFile == "" {
+		var err error
+		offsetFile, err = os.OpenFile(util.OffsetFilePath,
+			os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		var err error
+		offsetFile, err = os.OpenFile(cOffsetFile,
+			os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err)
+		}
 	}
+
+	lvdb := OpenIndexFile(dataDir)
+	defer lvdb.Close()
+
+	var blocksDir string
+	blocksDir = filepath.Join(dataDir, "/blocks/")
 
 	var lastOffsetHeight int32
 
 	defer offsetFile.Close()
 	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
+		fileDir := filepath.Join(blocksDir, fileName)
 		fmt.Printf("Building offsetfile... %s\n", fileName)
 
-		_, err := os.Stat(fileName)
+		_, err := os.Stat(fileDir)
 		if os.IsNotExist(err) {
-			fmt.Printf("%s doesn't exist; done building\n", fileName)
+			fmt.Printf("%s doesn't exist; done building\n", fileDir)
 			break
 		}
 		// grab headers from the .dat file as RawHeaderData type
-		rawheaders, err := readRawHeadersFromFile(uint32(fileNum))
+		rawheaders, err := readRawHeadersFromFile(fileDir, uint32(fileNum))
 		if err != nil {
 			panic(err)
 		}
 		tip, lastOffsetHeight, err = writeBlockOffset(
-			rawheaders, nextMap, offsetFile, lastOffsetHeight, tip)
+			rawheaders, nextMap, offsetFile, lastOffsetHeight, tip, lvdb)
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	// write the last height of the offsetfile
-	// needed info for the main genproofs processes
-	LastIndexOffsetHeightFile, err := os.OpenFile(
-		util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
+	// If empty string is given, just use the default path
+	// If not, then use the custom one given
+	if cLastOffsetHeightFile == "" {
+		var err error
+		// write the last height of the offsetfile
+		// needed info for the main genproofs processes
+		LastIndexOffsetHeightFile, err := os.OpenFile(
+			util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err)
+		}
+		defer LastIndexOffsetHeightFile.Close()
+		// write to the file
+		err = binary.Write(LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		var err error
+		// write the last height of the offsetfile
+		// needed info for the main genproofs processes
+		LastIndexOffsetHeightFile, err := os.OpenFile(
+			cLastOffsetHeightFile, os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err)
+		}
+		defer LastIndexOffsetHeightFile.Close()
+		// write to the file
+		err = binary.Write(LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
+		if err != nil {
+			panic(err)
+		}
 	}
-
-	err = binary.Write(LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
-	if err != nil {
-		panic(err)
-	}
-	LastIndexOffsetHeightFile.Close()
 
 	return lastOffsetHeight, nil
 }
@@ -148,14 +192,14 @@ func proofWriterWorker(
 }
 
 // readRawHeadersFromFile reads only the headers from the given .dat file
-func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
+func readRawHeadersFromFile(fileDir string, fileNum uint32) ([]util.RawHeaderData, error) {
 	var blockHeaders []util.RawHeaderData
 
-	fileName := fmt.Sprintf("blk%05d.dat", fileNum)
-	f, err := os.Open(fileName)
+	f, err := os.Open(fileDir)
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 
 	fStat, err := f.Stat()
 	if err != nil {
@@ -164,7 +208,6 @@ func readRawHeadersFromFile(fileNum uint32) ([]util.RawHeaderData, error) {
 
 	fSize := fStat.Size()
 
-	defer f.Close()
 	loc := int64(0)
 	offset := uint32(0) // where the block is located from the beginning of the file
 
@@ -215,7 +258,8 @@ func writeBlockOffset(
 	nextMap map[[32]byte]util.RawHeaderData, //  Map to save the current block hash
 	offsetFile *os.File, //                 File to save the sorted blocks and locations to
 	tipnum int32, //                          Current block it's on
-	tip util.Hash) ( //                Current hash of the block it's on
+	tip util.Hash, //                Current hash of the block it's on
+	lvdb *leveldb.DB) ( // index/ in bitcoin core's datadir
 	util.Hash, int32, error) {
 
 	for _, b := range blockHeaders {
@@ -237,6 +281,14 @@ func writeBlockOffset(
 		offsetFile.Write(b.FileNum[:])
 		offsetFile.Write(b.Offset[:])
 
+		// grab bitcoin core block index info
+		cbIndex := GetBlockIndexInfo(b.CurrentHeaderHash, lvdb)
+		undoOffset := make([]byte, 4)
+		binary.BigEndian.PutUint32(undoOffset, cbIndex.UndoPos)
+
+		// write undoblock offset
+		offsetFile.Write(undoOffset)
+
 		// set the tip to current block's hash
 		tip = b.CurrentHeaderHash
 		tipnum++
@@ -250,6 +302,15 @@ func writeBlockOffset(
 			// offset the block can be found at
 			offsetFile.Write(stashedBlock.FileNum[:])
 			offsetFile.Write(stashedBlock.Offset[:])
+
+			// grab bitcoin core block index info
+			sCbIndex := GetBlockIndexInfo(stashedBlock.CurrentHeaderHash, lvdb)
+
+			sUndoOffset := make([]byte, 4)
+			binary.BigEndian.PutUint32(sUndoOffset, sCbIndex.UndoPos)
+
+			// write undoblock offset
+			offsetFile.Write(sUndoOffset)
 
 			// set the tip to current block's hash
 			tip = stashedBlock.CurrentHeaderHash
