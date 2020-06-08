@@ -7,20 +7,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+    # set GOPATH
+    - name: setup env
+      shell: bash
+      run: |
+        echo "::set-env name=GOPATH::${{ github.workspace }}/go"
+        echo "::add-path::${{ github.workspace }}/go/bin"
 
-    - name: Set up Go 1.13
+    - name: Install Go
+      if: success()
       uses: actions/setup-go@v1
       with:
         go-version: 1.13
       id: go
 
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/${{ github.repository }}
+
     - name: Get dependencies
-      run: go get -v -d ./csn ./bridgenode ./cmd
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        go get -v -d ./csn ./bridgenode ./cmd
 
     - name: Build
-      run: cd cmd; go build -v
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd
+        go build -v
 
-    - name: Test
-      run: go test -v ./accumulator
+    - name: Run tests
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        go test -v ./accumulator
