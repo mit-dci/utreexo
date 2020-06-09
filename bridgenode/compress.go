@@ -1,4 +1,4 @@
-package util
+package bridgenode
 
 /*
  * Taken from github.com/btcsuite/btcd/blockchain/compress.go with
