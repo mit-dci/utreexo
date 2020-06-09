@@ -183,8 +183,4 @@ create_blocks
 # run utreexo for the first time
 run_utreexo
 
-create_blocks
-# run utreexo for the second time to see if resume functionality is working
-run_utreexo
-
 success
