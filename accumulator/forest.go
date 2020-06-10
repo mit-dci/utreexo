@@ -111,10 +111,7 @@ func NewForest(forestFile *os.File) *Forest {
 		d := new(diskForestData)
 		d.f = forestFile
 		f.data = d
-		d.cache = diskForestCache{
-			Size: 1 << 11,
-			data: make(map[uint64]Hash),
-		}
+		d.cache = newDiskForestCache(24)
 	}
 
 	f.data.resize(1)
@@ -551,6 +548,7 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 		d := new(diskForestData)
 		d.f = forestFile
 		f.data = d
+		d.cache = newDiskForestCache(24)
 	}
 	f.positionMap = make(map[MiniHash]uint64)
 
