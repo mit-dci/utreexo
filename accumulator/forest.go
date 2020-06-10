@@ -111,6 +111,10 @@ func NewForest(forestFile *os.File) *Forest {
 		d := new(diskForestData)
 		d.f = forestFile
 		f.data = d
+		d.cache = diskForestCache{
+			Size: 1 << 16, // 2^16 leaves
+			data: make(map[uint64]Hash),
+		}
 	}
 
 	f.data.resize(1)
@@ -579,6 +583,8 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	fmt.Println("Forest rows:", f.rows)
 	fmt.Println("Done restoring forest")
 
+	f.data.size()
+
 	return f, nil
 }
 
@@ -606,6 +612,8 @@ func (f *Forest) WriteForest(miscForestFile *os.File) error {
 	if err != nil {
 		return err
 	}
+
+	f.data.close()
 
 	return nil
 }
