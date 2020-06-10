@@ -88,6 +88,7 @@ type diskForestCache struct {
 	// The cache stores the forest data which is most frequently changed.
 	// Based on the ttl distribution of bitcoin utxos.
 	// (see figure 2 in the paper)
+	// TODO: convert to slice
 	data map[uint64]Hash
 }
 
@@ -373,7 +374,7 @@ func (d *diskForestData) readRange(
 				fmt.Printf("\treadRange WARNING!! read pos %d len %d %s\n (while populating cache)",
 					diskPosition, diskOverlap, err.Error())
 			}
-			d.diskReads += uint64(missBatchSize)
+			d.diskReads++
 
 			for j := uint64(0); j < uint64(missBatchSize); j++ {
 				copy(cacheHashes[batchPosition+j][:], missBatch[:j*leafSize])
@@ -394,7 +395,7 @@ func (d *diskForestData) readRange(
 		fmt.Printf("\treadRange WARNING!! read pos %d len %d %s\n",
 			diskPosition, diskOverlap, err.Error())
 	}
-	d.diskReads += diskOverlap
+	d.diskReads++
 
 	// convert diskRange to diskHashes
 	// TODO: this is ugly. we have 2 copies of the diskHashes in memory.
@@ -425,7 +426,7 @@ func (d *diskForestData) writeRange(
 		fmt.Printf("\twriteRange WARNING!! read pos %d len %d %s\n",
 			diskPosition, diskOverlap, err.Error())
 	}
-	d.diskWrites += diskOverlap
+	d.diskWrites++
 
 	// write cache hashes.
 	d.cache.rangeSet(
