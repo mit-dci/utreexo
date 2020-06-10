@@ -112,7 +112,7 @@ func NewForest(forestFile *os.File) *Forest {
 		d.f = forestFile
 		f.data = d
 		d.cache = diskForestCache{
-			Size: 1 << 16, // 2^16 leaves
+			Size: 1 << 11,
 			data: make(map[uint64]Hash),
 		}
 	}
