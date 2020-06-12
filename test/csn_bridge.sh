@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Integration test script for the csn and bridge node.
 # Assumes that `the following binaries exist:
 # 	`bitcoind`, `bitcoin-cli`
@@ -125,7 +125,7 @@ create_blocks() {
 run_utreexo() {
 	# run genproofs
 	log "running genproofs..."
-	eval "$GENPROOFS -net=regtest > $TEST_DATA/genproofs.log 2>&1 &"
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA -net=regtest > $TEST_DATA/genproofs.log 2>&1 &"
 	genproofs_id=$!
 
 	log "waiting for genproofs to start the blocks server..."
@@ -143,7 +143,7 @@ run_utreexo() {
 
 	# run ibdsim
 	log "running idbsim..."
-	eval "$IBDSIM -net=regtest > $TEST_DATA/ibdsim.log 2>&1"
+	eval "$IBDSIM -datadir=$BITCOIN_DATA -net=regtest > $TEST_DATA/ibdsim.log 2>&1"
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
 
@@ -180,7 +180,12 @@ mine_blocks 200
 
 cd $BITCOIN_DATA/regtest/blocks
 create_blocks
-# run utreexo for the first time
+
+# stop bitcoin core to enable access to /index
+bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
+sleep 1
+
+# run utreexo
 run_utreexo
 
 success
