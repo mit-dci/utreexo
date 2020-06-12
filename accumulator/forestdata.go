@@ -3,6 +3,7 @@ package accumulator
 import (
 	"fmt"
 	"os"
+	"time"
 )
 
 // leafSize is a [32]byte hash (sha256).
@@ -128,6 +129,14 @@ type diskForestData struct {
 
 	diskReads  uint64
 	diskWrites uint64
+
+	readTime  time.Duration
+	writeTime time.Duration
+	swapTime  time.Duration
+
+	reads  uint64
+	writes uint64
+	swaps  uint64
 }
 
 // Calculates the overlap of a range (start, start+r) with the cache.
@@ -213,7 +222,7 @@ func (cache *diskForestCache) get(pos uint64) (Hash, bool) {
 	}
 
 	var h Hash
-	copy(h[:], cache.data[pos*leafSize:pos*leafSize+32])
+	copy(h[:], cache.data[pos*leafSize:(pos+1)*leafSize])
 
 	return h, true
 }
@@ -239,8 +248,8 @@ func (cache *diskForestCache) rangeGet(start uint64, r uint64) ([]byte, []uint64
 // Will create an entry in the cache wether
 // or not it should actually be included.
 // Check inclusion first with `includes`.
-func (cache *diskForestCache) set(pos uint64, hash Hash) {
-	copy(cache.data[pos*leafSize:], hash[:])
+func (cache *diskForestCache) set(pos uint64, hash []byte) {
+	copy(cache.data[pos*leafSize:(pos+1)*leafSize], hash)
 	cache.valid[pos] = true
 }
 
@@ -260,7 +269,7 @@ func (cache *diskForestCache) rangeSet(start uint64,
 		cache.valid[populate] = true
 	}
 
-	copy(cache.data[start*leafSize:], hashes[:r*leafSize])
+	copy(cache.data[start*leafSize:(start+r)*leafSize], hashes[:r*leafSize])
 }
 
 // Resets the cache and returns the cache ranges.
@@ -302,6 +311,7 @@ func (cache *diskForestCache) flush(hashCount uint64) []cacheRange {
 
 // read ignores errors. Probably get an empty hash if it doesn't work
 func (d *diskForestData) read(pos uint64) Hash {
+	start := time.Now()
 	var h Hash
 	inCache, cachePos := d.cache.includes(pos, d.hashCount)
 	cacheMissed := false
@@ -312,6 +322,8 @@ func (d *diskForestData) read(pos uint64) Hash {
 		if ok {
 			// The cache did hold the value at `pos`.
 			d.cacheReads++
+			d.readTime += time.Since(start)
+			d.reads++
 			return h
 		}
 		// The cache did not hold the value at `pos`.
@@ -331,23 +343,29 @@ func (d *diskForestData) read(pos uint64) Hash {
 		// On the next read of `pos` it will be fetched from the cache,
 		// assuming the size of the forest doesn't change.
 		// This is how the cache gets restored when the forest is restored from disk.
-		d.cache.set(cachePos, h)
+		d.cache.set(cachePos, h[:])
 		d.cacheWrites++
 	}
 
 	// `h` now holds the hash at `pos`, either read slowly from the disk
 	// or fast from the cache.
+	d.readTime += time.Since(start)
+	d.reads++
 	return h
 }
 
 // writeHash writes a hash.  Don't go out of bounds.
 func (d *diskForestData) write(pos uint64, h Hash) {
+	start := time.Now()
 	inCache, cachePos := d.cache.includes(pos, d.hashCount)
 
 	// Write `h` to `pos` in the cache if `pos` should be included in the cache.
 	if inCache {
-		d.cache.set(cachePos, h)
+		d.cache.set(cachePos, h[:])
 		d.cacheWrites++
+
+		d.writeTime += time.Since(start)
+		d.writes++
 		return
 	}
 
@@ -357,6 +375,9 @@ func (d *diskForestData) write(pos uint64, h Hash) {
 		fmt.Printf("\tWARNING!! write pos %d %s\n", pos, err.Error())
 	}
 	d.diskWrites++
+
+	d.writeTime += time.Since(start)
+	d.writes++
 }
 
 // swapHash swaps 2 hashes.  Don't go out of bounds.
@@ -384,7 +405,7 @@ func (d *diskForestData) readRange(
 		for _, miss := range misses {
 			diskPosition := int64((diskOverlap + miss + start) * leafSize)
 			// TODO: batch read for sequential misses.
-			_, err := d.f.ReadAt(cacheHashes[miss*leafSize:miss*leafSize+32], diskPosition)
+			_, err := d.f.ReadAt(cacheHashes[miss*leafSize:(miss+1)*leafSize], diskPosition)
 			if err != nil {
 				fmt.Printf("\tWARNING!! read pos %d %s\n", start, err.Error())
 			}
@@ -430,10 +451,13 @@ func (d *diskForestData) writeRange(
 // depends if you count seeking from b-end to b-start as a seek. or if you have
 // like read & replace as one operation or something.
 func (d *diskForestData) swapHashRange(a, b, w uint64) {
+	start := time.Now()
 	hashesA := d.readRange(a, w)
 	hashesB := d.readRange(b, w)
 	d.writeRange(b, w, hashesA)
 	d.writeRange(a, w, hashesB)
+	d.swapTime += time.Since(start)
+	d.swaps++
 }
 
 // size gives you the size of the forest
@@ -450,8 +474,9 @@ func (d *diskForestData) size() uint64 {
 // resize makes the forest bigger (never gets smaller so don't try)
 func (d *diskForestData) resize(newSize uint64) {
 	fmt.Printf("forest data cache benchmarks:"+
-		"cacheReads: %d, cacheWrites: %d, cacheMisses: %d, diskReads: %d, diskWrites: %d, hashCount: %d\n",
-		d.cacheReads, d.cacheWrites, d.cacheMisses, d.diskReads, d.diskWrites, d.hashCount)
+		"cacheReads: %d, cacheWrites: %d, cacheMisses: %d, diskReads: %d, diskWrites: %d, hashCount: %d, readTime: %v(%v), writeTime: %v(%v), swapTime: %v(%v)\n",
+		d.cacheReads, d.cacheWrites, d.cacheMisses, d.diskReads, d.diskWrites, d.hashCount,
+		d.readTime, d.readTime/time.Duration(d.reads+1), d.writeTime, d.writeTime/time.Duration(d.writes+1), d.swapTime, d.swapTime/time.Duration(d.swaps+1))
 	cacheRanges := d.cache.flush(d.hashCount)
 	err := d.f.Truncate(int64(newSize * leafSize))
 	if err != nil {

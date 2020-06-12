@@ -111,7 +111,7 @@ func NewForest(forestFile *os.File) *Forest {
 		d := new(diskForestData)
 		d.f = forestFile
 		f.data = d
-		d.cache = newDiskForestCache(24)
+		d.cache = newDiskForestCache(16)
 	}
 
 	f.data.resize(1)
