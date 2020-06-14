@@ -24,10 +24,6 @@ func IBDClient(net wire.BitcoinNet,
 
 	go stopRunIBD(sig, stopGoing, done)
 
-	// Check if the blk*.dat file given is a testnet/mainnet/regtest
-	// file corresponding to net
-	util.CheckNet(net)
-
 	// Make neccesary directories
 	util.MakePaths()
 

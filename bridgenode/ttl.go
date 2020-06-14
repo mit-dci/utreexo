@@ -1,4 +1,4 @@
-package ttl
+package bridgenode
 
 import (
 	"encoding/binary"
@@ -19,7 +19,7 @@ type DeathInfo struct {
 }
 
 // WriteBlock sends off ttl info to dbWorker to be written to ttldb
-func WriteBlock(bnr util.BlockAndRev,
+func WriteBlock(bnr BlockAndRev,
 	batchan chan *leveldb.Batch, wg *sync.WaitGroup) {
 
 	blockBatch := new(leveldb.Batch)
