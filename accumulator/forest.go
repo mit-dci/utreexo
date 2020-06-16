@@ -108,7 +108,7 @@ func NewForest(forestFile *os.File) *Forest {
 		f.data = new(ramForestData)
 	} else {
 		// for on-disk
-		d := new(diskForestData)
+		d := new(cacheForestData)
 		d.f = forestFile
 		f.data = d
 		d.cache = newDiskForestCache(16)
@@ -545,7 +545,7 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 		f.data = new(ramForestData)
 	} else {
 		// for on-disk
-		d := new(diskForestData)
+		d := new(cacheForestData)
 		d.f = forestFile
 		f.data = d
 		d.cache = newDiskForestCache(24)
@@ -638,6 +638,8 @@ func (f *Forest) Stats() string {
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
 		f.TimeInProve.Seconds())
+
+	f.data.bench()
 	return s
 }
 
