@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"path/filepath"
 
 	"github.com/mit-dci/utreexo/util"
 )
@@ -12,7 +11,6 @@ import (
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
-	blockDir := filepath.Join(dataDir, "/blocks/")
 
 	listenAdr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8338")
 	if err != nil {
@@ -37,7 +35,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan b
 			close(cons)
 			return
 		case con := <-cons:
-			go pushBlocks(con, blockDir)
+			go pushBlocks(con, dataDir)
 		}
 	}
 }

@@ -13,12 +13,13 @@ var LinuxDataDir string = "/.bitcoin/"
 var DarwinDataDir string = "/Library/Application Support/Bitcoin/"
 
 // Directory paths
-var OffsetDirPath string = filepath.Join(".", "offsetdata")
-var ProofDirPath string = filepath.Join(".", "proofdata")
-var ForestDirPath string = filepath.Join(".", "forestdata")
-var PollardDirPath string = filepath.Join(".", "pollarddata")
+var OffsetDirPath string = filepath.Join(".", "utree/offsetdata")
+var ProofDirPath string = filepath.Join(".", "utree/proofdata")
+var ForestDirPath string = filepath.Join(".", "utree/forestdata")
 
 // File paths
+var PollardFilePath string = "pollardFile"
+var PollardHeightFilePath string = "polHeight"
 
 // offsetdata file paths
 var OffsetFilePath string = filepath.Join(OffsetDirPath, "offsetfile")
@@ -40,16 +41,11 @@ var ForestFilePath string = filepath.Join(ForestDirPath, "forestfile.dat")
 var MiscForestFilePath string = filepath.Join(ForestDirPath, "miscforestfile.dat")
 var ForestLastSyncedBlockHeightFilePath string = filepath.Join(ForestDirPath, "forestlastsyncedheight.dat")
 
-// pollard data file paths
-var PollardFilePath string = filepath.Join(PollardDirPath, "pollardfile.dat")
-var PollardHeightFilePath string = filepath.Join(PollardDirPath, "pollardheight.dat")
-
 // MakePaths makes the neccessary paths for all files
 func MakePaths() {
 	os.MkdirAll(OffsetDirPath, os.ModePerm)
 	os.MkdirAll(ProofDirPath, os.ModePerm)
 	os.MkdirAll(ForestDirPath, os.ModePerm)
-	os.MkdirAll(PollardDirPath, os.ModePerm)
 }
 
 // GetBitcoinDataDir grabs the user's Bitcoin DataDir. Doesn't support Windows or BSDs

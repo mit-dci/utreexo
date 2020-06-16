@@ -2,6 +2,7 @@ package csn
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 	"sync"
 
@@ -12,16 +13,16 @@ import (
 // restorePollard restores the pollard from disk to memory.
 // If starting anew, it just returns a empty pollard.
 func restorePollard() (p accumulator.Pollard, err error) {
-
 	// Restore Pollard
 	pollardFile, err := os.OpenFile(
 		util.PollardFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return p, err
+		return
 	}
 	err = p.RestorePollard(pollardFile)
 	if err != nil {
-		return p, err
+		fmt.Printf("restore error\n")
+		return
 	}
 
 	return

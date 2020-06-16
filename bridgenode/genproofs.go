@@ -35,12 +35,12 @@ func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(param, offsetFinished)
+		initBridgeNodeState(param, dataDir, offsetFinished)
 	if err != nil {
 		panic(err)
 	}
 
-	ttlpath := param.Name + "ttldb"
+	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
 	o := opt.Options{CompactionTableSizeMultiplier: 8}
 	lvdb, err := leveldb.OpenFile(ttlpath, &o)

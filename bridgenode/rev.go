@@ -34,7 +34,6 @@ func BlockAndRevReader(
 	maxHeight, curHeight int32) {
 
 	var offsetFilePath string
-	blockDir := filepath.Join(dataDir, "/blocks/")
 
 	// If empty string is given, just use the default path
 	// If not, then use the custom one given
@@ -45,7 +44,7 @@ func BlockAndRevReader(
 	}
 
 	for curHeight != maxHeight {
-		blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, blockDir)
+		blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
 		if err != nil {
 			panic(err)
 		}
@@ -263,7 +262,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 // OpenIndexFile returns the db with only read only option enabled
 func OpenIndexFile(dataDir string) *leveldb.DB {
 	var indexDir string
-	indexDir = filepath.Join(dataDir, "/blocks/index")
+	indexDir = filepath.Join(dataDir, "/index")
 	// Read-only and no compression on
 	// Bitcoin Core uses uncompressed leveldb. If that db is
 	// opened EVEN ONCE, with compression on, the user will
@@ -271,6 +270,7 @@ func OpenIndexFile(dataDir string) *leveldb.DB {
 	o := opt.Options{ReadOnly: true, Compression: opt.NoCompression}
 	lvdb, err := leveldb.OpenFile(indexDir, &o)
 	if err != nil {
+		fmt.Printf("can't open %s\n", indexDir)
 		panic(err)
 	}
 

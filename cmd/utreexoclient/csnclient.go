@@ -8,30 +8,23 @@ import (
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
-
-	bridge "github.com/mit-dci/utreexo/bridgenode"
 	"github.com/mit-dci/utreexo/csn"
-	"github.com/mit-dci/utreexo/util"
 )
 
 var msg = `
-Usage: cmd COMMAND [OPTION]
+Usage: client COMMAND [OPTION]
 A dynamic hash based accumulator designed for the Bitcoin UTXO set
 
 COMMANDS:
-  genproofs                    generates proofs and serves to the CSN node.
-                               this is the bridgenode.
-  ibdsim                       simulates an ibd (initial block download).
-                               this is the CSN node
-OPTIONS:
-  -net=testnet                 configure whether to use testnet. Optional.
-  -net=regtest                 configure whether to use regtest. Optional.
+The client performs ibd (initial block download).
 
+OPTIONS:
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path.
 `
 
-// bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]). You need a subcommand to do so.
+// bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]).
+// You need a subcommand to do so.
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
 var netCmd = optionCmd.String("net", "testnet",
 	"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
@@ -40,18 +33,12 @@ var dataDirCmd = optionCmd.String("datadir", "",
 
 func main() {
 	// check if enough arguments were given
-	if len(os.Args) < 2 {
-		fmt.Println(msg)
-		os.Exit(1)
-	}
-	optionCmd.Parse(os.Args[2:])
-	// set datadir
-	var dataDir string
-	if *dataDirCmd == "" { // No custom datadir given by the user
-		dataDir = util.GetBitcoinDataDir()
-	} else {
-		dataDir = *dataDirCmd // set dataDir to the one set by the user
-	}
+	// if len(os.Args) < 1 {
+	// fmt.Println(msg)
+	// os.Exit(1)
+	// }
+
+	optionCmd.Parse(os.Args[1:])
 
 	var param chaincfg.Params // wire.BitcoinNet
 	if *netCmd == "testnet" {
@@ -65,24 +52,16 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
+	optionCmd.Parse(os.Args[1:])
+	// set datadir
+
 	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
 	handleIntSig(sig)
 
-	switch os.Args[1] {
-	case "ibdsim":
-		err := csn.RunIBD(&param, sig)
-		if err != nil {
-			panic(err)
-		}
-	case "genproofs":
-		err := bridge.BuildProofs(param, dataDir, sig)
-		if err != nil {
-			panic(err)
-		}
-	default:
-		fmt.Println(msg)
-		os.Exit(0)
+	err := csn.RunIBD(&param, sig)
+	if err != nil {
+		panic(err)
 	}
 }
 

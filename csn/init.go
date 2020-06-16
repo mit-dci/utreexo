@@ -11,33 +11,59 @@ import (
 	"github.com/mit-dci/utreexo/util"
 )
 
+// RunIBD calls evertyhing to run IBD
 func RunIBD(p *chaincfg.Params, sig chan bool) error {
 
+	// check on disk for pre-existing state and load it
 	pol, h, err := initCSNState()
 	if err != nil {
 		return err
 	}
+	// make a new CSN struct and load the pollard into it
 	c := new(Csn)
 	c.pollard = pol
 
-	c.Start(h, "127.0.0.1:8338", "compactstate", "", p)
-	// start client & connect
-	go IBD(sig)
+	txChan, heightChan, err := c.Start(h, "127.0.0.1:8338", "compactstate", "", p, sig)
+	if err != nil {
+		return err
+	}
+	var empty [20]byte
+	c.RegisterAddress(empty)
+
+	for {
+		select {
+		case tx := <-txChan:
+			fmt.Printf("Got tx %s\n", tx.TxHash().String())
+		case height := <-heightChan:
+			if height%1000 == 0 {
+				fmt.Printf("got to height %d\n", height)
+			}
+		}
+	}
 
 	return nil
 }
 
 // Start starts up a compact state node, and returns channels for txs and
 // block heights.
-func (c *Csn) Start(height int32, host, path, proxyURL string,
-	params *chaincfg.Params) (chan wire.MsgTx, chan int32, error) {
+func (c *Csn) Start(height int32,
+	host, path, proxyURL string,
+	params *chaincfg.Params,
+	haltSig chan bool) (chan wire.MsgTx, chan int32, error) {
 
-	// p, height, err := initCSNState()
-	// if err != nil {
-	// 	panic(err)
-	// }
+	// initialize maps
+	c.WatchAdrs = make(map[[20]byte]bool)
+	c.WatchOPs = make(map[wire.OutPoint]bool)
+	// initialize channels
+	c.TxChan = make(chan wire.MsgTx, 10)
+	c.HeightChan = make(chan int32, 10)
 
-	return nil, nil, nil
+	c.CurrentHeight = height
+
+	// start client & connect
+	go c.IBDThread(haltSig)
+
+	return c.TxChan, c.HeightChan, nil
 }
 
 // initCSNState attempts to load and initialize the CSN state from the disk.
