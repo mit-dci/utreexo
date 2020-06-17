@@ -639,7 +639,6 @@ func (f *Forest) Stats() string {
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
 		f.TimeInProve.Seconds())
 
-	f.data.bench()
 	return s
 }
 
