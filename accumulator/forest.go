@@ -108,10 +108,9 @@ func NewForest(forestFile *os.File) *Forest {
 		f.data = new(ramForestData)
 	} else {
 		// for on-disk
-		d := new(cacheForestData)
+		d := new(diskForestData)
 		d.f = forestFile
 		f.data = d
-		d.cache = newDiskForestCache(16)
 	}
 
 	f.data.resize(1)
@@ -545,10 +544,9 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 		f.data = new(ramForestData)
 	} else {
 		// for on-disk
-		d := new(cacheForestData)
+		d := new(diskForestData)
 		d.f = forestFile
 		f.data = d
-		d.cache = newDiskForestCache(24)
 	}
 	f.positionMap = make(map[MiniHash]uint64)
 
@@ -581,6 +579,8 @@ func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error
 	fmt.Println("Forest rows:", f.rows)
 	fmt.Println("Done restoring forest")
 
+	// for cacheForestData the `hashCount` field gets
+	// set throught the size() call.
 	f.data.size()
 
 	return f, nil
@@ -638,7 +638,6 @@ func (f *Forest) Stats() string {
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
 		f.TimeInProve.Seconds())
-
 	return s
 }
 
