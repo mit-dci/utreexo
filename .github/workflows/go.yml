@@ -1,12 +1,11 @@
 name: Go
 on: [push, pull_request]
 jobs:
-
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-
     # set GOPATH
     - name: setup env
       shell: bash
