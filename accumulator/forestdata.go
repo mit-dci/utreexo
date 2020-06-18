@@ -337,11 +337,10 @@ func (cache *diskForestCache) rangeSet(start uint64,
 	copy(cache.data[start*leafSize:(start+r)*leafSize], hashes[:r*leafSize])
 }
 
-// Resets the cache and returns the cache ranges.
+// Resets the cache and returns populated cache ranges.
 // sort of expensive but not needed often.
 func (cache *diskForestCache) flush(hashCount uint64) []cacheRange {
 	cacheLength := cache.size << 1
-	// fill the cacheEntries with the forest positions and ranges.
 	var entries []cacheRange
 
 	row := uint8(0)
@@ -358,11 +357,26 @@ func (cache *diskForestCache) flush(hashCount uint64) []cacheRange {
 		minPosition := rowOffset + (totalHashesOnRow - hashesCachedOnRow)
 		hashesNotCached += (totalHashesOnRow - hashesCachedOnRow)
 
-		entries = append(entries, cacheRange{
-			start:      minPosition,
-			startCache: minPosition - hashesNotCached,
-			count:      hashesCachedOnRow,
-		})
+		cachePosition := minPosition - hashesNotCached
+		count := uint64(0)
+		for i := uint64(0); i < hashesCachedOnRow+1; i++ {
+			// if the end of the row is reached
+			if i == hashesCachedOnRow ||
+				// or the cache is not populated at `cachePosition+i`.
+				!cache.valid[cachePosition+i] {
+				// append the range of populated entries.
+				entries = append(entries, cacheRange{
+					start:      minPosition + i - count,
+					startCache: cachePosition + i - count,
+					count:      count,
+				})
+				// reset the count
+				count = 0
+				continue
+			}
+
+			count++
+		}
 
 		row++
 		rowOffset += totalHashesOnRow
@@ -516,28 +530,21 @@ func (d *cacheForestData) size() uint64 {
 
 // resize makes the forest bigger (never gets smaller so don't try)
 func (d *cacheForestData) resize(newSize uint64) {
-	// reset benchmark stats
-	cacheRanges := d.cache.flush(d.hashCount)
 	err := d.f.Truncate(int64(newSize * leafSize))
 	if err != nil {
 		panic(err)
 	}
-	d.hashCount = newSize
 
-	// write cache entries to disk.
-	for _, r := range cacheRanges {
-		// write to disk
-		_, err := d.f.WriteAt(
-			d.cache.data[r.startCache*leafSize:(r.startCache+r.count)*leafSize],
-			int64(r.start*leafSize),
-		)
-		if err != nil {
-			fmt.Printf("\tWARNING!! write pos %d %s\n", r.start, err.Error())
-		}
-	}
+	flushCacheToDisk(d)
+
+	d.hashCount = newSize
 }
 
 func (d *cacheForestData) close() {
+	flushCacheToDisk(d)
+}
+
+func flushCacheToDisk(d *cacheForestData) {
 	// flush the entire cache to disk.
 	cacheRanges := d.cache.flush(d.hashCount)
 	// write cache entries to disk.
