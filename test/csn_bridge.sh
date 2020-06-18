@@ -65,7 +65,7 @@ log() {
 }
 
 failure() {
-	echo "$(timestamp) $(tput setaf 1)FAILURE$(tput sgr0) on line ${BASH_LINENO[0]}: test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
+	echo "$(timestamp) FAILURE on line ${BASH_LINENO[0]}: test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
 	# stop bitcoin core if its running but ignore if this fails.
 	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
 	# print genproofs and ibdsim logs
@@ -78,7 +78,7 @@ success() {
 	# stop bitcoin core if its running but ignore if this fails.
 	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
 	
-	log "$(tput setaf 2)SUCCESS$(tput sgr0): everything seems to be working. test data(logs, regtest files, ...) can be found here: $TEST_DATA"
+	log "SUCCESS: everything seems to be working. test data(logs, regtest files, ...) can be found here: $TEST_DATA"
 }
 
 trap "failure" ERR
