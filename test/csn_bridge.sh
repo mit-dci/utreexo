@@ -23,6 +23,7 @@ UTX_PER_BLOCK=5
 # coins send to this address won't be spend
 # used to create long lasting UTXOs
 UNSPENDABLE_ADDR="bcrt1qduc2gmuwkun9wnlcfp6ak8zzphmyee4dakgnlk"
+GENPROOFS_TIMEOUT=60
 
 # sadly `realpath` does not exist on macOS, so this is a lazy replacement.
 # does not resolve .. in paths.
@@ -65,7 +66,7 @@ log() {
 }
 
 failure() {
-	echo "$(timestamp) $(tput setaf 1)FAILURE$(tput sgr0) on line ${BASH_LINENO[0]}: test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
+	echo "$(timestamp) FAILURE on line ${BASH_LINENO[0]}: test data(logs, regtest files, ...) can be found here: $TEST_DATA" >&2
 	# stop bitcoin core if its running but ignore if this fails.
 	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
 	# print genproofs and ibdsim logs
@@ -78,7 +79,7 @@ success() {
 	# stop bitcoin core if its running but ignore if this fails.
 	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
 	
-	log "$(tput setaf 2)SUCCESS$(tput sgr0): everything seems to be working. test data(logs, regtest files, ...) can be found here: $TEST_DATA"
+	log "SUCCESS: everything seems to be working. test data(logs, regtest files, ...) can be found here: $TEST_DATA"
 }
 
 trap "failure" ERR
@@ -129,15 +130,22 @@ run_utreexo() {
 	genproofs_id=$!
 
 	log "waiting for genproofs to start the blocks server..."
+	local sleep_counter=0
 	while :
 	do
+		if [[ "$sleep_counter" -gt "$GENPROOFS_TIMEOUT" ]]; then
+			log "timeout reached while waiting for genproofs to start the blocks server! failing..."
+			false
+		fi
+		
 		if jobs %% > /dev/null 2>&1; then
-			nc localhost 8338 < /dev/null && break
+			nc -z localhost 8338 && break
 		else
 			# genproofs failed => exit
 			wait $genproofs_id
 		fi
 		sleep 1
+		((sleep_counter=$sleep_counter+1))
 	done
 	log "genproofs started the block server"
 
