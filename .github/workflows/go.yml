@@ -1,12 +1,11 @@
 name: Go
 on: [push, pull_request]
 jobs:
-
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-
     # set GOPATH
     - name: setup env
       shell: bash
@@ -38,8 +37,15 @@ jobs:
         cd $GOPATH/src/github.com/${{ github.repository }}/cmd
         go build -v
 
-    - name: Run tests
+    - name: Run unit tests
       shell: bash
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
         go test -v ./accumulator
+
+    - name: Run integration tests
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        ./test/install_bitcoind.sh
+        ./test/csn_bridge.sh "./cmd/cmd genproofs" "./cmd/cmd ibdsim"
