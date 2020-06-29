@@ -71,7 +71,8 @@ func main() {
 	fmt.Printf("datadir is %s\n", dataDir)
 	err := bridge.BuildProofs(param, dataDir, sig)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Buildproofs error: %s\n", err.Error())
+		panic("server halting")
 	}
 
 }

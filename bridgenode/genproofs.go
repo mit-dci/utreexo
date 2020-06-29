@@ -37,7 +37,9 @@ func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
 	forest, height, knownTipHeight, err :=
 		initBridgeNodeState(param, dataDir, offsetFinished)
 	if err != nil {
-		panic(err)
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		return err
 	}
 
 	ttlpath := "utree/" + param.Name + "ttldb"
@@ -45,7 +47,9 @@ func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
 	o := opt.Options{CompactionTableSizeMultiplier: 8}
 	lvdb, err := leveldb.OpenFile(ttlpath, &o)
 	if err != nil {
-		panic(err)
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		return err
 	}
 	defer lvdb.Close()
 

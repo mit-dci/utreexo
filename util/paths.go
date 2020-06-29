@@ -23,7 +23,8 @@ var PollardHeightFilePath string = "polHeight"
 
 // offsetdata file paths
 var OffsetFilePath string = filepath.Join(OffsetDirPath, "offsetfile")
-var LastIndexOffsetHeightFilePath string = filepath.Join(OffsetDirPath, "lastindexoffsetheightfile")
+var LastIndexOffsetHeightFilePath string = filepath.Join(OffsetDirPath,
+	"lastindexoffsetheightfile")
 
 // proofdata file paths
 //
@@ -39,7 +40,8 @@ var LastPOffsetFilePath string = filepath.Join(ProofDirPath, "lastproofoffset.da
 // forestdata file paths
 var ForestFilePath string = filepath.Join(ForestDirPath, "forestfile.dat")
 var MiscForestFilePath string = filepath.Join(ForestDirPath, "miscforestfile.dat")
-var ForestLastSyncedBlockHeightFilePath string = filepath.Join(ForestDirPath, "forestlastsyncedheight.dat")
+var ForestLastSyncedBlockHeightFilePath string = filepath.Join(ForestDirPath,
+	"forestlastsyncedheight.dat")
 
 // MakePaths makes the neccessary paths for all files
 func MakePaths() {
