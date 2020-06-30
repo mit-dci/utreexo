@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 
@@ -16,7 +16,7 @@ import (
 
 // build the bridge node / proofs
 func BuildProofs(
-	dataDir string, net wire.BitcoinNet, ttlpath, offsetfile string, sig chan bool) error {
+	param chaincfg.Params, dataDir string, forestInRam bool, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -36,16 +36,21 @@ func BuildProofs(
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(dataDir, net, offsetFinished)
+		initBridgeNodeState(param, dataDir, forestInRam, offsetFinished)
 	if err != nil {
-		panic(err)
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		return err
 	}
-
+	knownTipHeight = 729000
+	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
 	o := opt.Options{CompactionTableSizeMultiplier: 8}
 	lvdb, err := leveldb.OpenFile(ttlpath, &o)
 	if err != nil {
-		panic(err)
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		return err
 	}
 	defer lvdb.Close()
 
@@ -114,7 +119,7 @@ func BuildProofs(
 			return err
 		}
 
-		if bnr.Height%10000 == 0 {
+		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
 		}
 
@@ -134,7 +139,7 @@ func BuildProofs(
 	fileWait.Wait()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, height)
+	err = saveBridgeNodeData(forest, height, forestInRam)
 	if err != nil {
 		panic(err)
 	}

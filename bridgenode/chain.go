@@ -4,9 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"sync"
 
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
@@ -15,8 +14,9 @@ import (
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(
-	dataDir string, net wire.BitcoinNet, offsetFinished chan bool) (forest *accumulator.Forest,
-	height int32, lastIndexOffsetHeight int32, err error) {
+	p chaincfg.Params, dataDir string, forestInRam bool,
+	offsetFinished chan bool) (forest *accumulator.Forest,
+	height int32, knownTipHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
 	// if they have new blk*.dat files to sync
@@ -27,38 +27,43 @@ func initBridgeNodeState(
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
 	if util.HasAccess(util.OffsetFilePath) {
-		lastIndexOffsetHeight, err = restoreLastIndexOffsetHeight(
+		knownTipHeight, err = restoreLastIndexOffsetHeight(
 			offsetFinished)
 		if err != nil {
+			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s\n", err.Error())
 			return
 		}
 	} else {
-		fmt.Println("Offsetfile not present or half present." +
+		fmt.Println("Offsetfile not present or half present. " +
 			"Indexing offset for blocks blk*.dat files...")
-		lastIndexOffsetHeight, err = createOffsetData(
-			dataDir, net, offsetFinished)
+		knownTipHeight, err = createOffsetData(p, dataDir, offsetFinished)
 		if err != nil {
+			err = fmt.Errorf("createOffsetData error: %s\n", err.Error())
 			return
 		}
-		fmt.Printf("tip height %d\n", lastIndexOffsetHeight)
+		fmt.Printf("tip height %d\n", knownTipHeight)
 	}
 
 	// Check if the forestdata is present
 	if util.HasAccess(util.ForestFilePath) {
 		fmt.Println("Has access to forestdata, resuming")
-		forest, err = restoreForest()
+		forest, err = restoreForest(
+			util.ForestFilePath, util.MiscForestFilePath, forestInRam)
 		if err != nil {
+			err = fmt.Errorf("restoreForest error: %s\n", err.Error())
 			return
 		}
 		height, err = restoreHeight()
 		if err != nil {
+			err = fmt.Errorf("restoreHeight error: %s\n", err.Error())
 			return
 		}
 	} else {
 		fmt.Println("Creating new forestdata")
-		forest, err = createForest()
+		forest, err = createForest(forestInRam)
 		height = 1 // note that blocks start at 1, block 0 doesn't go into set
 		if err != nil {
+			err = fmt.Errorf("createForest error: %s\n", err.Error())
 			return
 		}
 	}
@@ -70,40 +75,42 @@ func initBridgeNodeState(
 // user restarts, they'll be able to resume.
 // Saves height, forest fields, and pOffset
 func saveBridgeNodeData(
-	forest *accumulator.Forest, height int32) error {
+	forest *accumulator.Forest, height int32, inRam bool) error {
 
-	var fileWait sync.WaitGroup
-	fileWait.Add(1)
-	go func() error {
-		heightFile, err := os.OpenFile(
-			util.ForestLastSyncedBlockHeightFilePath,
+	if inRam {
+		forestFile, err := os.OpenFile(
+			util.ForestFilePath,
 			os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			return err
 		}
-		err = binary.Write(heightFile, binary.BigEndian, height)
+		err = forest.WriteForestToDisk(forestFile)
 		if err != nil {
 			return err
 		}
-		fileWait.Done()
-		return nil
-	}()
-	fileWait.Add(1)
-	// write other misc forest data
-	go func() error {
-		miscForestFile, err := os.OpenFile(
-			util.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
-		if err != nil {
-			return err
-		}
-		err = forest.WriteForest(miscForestFile)
-		if err != nil {
-			return err
-		}
-		fileWait.Done()
-		return nil
-	}()
+	}
 
-	fileWait.Wait()
+	heightFile, err := os.OpenFile(
+		util.ForestLastSyncedBlockHeightFilePath,
+		os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(heightFile, binary.BigEndian, height)
+	if err != nil {
+		return err
+	}
+
+	// write other misc forest data
+	miscForestFile, err := os.OpenFile(
+		util.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	err = forest.WriteMiscData(miscForestFile)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 )
@@ -39,13 +40,14 @@ var regTestGenHash = Hash{
 // For a given BitcoinNet, yields the genesis hash
 // If the BitcoinNet is not supported, an error is
 // returned.
-func GenHashForNet(net wire.BitcoinNet) (*Hash, error) {
-	switch net {
-	case wire.TestNet3:
+func GenHashForNet(p chaincfg.Params) (*Hash, error) {
+
+	switch p.Name {
+	case "testnet3":
 		return &testNet3GenHash, nil
-	case wire.MainNet:
+	case "mainnet":
 		return &mainNetGenHash, nil
-	case wire.TestNet: // yes, this is regtest
+	case "regtest":
 		return &regTestGenHash, nil
 	}
 	return nil, fmt.Errorf("net not supported\n")
@@ -74,7 +76,9 @@ func UblockNetworkReader(
 		err = ub.Deserialize(con)
 		if err != nil {
 			if err == io.EOF {
-				close(blockChan)
+				// close(blockChan)
+				// TODO closing the channel makes it keep going on empty
+				// make a better way to finish up
 				break
 			}
 			panic(err)

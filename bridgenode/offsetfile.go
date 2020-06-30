@@ -51,24 +51,21 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 	lvdb := OpenIndexFile(dataDir)
 	defer lvdb.Close()
 
-	var blocksDir string
-	blocksDir = filepath.Join(dataDir, "/blocks/")
-
 	var lastOffsetHeight int32
 
 	defer offsetFile.Close()
 	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
-		fileDir := filepath.Join(blocksDir, fileName)
+		filePath := filepath.Join(dataDir, fileName)
 		fmt.Printf("Building offsetfile... %s\n", fileName)
 
-		_, err := os.Stat(fileDir)
+		_, err := os.Stat(filePath)
 		if os.IsNotExist(err) {
-			fmt.Printf("%s doesn't exist; done building\n", fileDir)
+			fmt.Printf("%s doesn't exist; done building\n", filePath)
 			break
 		}
 		// grab headers from the .dat file as RawHeaderData type
-		rawheaders, err := readRawHeadersFromFile(fileDir, uint32(fileNum))
+		rawheaders, err := readRawHeadersFromFile(filePath, uint32(fileNum))
 		if err != nil {
 			panic(err)
 		}

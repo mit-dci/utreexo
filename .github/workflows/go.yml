@@ -29,12 +29,18 @@ jobs:
     - name: Get dependencies
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
-        go get -v -d ./csn ./bridgenode ./cmd
+        go get -v -d ./csn ./bridgenode ./cmd/utreexoserver ./cmd/utreexoclient
 
     - name: Build
       shell: bash
       run: |
-        cd $GOPATH/src/github.com/${{ github.repository }}/cmd
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoserver
+        go build -v
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoclient
         go build -v
 
     - name: Run unit tests
@@ -48,4 +54,4 @@ jobs:
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
         ./test/install_bitcoind.sh
-        ./test/csn_bridge.sh "./cmd/cmd genproofs" "./cmd/cmd ibdsim"
+        ./test/csn_bridge.sh "./cmd/utreexoserver/utreexoserver" "./cmd/utreexoclient/utreexoclient"

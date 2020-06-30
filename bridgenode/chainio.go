@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"os"
 
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
@@ -12,13 +12,13 @@ import (
 // createOffsetData restores the offsetfile needed to index the
 // blocks in the raw blk*.dat and raw rev*.dat files.
 func createOffsetData(
-	dataDir string, net wire.BitcoinNet, offsetFinished chan bool) (
+	p chaincfg.Params, dataDir string, offsetFinished chan bool) (
 	lastIndexOffsetHeight int32, err error) {
 
 	// Set the Block Header hash
 	// buildOffsetFile matches the header hash to organize
 	// for blk*.dat files
-	hash, err := util.GenHashForNet(net)
+	hash, err := util.GenHashForNet(p)
 	if err != nil {
 		return 0, err
 	}
@@ -36,13 +36,17 @@ func createOffsetData(
 }
 
 // createForest initializes forest
-func createForest() (forest *accumulator.Forest, err error) {
+func createForest(inRam bool) (forest *accumulator.Forest, err error) {
+	if inRam {
+		forest = accumulator.NewForest(nil)
+		return
+	}
 
 	// Where the forestfile exists
 	forestFile, err := os.OpenFile(
 		util.ForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Restores all the forest data
@@ -53,26 +57,22 @@ func createForest() (forest *accumulator.Forest, err error) {
 
 // restoreForest restores forest fields based off the existing forestdata
 // on disk.
-func restoreForest() (forest *accumulator.Forest, err error) {
+func restoreForest(
+	forestFilename, miscFilename string,
+	inRam bool) (forest *accumulator.Forest, err error) {
 
 	// Where the forestfile exists
-	forestFile, err := os.OpenFile(
-		util.ForestFilePath, os.O_RDWR, 0400)
+	forestFile, err := os.OpenFile(forestFilename, os.O_RDWR, 0400)
 	if err != nil {
-		return nil, err
+		return
 	}
 	// Where the misc forest data exists
-	miscForestFile, err := os.OpenFile(
-		util.MiscForestFilePath, os.O_RDONLY, 0400)
+	miscForestFile, err := os.OpenFile(miscFilename, os.O_RDONLY, 0400)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	forest, err = accumulator.RestoreForest(miscForestFile, forestFile)
-	if err != nil {
-		return nil, err
-	}
-
+	forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam)
 	return
 }
 

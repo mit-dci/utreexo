@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"path/filepath"
 
 	"github.com/mit-dci/utreexo/util"
 )
@@ -12,7 +11,6 @@ import (
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
-	blockDir := filepath.Join(dataDir, "/blocks/")
 
 	listenAdr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8338")
 	if err != nil {
@@ -37,7 +35,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan b
 			close(cons)
 			return
 		case con := <-cons:
-			go pushBlocks(con, blockDir)
+			go pushBlocks(con, endHeight, dataDir)
 		}
 	}
 }
@@ -61,7 +59,7 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 	}
 }
 
-func pushBlocks(c net.Conn, blockDir string) {
+func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 	var curHeight int32
 	defer c.Close()
 	err := binary.Read(c, binary.BigEndian, &curHeight)
@@ -69,8 +67,10 @@ func pushBlocks(c net.Conn, blockDir string) {
 		fmt.Printf("pushBlocks Read %s\n", err.Error())
 		return
 	}
+	fmt.Printf("start serving %s height %d\n", c.RemoteAddr().String(), curHeight)
 
-	for ; ; curHeight++ {
+	for ; curHeight < endHeight; curHeight++ {
+		// fmt.Printf("push %d\n", curHeight)
 		ud, err := util.GetUDataFromFile(curHeight)
 		if err != nil {
 			fmt.Printf("pushBlocks GetUDataFromFile %s\n", err.Error())
@@ -91,4 +91,6 @@ func pushBlocks(c net.Conn, blockDir string) {
 			return
 		}
 	}
+	fmt.Printf("done pushing blocks to %s\n", c.RemoteAddr().String())
+	c.Close()
 }

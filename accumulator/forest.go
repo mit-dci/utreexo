@@ -402,6 +402,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 			len(dels), f.numLeaves)
 	}
 	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
+		fmt.Printf("%v\n", dels)
 		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
 	}
 	for _, a := range adds { // check for empty leaves
@@ -535,48 +536,69 @@ func (f *Forest) PosMapSanity() error {
 
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and rows is stored
-func RestoreForest(miscForestFile *os.File, forestFile *os.File) (*Forest, error) {
+func RestoreForest(
+	miscForestFile *os.File, forestFile *os.File, toRam bool) (*Forest, error) {
 
-	// Initialize the forest for restore
+	// start a forest for restore
 	f := new(Forest)
-	if forestFile == nil {
-		// for in-ram
-		f.data = new(ramForestData)
-	} else {
-		// for on-disk
-		d := new(diskForestData)
-		d.f = forestFile
-		f.data = d
-	}
-	f.positionMap = make(map[MiniHash]uint64)
 
-	// This restores the numLeaves
+	// Restore the numLeaves
 	err := binary.Read(miscForestFile, binary.BigEndian, &f.numLeaves)
 	if err != nil {
 		return nil, err
 	}
 	fmt.Println("Forest leaves:", f.numLeaves)
+	// Restore number of rows
+	// TODO optimize away "rows" and only save in minimzed form
+	// (this requires code to shrink the forest
+	binary.Read(miscForestFile, binary.BigEndian, &f.rows)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Forest rows:", f.rows)
 
-	// This restores the positionMap
-	var i uint64
-	fmt.Printf("%d iterations to do\n", f.numLeaves)
-	for i = uint64(0); i < f.numLeaves; i++ {
+	// open the forest file on disk even if we're going to ram
+	diskData := new(diskForestData)
+	diskData.f = forestFile
+	if toRam {
+		// for in-ram
+		ramData := new(ramForestData)
+		ramData.resize(2 << f.rows)
+
+		// read all at once
+		_, err = diskData.f.Read(ramData.m)
+		if err != nil {
+			return nil, err
+		}
+
+		f.data = ramData
+
+		// for i := uint64(0); i < f.data.size(); i++ {
+		// f.data.write(i, diskData.read(i))
+		// if i%100000 == 0 && i != 0 {
+		// fmt.Printf("read %d nodes from disk\n", i)
+		// }
+		// }
+
+	} else {
+		// for on-disk
+		f.data = diskData
+		// assume no resize needed
+	}
+
+	// Restore positionMap by rebuilding from all leaves
+	f.positionMap = make(map[MiniHash]uint64)
+	fmt.Printf("%d leaves for position map\n", f.numLeaves)
+	for i := uint64(0); i < f.numLeaves; i++ {
 		f.positionMap[f.data.read(i).Mini()] = i
-
-		if i%uint64(100000) == 0 && i != uint64(0) {
-			fmt.Printf("Done %d iterations\n", i)
+		if i%100000 == 0 && i != 0 {
+			fmt.Printf("Added %d leaves %x\n", i, f.data.read(i).Mini())
 		}
 	}
 	if f.positionMap == nil {
 		return nil, fmt.Errorf("Generated positionMap is nil")
 	}
 
-	// This restores the rows
-	binary.Read(miscForestFile, binary.BigEndian, &f.rows)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("Forest rows:", f.rows)
 	fmt.Println("Done restoring forest")
 
 	// for cacheForestData the `hashCount` field gets
@@ -597,7 +619,7 @@ func (f *Forest) PrintPositionMap() string {
 }
 
 // WriteForest writes the numLeaves and rows to miscForestFile
-func (f *Forest) WriteForest(miscForestFile *os.File) error {
+func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 	fmt.Println("numLeaves=", f.numLeaves)
 	fmt.Println("f.rows=", f.rows)
 
@@ -612,6 +634,28 @@ func (f *Forest) WriteForest(miscForestFile *os.File) error {
 	}
 
 	f.data.close()
+
+	return nil
+}
+
+// WriteForest writes the whole forest to disk
+// this only makes sense to do if the forest is in ram.  So it'll return
+// an error if it's not a ramForestData
+func (f *Forest) WriteForestToDisk(dumpFile *os.File) error {
+
+	ramForest, ok := f.data.(*ramForestData)
+	if !ok {
+		return fmt.Errorf("WriteForest only possible with ram forest")
+	}
+
+	_, err := dumpFile.Seek(0, 0)
+	if err != nil {
+		return fmt.Errorf("WriteForest seek %s", err.Error())
+	}
+	_, err = dumpFile.Write(ramForest.m)
+	if err != nil {
+		return fmt.Errorf("WriteForest write %s", err.Error())
+	}
 
 	return nil
 }

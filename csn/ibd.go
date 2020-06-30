@@ -11,26 +11,17 @@ import (
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-func IBDClient(net wire.BitcoinNet,
-	offsetfile string, ttldb string, sig chan bool) error {
+func (c *Csn) IBDThread(sig chan bool) {
 
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
-	stopGoing := make(chan bool, 1)
+	haltRequest := make(chan bool, 1)
 
 	// Channel to alert stopRunIBD it's ok to exit
 	// Makes it wait for flushing to disk
-	done := make(chan bool, 1)
+	haltAccept := make(chan bool, 1)
 
-	go stopRunIBD(sig, stopGoing, done)
-
-	// Make neccesary directories
-	util.MakePaths()
-
-	p, height, err := initCSNState()
-	if err != nil {
-		panic(err)
-	}
+	go stopRunIBD(sig, haltRequest, haltAccept)
 
 	// caching parameter. Keeps txos that are spent before than this many blocks
 	lookahead := int32(1000)
@@ -46,51 +37,61 @@ func IBDClient(net wire.BitcoinNet,
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
 	go util.UblockNetworkReader(
-		ublockQueue, "127.0.0.1:8338", height, lookahead)
+		ublockQueue, "127.0.0.1:8338", c.CurrentHeight, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
 
 	// bool for stopping the below for loop
 	var stop bool
-	for ; !stop; height++ {
+	for ; !stop; c.CurrentHeight++ {
 
-		blocknproof, open := <-ublockQueue
-		if !open {
-			break
-		}
+		blocknproof := <-ublockQueue
 
-		err = putBlockInPollard(blocknproof,
-			&totalTXOAdded, &totalDels, plustime, &p)
+		err := putBlockInPollard(blocknproof,
+			&totalTXOAdded, &totalDels, plustime, &c.pollard)
 		if err != nil {
 			panic(err)
 		}
+		c.HeightChan <- c.CurrentHeight
 
-		if height%10000 == 0 {
+		if c.CurrentHeight%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
-				height, totalTXOAdded, totalDels, p.Stats(),
+				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 		}
 
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
 		select {
-		case stop = <-stopGoing:
+		case stop = <-haltRequest:
 		default:
 		}
 
 	}
 	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
-		height, totalTXOAdded, totalDels, p.Stats(),
+		c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 
-	saveIBDsimData(height, p)
+	saveIBDsimData(c.CurrentHeight, c.pollard)
 
 	fmt.Println("Done Writing")
 
-	done <- true
+	haltAccept <- true
+}
 
-	return nil
+// ScanBlock looks through a block using the CSN's maps and sends matches
+// into the tx channel.
+func (c *Csn) ScanBlock(b wire.MsgBlock) {
+	var curAdr [20]byte
+	for _, tx := range b.Transactions {
+		for _, out := range tx.TxOut {
+			copy(curAdr[:], out.PkScript[:])
+			if c.WatchAdrs[curAdr] {
+				c.TxChan <- *tx
+			}
+		}
+	}
 }
 
 // Here we write proofs for all the txs.
