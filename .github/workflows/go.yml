@@ -48,4 +48,4 @@ jobs:
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
         ./test/install_bitcoind.sh
-        ./test/csn_bridge.sh "./cmd/cmd genproofs" "./cmd/cmd ibdsim"
+        ./test/csn_bridge.sh "./cmd/utreexoserver/utreexoserver" "./cmd/utreexoclient/utreexoclient"
