@@ -34,7 +34,13 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cd $GOPATH/src/github.com/${{ github.repository }}/cmd
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoserver
+        go build -v
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoclient
         go build -v
 
     - name: Run unit tests
