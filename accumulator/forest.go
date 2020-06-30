@@ -562,14 +562,24 @@ func RestoreForest(
 	diskData.f = forestFile
 	if toRam {
 		// for in-ram
-		f.data = new(ramForestData)
-		f.data.resize(2 << f.rows)
-		for i := uint64(0); i < f.data.size(); i++ {
-			f.data.write(i, diskData.read(i))
-			if i%100000 == 0 && i != 0 {
-				fmt.Printf("read %d leaves from disk\n", i)
-			}
+		ramData := new(ramForestData)
+		ramData.resize(2 << f.rows)
+
+		// read all at once
+		_, err = diskData.f.Read(ramData.m)
+		if err != nil {
+			return nil, err
 		}
+
+		f.data = ramData
+
+		// for i := uint64(0); i < f.data.size(); i++ {
+		// f.data.write(i, diskData.read(i))
+		// if i%100000 == 0 && i != 0 {
+		// fmt.Printf("read %d nodes from disk\n", i)
+		// }
+		// }
+
 	} else {
 		// for on-disk
 		f.data = diskData
