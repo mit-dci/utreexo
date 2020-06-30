@@ -65,7 +65,7 @@ func (r *ramForestData) swapHashRange(a, b, w uint64) {
 	a <<= 5
 	b <<= 5
 	w <<= 5
-	temp := make([]byte, a+w)
+	temp := make([]byte, w)
 	copy(temp[:], r.m[a:a+w])
 
 	copy(r.m[a:a+w], r.m[b:b+w])
