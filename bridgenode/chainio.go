@@ -36,13 +36,17 @@ func createOffsetData(
 }
 
 // createForest initializes forest
-func createForest() (forest *accumulator.Forest, err error) {
+func createForest(inRam bool) (forest *accumulator.Forest, err error) {
+	if inRam {
+		forest = accumulator.NewForest(nil)
+		return
+	}
 
 	// Where the forestfile exists
 	forestFile, err := os.OpenFile(
 		util.ForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Restores all the forest data
@@ -53,26 +57,22 @@ func createForest() (forest *accumulator.Forest, err error) {
 
 // restoreForest restores forest fields based off the existing forestdata
 // on disk.
-func restoreForest() (forest *accumulator.Forest, err error) {
+func restoreForest(
+	forestFilename, miscFilename string,
+	inRam bool) (forest *accumulator.Forest, err error) {
 
 	// Where the forestfile exists
-	forestFile, err := os.OpenFile(
-		util.ForestFilePath, os.O_RDWR, 0400)
+	forestFile, err := os.OpenFile(forestFilename, os.O_RDWR, 0400)
 	if err != nil {
-		return nil, err
+		return
 	}
 	// Where the misc forest data exists
-	miscForestFile, err := os.OpenFile(
-		util.MiscForestFilePath, os.O_RDONLY, 0400)
+	miscForestFile, err := os.OpenFile(miscFilename, os.O_RDONLY, 0400)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	forest, err = accumulator.RestoreForest(miscForestFile, forestFile)
-	if err != nil {
-		return nil, err
-	}
-
+	forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam)
 	return
 }
 

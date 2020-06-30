@@ -15,7 +15,8 @@ import (
 )
 
 // build the bridge node / proofs
-func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
+func BuildProofs(
+	param chaincfg.Params, dataDir string, forestInRam bool, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -35,7 +36,7 @@ func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(param, dataDir, offsetFinished)
+		initBridgeNodeState(param, dataDir, forestInRam, offsetFinished)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
@@ -138,7 +139,7 @@ func BuildProofs(param chaincfg.Params, dataDir string, sig chan bool) error {
 	fileWait.Wait()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, height)
+	err = saveBridgeNodeData(forest, height, forestInRam)
 	if err != nil {
 		panic(err)
 	}

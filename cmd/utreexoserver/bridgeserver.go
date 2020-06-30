@@ -23,6 +23,9 @@ OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
 
+  -inram				Keep forest data in ram instead of on disk
+
+
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path.
 `
@@ -34,6 +37,8 @@ var netCmd = optionCmd.String("net", "testnet",
 	"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
 var dataDirCmd = optionCmd.String("datadir", "",
 	`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
+var forestInRam = optionCmd.Bool("inram", false,
+	`keep forest in ram instead of disk.  Faster but needs 4GB ram`)
 
 func main() {
 
@@ -69,7 +74,7 @@ func main() {
 	handleIntSig(sig)
 
 	fmt.Printf("datadir is %s\n", dataDir)
-	err := bridge.BuildProofs(param, dataDir, sig)
+	err := bridge.BuildProofs(param, dataDir, *forestInRam, sig)
 	if err != nil {
 		fmt.Printf("Buildproofs error: %s\n", err.Error())
 		panic("server halting")
