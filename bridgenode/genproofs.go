@@ -42,7 +42,7 @@ func BuildProofs(
 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
 		return err
 	}
-
+	// knownTipHeight = 725000
 	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
 	o := opt.Options{CompactionTableSizeMultiplier: 8}

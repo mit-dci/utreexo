@@ -16,7 +16,7 @@ import (
 func initBridgeNodeState(
 	p chaincfg.Params, dataDir string, forestInRam bool,
 	offsetFinished chan bool) (forest *accumulator.Forest,
-	height int32, lastIndexOffsetHeight int32, err error) {
+	height int32, knownTipHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
 	// if they have new blk*.dat files to sync
@@ -27,7 +27,7 @@ func initBridgeNodeState(
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
 	if util.HasAccess(util.OffsetFilePath) {
-		lastIndexOffsetHeight, err = restoreLastIndexOffsetHeight(
+		knownTipHeight, err = restoreLastIndexOffsetHeight(
 			offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s\n", err.Error())
@@ -36,12 +36,12 @@ func initBridgeNodeState(
 	} else {
 		fmt.Println("Offsetfile not present or half present. " +
 			"Indexing offset for blocks blk*.dat files...")
-		lastIndexOffsetHeight, err = createOffsetData(p, dataDir, offsetFinished)
+		knownTipHeight, err = createOffsetData(p, dataDir, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("createOffsetData error: %s\n", err.Error())
 			return
 		}
-		fmt.Printf("tip height %d\n", lastIndexOffsetHeight)
+		fmt.Printf("tip height %d\n", knownTipHeight)
 	}
 
 	// Check if the forestdata is present
