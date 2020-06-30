@@ -62,10 +62,7 @@ func GetBitcoinDataDir() (dir string) {
 	case "darwin":
 		dir = filepath.Join(home, DarwinDataDir)
 	default:
-		str := fmt.Sprintf(""+
-			"%s is an unsupported operating system"+
-			"Current supported operating systems are linux and darwin",
-			runtime.GOOS)
+		str := fmt.Sprintf("%s unknown, must specify -datadir\n", runtime.GOOS)
 		panic(str)
 	}
 
