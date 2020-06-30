@@ -119,7 +119,7 @@ func BuildProofs(
 			return err
 		}
 
-		if bnr.Height%10000 == 0 {
+		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
 		}
 
