@@ -323,10 +323,10 @@ func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
 // CheckMagicByte checks for the Bitcoin magic bytes.
 // returns false if it didn't read the Bitcoin magic bytes.
 // Checks only for testnet3 and mainnet
-func CheckMagicByte(bytesgiven [4]byte) bool {
-	if bytesgiven != [4]byte{0x0b, 0x11, 0x09, 0x07} && //testnet
-		bytesgiven != [4]byte{0xf9, 0xbe, 0xb4, 0xd9} && // mainnet
-		bytesgiven != [4]byte{0xfa, 0xbf, 0xb5, 0xda} { // regtest
+func CheckMagicByte(bytesgiven []byte) bool {
+	if bytes.Compare(bytesgiven, []byte{0x0b, 0x11, 0x09, 0x07}) != 0 && //testnet
+		bytes.Compare(bytesgiven, []byte{0xf9, 0xbe, 0xb4, 0xd9}) != 0 && // mainnet
+		bytes.Compare(bytesgiven, []byte{0xfa, 0xbf, 0xb5, 0xda}) != 0 { // regtest
 		fmt.Printf("got non magic bytes %x, finishing\n", bytesgiven)
 		return false
 	} else {

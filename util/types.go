@@ -35,22 +35,6 @@ type zProofTx struct {
 	txIndex       int         // Position within a block or TxIndexUnknown
 }
 
-// RawHeaderData is used for blk*.dat offsetfile building
-// Used for ordering blocks as they aren't stored in order in the blk files.
-// Includes 32 bytes of sha256 hash along with other variables
-// needed for offsetfile building.
-type RawHeaderData struct {
-	// CurrentHeaderHash is the double hashed 32 byte header
-	CurrentHeaderHash [32]byte
-	// Prevhash is the 32 byte previous header included in the 80byte header.
-	// Needed for ordering
-	Prevhash [32]byte
-	// FileNum is the blk*.dat file number
-	FileNum [4]byte
-	// Offset is where it is in the .dat file.
-	Offset [4]byte
-}
-
 // UBlock is a regular block, with Udata stuck on
 type UBlock struct {
 	Block     wire.MsgBlock

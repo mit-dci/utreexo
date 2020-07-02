@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/mit-dci/utreexo/util"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // buildOffsetFile builds an offsetFile which acts as an index
@@ -26,7 +26,7 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 
 	// Map to store Block Header Hashes for sorting purposes
 	// blk*.dat files aren't in block order so this is needed
-	nextMap := make(map[[32]byte]util.RawHeaderData)
+	nextMap := make(map[[32]byte]RawHeaderData)
 
 	var offsetFile *os.File
 
@@ -49,9 +49,16 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 	}
 
 	lvdb := OpenIndexFile(dataDir)
-	defer lvdb.Close()
+
+	bufDB := BufferDB(lvdb)
+	lvdb.Close()
 
 	var lastOffsetHeight int32
+
+	// Allocate buffered reader for readRawHeadersFromFile
+	// Less overhead to pre allocate and reuse
+	bufReader := bufio.NewReaderSize(nil, (1<<20)*128) // 128M
+	wr := bufio.NewWriter(nil)
 
 	defer offsetFile.Close()
 	for fileNum := 0; ; fileNum++ {
@@ -65,12 +72,12 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 			break
 		}
 		// grab headers from the .dat file as RawHeaderData type
-		rawheaders, err := readRawHeadersFromFile(filePath, uint32(fileNum))
+		rawheaders, err := readRawHeadersFromFile(bufReader, filePath, uint32(fileNum), bufDB)
 		if err != nil {
 			panic(err)
 		}
 		tip, lastOffsetHeight, err = writeBlockOffset(
-			rawheaders, nextMap, offsetFile, lastOffsetHeight, tip, lvdb)
+			rawheaders, nextMap, wr, offsetFile, lastOffsetHeight, tip)
 		if err != nil {
 			panic(err)
 		}
@@ -189,8 +196,8 @@ func proofWriterWorker(
 }
 
 // readRawHeadersFromFile reads only the headers from the given .dat file
-func readRawHeadersFromFile(fileDir string, fileNum uint32) ([]util.RawHeaderData, error) {
-	var blockHeaders []util.RawHeaderData
+func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string, fileNum uint32, bufMap map[[32]byte]uint32) ([]RawHeaderData, error) {
+	var blockHeaders []RawHeaderData
 
 	f, err := os.Open(fileDir)
 	if err != nil {
@@ -202,62 +209,68 @@ func readRawHeadersFromFile(fileDir string, fileNum uint32) ([]util.RawHeaderDat
 	if err != nil {
 		panic(err)
 	}
-
 	fSize := fStat.Size()
 
-	loc := int64(0)
+	bufReader.Reset(f)
+
+	var buf [88]byte    // buffer for magicbytes, size, and 80 byte header
 	offset := uint32(0) // where the block is located from the beginning of the file
 
 	// until offset is at the end of the file
-	for loc != fSize {
-		b := new(util.RawHeaderData)
+	for int64(offset) != fSize {
+		b := new(RawHeaderData)
 		binary.BigEndian.PutUint32(b.FileNum[:], fileNum)
 		binary.BigEndian.PutUint32(b.Offset[:], offset)
 
+		_, err := bufReader.Read(buf[:])
+		if err != nil {
+			panic(err)
+		}
 		// check if Bitcoin magic bytes were read
-		var magicbytes [4]byte
-		f.Read(magicbytes[:])
-		if util.CheckMagicByte(magicbytes) == false {
+		if util.CheckMagicByte(buf[:4]) == false {
 			break
 		}
 
 		// read the 4 byte size of the load of the block
-		var size uint32
-		binary.Read(f, binary.LittleEndian, &size)
+		size := binary.LittleEndian.Uint32(buf[4:8])
 
 		// add 8bytes for the magic bytes (4bytes) and size (4bytes)
 		offset = offset + size + uint32(8)
 
-		var blockheader [80]byte
-		f.Read(blockheader[:])
-
-		copy(b.Prevhash[:], blockheader[4:32+4])
+		copy(b.Prevhash[:], buf[12:12+32])
 
 		// create block hash
 		// double sha256 needed with Bitcoin
-		first := sha256.Sum256(blockheader[:])
+		first := sha256.Sum256(buf[8 : 8+80])
 		b.CurrentHeaderHash = sha256.Sum256(first[:])
 
-		// offset for the next block from the current position
-		loc, err = f.Seek(int64(size)-80, 1)
-		if err != nil {
-			return nil, err
+		// grab bitcoin core block index info
+		b.UndoPos = bufMap[b.CurrentHeaderHash]
+		if b.UndoPos == 0 {
+			fmt.Printf("WARNING: block in blk file with header: %x\nexists without"+
+				" a corresponding rev block. May be wasting disk space\n", b.CurrentHeaderHash)
 		}
+
+		// offset for the next block from the current position
+		bufReader.Discard(int(size) - 80)
+
 		blockHeaders = append(blockHeaders, *b)
-		b = nil
 	}
+
 	return blockHeaders, nil
 }
 
 // Sorts and writes the block offset from the passed in blockHeaders.
 func writeBlockOffset(
-	blockHeaders []util.RawHeaderData, //        All headers from the select .dat file
-	nextMap map[[32]byte]util.RawHeaderData, //  Map to save the current block hash
+	blockHeaders []RawHeaderData, //        All headers from the select .dat file
+	nextMap map[[32]byte]RawHeaderData, //  Map to save the current block hash
+	wr *bufio.Writer, //buffered writer
 	offsetFile *os.File, //                 File to save the sorted blocks and locations to
 	tipnum int32, //                          Current block it's on
-	tip util.Hash, //                Current hash of the block it's on
-	lvdb *leveldb.DB) ( // index/ in bitcoin core's datadir
+	tip util.Hash) ( //                Current hash of the block it's on
 	util.Hash, int32, error) {
+
+	wr.Reset(offsetFile)
 
 	for _, b := range blockHeaders {
 		if len(nextMap) > 10000 { //Just a random big number
@@ -275,16 +288,14 @@ func writeBlockOffset(
 
 		// Write the .dat file name and the
 		// offset the block can be found at
-		offsetFile.Write(b.FileNum[:])
-		offsetFile.Write(b.Offset[:])
+		wr.Write(b.FileNum[:])
+		wr.Write(b.Offset[:])
 
-		// grab bitcoin core block index info
-		cbIndex := GetBlockIndexInfo(b.CurrentHeaderHash, lvdb)
 		undoOffset := make([]byte, 4)
-		binary.BigEndian.PutUint32(undoOffset, cbIndex.UndoPos)
+		binary.BigEndian.PutUint32(undoOffset, b.UndoPos)
 
 		// write undoblock offset
-		offsetFile.Write(undoOffset)
+		wr.Write(undoOffset)
 
 		// set the tip to current block's hash
 		tip = b.CurrentHeaderHash
@@ -297,17 +308,17 @@ func writeBlockOffset(
 		for ok {
 			// Write the .dat file name and the
 			// offset the block can be found at
-			offsetFile.Write(stashedBlock.FileNum[:])
-			offsetFile.Write(stashedBlock.Offset[:])
+			wr.Write(stashedBlock.FileNum[:])
+			wr.Write(stashedBlock.Offset[:])
 
 			// grab bitcoin core block index info
-			sCbIndex := GetBlockIndexInfo(stashedBlock.CurrentHeaderHash, lvdb)
+			//sCbIndex := GetBlockIndexInfo(stashedBlock.CurrentHeaderHash, lvdb)
 
 			sUndoOffset := make([]byte, 4)
-			binary.BigEndian.PutUint32(sUndoOffset, sCbIndex.UndoPos)
+			binary.BigEndian.PutUint32(sUndoOffset, stashedBlock.UndoPos)
 
 			// write undoblock offset
-			offsetFile.Write(sUndoOffset)
+			wr.Write(sUndoOffset)
 
 			// set the tip to current block's hash
 			tip = stashedBlock.CurrentHeaderHash
@@ -320,5 +331,6 @@ func writeBlockOffset(
 			stashedBlock, ok = nextMap[tip]
 		}
 	}
+	wr.Flush()
 	return tip, tipnum, nil
 }
