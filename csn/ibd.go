@@ -46,7 +46,11 @@ func (c *Csn) IBDThread(sig chan bool) {
 	var stop bool
 	for ; !stop; c.CurrentHeight++ {
 
-		blocknproof := <-ublockQueue
+		blocknproof, open := <-ublockQueue
+		if !open {
+			sig <- true
+			break
+		}
 
 		err := putBlockInPollard(blocknproof,
 			&totalTXOAdded, &totalDels, plustime, &c.pollard)
