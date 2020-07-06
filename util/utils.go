@@ -76,9 +76,7 @@ func UblockNetworkReader(
 		err = ub.Deserialize(con)
 		if err != nil {
 			if err == io.EOF {
-				// close(blockChan)
-				// TODO closing the channel makes it keep going on empty
-				// make a better way to finish up
+				close(blockChan)
 				break
 			}
 			panic(err)

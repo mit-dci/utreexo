@@ -126,7 +126,7 @@ create_blocks() {
 run_utreexo() {
 	# run genproofs
 	log "running genproofs..."
-	eval "$GENPROOFS -datadir=$BITCOIN_DATA -net=regtest > $TEST_DATA/genproofs.log 2>&1 &"
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/regtest/blocks -net=regtest > $TEST_DATA/genproofs.log 2>&1 &"
 	genproofs_id=$!
 
 	log "waiting for genproofs to start the blocks server..."
