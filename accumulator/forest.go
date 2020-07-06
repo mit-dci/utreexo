@@ -98,7 +98,7 @@ type Forest struct {
 }
 
 // NewForest : use ram if not given a file
-func NewForest(forestFile *os.File) *Forest {
+func NewForest(forestFile *os.File, cached bool) *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
 	f.rows = 0
@@ -107,10 +107,18 @@ func NewForest(forestFile *os.File) *Forest {
 		// for in-ram
 		f.data = new(ramForestData)
 	} else {
-		// for on-disk
-		d := new(diskForestData)
-		d.f = forestFile
-		f.data = d
+
+		if cached {
+			d := new(cacheForestData)
+			d.file = forestFile
+			d.cache = newDiskForestCache(20)
+			f.data = d
+		} else {
+			// for on-disk
+			d := new(diskForestData)
+			d.file = forestFile
+			f.data = d
+		}
 	}
 
 	f.data.resize(1)
@@ -537,7 +545,7 @@ func (f *Forest) PosMapSanity() error {
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and rows is stored
 func RestoreForest(
-	miscForestFile *os.File, forestFile *os.File, toRam bool) (*Forest, error) {
+	miscForestFile *os.File, forestFile *os.File, toRam, cached bool) (*Forest, error) {
 
 	// start a forest for restore
 	f := new(Forest)
@@ -559,14 +567,15 @@ func RestoreForest(
 
 	// open the forest file on disk even if we're going to ram
 	diskData := new(diskForestData)
-	diskData.f = forestFile
+	diskData.file = forestFile
+
 	if toRam {
 		// for in-ram
 		ramData := new(ramForestData)
 		ramData.resize(2 << f.rows)
 
 		// read all at once
-		_, err = diskData.f.Read(ramData.m)
+		_, err = diskData.file.Read(ramData.m)
 		if err != nil {
 			return nil, err
 		}
@@ -581,8 +590,16 @@ func RestoreForest(
 		// }
 
 	} else {
-		// for on-disk
-		f.data = diskData
+		if cached {
+			// on disk, with cache
+			cfd := new(cacheForestData)
+			cfd.cache = newDiskForestCache(20)
+			cfd.file = forestFile
+			f.data = cfd
+		} else {
+			// on disk, no cache
+			f.data = diskData
+		}
 		// assume no resize needed
 	}
 

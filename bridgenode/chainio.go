@@ -36,9 +36,9 @@ func createOffsetData(
 }
 
 // createForest initializes forest
-func createForest(inRam bool) (forest *accumulator.Forest, err error) {
+func createForest(inRam, cached bool) (forest *accumulator.Forest, err error) {
 	if inRam {
-		forest = accumulator.NewForest(nil)
+		forest = accumulator.NewForest(nil, false)
 		return
 	}
 
@@ -50,7 +50,7 @@ func createForest(inRam bool) (forest *accumulator.Forest, err error) {
 	}
 
 	// Restores all the forest data
-	forest = accumulator.NewForest(forestFile)
+	forest = accumulator.NewForest(forestFile, cached)
 
 	return
 }
@@ -59,7 +59,7 @@ func createForest(inRam bool) (forest *accumulator.Forest, err error) {
 // on disk.
 func restoreForest(
 	forestFilename, miscFilename string,
-	inRam bool) (forest *accumulator.Forest, err error) {
+	inRam, cached bool) (forest *accumulator.Forest, err error) {
 
 	// Where the forestfile exists
 	forestFile, err := os.OpenFile(forestFilename, os.O_RDWR, 0400)
@@ -72,7 +72,7 @@ func restoreForest(
 		return
 	}
 
-	forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam)
+	forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam, cached)
 	return
 }
 

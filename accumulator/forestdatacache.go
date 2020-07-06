@@ -40,7 +40,7 @@ type cacheRange struct {
 }
 
 type cacheForestData struct {
-	f *os.File
+	file *os.File
 	// stores the size of the forest (the number of hashes stored).
 	// gets updated on every size()/resize() call.
 	hashCount uint64
@@ -250,7 +250,7 @@ func (d *cacheForestData) read(pos uint64) Hash {
 	}
 
 	// Read `pos` from disk.
-	_, err := d.f.ReadAt(h[:], int64(pos*leafSize))
+	_, err := d.file.ReadAt(h[:], int64(pos*leafSize))
 	if err != nil {
 		fmt.Printf("\tWARNING!! read %x pos %d %s\n", h, pos, err.Error())
 	}
@@ -279,7 +279,7 @@ func (d *cacheForestData) write(pos uint64, h Hash) {
 	}
 
 	// Write `h` to disk if it was not included in the cache.
-	_, err := d.f.WriteAt(h[:], int64(pos*leafSize))
+	_, err := d.file.WriteAt(h[:], int64(pos*leafSize))
 	if err != nil {
 		fmt.Printf("\tWARNING!! write pos %d %s\n", pos, err.Error())
 	}
@@ -310,7 +310,7 @@ func (d *cacheForestData) readRange(
 		for _, miss := range misses {
 			diskPosition := int64((diskOverlap + miss + start) * leafSize)
 			// TODO: batch read for sequential misses.
-			_, err := d.f.ReadAt(cacheHashes[miss*leafSize:(miss+1)*leafSize], diskPosition)
+			_, err := d.file.ReadAt(cacheHashes[miss*leafSize:(miss+1)*leafSize], diskPosition)
 			if err != nil {
 				fmt.Printf("\tWARNING!! read pos %d %s\n", start, err.Error())
 			}
@@ -318,7 +318,7 @@ func (d *cacheForestData) readRange(
 	}
 
 	hashes = make([]byte, leafSize*diskOverlap)
-	_, err := d.f.ReadAt(hashes, diskPosition)
+	_, err := d.file.ReadAt(hashes, diskPosition)
 	if err != nil {
 		fmt.Printf("\tWARNING!! read pos %d %s\n", start, err.Error())
 	}
@@ -340,7 +340,7 @@ func (d *cacheForestData) writeRange(
 	d.cache.rangeSet(cacheStart, cacheOverlap, hashes[diskOverlap*leafSize:])
 
 	// write the diskoverlap of the range to disk
-	_, err := d.f.WriteAt(
+	_, err := d.file.WriteAt(
 		hashes[:diskOverlap*leafSize],
 		diskPosition,
 	)
@@ -363,7 +363,7 @@ func (d *cacheForestData) swapHashRange(a, b, w uint64) {
 
 // size gives you the size of the forest
 func (d *cacheForestData) size() uint64 {
-	s, err := d.f.Stat()
+	s, err := d.file.Stat()
 	if err != nil {
 		fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
 		return 0
@@ -374,7 +374,7 @@ func (d *cacheForestData) size() uint64 {
 
 // resize makes the forest bigger (never gets smaller so don't try)
 func (d *cacheForestData) resize(newSize uint64) {
-	err := d.f.Truncate(int64(newSize * leafSize))
+	err := d.file.Truncate(int64(newSize * leafSize))
 	if err != nil {
 		panic(err)
 	}
@@ -394,7 +394,7 @@ func flushCacheToDisk(d *cacheForestData) {
 	// write cache entries to disk.
 	for _, r := range cacheRanges {
 		// write to disk
-		_, err := d.f.WriteAt(
+		_, err := d.file.WriteAt(
 			d.cache.data[r.startCache*leafSize:(r.startCache+r.count)*leafSize],
 			int64(r.start*leafSize),
 		)

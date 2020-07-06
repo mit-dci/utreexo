@@ -38,7 +38,9 @@ var netCmd = optionCmd.String("net", "testnet",
 var dataDirCmd = optionCmd.String("datadir", "",
 	`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 var forestInRam = optionCmd.Bool("inram", false,
-	`keep forest in ram instead of disk.  Faster but needs 4GB ram`)
+	`keep forest in ram instead of disk.  Faster but needs lots of ram`)
+var forestCache = optionCmd.Bool("cache", false,
+	`use ram-cached forest.  Speed between on disk and fully in-ram`)
 
 func main() {
 
@@ -74,7 +76,7 @@ func main() {
 	handleIntSig(sig)
 
 	fmt.Printf("datadir is %s\n", dataDir)
-	err := bridge.BuildProofs(param, dataDir, *forestInRam, sig)
+	err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
 	if err != nil {
 		fmt.Printf("Buildproofs error: %s\n", err.Error())
 		panic("server halting")

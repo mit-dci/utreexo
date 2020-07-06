@@ -88,13 +88,13 @@ func (r *ramForestData) close() {
 
 // ********************************************* forest on disk
 type diskForestData struct {
-	f *os.File
+	file *os.File
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
 func (d *diskForestData) read(pos uint64) Hash {
 	var h Hash
-	_, err := d.f.ReadAt(h[:], int64(pos*leafSize))
+	_, err := d.file.ReadAt(h[:], int64(pos*leafSize))
 	if err != nil {
 		fmt.Printf("\tWARNING!! read %x pos %d %s\n", h, pos, err.Error())
 	}
@@ -103,7 +103,7 @@ func (d *diskForestData) read(pos uint64) Hash {
 
 // writeHash writes a hash.  Don't go out of bounds.
 func (d *diskForestData) write(pos uint64, h Hash) {
-	_, err := d.f.WriteAt(h[:], int64(pos*leafSize))
+	_, err := d.file.WriteAt(h[:], int64(pos*leafSize))
 	if err != nil {
 		fmt.Printf("\tWARNING!! write pos %d %s\n", pos, err.Error())
 	}
@@ -125,22 +125,22 @@ func (d *diskForestData) swapHash(a, b uint64) {
 func (d *diskForestData) swapHashRange(a, b, w uint64) {
 	arange := make([]byte, leafSize*w)
 	brange := make([]byte, leafSize*w)
-	_, err := d.f.ReadAt(arange, int64(a*leafSize)) // read at a
+	_, err := d.file.ReadAt(arange, int64(a*leafSize)) // read at a
 	if err != nil {
 		fmt.Printf("\tshr WARNING!! read pos %d len %d %s\n",
 			a*leafSize, w, err.Error())
 	}
-	_, err = d.f.ReadAt(brange, int64(b*leafSize)) // read at b
+	_, err = d.file.ReadAt(brange, int64(b*leafSize)) // read at b
 	if err != nil {
 		fmt.Printf("\tshr WARNING!! read pos %d len %d %s\n",
 			b*leafSize, w, err.Error())
 	}
-	_, err = d.f.WriteAt(arange, int64(b*leafSize)) // write arange to b
+	_, err = d.file.WriteAt(arange, int64(b*leafSize)) // write arange to b
 	if err != nil {
 		fmt.Printf("\tshr WARNING!! write pos %d len %d %s\n",
 			b*leafSize, w, err.Error())
 	}
-	_, err = d.f.WriteAt(brange, int64(a*leafSize)) // write brange to a
+	_, err = d.file.WriteAt(brange, int64(a*leafSize)) // write brange to a
 	if err != nil {
 		fmt.Printf("\tshr WARNING!! write pos %d len %d %s\n",
 			a*leafSize, w, err.Error())
@@ -149,7 +149,7 @@ func (d *diskForestData) swapHashRange(a, b, w uint64) {
 
 // size gives you the size of the forest
 func (d *diskForestData) size() uint64 {
-	s, err := d.f.Stat()
+	s, err := d.file.Stat()
 	if err != nil {
 		fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
 		return 0
@@ -159,14 +159,14 @@ func (d *diskForestData) size() uint64 {
 
 // resize makes the forest bigger (never gets smaller so don't try)
 func (d *diskForestData) resize(newSize uint64) {
-	err := d.f.Truncate(int64(newSize * leafSize))
+	err := d.file.Truncate(int64(newSize * leafSize))
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (d *diskForestData) close() {
-	err := d.f.Close()
+	err := d.file.Close()
 	if err != nil {
 		fmt.Printf("diskForestData close error: %s\n", err.Error())
 	}
