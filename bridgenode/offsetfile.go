@@ -48,7 +48,10 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 		}
 	}
 
-	lvdb := OpenIndexFile(dataDir)
+	lvdb, err := OpenIndexFile(dataDir)
+	if err != nil {
+		return 0, err
+	}
 
 	bufDB := BufferDB(lvdb)
 	lvdb.Close()
