@@ -14,7 +14,7 @@ import (
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(
-	p chaincfg.Params, dataDir string, forestInRam bool,
+	p chaincfg.Params, dataDir string, forestInRam, forestCached bool,
 	offsetFinished chan bool) (forest *accumulator.Forest,
 	height int32, knownTipHeight int32, err error) {
 
@@ -48,7 +48,7 @@ func initBridgeNodeState(
 	if util.HasAccess(util.ForestFilePath) {
 		fmt.Println("Has access to forestdata, resuming")
 		forest, err = restoreForest(
-			util.ForestFilePath, util.MiscForestFilePath, forestInRam)
+			util.ForestFilePath, util.MiscForestFilePath, forestInRam, forestCached)
 		if err != nil {
 			err = fmt.Errorf("restoreForest error: %s\n", err.Error())
 			return
@@ -60,7 +60,7 @@ func initBridgeNodeState(
 		}
 	} else {
 		fmt.Println("Creating new forestdata")
-		forest, err = createForest(forestInRam)
+		forest, err = createForest(forestInRam, forestCached)
 		height = 1 // note that blocks start at 1, block 0 doesn't go into set
 		if err != nil {
 			err = fmt.Errorf("createForest error: %s\n", err.Error())

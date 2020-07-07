@@ -10,7 +10,7 @@ import (
 )
 
 func TestDeleteReverseOrder(t *testing.T) {
-	f := NewForest(nil)
+	f := NewForest(nil, false)
 	leaf1 := Leaf{Hash: Hash{1}}
 	leaf2 := Leaf{Hash: Hash{2}}
 	_, err := f.Modify([]Leaf{leaf1, leaf2}, nil)
@@ -28,7 +28,7 @@ func TestForestAddDel(t *testing.T) {
 
 	numAdds := uint32(10)
 
-	f := NewForest(nil)
+	f := NewForest(nil, false)
 
 	sc := NewSimChain(0x07)
 	sc.lookahead = 400
@@ -52,7 +52,7 @@ func TestForestAddDel(t *testing.T) {
 }
 
 func TestForestFixed(t *testing.T) {
-	f := NewForest(nil)
+	f := NewForest(nil, false)
 	numadds := 5
 	numdels := 3
 	adds := make([]Leaf, numadds)
@@ -83,7 +83,7 @@ func TestForestFixed(t *testing.T) {
 
 // Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
-	f := NewForest(nil)
+	f := NewForest(nil, false)
 	var absidx uint32
 	adds := make([]Leaf, 2)
 
@@ -162,7 +162,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 		return fmt.Errorf("too many deletes")
 	}
 
-	f := NewForest(nil)
+	f := NewForest(nil, false)
 	adds := make([]Leaf, nAdds)
 
 	for j := range adds {
@@ -199,7 +199,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 }
 
 func TestDeleteNonExisting(t *testing.T) {
-	f := NewForest(nil)
+	f := NewForest(nil, false)
 	deletions := []uint64{0}
 	_, err := f.Modify(nil, deletions)
 	if err == nil {
@@ -213,7 +213,7 @@ func TestSmallRandomForests(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		// The forest instance to test in this iteration of the loop
-		f := NewForest(nil)
+		f := NewForest(nil, false)
 
 		// We use 'quick' to generate testing data:
 		// we interpret the keys as leaf hashes and the values
