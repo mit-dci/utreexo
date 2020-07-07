@@ -12,6 +12,7 @@ import (
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	dbutil "github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // Wire Protocol version
@@ -23,6 +24,24 @@ const pver uint32 = 0
 // MaxMessagePayload is the maximum bytes a message can be regardless of other
 // individual limits imposed by messages themselves.
 const MaxMessagePayload = (1024 * 1024 * 32) // 32MB
+
+// RawHeaderData is used for blk*.dat offsetfile building
+// Used for ordering blocks as they aren't stored in order in the blk files.
+// Includes 32 bytes of sha256 hash along with other variables
+// needed for offsetfile building.
+type RawHeaderData struct {
+	// CurrentHeaderHash is the double hashed 32 byte header
+	CurrentHeaderHash [32]byte
+	// Prevhash is the 32 byte previous header included in the 80byte header.
+	// Needed for ordering
+	Prevhash [32]byte
+	// FileNum is the blk*.dat file number
+	FileNum [4]byte
+	// Offset is where it is in the .dat file.
+	Offset [4]byte
+	// revblock position
+	UndoPos uint32
+}
 
 // BlockReader is a wrapper around GetRawBlockFromFile so that the process
 // can be made into a goroutine. As long as it's running, it keeps sending
@@ -292,28 +311,25 @@ type CBlockFileIndex struct {
 	UndoPos uint32 // rev*.dat file offset
 }
 
-// GetBlockIndexInfo returns a
-func GetBlockIndexInfo(h [32]byte, lvdb *leveldb.DB) CBlockFileIndex {
-	// 0x62 is hex representation of ascii 'b' (98), which is used
-	// appended to block keys in leveldb
-	lookup := append([]byte{0x62}, h[:]...)
+// BufferDB buffers the leveldb key values into map in memory
+func BufferDB(lvdb *leveldb.DB) map[[32]byte]uint32 {
+	bufDB := make(map[[32]byte]uint32)
+	var header [32]byte
 
-	value, err := lvdb.Get(lookup, nil)
-	if err == leveldb.ErrClosed { // Handle db closed err
+	iter := lvdb.NewIterator(dbutil.BytesPrefix([]byte{0x62}), nil)
+	for iter.Next() {
+		copy(header[:], iter.Key()[1:])
+		cbIdx := ReadCBlockFileIndex(bytes.NewReader(iter.Value()))
+		bufDB[header] = cbIdx.UndoPos
+	}
+
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
 		panic(err)
 	}
-	// Sometimes there may be a block in blk that is not verified but is just sitting there
-	// Warn the user about it but ignore it since it doesn't effect the actual validation
-	if err != nil { // all other returned errors are from reading the db
-		str := fmt.Errorf("%s WARNING: A block in blk file exists without"+
-			"a corresponding rev block location. May be wasting disk space", err)
-		fmt.Println(str)
-	}
 
-	r := bytes.NewReader(value)
-	cbIdx := ReadCBlockFileIndex(r)
-
-	return cbIdx
+	return bufDB
 }
 
 func ReadCBlockFileIndex(r io.ReadSeeker) (cbIdx CBlockFileIndex) {
