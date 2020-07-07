@@ -46,7 +46,9 @@ func BlockAndRevReader(
 	for curHeight != maxHeight {
 		blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
 		if err != nil {
-			panic(err)
+			fmt.Printf(err.Error())
+			// close(blockChan)
+			return
 		}
 
 		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
@@ -237,30 +239,32 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 	// Only TxInUndos that have the height greater than 0
 	// Has varint that isn't 0. see
 	// github.com/bitcoin/bitcoin/blob/9cc7eba1b5651195c05473004c00021fe3856f30/src/undo.h#L42
-	if ti.Height > 0 {
-		varint, err := wire.ReadVarInt(r, pver)
-		if err != nil {
-			return err
-		}
-		if varint != 0 {
-			return fmt.Errorf("varint is %d", varint)
-		}
-		ti.Varint = varint
+	// if ti.Height > 0 {
+	_, err := wire.ReadVarInt(r, pver)
+	if err != nil {
+		return err
 	}
+
+	// if varint != 0 {
+	// return fmt.Errorf("varint is %d", varint)
+	// }
+	// ti.Varint = varint
+	// }
 
 	amount, _ := deserializeVLQ(r)
 	ti.Amount = decompressTxOutAmount(amount)
 
 	ti.PKScript = decompressScript(r)
 	if ti.PKScript == nil {
-		panic("nil pkscript")
+		return fmt.Errorf("nil pkscript on h %d, pks %x\n", ti.Height, ti.PKScript)
+
 	}
 
 	return nil
 }
 
 // OpenIndexFile returns the db with only read only option enabled
-func OpenIndexFile(dataDir string) *leveldb.DB {
+func OpenIndexFile(dataDir string) (*leveldb.DB, error) {
 	var indexDir string
 	indexDir = filepath.Join(dataDir, "/index")
 	// Read-only and no compression on
@@ -270,11 +274,10 @@ func OpenIndexFile(dataDir string) *leveldb.DB {
 	o := opt.Options{ReadOnly: true, Compression: opt.NoCompression}
 	lvdb, err := leveldb.OpenFile(indexDir, &o)
 	if err != nil {
-		fmt.Printf("can't open %s\n", indexDir)
-		panic(err)
+		return nil, fmt.Errorf("can't open %s\n", indexDir)
 	}
 
-	return lvdb
+	return lvdb, nil
 }
 
 // CBlockFileIndex is a reimplementation of the Bitcoin Core

@@ -159,7 +159,7 @@ func (d *diskForestData) size() uint64 {
 
 // resize makes the forest bigger (never gets smaller so don't try)
 func (d *diskForestData) resize(newSize uint64) {
-	err := d.file.Truncate(int64(newSize * leafSize))
+	err := d.file.Truncate(int64(newSize * leafSize * 2))
 	if err != nil {
 		panic(err)
 	}

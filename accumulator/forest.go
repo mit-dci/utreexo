@@ -572,12 +572,19 @@ func RestoreForest(
 	if toRam {
 		// for in-ram
 		ramData := new(ramForestData)
+		fmt.Printf("%d rows resize to %d\n", f.rows, 2<<f.rows)
 		ramData.resize(2 << f.rows)
 
-		// read all at once
-		_, err = diskData.file.Read(ramData.m)
-		if err != nil {
-			return nil, err
+		// Can't read all at once!  There's a (secret? at least not well
+		// documented) maxRW of 1GB.
+		var bytesRead int
+		for bytesRead < len(ramData.m) {
+			n, err := diskData.file.Read(ramData.m[bytesRead:])
+			if err != nil {
+				return nil, err
+			}
+			bytesRead += n
+			fmt.Printf("read %d bytes of forest file into ram\n", bytesRead)
 		}
 
 		f.data = ramData
