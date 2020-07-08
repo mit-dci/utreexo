@@ -73,7 +73,7 @@ $ ./cmd ibdsim -net=testnet # -net=testnet flag needed for testnet. Leave out fo
 
 Note that your folders or filenames might be different, but this should give you the idea and work on default Linux/golang setups.  If you've tried this and it doesn't work and you'd like to help out, you can either fix the code or documentation so that it works and make a pull request, or open an issue describing what doesn't work.
 
-###Windows walkthrough
+### Windows walkthrough
 <ol>
 <li>
 To run Utreexo, download the Bitcoin core here (includes both testnet and main chain): <a href="https://bitcoin.org/en/download ">https://bitcoin.org/en/download </a> Open the respective application; the testnet application should appear as a green bitcoin and the main bitcoin core application should appear as an orange bitcoin.
