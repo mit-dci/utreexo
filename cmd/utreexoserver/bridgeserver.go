@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -22,12 +23,13 @@ The birdgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
-
-  -inram				Keep forest data in ram instead of on disk
-
-
+  -inram                       Keep forest data in ram instead of on disk
   -datadir="path/to/directory" set a custom DATADIR.
-                               Defaults to the Bitcoin Core DATADIR path.
+                               Defaults to the Bitcoin Core DATADIR path
+
+  -cpuprof                     configure whether to use use cpu profiling
+  -memprof                     configure whether to use use heap profiling
+
 `
 
 // bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]).
@@ -41,6 +43,10 @@ var forestInRam = optionCmd.Bool("inram", false,
 	`keep forest in ram instead of disk.  Faster but needs lots of ram`)
 var forestCache = optionCmd.Bool("cache", false,
 	`use ram-cached forest.  Speed between on disk and fully in-ram`)
+var cpuProfCmd = optionCmd.String("cpuprof", "",
+	`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
+var memProfCmd = optionCmd.String("memprof", "",
+	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
 
 func main() {
 
@@ -59,6 +65,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *cpuProfCmd != "" {
+		f, err := os.Create(*cpuProfCmd)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(msg)
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
+	if *memProfCmd != "" {
+		f, err := os.Create(*memProfCmd)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(msg)
+			os.Exit(1)
+		}
+		pprof.WriteHeapProfile(f)
+	}
+
 	// set datadir
 	var dataDir string
 	if *dataDirCmd == "" { // No custom datadir given by the user
@@ -71,9 +97,9 @@ func main() {
 		dataDir = *dataDirCmd // set dataDir to the one set by the user
 	}
 
-	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
+	// listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
-	handleIntSig(sig)
+	handleIntSig(sig, *cpuProfCmd)
 
 	fmt.Printf("datadir is %s\n", dataDir)
 	err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
@@ -84,11 +110,14 @@ func main() {
 
 }
 
-func handleIntSig(sig chan bool) {
+func handleIntSig(sig chan bool, cpuProfCmd string) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
 		<-s
+		if cpuProfCmd != "" {
+			pprof.StopCPUProfile()
+		}
 		sig <- true
 	}()
 }

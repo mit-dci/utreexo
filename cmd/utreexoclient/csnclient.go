@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -12,15 +13,16 @@ import (
 )
 
 var msg = `
-Usage: client COMMAND [OPTION]
-A dynamic hash based accumulator designed for the Bitcoin UTXO set
-
-COMMANDS:
-The client performs ibd (initial block download).
+Usage: client [OPTION]
+A dynamic hash based accumulator designed for the Bitcoin UTXO set.
+client performs ibd (initial block download) on the Bitcoin blockchain.
 
 OPTIONS:
-  -datadir="path/to/directory" set a custom DATADIR.
-                               Defaults to the Bitcoin Core DATADIR path.
+  -net=mainnet                 configure whether to use mainnet. Optional.
+  -net=regtest                 configure whether to use regtest. Optional.
+
+  -cpuprof                     configure whether to use use cpu profiling
+  -memprof                     configure whether to use use heap profiling
 `
 
 // bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]).
@@ -30,6 +32,10 @@ var netCmd = optionCmd.String("net", "testnet",
 	"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
 var dataDirCmd = optionCmd.String("datadir", "",
 	`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
+var cpuProfCmd = optionCmd.String("cpuprof", "",
+	`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
+var memProfCmd = optionCmd.String("memprof", "",
+	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
 
 func main() {
 	// check if enough arguments were given
@@ -52,12 +58,30 @@ func main() {
 		fmt.Println(msg)
 		os.Exit(1)
 	}
-	optionCmd.Parse(os.Args[1:])
-	// set datadir
 
-	//listen for SIGINT, SIGTERM, or SIGQUIT from the os
+	if *cpuProfCmd != "" {
+		f, err := os.Create(*cpuProfCmd)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(msg)
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
+	if *memProfCmd != "" {
+		f, err := os.Create(*memProfCmd)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(msg)
+			os.Exit(1)
+		}
+		pprof.WriteHeapProfile(f)
+	}
+
+	// listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
-	handleIntSig(sig)
+	handleIntSig(sig, *cpuProfCmd)
 
 	err := csn.RunIBD(&param, sig)
 	if err != nil {
@@ -65,11 +89,14 @@ func main() {
 	}
 }
 
-func handleIntSig(sig chan bool) {
+func handleIntSig(sig chan bool, cpuProfCmd string) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
 		<-s
+		if cpuProfCmd != "" {
+			pprof.StopCPUProfile()
+		}
 		sig <- true
 	}()
 }
