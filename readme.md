@@ -88,21 +88,19 @@ Get the Utreexo Code from ```github.com/mit-dci/utreexo```
 </li>
 <li>
 
-Generate proofs by running the following command where $USER is your login user name. Remove ```"-net=testnet"``` if you are not running on testnet.  
+Build and generate proofs (server) by running the following command where $USER is your username
 ```
-cd C:\Users\$USER\AppData\Roaming\Bitcoin\testnet3\blocks
-C:\utreexo\cmd genproofs -net=testnet 
+go build bridgeserver.go
+bridgeserver -datadir=C:\Users\$USER\AppData\Roaming\Bitcoin\testnet3\blocks\
 ```
- **If this fails, the command run was interupted or failed. To relaunch, delete the folders in the Utreexo folder: forestdata, offsetdata, pollarddata, proofdata, testnet-ttlbd**
+ **If this fails, the command run was interupted or failed. To relaunch, delete the folders in the Utreexo\utreexoserver\utree folder: forestdata, offsetdata, pollarddata, proofdata, testnet-ttlbd**
  
 </li>
 <li>
 
  For a debugging session, in launch.json in VSCode, create a configuration as follows. The 
       ```"-datadir"```    argument should point to the folder where Bitcoin was downloaded in step 1. 
-  
-  * If you are not using testnet, remove the ```"-net=testnet"``` argument. 
-  
+ 
 ```
 {
     "version": "0.2.0",
@@ -114,7 +112,7 @@ C:\utreexo\cmd genproofs -net=testnet
             "mode": "auto",
             "program": "${fileDirname}",
             "env": {},
-            "args": ["genproofs","-net=testnet","-datadir=C:\\Users\\$USER\\AppData\\Roaming\\Bitcoin"]
+            "args": ["-datadir=C:\\Users\\$USER\\AppData\\Roaming\\Bitcoin\\testnet3\\blocks\\"]
         }
     ]
 }
@@ -123,11 +121,11 @@ C:\utreexo\cmd genproofs -net=testnet
 
 <li>
 
-Finally run Utreexo from  **command line** using the following. Remove ``` -net=testnet``` if you aren't using testnet. 
+Finally run Utreexo client from  **command line** using the following. Make sure that the server has finished running before running this command. 
 
 ```
-cd C:\Users\$USER\AppData\Roaming\Bitcoin\testnet3\blocks
-C:\utreexo\cmd ibdsim -net=testnet 
+go build csnclient.go
+C:\utreexo\csnclient -datadir=C:\Users\admin\AppData\Roaming\Bitcoin\testnet3\blocks\
 ```
 </li>
 </ol>
