@@ -23,8 +23,8 @@ var PollardHeightFilePath string = "polHeight"
 
 // offsetdata file paths
 var OffsetFilePath string = filepath.Join(OffsetDirPath, "offsetfile")
-var LastIndexOffsetHeightFilePath string = filepath.Join(OffsetDirPath,
-	"lastindexoffsetheightfile")
+var LastIndexOffsetHeightFilePath string = filepath.Join(OffsetDirPath, "lastindexoffsetheightfile")
+var OffsetFileResumeDataFilePath string = filepath.Join(OffsetDirPath, "resumedata")
 
 // proofdata file paths
 //

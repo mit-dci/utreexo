@@ -22,21 +22,32 @@ func BenchmarkBuildOffsetFile(b *testing.B) {
 
 	// grab the datadir for this system
 	// use testnet3
-	testnetDataDir := filepath.Join(util.GetBitcoinDataDir(), "testnet3/blocks")
+	testnetDataDir := filepath.Join("/Users/niklas/.bitcoin", "testnet3/blocks")
 	tmpOffsetFile := filepath.Join(tmpDir, "offsetfile")
 	tmpLastOffsetHeightFile := filepath.Join(tmpDir, "loffsetfile")
-
-	db := OpenIndexFile(testnetDataDir)
-	defer db.Close()
 
 	hash, err := util.GenHashForNet(chaincfg.TestNet3Params)
 	if err != nil {
 		b.Fatal(err)
 	}
-
-	_, err = buildOffsetFile(testnetDataDir, *hash, tmpOffsetFile, tmpLastOffsetHeightFile)
+	fmt.Println("creating offestfile...")
+	offsetfile, err := NewOffsetFile(testnetDataDir, tmpOffsetFile,
+		tmpLastOffsetHeightFile, *hash)
 	if err != nil {
 		b.Fatal(err)
+	}
+	defer offsetfile.Close()
+	fmt.Println("building offsetfile...")
+	newBlocks := make(chan bool)
+	lastIndexed := offsetfile.Build(newBlocks)
+	newBlocks <- true
+
+	// wait for offsetfile to finish
+	for {
+		if <-lastIndexed > 1500000 {
+			fmt.Println("Done")
+			break
+		}
 	}
 }
 
@@ -49,7 +60,7 @@ func TestBuildOffsetFile(t *testing.T) {
 
 	// grab the datadir for this system
 	// use testnet3
-	testnetDataDir := filepath.Join(util.GetBitcoinDataDir(), "testnet3/blocks")
+	testnetDataDir := filepath.Join("/Users/niklas/.bitcoin", "testnet3/blocks")
 	// grab testnet3 hash
 	testnetHash, err := util.GenHashForNet(chaincfg.TestNet3Params)
 	if err != nil {
@@ -61,20 +72,25 @@ func TestBuildOffsetFile(t *testing.T) {
 
 	// build offsetfile
 	fmt.Println("creating offestfile...")
-	lastOffsetHeight, err := buildOffsetFile(testnetDataDir,
-		*testnetHash, tmpOffsetFile, tmpLastOffsetHeightFile)
+	offsetfile, err := NewOffsetFile(testnetDataDir, tmpOffsetFile,
+		tmpLastOffsetHeightFile, *testnetHash)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer offsetfile.Close()
+	fmt.Println("building offsetfile...")
+	newBlocks := make(chan bool)
+	lastIndexed := offsetfile.Build(newBlocks)
+	newBlocks <- true
 
-	lvdb := OpenIndexFile(testnetDataDir)
+	lvdb, err := OpenIndexFile(filepath.Join(testnetDataDir, "index"))
 	bnrChan := make(chan BlockAndRev, 10)
 
 	fmt.Println("checking the offestfile created...")
 
 	// Start the reader
 	go BlockAndRevReader(bnrChan, testnetDataDir, tmpOffsetFile,
-		lastOffsetHeight, 1)
+		lastIndexed, 1)
 
 	// Check that things in the offsetfile are correct
 	// 200,000 blocks is prob enough
@@ -100,6 +116,8 @@ func TestBuildOffsetFile(t *testing.T) {
 			fmt.Println("# of tested blocks: ", i)
 		}
 	}
+
+	fmt.Println("Done")
 }
 
 // GetBlockIndexInfo returns a CBlockFileIndex based on the hash given as a key

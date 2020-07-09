@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/util"
@@ -24,6 +26,14 @@ const pver uint32 = 0
 // MaxMessagePayload is the maximum bytes a message can be regardless of other
 // individual limits imposed by messages themselves.
 const MaxMessagePayload = (1024 * 1024 * 32) // 32MB
+func countOpenFiles() int64 {
+	out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -p %v", os.Getpid())).Output()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	lines := strings.Split(string(out), "\n")
+	return int64(len(lines) - 1)
+}
 
 // RawHeaderData is used for blk*.dat offsetfile building
 // Used for ordering blocks as they aren't stored in order in the blk files.
@@ -50,7 +60,7 @@ type RawHeaderData struct {
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
 	blockChan chan BlockAndRev, dataDir, cOffsetFile string,
-	maxHeight, curHeight int32) {
+	knownBlockHeight chan int32, curHeight int32) {
 
 	var offsetFilePath string
 
@@ -62,19 +72,29 @@ func BlockAndRevReader(
 		offsetFilePath = cOffsetFile
 	}
 
-	for curHeight != maxHeight {
-		blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
-		if err != nil {
-			fmt.Printf(err.Error())
-			// close(blockChan)
+	for {
+		maxHeight, ok := <-knownBlockHeight
+		if !ok {
+			fmt.Println("BlockAndRevReader: knownBlockHeight channel got closed, bye.")
 			return
 		}
 
-		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
+		fmt.Println("BlockAndRevReader: reading blocks until", maxHeight,
+			", current height:", curHeight, "open files", countOpenFiles())
 
-		blockChan <- bnr
-		curHeight++
+		for curHeight < maxHeight {
+			blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
+			if err != nil {
+				panic(err)
+			}
+
+			bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
+
+			blockChan <- bnr
+			curHeight++
+		}
 	}
+
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and
@@ -283,9 +303,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 }
 
 // OpenIndexFile returns the db with only read only option enabled
-func OpenIndexFile(dataDir string) (*leveldb.DB, error) {
-	var indexDir string
-	indexDir = filepath.Join(dataDir, "/index")
+func OpenIndexFile(indexDir string) (*leveldb.DB, error) {
 	// Read-only and no compression on
 	// Bitcoin Core uses uncompressed leveldb. If that db is
 	// opened EVEN ONCE, with compression on, the user will
@@ -311,6 +329,11 @@ type CBlockFileIndex struct {
 	UndoPos uint32 // rev*.dat file offset
 }
 
+const (
+	// BlockHaveUndo indicates that undo data is available in rev*.dat
+	BlockHaveUndo int32 = 16
+)
+
 // BufferDB buffers the leveldb key values into map in memory
 func BufferDB(lvdb *leveldb.DB) map[[32]byte]uint32 {
 	bufDB := make(map[[32]byte]uint32)
@@ -320,7 +343,11 @@ func BufferDB(lvdb *leveldb.DB) map[[32]byte]uint32 {
 	for iter.Next() {
 		copy(header[:], iter.Key()[1:])
 		cbIdx := ReadCBlockFileIndex(bytes.NewReader(iter.Value()))
-		bufDB[header] = cbIdx.UndoPos
+		if cbIdx.Status&BlockHaveUndo > 0 || cbIdx.Height == 0 {
+			// only write the undopos into the map if a undo position is available,
+			// or if it's the genesis block.
+			bufDB[header] = cbIdx.UndoPos
+		}
 	}
 
 	iter.Release()

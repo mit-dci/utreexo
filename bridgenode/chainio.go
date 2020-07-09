@@ -4,36 +4,9 @@ import (
 	"encoding/binary"
 	"os"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
-
-// createOffsetData restores the offsetfile needed to index the
-// blocks in the raw blk*.dat and raw rev*.dat files.
-func createOffsetData(
-	p chaincfg.Params, dataDir string, offsetFinished chan bool) (
-	lastIndexOffsetHeight int32, err error) {
-
-	// Set the Block Header hash
-	// buildOffsetFile matches the header hash to organize
-	// for blk*.dat files
-	hash, err := util.GenHashForNet(p)
-	if err != nil {
-		return 0, err
-	}
-
-	// TODO allow the user to pass a custom offsetfile path and
-	// custom lastOffsetHeight path instead of just ""
-	lastIndexOffsetHeight, err = buildOffsetFile(dataDir, *hash, "", "")
-	if err != nil {
-		return 0, err
-	}
-
-	offsetFinished <- true
-
-	return
-}
 
 // createForest initializes forest
 func createForest(inRam, cached bool) (forest *accumulator.Forest, err error) {
@@ -93,28 +66,5 @@ func restoreHeight() (height int32, err error) {
 			return 0, err
 		}
 	}
-	return
-}
-
-// restoreLastIndexOffsetHeight restores the lastIndexOffsetHeight
-func restoreLastIndexOffsetHeight(offsetFinished chan bool) (
-	lastIndexOffsetHeight int32, err error) {
-
-	f, err := os.OpenFile(
-		util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return 0, err
-	}
-
-	// grab the last block height from currentoffsetheight
-	// currentoffsetheight saves the last height from the offsetfile
-	err = binary.Read(f, binary.BigEndian, &lastIndexOffsetHeight)
-	if err != nil {
-		return 0, err
-	}
-	// if there is a offset file, we should pass true to offsetFinished
-	// to let stopParse() know that it shouldn't delete offsetfile
-	offsetFinished <- true
-
 	return
 }

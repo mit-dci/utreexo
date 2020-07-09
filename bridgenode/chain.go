@@ -14,34 +14,16 @@ import (
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(
-	p chaincfg.Params, dataDir string, forestInRam, forestCached bool,
-	offsetFinished chan bool) (forest *accumulator.Forest,
-	height int32, knownTipHeight int32, err error) {
+	p chaincfg.Params, dataDir string, forestInRam, forestCached bool, offsetFinished chan bool) (forest *accumulator.Forest,
+	height int32, offsetFile *OffsetFile, err error) {
+	genesis, err := util.GenHashForNet(p)
+	if err != nil {
+		return
+	}
 
-	// Default behavior is that the user should delete all offsetdata
-	// if they have new blk*.dat files to sync
-	// User needs to re-index blk*.dat files when added new files to sync
-
-	// Both the blk*.dat offset and rev*.dat offset is checked at the same time
-	// If either is incomplete or not complete, they're both removed and made
-	// anew
-	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
-	if util.HasAccess(util.OffsetFilePath) {
-		knownTipHeight, err = restoreLastIndexOffsetHeight(
-			offsetFinished)
-		if err != nil {
-			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s\n", err.Error())
-			return
-		}
-	} else {
-		fmt.Println("Offsetfile not present or half present. " +
-			"Indexing offset for blocks blk*.dat files...")
-		knownTipHeight, err = createOffsetData(p, dataDir, offsetFinished)
-		if err != nil {
-			err = fmt.Errorf("createOffsetData error: %s\n", err.Error())
-			return
-		}
-		fmt.Printf("tip height %d\n", knownTipHeight)
+	offsetFile, err = NewOffsetFile(dataDir, "", "", *genesis)
+	if err != nil {
+		return
 	}
 
 	// Check if the forestdata is present

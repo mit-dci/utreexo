@@ -94,7 +94,7 @@ mine_blocks() {
 # 50% of these UTXOs will not be spend by future blocks.
 # TODO: find a better way to create lots of utxos
 create_utxos() {
-	#outputs=$(cat unspendable_outputs.json)
+	local pids=()
 	for ((i=0;i<$TX_PER_BLOCK;i++))
 	do
 		if (("$i" < $UTX_PER_BLOCK))
@@ -103,8 +103,13 @@ create_utxos() {
 		else
 			bitcoin-cli -conf=$BITCOIN_CONF sendtoaddress "$(bitcoin-cli -conf=$BITCOIN_CONF getnewaddress)" 0.01 > /dev/null &
 		fi
+
+		pids+=($!)
 	done
-	wait
+
+	for pid in "${pids[@]}"; do
+  	wait "$pid"
+	done
 }
 
 # create blocks, with some transactions in them
@@ -151,9 +156,15 @@ run_utreexo() {
 
 	# run ibdsim
 	log "running idbsim..."
-	eval "$IBDSIM -datadir=$BITCOIN_DATA -net=regtest > $TEST_DATA/ibdsim.log 2>&1"
+	eval "$IBDSIM -datadir=$BITCOIN_DATA -net=regtest > $TEST_DATA/ibdsim.log 2>&1 &"
+	ibdsim_id=$!
+
+	create_blocks
+
+	sleep 5
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
+	wait $ibdsim_id
 
 	log "utreexo output:"
 	tail -n +1 $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log
@@ -169,10 +180,12 @@ daemon=1
 regtest=1
 server=1
 fallbackfee=0.0002
+listen=1
 [regtest]
+port=8333
 rpcuser=utreexo
 rpcpassword=utreexo
-rpcport=8332
+rpcport=18332
 EOF
 
 # remove old regtest
@@ -188,10 +201,6 @@ mine_blocks 200
 
 cd $BITCOIN_DATA/regtest/blocks
 create_blocks
-
-# stop bitcoin core to enable access to /index
-bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
-sleep 1
 
 # run utreexo
 run_utreexo

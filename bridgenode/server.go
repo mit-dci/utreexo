@@ -4,14 +4,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/mit-dci/utreexo/util"
 )
 
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
-func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
-
+func blockServer(dataDir string, haltRequest, haltAccept chan bool,
+	newProofCondition *sync.Cond) {
 	listenAdr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8338")
 	if err != nil {
 		fmt.Printf(err.Error())
@@ -35,7 +36,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan b
 			close(cons)
 			return
 		case con := <-cons:
-			go pushBlocks(con, endHeight, dataDir)
+			go pushBlocks(con, dataDir, newProofCondition)
 		}
 	}
 }
@@ -59,7 +60,7 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 	}
 }
 
-func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
+func pushBlocks(c net.Conn, blockDir string, newProofCondition *sync.Cond) {
 	var curHeight int32
 	defer c.Close()
 	err := binary.Read(c, binary.BigEndian, &curHeight)
@@ -69,18 +70,35 @@ func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 	}
 	fmt.Printf("start serving %s height %d\n", c.RemoteAddr().String(), curHeight)
 
-	for ; curHeight < endHeight; curHeight++ {
-		// fmt.Printf("push %d\n", curHeight)
+	var shouldWait bool
+	for ; ; curHeight++ {
+		// wait until the condition signals that new blocks+proof are ready to serve
+		newProofCondition.L.Lock()
+		if shouldWait {
+			fmt.Println("pushBlocks: waiting for new proof")
+			newProofCondition.Wait()
+			shouldWait = false
+			fmt.Println("pushBlocks: new proof found, ready to serve")
+		}
+		newProofCondition.L.Unlock()
+
 		ud, err := util.GetUDataFromFile(curHeight)
 		if err != nil {
+			// TODO: only handle EOF instead of any error?
 			fmt.Printf("pushBlocks GetUDataFromFile %s\n", err.Error())
-			return
+			// try this height again next time
+			curHeight--
+			shouldWait = true
+			continue
 		}
 
 		blk, _, err := GetRawBlockFromFile(curHeight, util.OffsetFilePath, blockDir)
 		if err != nil {
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
-			return
+			// try this height again next time
+			curHeight--
+			shouldWait = true
+			continue
 		}
 
 		// put proofs & block together, send that over
