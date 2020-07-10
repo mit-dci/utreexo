@@ -72,3 +72,60 @@ $ ./cmd ibdsim -net=testnet # -net=testnet flag needed for testnet. Leave out fo
 * `ibdsim` is the CSN node and it will call genproofs and ask for blocks with the Utreexo accumulator proofs. It will receive the proofs and validate the inclusion.
 
 Note that your folders or filenames might be different, but this should give you the idea and work on default Linux/golang setups.  If you've tried this and it doesn't work and you'd like to help out, you can either fix the code or documentation so that it works and make a pull request, or open an issue describing what doesn't work.
+
+### Windows walkthrough
+<ol>
+<li>
+To run Utreexo, download the Bitcoin core here (includes both testnet and main chain): <a href="https://bitcoin.org/en/download ">https://bitcoin.org/en/download </a> Open the respective application; the testnet application should appear as a green bitcoin and the main bitcoin core application should appear as an orange bitcoin.
+From here, synchronize with the blockchain; this takes around 2-5 hours on the testnet and up to a day using Bitcoin core. 
+</li>
+<li>
+Install Go in your pc and get it working on your compiler/IDE. The guide below will refer to installing Go on VSCode. 
+</li>
+<li>
+
+Get the Utreexo Code from ```github.com/mit-dci/utreexo```
+</li>
+<li>
+
+Build and generate proofs (server) by running the following command where $USER is your username
+```
+go build bridgeserver.go
+bridgeserver -datadir=C:\Users\$USER\AppData\Roaming\Bitcoin\testnet3\blocks\
+```
+ **If this fails, the command run was interupted or failed. To relaunch, delete the folders in the Utreexo\utreexoserver\utree folder: forestdata, offsetdata, pollarddata, proofdata, testnet-ttlbd**
+ 
+</li>
+<li>
+
+ For a debugging session, in launch.json in VSCode, create a configuration as follows. The 
+      ```"-datadir"```    argument should point to the folder where Bitcoin was downloaded in step 1. 
+ 
+```
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${fileDirname}",
+            "env": {},
+            "args": ["-datadir=C:\\Users\\$USER\\AppData\\Roaming\\Bitcoin\\testnet3\\blocks\\"]
+        }
+    ]
+}
+```
+</li>
+
+<li>
+
+Finally run Utreexo client from  **command line** using the following. Make sure that the server has finished running before running this command. 
+
+```
+go build csnclient.go
+C:\utreexo\csnclient -datadir=C:\Users\admin\AppData\Roaming\Bitcoin\testnet3\blocks\
+```
+</li>
+</ol>
