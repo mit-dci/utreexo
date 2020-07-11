@@ -276,7 +276,7 @@ offset_loop:
 		fmt.Printf("Building offsetfile... %d\n", fileNum)
 
 		// grab headers from the .dat file as RawHeaderData type
-		rawheaders, err := readRawHeadersFromFile(bufReader, filePath, uint32(fileNum), bufDB)
+		rawheaders, err := readRawHeadersFromFile(bufReader, filePath, uint32(fileNum))
 		if err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ offset_loop:
 		var newOffsetHeight int32
 		file.tip, newOffsetHeight, err = writeBlockOffset(
 			headersToIndex, file.resumeData.nextMap, wr, file.offsetFile,
-			file.resumeData.lastOffsetHeight, file.tip)
+			file.resumeData.lastOffsetHeight, file.tip, bufDB)
 		if err != nil {
 			return err
 		}
@@ -460,7 +460,7 @@ func proofWriterWorker(proofChan chan []byte, newProofChan *sync.Cond,
 
 // readRawHeadersFromFile reads only the headers from the given .dat file
 func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string,
-	fileNum uint32, bufMap map[[32]byte]uint32) ([]RawHeaderData, error) {
+	fileNum uint32) ([]RawHeaderData, error) {
 	var blockHeaders []RawHeaderData
 
 	f, err := os.Open(fileDir)
@@ -508,15 +508,6 @@ func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string,
 		first := sha256.Sum256(buf[8 : 8+80])
 		b.CurrentHeaderHash = sha256.Sum256(first[:])
 
-		// grab bitcoin core block index info
-		var ok bool
-		b.UndoPos, ok = bufMap[b.CurrentHeaderHash]
-		if !ok {
-			fmt.Printf("block in blk file with header: %x\nexists without"+
-				" a corresponding rev block. done reading headers.\n", b.CurrentHeaderHash)
-			break
-		}
-
 		// offset for the next block from the current position
 		bufReader.Discard(int(size) - 80)
 
@@ -533,7 +524,8 @@ func writeBlockOffset(
 	wr *bufio.Writer, //buffered writer
 	offsetFile *os.File, //                 File to save the sorted blocks and locations to
 	tipnum int32, //                          Current block it's on
-	tip util.Hash) ( //                Current hash of the block it's on
+	tip util.Hash, //                Current hash of the block it's on
+	bufMap map[[32]byte]uint32) (
 	util.Hash, int32, error) {
 
 	wr.Reset(offsetFile)
@@ -553,6 +545,13 @@ func writeBlockOffset(
 			continue
 		}
 
+		var ok bool
+		b.UndoPos, ok = bufMap[b.CurrentHeaderHash]
+		if !ok {
+			fmt.Printf("block in blk file with header: %x\nexists without"+
+				" a corresponding rev block. done reading headers.\n", b.CurrentHeaderHash)
+			continue
+		}
 		undoOffset := make([]byte, 4)
 		binary.BigEndian.PutUint32(undoOffset, b.UndoPos)
 
@@ -572,6 +571,12 @@ func writeBlockOffset(
 		// that we skipped over
 		stashedBlock, ok := nextMap[tip]
 		for ok {
+			stashedBlock.UndoPos, ok = bufMap[stashedBlock.CurrentHeaderHash]
+			if !ok {
+				fmt.Printf("block in blk file with header: %x\nexists without"+
+					" a corresponding rev block. done reading headers.\n", stashedBlock.CurrentHeaderHash)
+				break
+			}
 			sUndoOffset := make([]byte, 4)
 			binary.BigEndian.PutUint32(sUndoOffset, stashedBlock.UndoPos)
 
@@ -593,6 +598,7 @@ func writeBlockOffset(
 			stashedBlock, ok = nextMap[tip]
 		}
 	}
+
 	wr.Flush()
 	return tip, tipnum, nil
 }
