@@ -39,7 +39,9 @@ func BenchmarkBuildOffsetFile(b *testing.B) {
 	defer offsetfile.Close()
 	fmt.Println("building offsetfile...")
 	newBlocks := make(chan bool)
-	lastIndexed := offsetfile.Build(newBlocks)
+	haltReq := make(chan bool)
+	haltAccepted := make(chan bool)
+	lastIndexed := offsetfile.Build(newBlocks, haltReq, haltAccepted)
 	newBlocks <- true
 
 	// wait for offsetfile to finish
@@ -49,6 +51,49 @@ func BenchmarkBuildOffsetFile(b *testing.B) {
 			break
 		}
 	}
+}
+
+func TestRandom(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir) // clean up. Always runs
+
+	// grab the datadir for this system
+	// use testnet3
+	testnetDataDir := filepath.Join("/Volumes/bitcoindata/.bitcoin/", "testnet3/blocks")
+	// grab testnet3 hash
+	testnetHash, err := util.GenHashForNet(chaincfg.TestNet3Params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpOffsetFile := filepath.Join(tmpDir, "offsetfile")
+	tmpLastOffsetHeightFile := filepath.Join(tmpDir, "loffsetfile")
+
+	// build offsetfile
+	fmt.Println("creating offestfile...")
+	offsetfile, err := NewOffsetFile(testnetDataDir, tmpOffsetFile,
+		tmpLastOffsetHeightFile, *testnetHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer offsetfile.Close()
+	fmt.Println("building offsetfile...")
+	newBlocks := make(chan bool)
+	haltReq := make(chan bool)
+	haltAccepted := make(chan bool)
+	lastIndexed := offsetfile.Build(newBlocks, haltReq, haltAccepted)
+	newBlocks <- true
+
+	// Check that things in the offsetfile are correct
+	// 200,000 blocks is prob enough
+	for i := int32(1); i < 1750000; i++ { // skip genesis
+		fmt.Println(<-lastIndexed)
+	}
+
+	fmt.Println("Done")
 }
 
 func TestBuildOffsetFile(t *testing.T) {
@@ -80,10 +125,11 @@ func TestBuildOffsetFile(t *testing.T) {
 	defer offsetfile.Close()
 	fmt.Println("building offsetfile...")
 	newBlocks := make(chan bool)
-	lastIndexed := offsetfile.Build(newBlocks)
+	haltReq := make(chan bool)
+	haltAccepted := make(chan bool)
+	lastIndexed := offsetfile.Build(newBlocks, haltReq, haltAccepted)
 	newBlocks <- true
-
-	lvdb, err := OpenIndexFile(filepath.Join(testnetDataDir, "index"))
+	lvdb, _ := OpenIndexFile(filepath.Join(testnetDataDir, "/index"))
 	bnrChan := make(chan BlockAndRev, 10)
 
 	fmt.Println("checking the offestfile created...")
@@ -94,7 +140,7 @@ func TestBuildOffsetFile(t *testing.T) {
 
 	// Check that things in the offsetfile are correct
 	// 200,000 blocks is prob enough
-	for i := int32(1); i < 200000; i++ { // skip genesis
+	for i := int32(1); i < 1770000; i++ { // skip genesis
 		bnr := <-bnrChan
 
 		cbIdx := GetBlockIndexInfo(bnr.Blk.BlockHash(), lvdb)

@@ -83,8 +83,12 @@ func BlockAndRevReader(
 			", current height:", curHeight, "open files", countOpenFiles())
 
 		for curHeight < maxHeight {
+			if curHeight%100 == 0 {
+				fmt.Println("BlockAndRevReader:", curHeight)
+			}
 			blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
 			if err != nil {
+				fmt.Println(curHeight)
 				panic(err)
 			}
 
@@ -279,16 +283,15 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 	// Has varint that isn't 0. see
 	// github.com/bitcoin/bitcoin/blob/9cc7eba1b5651195c05473004c00021fe3856f30/src/undo.h#L42
 	// if ti.Height > 0 {
-	_, err := wire.ReadVarInt(r, pver)
+	varint, err := wire.ReadVarInt(r, pver)
 	if err != nil {
 		return err
 	}
 
-	// if varint != 0 {
-	// return fmt.Errorf("varint is %d", varint)
-	// }
-	// ti.Varint = varint
-	// }
+	if varint != 0 {
+		return fmt.Errorf("varint is %d", varint)
+	}
+	ti.Varint = varint
 
 	amount, _ := deserializeVLQ(r)
 	ti.Amount = decompressTxOutAmount(amount)
@@ -343,9 +346,9 @@ func BufferDB(lvdb *leveldb.DB) map[[32]byte]uint32 {
 	for iter.Next() {
 		copy(header[:], iter.Key()[1:])
 		cbIdx := ReadCBlockFileIndex(bytes.NewReader(iter.Value()))
-		if cbIdx.Status&BlockHaveUndo > 0 || cbIdx.Height == 0 {
-			// only write the undopos into the map if a undo position is available,
-			// or if it's the genesis block.
+
+		if cbIdx.Status&BlockHaveUndo > 0 {
+			// only write the undopos into the map if a undo position is available
 			bufDB[header] = cbIdx.UndoPos
 		}
 	}
