@@ -45,7 +45,6 @@ func (c *Csn) IBDThread(sig chan bool) {
 	// bool for stopping the below for loop
 	var stop bool
 	for ; !stop; c.CurrentHeight++ {
-
 		blocknproof, open := <-ublockQueue
 		if !open {
 			sig <- true

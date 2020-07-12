@@ -71,9 +71,10 @@ func UblockNetworkReader(
 		panic(err)
 	}
 
+	// TODO goroutines for only the Deserialize part might be nice.
+	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
-		var ub UBlock
-		err = ub.Deserialize(con)
+		block, err := ReadBlock(con)
 		if err != nil {
 			if err == io.EOF {
 				close(blockChan)
@@ -82,9 +83,36 @@ func UblockNetworkReader(
 			panic(err)
 		}
 
+		var ub UBlock
+		bReader := bytes.NewReader(block)
+		err = ub.Deserialize(bReader)
+		if err != nil {
+			panic(err)
+		}
 		ub.Height = curHeight
 		blockChan <- ub
 	}
+}
+
+func ReadBlock(con net.Conn) ([]byte, error) {
+	// 4 bytes size of the payload is sent over
+	var sizeb [4]byte
+
+	_, err := io.ReadFull(con, sizeb[:])
+	if err != nil {
+		fmt.Println("size read err: ", err)
+		return nil, err
+	}
+
+	size := binary.BigEndian.Uint32(sizeb[:])
+	block := make([]byte, size)
+
+	_, err = io.ReadFull(con, block)
+	if err != nil {
+		fmt.Println("block read err: ", err)
+		return nil, err
+	}
+	return block, nil
 }
 
 // GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat

@@ -218,18 +218,29 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 }
 
 func (ub *UBlock) Serialize(w io.Writer) (err error) {
-	err = ub.Block.Serialize(w)
+	var bw bytes.Buffer
+	err = ub.Block.Serialize(&bw)
 	if err != nil {
 		return
 	}
 
 	udataBytes := ub.ExtraData.ToBytes()
-	err = binary.Write(w, binary.BigEndian, uint32(len(udataBytes)))
+	err = binary.Write(&bw, binary.BigEndian, uint32(len(udataBytes)))
 	if err != nil {
 		return
 	}
 
-	_, err = w.Write(udataBytes)
+	_, err = bw.Write(udataBytes)
+	if err != nil {
+		return err
+	}
+
+	payload := bw.Bytes()
+	err = binary.Write(w, binary.BigEndian, uint32(len(payload)))
+	if err != nil {
+		return
+	}
+	_, err = w.Write(payload)
 
 	return
 }
