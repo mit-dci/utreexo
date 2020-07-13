@@ -332,9 +332,44 @@ type CBlockFileIndex struct {
 	UndoPos uint32 // rev*.dat file offset
 }
 
+// Block status bits
 const (
-	// BlockHaveUndo indicates that undo data is available in rev*.dat
-	BlockHaveUndo int32 = 16
+	//! Unused.
+	BlockValidUnknown int32 = 0
+	// Reserved
+	BlockValidReserved int32 = 1
+
+	//! All parent headers found, difficulty matches, timestamp >= median previous, checkpoint. Implies all parents
+	//! are also at least TREE.
+	BlockValidTree int32 = 2
+
+	/**
+	 * Only first tx is coinbase, 2 <= coinbase input script length <= 100, transactions valid, no duplicate txids,
+	 * sigops, size, merkle root. Implies all parents are at least TREE but not necessarily TRANSACTIONS. When all
+	 * parent blocks also have TRANSACTIONS, CBlockIndex::nChainTx will be set.
+	 */
+	BlockValidTransactions int32 = 3
+
+	//! Outputs do not overspend inputs, no double spends, coinbase output ok, no immature coinbase spends, BIP30.
+	//! Implies all parents are also at least CHAIN.
+	BlockValidChain int32 = 4
+
+	//! Scripts & signatures ok. Implies all parents are also at least SCRIPTS.
+	BlockValidScripts int32 = 5
+
+	//! All validity bits.
+	BlockValidMask int32 = BlockValidReserved | BlockValidTree | BlockValidTransactions |
+		BlockValidChain | BlockValidScripts
+
+	BlockHaveData int32 = 8  //!< full block available in blk*.dat
+	BlockHaveUndo int32 = 16 //!< undo data available in rev*.dat
+	BlockHaveMask int32 = BlockHaveData | BlockHaveUndo
+
+	BlockFailedValid int32 = 32 //!< stage after last reached validness failed
+	BlockFailedChild int32 = 64 //!< descends from failed block
+	BlockFailedMask  int32 = BlockFailedValid | BlockFailedChild
+
+	BlockOptWitness int32 = 128 //!< block data in blk*.data was received with a witness-enforcing client
 )
 
 // BufferDB buffers the leveldb key values into map in memory
@@ -347,8 +382,8 @@ func BufferDB(lvdb *leveldb.DB) map[[32]byte]uint32 {
 		copy(header[:], iter.Key()[1:])
 		cbIdx := ReadCBlockFileIndex(bytes.NewReader(iter.Value()))
 
-		if cbIdx.Status&BlockHaveUndo > 0 {
-			// only write the undopos into the map if a undo position is available
+		if cbIdx.Status&(BlockHaveMask|BlockValidMask) > 0 && cbIdx.Status&BlockFailedMask == 0 {
+			// only write the undopos into the map if it's a valid block with undo data
 			bufDB[header] = cbIdx.UndoPos
 		}
 	}
