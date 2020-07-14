@@ -84,6 +84,9 @@ func BlockAndRevReader(
 	}
 }
 
+// GetRawBlocksFromDisk retrives multiple consecutive blocks starting at height `startAt`.
+// `count` is a upper limit for the number of blocks read.
+// Only blocks that are contained in the same blk file are returned.
 func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	blockDir string) (blocks []wire.MsgBlock, revs []RevBlock, err error) {
 	if startAt == 0 {
@@ -114,10 +117,16 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	revOffsets := make([]uint32, count)
 
 	var datFileNum uint32
+	// minOffset holds the smallest block offset that was seen
 	minOffset := uint32(math.MaxUint32)
+	// maxOffset holds the largest block offset that was seen
 	maxOffset := uint32(0)
+	// minRevOffset holds the smallest rev offset that was seen
 	minRevOffset := uint32(math.MaxUint32)
+	// maxRevOffset holds the largest rev offset that was seen
 	maxRevOffset := uint32(0)
+	// offsetsRead holds the number of blocks < count that are loacated in
+	// blk file with number `datFileNum`
 	offsetsRead := uint32(0)
 	for ; offsetsRead < uint32(count); offsetsRead++ {
 		var datFileNumTmp uint32
@@ -126,6 +135,7 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 			break
 		}
 		if offsetsRead > 0 && datFileNumTmp != datFileNum {
+			// break if the block is located in a different blk file
 			break
 		}
 		datFileNum = datFileNumTmp
@@ -165,6 +175,9 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	defer blockFile.Close()
 	blockFileInfo, _ := blockFile.Stat()
 
+	// Read all block data needed for the blocks into memory.
+	// The blocks that are needed are located between the minOffset and
+	// maxOffset+(the size of the block at maxOffset).
 	// 1<<23 = +8MB TODO: whats the max on disk size of a block?
 	blockData := make([]byte, min(maxOffset+1<<23, uint32(blockFileInfo.Size()))-minOffset)
 	_, err = blockFile.ReadAt(blockData, int64(minOffset))
@@ -180,7 +193,10 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	defer revFile.Close()
 	revFileInfo, _ := revFile.Stat()
 
-	// 1<<23 = +8MB TODO: whats the max on disk size of a block?
+	// Read all rev data needed for the blocks into memory.
+	// The rev data thats needed is located between the minRevOffset and
+	// maxRevOffset+(the size of the rev at maxRevOffset).
+	// 1<<23 = +8MB TODO: whats the max on disk size of a rev?
 	revData := make([]byte, min(maxRevOffset+1<<23, uint32(revFileInfo.Size()))-minRevOffset)
 	_, err = revFile.ReadAt(revData, int64(minRevOffset))
 	if err != nil {
@@ -192,6 +208,7 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	skip := make([]byte, 8)
 	for i := uint32(0); i < offsetsRead; i++ {
 		blockBuf := bytes.NewBuffer(blockData[offsets[i]-minOffset:])
+		// skip 8 bytes, magic bytes + load size.
 		blockBuf.Read(skip)
 		// TODO this is probably expensive. fix
 		err = blocks[i].Deserialize(blockBuf)
