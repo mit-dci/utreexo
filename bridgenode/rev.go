@@ -64,7 +64,7 @@ func BlockAndRevReader(
 		offsetFilePath = cOffsetFile
 	}
 
-	for curHeight != maxHeight {
+	for curHeight < maxHeight {
 		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 1000, offsetFilePath, dataDir)
 		if err != nil {
 			fmt.Printf(err.Error())
@@ -123,7 +123,7 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 		var datFileNumTmp uint32
 		err = binary.Read(offsetReader, binary.BigEndian, &datFileNumTmp)
 		if err != nil {
-			return
+			break
 		}
 		if offsetsRead > 0 && datFileNumTmp != datFileNum {
 			break
@@ -151,6 +151,10 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 		if revOffsets[offsetsRead] > maxRevOffset {
 			maxRevOffset = revOffsets[offsetsRead]
 		}
+	}
+
+	if offsetsRead == 0 {
+		return
 	}
 
 	blockFile, err := os.Open(filepath.Join(blockDir,
