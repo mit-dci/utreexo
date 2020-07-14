@@ -1,10 +1,12 @@
 package bridgenode
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -63,18 +65,144 @@ func BlockAndRevReader(
 	}
 
 	for curHeight != maxHeight {
-		blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
+		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 1000, offsetFilePath, dataDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
 			return
 		}
 
-		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
-
-		blockChan <- bnr
-		curHeight++
+		for i := 0; i < len(blocks); i++ {
+			bnr := BlockAndRev{
+				Height: curHeight,
+				Blk:    blocks[i],
+				Rev:    revs[i],
+			}
+			blockChan <- bnr
+			curHeight++
+		}
 	}
+}
+
+func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
+	blockDir string) (blocks []wire.MsgBlock, revs []RevBlock, err error) {
+	if startAt == 0 {
+		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		return
+	}
+	startAt--
+
+	if count <= 0 {
+		return
+	}
+
+	offsetFile, err := os.Open(offsetFileName)
+	if err != nil {
+		return
+	}
+	defer offsetFile.Close() // file always closes
+
+	// offset file consists of 12 bytes per block
+	// tipnum * 12 gives us the correct position for that block
+	_, err = offsetFile.Seek(int64(12*startAt), 0)
+	if err != nil {
+		return
+	}
+	offsetReader := bufio.NewReaderSize(offsetFile, int(12*count))
+
+	offsets := make([]uint32, count)
+	revOffsets := make([]uint32, count)
+
+	var datFileNum uint32
+	minOffset := uint32(math.MaxUint32)
+	maxOffset := uint32(0)
+	minRevOffset := uint32(math.MaxUint32)
+	maxRevOffset := uint32(0)
+	offsetsRead := uint32(0)
+	for ; offsetsRead < uint32(count); offsetsRead++ {
+		var datFileNumTmp uint32
+		err = binary.Read(offsetReader, binary.BigEndian, &datFileNumTmp)
+		if err != nil {
+			return
+		}
+		if offsetsRead > 0 && datFileNumTmp != datFileNum {
+			break
+		}
+		datFileNum = datFileNumTmp
+		err = binary.Read(offsetReader, binary.BigEndian, &offsets[offsetsRead])
+		if err != nil {
+			return
+		}
+		err = binary.Read(offsetReader, binary.BigEndian, &revOffsets[offsetsRead])
+		if err != nil {
+			return
+		}
+
+		if offsets[offsetsRead] < minOffset {
+			minOffset = offsets[offsetsRead]
+		}
+		if offsets[offsetsRead] > maxOffset {
+			maxOffset = offsets[offsetsRead]
+		}
+
+		if revOffsets[offsetsRead] < minRevOffset {
+			minRevOffset = revOffsets[offsetsRead]
+		}
+		if revOffsets[offsetsRead] > maxRevOffset {
+			maxRevOffset = revOffsets[offsetsRead]
+		}
+	}
+
+	blockFile, err := os.Open(filepath.Join(blockDir,
+		fmt.Sprintf("blk%05d.dat", datFileNum)))
+	if err != nil {
+		return
+	}
+	defer blockFile.Close()
+	blockFileInfo, _ := blockFile.Stat()
+
+	// 1<<23 = +8MB TODO: whats the max on disk size of a block?
+	blockData := make([]byte, min(maxOffset+1<<23, uint32(blockFileInfo.Size()))-minOffset)
+	_, err = blockFile.ReadAt(blockData, int64(minOffset))
+	if err != nil {
+		return
+	}
+
+	revFile, err := os.Open(filepath.Join(blockDir,
+		fmt.Sprintf("rev%05d.dat", datFileNum)))
+	if err != nil {
+		return
+	}
+	defer revFile.Close()
+	revFileInfo, _ := revFile.Stat()
+
+	// 1<<23 = +8MB TODO: whats the max on disk size of a block?
+	revData := make([]byte, min(maxRevOffset+1<<23, uint32(revFileInfo.Size()))-minRevOffset)
+	_, err = revFile.ReadAt(revData, int64(minRevOffset))
+	if err != nil {
+		return
+	}
+
+	blocks = make([]wire.MsgBlock, offsetsRead)
+	revs = make([]RevBlock, offsetsRead)
+	skip := make([]byte, 8)
+	for i := uint32(0); i < offsetsRead; i++ {
+		blockBuf := bytes.NewBuffer(blockData[offsets[i]-minOffset:])
+		blockBuf.Read(skip)
+		// TODO this is probably expensive. fix
+		err = blocks[i].Deserialize(blockBuf)
+		if err != nil {
+			return
+		}
+
+		revBuf := bytes.NewBuffer(revData[revOffsets[i]-minRevOffset:])
+		err = revs[i].Deserialize(revBuf)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and
@@ -362,4 +490,11 @@ func ReadCBlockFileIndex(r io.ReadSeeker) (cbIdx CBlockFileIndex) {
 	// r.Seek(3, 1)
 
 	return cbIdx
+}
+
+func min(a, b uint32) uint32 {
+	if a < b {
+		return a
+	}
+	return b
 }
