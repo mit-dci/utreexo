@@ -64,7 +64,7 @@ func BlockAndRevReader(
 	}
 
 	for curHeight < maxHeight {
-		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 1000, offsetFilePath, dataDir)
+		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFilePath, dataDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
