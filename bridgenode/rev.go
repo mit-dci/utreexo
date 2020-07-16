@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -62,19 +63,138 @@ func BlockAndRevReader(
 		offsetFilePath = cOffsetFile
 	}
 
-	for curHeight != maxHeight {
-		blk, rb, err := GetRawBlockFromFile(curHeight, offsetFilePath, dataDir)
+	for curHeight < maxHeight {
+		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFilePath, dataDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
 			return
 		}
 
-		bnr := BlockAndRev{Height: curHeight, Blk: blk, Rev: rb}
-
-		blockChan <- bnr
-		curHeight++
+		for i := 0; i < len(blocks); i++ {
+			bnr := BlockAndRev{
+				Height: curHeight,
+				Blk:    blocks[i],
+				Rev:    revs[i],
+			}
+			blockChan <- bnr
+			curHeight++
+		}
 	}
+}
+
+// GetRawBlocksFromDisk retrives multiple consecutive blocks starting at height `startAt`.
+// `count` is a upper limit for the number of blocks read.
+// Only blocks that are contained in the same blk file are returned.
+func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
+	blockDir string) (blocks []wire.MsgBlock, revs []RevBlock, err error) {
+	if startAt == 0 {
+		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		return
+	}
+	startAt--
+
+	if count <= 0 {
+		return
+	}
+
+	offsetFile, err := os.Open(offsetFileName)
+	if err != nil {
+		return
+	}
+	defer offsetFile.Close() // file always closes
+
+	// offset file consists of 12 bytes per block
+	// tipnum * 12 gives us the correct position for that block
+	_, err = offsetFile.Seek(int64(12*startAt), 0)
+	if err != nil {
+		return
+	}
+	offsetReader := bufio.NewReaderSize(offsetFile, int(12*count))
+
+	offsets := make([]uint32, count)
+	revOffsets := make([]uint32, count)
+
+	var datFileNum uint32
+	// offsetsRead holds the number of blocks < count that are loacated in
+	// blk file with number `datFileNum`
+	offsetsRead := uint32(0)
+	for ; offsetsRead < uint32(count); offsetsRead++ {
+		var datFileNumTmp uint32
+		err = binary.Read(offsetReader, binary.BigEndian, &datFileNumTmp)
+		if err != nil {
+			break
+		}
+		if offsetsRead > 0 && datFileNumTmp != datFileNum {
+			// break if the block is located in a different blk file
+			break
+		}
+		datFileNum = datFileNumTmp
+		err = binary.Read(offsetReader, binary.BigEndian, &offsets[offsetsRead])
+		if err != nil {
+			return
+		}
+		err = binary.Read(offsetReader, binary.BigEndian, &revOffsets[offsetsRead])
+		if err != nil {
+			return
+		}
+	}
+
+	if offsetsRead == 0 {
+		return
+	}
+
+	blockFile, err := os.Open(filepath.Join(blockDir,
+		fmt.Sprintf("blk%05d.dat", datFileNum)))
+	if err != nil {
+		return
+	}
+	defer blockFile.Close()
+
+	// Read all block data needed for the blocks into memory.
+	// 1<<27 = 128MB
+	blockData := make([]byte, 1<<27)
+	_, err = blockFile.Read(blockData)
+	if err != nil {
+		return
+	}
+
+	revFile, err := os.Open(filepath.Join(blockDir,
+		fmt.Sprintf("rev%05d.dat", datFileNum)))
+	if err != nil {
+		return
+	}
+	defer revFile.Close()
+
+	// Read all rev data needed for the blocks into memory.
+	// 1<<27 = 128MB
+	revData := make([]byte, 1<<27)
+	_, err = revFile.Read(revData)
+	if err != nil {
+		return
+	}
+
+	blocks = make([]wire.MsgBlock, offsetsRead)
+	revs = make([]RevBlock, offsetsRead)
+	skip := make([]byte, 8)
+	for i := uint32(0); i < offsetsRead; i++ {
+		blockBuf := bytes.NewBuffer(blockData[offsets[i]:])
+		// skip 8 bytes, magic bytes + load size.
+		blockBuf.Read(skip)
+		// TODO this is probably expensive. fix
+		err = blocks[i].Deserialize(blockBuf)
+		if err != nil {
+			return
+		}
+
+		revBuf := bytes.NewBuffer(revData[revOffsets[i]:])
+		err = revs[i].Deserialize(revBuf)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 // GetRawBlocksFromFile reads the blocks from the given .dat file and
@@ -362,4 +482,11 @@ func ReadCBlockFileIndex(r io.ReadSeeker) (cbIdx CBlockFileIndex) {
 	// r.Seek(3, 1)
 
 	return cbIdx
+}
+
+func min(a, b uint32) uint32 {
+	if a < b {
+		return a
+	}
+	return b
 }
