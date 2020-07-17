@@ -53,7 +53,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 		}
 
 		err := putBlockInPollard(blocknproof,
-			&totalTXOAdded, &totalDels, plustime, &c.pollard)
+			&totalTXOAdded, &totalDels, plustime, &c.pollard, c.CheckSignatures)
 		if err != nil {
 			panic(err)
 		}
@@ -105,7 +105,8 @@ func putBlockInPollard(
 	ub util.UBlock,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
-	p *accumulator.Pollard) error {
+	p *accumulator.Pollard,
+	checkSig bool) error {
 
 	plusstart := time.Now()
 
@@ -131,11 +132,12 @@ func putBlockInPollard(
 	// thing first.  (Especially since that thing isn't committed to in the
 	// PoW, but the signatures are...
 
-	if !ub.CheckBlock(outskip) {
-		return fmt.Errorf("height %d hash %s block invalid",
-			ub.Height, ub.Block.BlockHash().String())
+	if checkSig {
+		if !ub.CheckBlock(outskip) {
+			return fmt.Errorf("height %d hash %s block invalid",
+				ub.Height, ub.Block.BlockHash().String())
+		}
 	}
-
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion

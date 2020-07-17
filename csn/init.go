@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/adiabat/bech32"
+
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -12,7 +14,7 @@ import (
 )
 
 // RunIBD calls evertyhing to run IBD
-func RunIBD(p *chaincfg.Params, sig chan bool) error {
+func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) error {
 
 	// check on disk for pre-existing state and load it
 	pol, h, err := initCSNState()
@@ -22,13 +24,28 @@ func RunIBD(p *chaincfg.Params, sig chan bool) error {
 	// make a new CSN struct and load the pollard into it
 	c := new(Csn)
 	c.pollard = pol
+	c.CheckSignatures = check
 
 	txChan, heightChan, err := c.Start(h, "127.0.0.1:8338", "compactstate", "", p, sig)
 	if err != nil {
 		return err
 	}
-	var empty [20]byte
-	c.RegisterAddress(empty)
+
+	if watchAddr != "" {
+		fmt.Printf("decode len %d %s\n", len(watchAddr), watchAddr)
+		adrBytes, err := bech32.SegWitAddressDecode(watchAddr)
+		if err != nil {
+			return err
+		}
+		if len(adrBytes) != 22 {
+			return fmt.Errorf("need a bech32 p2wpkh address, %s has %d bytes\n",
+				watchAddr, len(adrBytes))
+		}
+
+		var pkh [20]byte
+		copy(pkh[:], adrBytes[2:])
+		c.RegisterAddress(pkh)
+	}
 
 	for {
 		select {

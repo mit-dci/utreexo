@@ -44,6 +44,8 @@ type Csn struct {
 	// TODO use better addresses, either []byte or something fancy
 	TxChan     chan wire.MsgTx
 	HeightChan chan int32
+
+	CheckSignatures bool
 }
 
 func (ch *Csn) RegisterOutPoint(op wire.OutPoint) {
