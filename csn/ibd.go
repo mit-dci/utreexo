@@ -89,10 +89,17 @@ func (c *Csn) IBDThread(sig chan bool) {
 func (c *Csn) ScanBlock(b wire.MsgBlock) {
 	var curAdr [20]byte
 	for _, tx := range b.Transactions {
-		for _, out := range tx.TxOut {
-			copy(curAdr[:], out.PkScript[:])
+		for idx, out := range tx.TxOut {
+			if len(out.PkScript) != 22 {
+				continue
+			}
+			copy(curAdr[:], out.PkScript[2:])
 			if c.WatchAdrs[curAdr] {
+				fmt.Printf("got %d satoshis, nice!\n", out.Value)
+				c.RegisterOutPoint(
+					wire.OutPoint{Hash: tx.TxHash(), Index: uint32(idx)})
 				c.TxChan <- *tx
+				break
 			}
 		}
 	}

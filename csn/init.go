@@ -31,6 +31,7 @@ func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) err
 		return err
 	}
 
+	var pkh [20]byte
 	if watchAddr != "" {
 		fmt.Printf("decode len %d %s\n", len(watchAddr), watchAddr)
 		adrBytes, err := bech32.SegWitAddressDecode(watchAddr)
@@ -42,7 +43,6 @@ func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) err
 				watchAddr, len(adrBytes))
 		}
 
-		var pkh [20]byte
 		copy(pkh[:], adrBytes[2:])
 		c.RegisterAddress(pkh)
 	}
@@ -50,7 +50,9 @@ func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) err
 	for {
 		select {
 		case tx := <-txChan:
-			fmt.Printf("Got tx %s\n", tx.TxHash().String())
+			fmt.Printf("wallet got tx %s\n", tx.TxHash().String())
+			// for n, out := range tx.TxOut {
+			// }
 		case height := <-heightChan:
 			if height%1000 == 0 {
 				fmt.Printf("got to height %d\n", height)
@@ -95,25 +97,15 @@ func initCSNState() (
 
 	if pollardInitialized {
 		fmt.Println("Has access to forestdata, resuming")
-		p, err = restorePollard()
+		height, p, err = restorePollard()
 		if err != nil {
 			return
 		}
-		height, err = restorePollardHeight()
-		if err != nil {
-			return
-		}
-
 	} else {
 		fmt.Println("Creating new pollarddata")
 		// start at height 1
 		height = 1
-		// Create files needed for pollard
-		_, err = os.OpenFile(
-			util.PollardHeightFilePath, os.O_CREATE, 0600)
-		if err != nil {
-			return
-		}
+		// Create file needed for pollard
 		_, err = os.OpenFile(
 			util.PollardFilePath, os.O_CREATE, 0600)
 		if err != nil {
