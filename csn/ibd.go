@@ -59,6 +59,8 @@ func (c *Csn) IBDThread(sig chan bool) {
 		}
 		c.HeightChan <- c.CurrentHeight
 
+		c.ScanBlock(blocknproof.Block)
+
 		if c.CurrentHeight%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
@@ -89,17 +91,35 @@ func (c *Csn) IBDThread(sig chan bool) {
 func (c *Csn) ScanBlock(b wire.MsgBlock) {
 	var curAdr [20]byte
 	for _, tx := range b.Transactions {
-		for idx, out := range tx.TxOut {
+		// first check utxo loss
+		for _, in := range tx.TxIn {
+			lostTxo, exists := c.utxoStore[in.PreviousOutPoint]
+			if !exists {
+				continue
+			}
+			delete(c.utxoStore, in.PreviousOutPoint)
+			c.totalScore -= lostTxo.Amt
+			fmt.Printf("tx %s lost %d satoshis :( But still have %d in %d utxos\n",
+				tx.TxHash().String(), lostTxo.Amt, c.totalScore, len(c.utxoStore))
+			c.TxChan <- *tx
+		}
+
+		// now check utxo gain
+		for i, out := range tx.TxOut {
 			if len(out.PkScript) != 22 {
 				continue
 			}
 			copy(curAdr[:], out.PkScript[2:])
 			if c.WatchAdrs[curAdr] {
-				fmt.Printf("got %d satoshis, nice!\n", out.Value)
-				c.RegisterOutPoint(
-					wire.OutPoint{Hash: tx.TxHash(), Index: uint32(idx)})
+				newOut := wire.OutPoint{Hash: tx.TxHash(), Index: uint32(i)}
+				c.RegisterOutPoint(newOut)
+				c.utxoStore[newOut] =
+					util.LeafData{Outpoint: newOut, Amt: out.Value}
+				c.totalScore += out.Value
+				fmt.Printf("got utxo %s with %d satoshis! Now have %d in %d utxos\n",
+					newOut.String(), out.Value, c.totalScore, len(c.utxoStore))
 				c.TxChan <- *tx
-				break
+				// break
 			}
 		}
 	}
@@ -145,6 +165,7 @@ func putBlockInPollard(
 				ub.Height, ub.Block.BlockHash().String())
 		}
 	}
+
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion

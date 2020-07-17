@@ -5,6 +5,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
+	"github.com/mit-dci/utreexo/util"
 )
 
 /*
@@ -46,6 +47,9 @@ type Csn struct {
 	HeightChan chan int32
 
 	CheckSignatures bool
+
+	utxoStore  map[wire.OutPoint]util.LeafData
+	totalScore int64
 }
 
 func (ch *Csn) RegisterOutPoint(op wire.OutPoint) {

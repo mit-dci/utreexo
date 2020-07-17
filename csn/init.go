@@ -73,6 +73,8 @@ func (c *Csn) Start(height int32,
 	// initialize maps
 	c.WatchAdrs = make(map[[20]byte]bool)
 	c.WatchOPs = make(map[wire.OutPoint]bool)
+	c.utxoStore = make(map[wire.OutPoint]util.LeafData)
+
 	// initialize channels
 	c.TxChan = make(chan wire.MsgTx, 10)
 	c.HeightChan = make(chan int32, 10)
