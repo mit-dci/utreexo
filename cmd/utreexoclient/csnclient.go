@@ -16,6 +16,7 @@ var msg = `
 Usage: client [OPTION]
 A dynamic hash based accumulator designed for the Bitcoin UTXO set.
 client performs ibd (initial block download) on the Bitcoin blockchain.
+You can give a bech32 address to watch during IBD.
 
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
@@ -30,12 +31,14 @@ OPTIONS:
 var optionCmd = flag.NewFlagSet("", flag.ExitOnError)
 var netCmd = optionCmd.String("net", "testnet",
 	"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
-var dataDirCmd = optionCmd.String("datadir", "",
-	`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 var cpuProfCmd = optionCmd.String("cpuprof", "",
 	`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 var memProfCmd = optionCmd.String("memprof", "",
 	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
+var watchAddr = optionCmd.String("watchaddr", "",
+	`Address to watch & report transactions. Only bech32 p2wpkh supported`)
+var checkSig = optionCmd.Bool("checksig", true,
+	`check signatures (slower)`)
 
 func main() {
 	// check if enough arguments were given
@@ -83,7 +86,7 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig, *cpuProfCmd)
 
-	err := csn.RunIBD(&param, sig)
+	err := csn.RunIBD(&param, *watchAddr, *checkSig, sig)
 	if err != nil {
 		panic(err)
 	}

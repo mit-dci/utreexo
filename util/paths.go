@@ -19,7 +19,6 @@ var ForestDirPath string = filepath.Join(".", "utree/forestdata")
 
 // File paths
 var PollardFilePath string = "pollardFile"
-var PollardHeightFilePath string = "polHeight"
 
 // offsetdata file paths
 var OffsetFilePath string = filepath.Join(OffsetDirPath, "offsetfile")

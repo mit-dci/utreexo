@@ -53,11 +53,13 @@ func (c *Csn) IBDThread(sig chan bool) {
 		}
 
 		err := putBlockInPollard(blocknproof,
-			&totalTXOAdded, &totalDels, plustime, &c.pollard)
+			&totalTXOAdded, &totalDels, plustime, &c.pollard, c.CheckSignatures)
 		if err != nil {
 			panic(err)
 		}
 		c.HeightChan <- c.CurrentHeight
+
+		c.ScanBlock(blocknproof.Block)
 
 		if c.CurrentHeight%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
@@ -89,10 +91,35 @@ func (c *Csn) IBDThread(sig chan bool) {
 func (c *Csn) ScanBlock(b wire.MsgBlock) {
 	var curAdr [20]byte
 	for _, tx := range b.Transactions {
-		for _, out := range tx.TxOut {
-			copy(curAdr[:], out.PkScript[:])
+		// first check utxo loss
+		for _, in := range tx.TxIn {
+			lostTxo, exists := c.utxoStore[in.PreviousOutPoint]
+			if !exists {
+				continue
+			}
+			delete(c.utxoStore, in.PreviousOutPoint)
+			c.totalScore -= lostTxo.Amt
+			fmt.Printf("tx %s lost %d satoshis :( But still have %d in %d utxos\n",
+				tx.TxHash().String(), lostTxo.Amt, c.totalScore, len(c.utxoStore))
+			c.TxChan <- *tx
+		}
+
+		// now check utxo gain
+		for i, out := range tx.TxOut {
+			if len(out.PkScript) != 22 {
+				continue
+			}
+			copy(curAdr[:], out.PkScript[2:])
 			if c.WatchAdrs[curAdr] {
+				newOut := wire.OutPoint{Hash: tx.TxHash(), Index: uint32(i)}
+				c.RegisterOutPoint(newOut)
+				c.utxoStore[newOut] =
+					util.LeafData{Outpoint: newOut, Amt: out.Value}
+				c.totalScore += out.Value
+				fmt.Printf("got utxo %s with %d satoshis! Now have %d in %d utxos\n",
+					newOut.String(), out.Value, c.totalScore, len(c.utxoStore))
 				c.TxChan <- *tx
+				// break
 			}
 		}
 	}
@@ -105,7 +132,8 @@ func putBlockInPollard(
 	ub util.UBlock,
 	totalTXOAdded, totalDels *int,
 	plustime time.Duration,
-	p *accumulator.Pollard) error {
+	p *accumulator.Pollard,
+	checkSig bool) error {
 
 	plusstart := time.Now()
 
@@ -131,9 +159,11 @@ func putBlockInPollard(
 	// thing first.  (Especially since that thing isn't committed to in the
 	// PoW, but the signatures are...
 
-	if !ub.CheckBlock(outskip) {
-		return fmt.Errorf("height %d hash %s block invalid",
-			ub.Height, ub.Block.BlockHash().String())
+	if checkSig {
+		if !ub.CheckBlock(outskip) {
+			return fmt.Errorf("height %d hash %s block invalid",
+				ub.Height, ub.Block.BlockHash().String())
+		}
 	}
 
 	// sort before ingestion; verify up above unsorts...
