@@ -151,7 +151,7 @@ run_utreexo() {
 
 	# run ibdsim
 	log "running idbsim..."
-	eval "$IBDSIM -datadir=$BITCOIN_DATA -net=regtest > $TEST_DATA/ibdsim.log 2>&1"
+	eval "$IBDSIM -datadir=$BITCOIN_DATA > $TEST_DATA/ibdsim.log 2>&1"
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
 
