@@ -3,6 +3,7 @@ package csn
 import (
 	"fmt"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
@@ -47,6 +48,7 @@ type Csn struct {
 	HeightChan chan int32
 
 	CheckSignatures bool
+	Params          chaincfg.Params
 
 	utxoStore  map[wire.OutPoint]util.LeafData
 	totalScore int64

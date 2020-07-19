@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
 
@@ -51,9 +50,9 @@ func (c *Csn) IBDThread(sig chan bool) {
 			break
 		}
 
-		err := putBlockInPollard(blocknproof,
-			&totalTXOAdded, &totalDels, plustime, &c.pollard, c.CheckSignatures)
+		err := c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime)
 		if err != nil {
+			// crash if there's a bad proof or signature, OK for testing
 			panic(err)
 		}
 		c.HeightChan <- c.CurrentHeight
@@ -127,12 +126,8 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 // Here we write proofs for all the txs.
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as LeafTXO type.
-func putBlockInPollard(
-	ub util.UBlock,
-	totalTXOAdded, totalDels *int,
-	plustime time.Duration,
-	p *accumulator.Pollard,
-	checkSig bool) error {
+func (c *Csn) putBlockInPollard(
+	ub util.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
 
 	plusstart := time.Now()
 
@@ -144,7 +139,7 @@ func putBlockInPollard(
 	*totalDels += len(ub.ExtraData.AccProof.Targets) // for benchmarking
 
 	// derive leafHashes from leafData
-	if !ub.ExtraData.Verify(p.ReconstructStats()) {
+	if !ub.ExtraData.Verify(c.pollard.ReconstructStats()) {
 		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
 	}
 
@@ -158,8 +153,8 @@ func putBlockInPollard(
 	// thing first.  (Especially since that thing isn't committed to in the
 	// PoW, but the signatures are...
 
-	if checkSig {
-		if !ub.CheckBlock(outskip) {
+	if c.CheckSignatures {
+		if !ub.CheckBlock(outskip, &c.Params) {
 			return fmt.Errorf("height %d hash %s block invalid",
 				ub.Height, ub.Block.BlockHash().String())
 		}
@@ -168,7 +163,7 @@ func putBlockInPollard(
 	// sort before ingestion; verify up above unsorts...
 	ub.ExtraData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := p.IngestBatchProof(ub.ExtraData.AccProof)
+	err := c.pollard.IngestBatchProof(ub.ExtraData.AccProof)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.Height)
 		return err
@@ -184,7 +179,7 @@ func putBlockInPollard(
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
-	err = p.Modify(blockAdds, ub.ExtraData.AccProof.Targets)
+	err = c.pollard.Modify(blockAdds, ub.ExtraData.AccProof.Targets)
 	if err != nil {
 		return err
 	}

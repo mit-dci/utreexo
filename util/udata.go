@@ -118,7 +118,7 @@ func NewUtxoEntry(
 
 // CheckBlock does all internal block checks for a UBlock
 // right now checks the signatures
-func (ub *UBlock) CheckBlock(outskip []uint32) bool {
+func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 	// NOTE Whatever happens here is done a million times
 	// be efficient here
 	view := ub.ExtraData.ToUtxoView()
@@ -160,7 +160,7 @@ func (ub *UBlock) CheckBlock(outskip []uint32) bool {
 		go func(w *sync.WaitGroup, tx *btcutil.Tx) {
 			// hardcoded testnet3 for now
 			_, err := blockchain.CheckTransactionInputs(
-				utilTx, ub.Height, view, &chaincfg.TestNet3Params)
+				utilTx, ub.Height, view, p)
 			if err != nil {
 				fmt.Printf("Tx %s fails CheckTransactionInputs: %s\n",
 					utilTx.Hash().String(), err.Error())

@@ -80,6 +80,7 @@ func (c *Csn) Start(height int32,
 	c.HeightChan = make(chan int32, 10)
 
 	c.CurrentHeight = height
+	c.Params = *params
 
 	// start client & connect
 	go c.IBDThread(haltSig)
