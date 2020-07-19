@@ -298,7 +298,7 @@ func stopBuildProofs(
 	// Sometimes there are bugs that make the program run forver.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
-		time.Sleep(10 * time.Second)
+		time.Sleep(60 * time.Second)
 		fmt.Println("Program timed out. Force quitting. Data likely corrupted")
 		os.Exit(1)
 	}()
