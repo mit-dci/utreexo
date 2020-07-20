@@ -247,15 +247,18 @@ func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string, fileNum uin
 		first := sha256.Sum256(buf[8 : 8+80])
 		b.CurrentHeaderHash = sha256.Sum256(first[:])
 
-		// grab bitcoin core block index info
-		b.UndoPos = bufMap[b.CurrentHeaderHash]
-		if b.UndoPos == 0 {
-			fmt.Printf("WARNING: block in blk file with header: %x\nexists without"+
-				" a corresponding rev block. May be wasting disk space\n", b.CurrentHeaderHash)
-		}
-
 		// offset for the next block from the current position
 		bufReader.Discard(int(size) - 80)
+
+		// grab bitcoin core block index info
+		var ok bool
+		b.UndoPos, ok = bufMap[b.CurrentHeaderHash]
+		if !ok {
+			fmt.Printf("WARNING: block in blk file with header: %x\nexists without"+
+				" a corresponding rev block. May be wasting disk space\n", b.CurrentHeaderHash)
+			// skip block headers that don't have undo data
+			continue
+		}
 
 		blockHeaders = append(blockHeaders, *b)
 	}
