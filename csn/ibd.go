@@ -79,6 +79,8 @@ func (c *Csn) IBDThread(sig chan bool) {
 
 	saveIBDsimData(c.CurrentHeight, c.pollard)
 
+	fmt.Printf("Found %d satoshis in %d utxos\n", c.totalScore, len(c.utxoStore))
+
 	fmt.Println("Done Writing")
 
 	haltAccept <- true
