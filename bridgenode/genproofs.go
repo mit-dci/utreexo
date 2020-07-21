@@ -81,7 +81,7 @@ func BuildProofs(
 
 	var stop bool // bool for stopping the main loop
 
-	for ; height <= knownTipHeight && stop != true; height++ {
+	for ; height != knownTipHeight && stop != true; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
