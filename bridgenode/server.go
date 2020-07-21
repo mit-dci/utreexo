@@ -67,7 +67,8 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 	var curHeight int32
 
 	// first thing is push the tip height to the remote client so they know
-	err := binary.Write(c, binary.BigEndian, endHeight)
+	// TODO not sure why this is -1, some off by 1 thing
+	err := binary.Write(c, binary.BigEndian, endHeight-1)
 	if err != nil {
 		fmt.Printf("pushBlocks endHeight binary.Write %s\n", err.Error())
 		return

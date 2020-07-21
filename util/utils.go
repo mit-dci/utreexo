@@ -113,6 +113,70 @@ func UblockNetworkReader(
 	close(blockChan)
 }
 
+// It's the same as UblockNetworkReader but counts down
+func BackwardsUblockNetworkReader(
+	blockChan chan UBlock, remoteServer string,
+	curHeight, lookahead int32) {
+
+	d := net.Dialer{Timeout: 2 * time.Second}
+	con, err := d.Dial("tcp", remoteServer)
+	if err != nil {
+		panic(err)
+	}
+	defer con.Close()
+
+	var ub UBlock
+	var tipHeight int32
+	var ublen uint32
+
+	err = binary.Read(con, binary.BigEndian, &tipHeight)
+	if err != nil {
+		fmt.Printf("read error from connection %s %s\n",
+			con.RemoteAddr().String(), err.Error())
+	}
+	// if we are higher than the server can give us, clamp down to
+	// the server's tip (only happens initially)
+	if curHeight > tipHeight {
+		curHeight = tipHeight
+	}
+
+	// TODO goroutines for only the Deserialize part might be nice.
+	// Need to sort the blocks though if you're doing that
+	for ; curHeight > 0; curHeight-- {
+		err = binary.Write(con, binary.BigEndian, curHeight)
+		if err != nil {
+			fmt.Printf("write error to connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
+		}
+		// fmt.Printf("asked for height %d\n", curHeight)
+
+		err = binary.Read(con, binary.BigEndian, &ublen)
+		if err != nil {
+			fmt.Printf("read error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			close(blockChan)
+			return
+		}
+		// fmt.Printf("got len %d\n", ublen)
+
+		b := make([]byte, ublen)
+		_, err = io.ReadFull(con, b)
+		if err != nil {
+			fmt.Printf("ReadFull error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
+		}
+		// fmt.Printf("copied %d bytes into buffer\n", n)
+
+		err = ub.FromBytes(b)
+
+		ub.Height = curHeight
+		blockChan <- ub
+	}
+	close(blockChan)
+}
+
 // GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat
 // and gives the proof & utxo data back.
 // Don't ask for block 0, there is no proof of that.
