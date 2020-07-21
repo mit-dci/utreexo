@@ -76,7 +76,7 @@ func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			return
 		}
-		fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
+		// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
 
 		blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
 		if err != nil {
@@ -98,12 +98,12 @@ func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 			fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
 			return
 		}
-		n, err := c.Write(udb)
+		_, err = c.Write(udb)
 		if err != nil {
 			fmt.Printf("pushBlocks ubb write %s\n", err.Error())
 			return
 		}
-		fmt.Printf("wrote %d bytes udb\n", n)
+		// fmt.Printf("wrote %d bytes udb\n", n)
 	}
 	fmt.Printf("done pushing blocks to %s\n", c.RemoteAddr().String())
 	c.Close()

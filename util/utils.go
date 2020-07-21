@@ -351,10 +351,12 @@ func CheckMagicByte(bytesgiven []byte) bool {
 // Does NOT tell us if the file exists or not.
 // File might exist but may not be available to us
 func HasAccess(fileName string) bool {
-	if _, err := os.Stat(fileName); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
+	stat, err := os.Stat(fileName)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	if stat.Size() == 0 {
+		return false
 	}
 	return true
 }

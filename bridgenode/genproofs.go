@@ -44,7 +44,7 @@ func BuildProofs(
 		return err
 	}
 	// for testing only
-	knownTipHeight = 500
+	knownTipHeight = 50000
 
 	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
@@ -104,7 +104,6 @@ func BuildProofs(
 
 		// convert UData struct to bytes
 		b := ud.ToBytes()
-		fmt.Printf("height %d made %d byte ud %x\n", height, len(b), b)
 
 		// Add to WaitGroup and send data to channel to be written
 		// to disk

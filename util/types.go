@@ -195,7 +195,7 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 		return
 	}
 
-	fmt.Printf("deser block OK %s\n", ub.Block.Header.BlockHash().String())
+	// fmt.Printf("deser block OK %s\n", ub.Block.Header.BlockHash().String())
 	var uDataLen, bytesRead uint32
 	var n int
 	// read udata length
@@ -203,7 +203,7 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Printf("server says %d byte uDataLen\n", uDataLen)
+	// fmt.Printf("server says %d byte uDataLen\n", uDataLen)
 
 	udataBytes := make([]byte, uDataLen)
 
@@ -214,7 +214,7 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 		}
 		bytesRead += uint32(n)
 	}
-	fmt.Printf("udataBytes: %x\n", udataBytes)
+	// fmt.Printf("udataBytes: %x\n", udataBytes)
 	ub.ExtraData, err = UDataFromBytes(udataBytes)
 	return
 }
