@@ -66,58 +66,52 @@ func UblockNetworkReader(
 	}
 	defer con.Close()
 
-	err = binary.Write(con, binary.BigEndian, curHeight)
-	if err != nil {
-		panic(err)
-	}
-
 	var ub UBlock
+	var ublen uint32
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
-		err = ub.Deserialize(con)
+		err = binary.Write(con, binary.BigEndian, curHeight)
 		if err != nil {
-			if err == io.EOF {
-				close(blockChan)
-				break
-			}
-			panic(err)
+			fmt.Printf("write error to connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
 		}
+		// fmt.Printf("asked for height %d\n", curHeight)
+
+		err = binary.Read(con, binary.BigEndian, &ublen)
+		if err != nil {
+			fmt.Printf("read error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
+		}
+		// fmt.Printf("got len %d\n", ublen)
+
+		b := make([]byte, ublen)
+		_, err = io.ReadFull(con, b)
+		if err != nil {
+			fmt.Printf("ReadFull error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
+		}
+		// fmt.Printf("copied %d bytes into buffer\n", n)
+
+		err = ub.FromBytes(b)
+
 		ub.Height = curHeight
 		blockChan <- ub
 	}
 }
 
-/*
-func ReadUBlockBytesFromCon(con net.Conn) ([]byte, error) {
-	// 4 bytes size of the whole payload (block + udata)
-	var size uint32
-
-	err := binary.Read(con, binary.BigEndian, &size)
-	if err != nil {
-		fmt.Println("size read err: ", err)
-		return nil, err
-	}
-
-	blockBytes := make([]byte, size)
-
-	_, err = io.ReadFull(con, blockBytes)
-	if err != nil {
-		fmt.Println("block read err: ", err)
-		return nil, err
-	}
-	return blockBytes, nil
-}
-*/
 // GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat
 // and gives the proof & utxo data back.
 // Don't ask for block 0, there is no proof of that.
-func GetUDataBytesFromFile(tipnum int32) (b []byte, err error) {
-	if tipnum == 0 {
+func GetUDataBytesFromFile(height int32) (b []byte, err error) {
+	if height == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
 		return
 	}
-	tipnum--
+	height--
 	var offset int64
 	var size uint32
 	offsetFile, err := os.Open(POffsetFilePath)
@@ -133,7 +127,7 @@ func GetUDataBytesFromFile(tipnum int32) (b []byte, err error) {
 	// offset file consists of 8 bytes per block
 	// tipnum * 8 gives us the correct position for that block
 	// Note it's currently a int64, can go down to int32 for split files
-	_, err = offsetFile.Seek(int64(8*tipnum), 0)
+	_, err = offsetFile.Seek(int64(8*height), 0)
 	if err != nil {
 		err = fmt.Errorf("offsetFile.Seek %s", err.Error())
 		return
@@ -141,7 +135,7 @@ func GetUDataBytesFromFile(tipnum int32) (b []byte, err error) {
 
 	err = binary.Read(offsetFile, binary.BigEndian, &offset)
 	if err != nil {
-		err = fmt.Errorf("binary.Read offset %d %s", tipnum, err.Error())
+		err = fmt.Errorf("binary.Read h %d offset %d %s", height, offset, err.Error())
 		return
 	}
 

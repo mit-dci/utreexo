@@ -182,6 +182,17 @@ func (ud *UData) ToBytes() (b []byte) {
 	return
 }
 
+func (ub *UBlock) FromBytes(argbytes []byte) (err error) {
+	buf := bytes.NewBuffer(argbytes)
+	// first deser the block, then the udata
+	err = ub.Block.Deserialize(buf)
+	if err != nil {
+		return
+	}
+	ub.ExtraData, err = UDataFromBytes(buf.Bytes())
+	return
+}
+
 // network serialization for UBlocks (regular block with udata)
 // Firstjust a wire.MsgBlock with the regular serialization.
 // Then there's  4 bytes is (big endian) length of the udata.

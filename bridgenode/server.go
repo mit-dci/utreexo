@@ -35,7 +35,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan b
 			close(cons)
 			return
 		case con := <-cons:
-			go pushBlocks(con, endHeight, dataDir)
+			go serveBlocksWorker(con, endHeight, dataDir)
 		}
 	}
 }
@@ -59,17 +59,28 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 	}
 }
 
-func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
-	var curHeight int32
+// serveBlocksWorker gets height requests from client and sends out the ublock
+// for that height
+func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 	defer c.Close()
-	err := binary.Read(c, binary.BigEndian, &curHeight)
-	if err != nil {
-		fmt.Printf("pushBlocks Read %s\n", err.Error())
-		return
-	}
-	fmt.Printf("start serving %s height %d\n", c.RemoteAddr().String(), curHeight)
+	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
+	var curHeight int32
 
-	for ; curHeight < endHeight; curHeight++ {
+	for {
+		err := binary.Read(c, binary.BigEndian, &curHeight)
+		if err != nil {
+			fmt.Printf("pushBlocks Read %s\n", err.Error())
+			return
+		}
+
+		if curHeight > endHeight {
+			break
+		}
+
+		// over the wire send:
+		// 4 byte length prefix for the whole thing
+		// then the block, then the udb len, then udb
+
 		// fmt.Printf("push %d\n", curHeight)
 		udb, err := util.GetUDataBytesFromFile(curHeight)
 		if err != nil {
@@ -77,27 +88,32 @@ func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 			return
 		}
 		// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
-
 		blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
 		if err != nil {
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 			return
 		}
 
-		// first send the block bytes
+		// first send 4 byte lenght for everything
+		// fmt.Printf("h %d send len %d\n", curHeight, len(udb)+len(blkbytes))
+		err = binary.Write(c, binary.BigEndian, uint32(len(udb)+len(blkbytes)))
+		if err != nil {
+			fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
+			return
+		}
+		// next, send the block bytes
 		_, err = c.Write(blkbytes)
 		if err != nil {
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			return
 		}
-
-		// then send a 4 byte length, then udata
-		// fmt.Printf("send ubb len %d\n", len(udb))
-		err = binary.Write(c, binary.BigEndian, uint32(len(udb)))
-		if err != nil {
-			fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
-			return
-		}
+		// send 4 byte udata length
+		// err = binary.Write(c, binary.BigEndian, uint32(len(udb)))
+		// if err != nil {
+		// 	fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
+		// 	return
+		// }
+		// last, send the udata bytes
 		_, err = c.Write(udb)
 		if err != nil {
 			fmt.Printf("pushBlocks ubb write %s\n", err.Error())
@@ -105,6 +121,5 @@ func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 		}
 		// fmt.Printf("wrote %d bytes udb\n", n)
 	}
-	fmt.Printf("done pushing blocks to %s\n", c.RemoteAddr().String())
-	c.Close()
+	fmt.Printf("hung up on %s\n", c.RemoteAddr().String())
 }
