@@ -110,6 +110,7 @@ func UblockNetworkReader(
 		ub.Height = curHeight
 		blockChan <- ub
 	}
+	close(blockChan)
 }
 
 // GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat

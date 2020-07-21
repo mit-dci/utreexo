@@ -76,7 +76,8 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 	for {
 		err = binary.Read(c, binary.BigEndian, &curHeight)
 		if err != nil {
-			fmt.Printf("pushBlocks Read %s\n", err.Error())
+			fmt.Printf("pushBlocks Read %s close %s\n",
+				err.Error(), c.RemoteAddr().String())
 			return
 		}
 
