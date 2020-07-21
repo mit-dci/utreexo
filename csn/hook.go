@@ -48,6 +48,7 @@ type Csn struct {
 	HeightChan chan int32
 
 	CheckSignatures bool
+	backwards       bool
 	Params          chaincfg.Params
 
 	remoteHost string

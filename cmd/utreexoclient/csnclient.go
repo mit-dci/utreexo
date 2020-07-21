@@ -45,6 +45,9 @@ var remoteHost = optionCmd.String("host", "", `remote server to connect to`)
 var checkSig = optionCmd.Bool("checksig", true,
 	`check signatures (slower)`)
 
+var backwards = optionCmd.Bool("backwards", true,
+	`verify from tip to genesis`)
+
 func main() {
 	// check if enough arguments were given
 	// if len(os.Args) < 1 {

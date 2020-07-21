@@ -67,10 +67,18 @@ func UblockNetworkReader(
 	defer con.Close()
 
 	var ub UBlock
+	var tipHeight int32
 	var ublen uint32
+
+	err = binary.Read(con, binary.BigEndian, &tipHeight)
+	if err != nil {
+		fmt.Printf("read error from connection %s %s\n",
+			con.RemoteAddr().String(), err.Error())
+	}
+
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
-	for ; ; curHeight++ {
+	for ; curHeight < tipHeight; curHeight++ {
 		err = binary.Write(con, binary.BigEndian, curHeight)
 		if err != nil {
 			fmt.Printf("write error to connection %s %s\n",
