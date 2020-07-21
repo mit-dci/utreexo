@@ -12,7 +12,7 @@ import (
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
 
-	listenAdr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8338")
+	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
 		fmt.Printf(err.Error())
 		return

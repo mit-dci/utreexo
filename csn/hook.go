@@ -50,6 +50,7 @@ type Csn struct {
 	CheckSignatures bool
 	Params          chaincfg.Params
 
+	remoteHost string
 	utxoStore  map[wire.OutPoint]util.LeafData
 	totalScore int64
 }

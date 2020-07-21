@@ -36,7 +36,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
 	go util.UblockNetworkReader(
-		ublockQueue, "127.0.0.1:8338", c.CurrentHeight, lookahead)
+		ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
