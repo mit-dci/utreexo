@@ -44,7 +44,7 @@ func BuildProofs(
 		return err
 	}
 	// for testing only
-	knownTipHeight = 50000
+	// knownTipHeight = 200000
 
 	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
