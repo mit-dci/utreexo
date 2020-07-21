@@ -71,25 +71,39 @@ func pushBlocks(c net.Conn, endHeight int32, blockDir string) {
 
 	for ; curHeight < endHeight; curHeight++ {
 		// fmt.Printf("push %d\n", curHeight)
-		ud, err := util.GetUDataFromFile(curHeight)
+		udb, err := util.GetUDataBytesFromFile(curHeight)
 		if err != nil {
-			fmt.Printf("pushBlocks GetUDataFromFile %s\n", err.Error())
+			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			return
 		}
+		// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
 
-		blk, _, err := GetRawBlockFromFile(curHeight, util.OffsetFilePath, blockDir)
+		blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
 		if err != nil {
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 			return
 		}
 
-		// put proofs & block together, send that over
-		ub := util.UBlock{ExtraData: ud, Block: blk}
-		err = ub.Serialize(c)
+		// first send the block bytes
+		_, err = c.Write(blkbytes)
 		if err != nil {
-			fmt.Printf("pushBlocks ub.Serialize %s\n", err.Error())
+			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			return
 		}
+
+		// then send a 4 byte length, then udata
+		// fmt.Printf("send ubb len %d\n", len(udb))
+		err = binary.Write(c, binary.BigEndian, uint32(len(udb)))
+		if err != nil {
+			fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
+			return
+		}
+		_, err = c.Write(udb)
+		if err != nil {
+			fmt.Printf("pushBlocks ubb write %s\n", err.Error())
+			return
+		}
+		// fmt.Printf("wrote %d bytes udb\n", n)
 	}
 	fmt.Printf("done pushing blocks to %s\n", c.RemoteAddr().String())
 	c.Close()

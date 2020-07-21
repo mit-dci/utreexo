@@ -43,6 +43,8 @@ func BuildProofs(
 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
 		return err
 	}
+	// for testing only
+	// knownTipHeight = 200000
 
 	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
