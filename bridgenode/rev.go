@@ -197,19 +197,19 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	return
 }
 
-// GetRawBlocksFromFile reads the blocks from the given .dat file and
-// returns those blocks.
-// Skips the genesis block. If you search for block 0, it will give you
-// block 1.
-func GetRawBlockFromFile(tipnum int32, offsetFileName string, blockDir string) (
-	block wire.MsgBlock, rBlock RevBlock, err error) {
-	if tipnum == 0 {
+// GetBlockBytesFromFile reads a block from the right .dat file and
+// returns the bytes without deserializing the block
+// If you ask for block 0, it will give you an error.  If you ask for block
+// 1, it gives you the block at offset 0 which is consensus height 1.
+func GetBlockBytesFromFile(
+	height int32, offsetFileName string, blockDir string) (b []byte, err error) {
+	if height == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
 		return
 	}
-	tipnum--
+	height--
 
-	var datFile, offset, revOffset uint32
+	var datFile, offset, blklen uint32
 
 	offsetFile, err := os.Open(offsetFileName)
 	if err != nil {
@@ -219,12 +219,13 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string, blockDir string) (
 
 	// offset file consists of 12 bytes per block
 	// tipnum * 12 gives us the correct position for that block
-	_, err = offsetFile.Seek(int64(12*tipnum), 0)
+	// we ignore the rev data in this function
+	_, err = offsetFile.Seek(int64(12*height), 0)
 	if err != nil {
 		return
 	}
 
-	// Read file and offset for the block
+	// Read file number and offset for the block
 	err = binary.Read(offsetFile, binary.BigEndian, &datFile)
 	if err != nil {
 		return
@@ -233,47 +234,34 @@ func GetRawBlockFromFile(tipnum int32, offsetFileName string, blockDir string) (
 	if err != nil {
 		return
 	}
-	err = binary.Read(offsetFile, binary.BigEndian, &revOffset)
-	if err != nil {
-		return
-	}
+	// fmt.Printf("block %d in file %d offset %d\n", height+1, datFile, offset)
 
 	blockFName := fmt.Sprintf("blk%05d.dat", datFile)
-	revFName := fmt.Sprintf("rev%05d.dat", datFile)
-
 	bDir := filepath.Join(blockDir, blockFName)
-	rDir := filepath.Join(blockDir, revFName)
-
 	blockFile, err := os.Open(bDir)
 	if err != nil {
 		return
 	}
 	defer blockFile.Close() // file always closes
 
-	// +8 skips the 8 bytes of magicbytes and load size
-	_, err = blockFile.Seek(int64(offset)+8, 0)
+	// +4 skips the 4 magicbytes (assume they're OK here)
+	_, err = blockFile.Seek(int64(offset)+4, 0)
 	if err != nil {
 		return
 	}
 
-	// TODO this is probably expensive. fix
-	err = block.Deserialize(blockFile)
+	// read the 4 byte length before the block itself
+	err = binary.Read(blockFile, binary.LittleEndian, &blklen)
 	if err != nil {
 		return
 	}
 
-	revFile, err := os.Open(rDir)
-	if err != nil {
-		return
-	}
-	defer revFile.Close() // file always closes
+	b = make([]byte, blklen)
 
-	revFile.Seek(int64(revOffset), 0)
-	err = rBlock.Deserialize(revFile)
-	if err != nil {
-		return
+	n, err := blockFile.Read(b)
+	if uint32(n) != blklen {
+		fmt.Printf("%d byte block but only read %d bytes\n", blklen, n)
 	}
-
 	return
 }
 

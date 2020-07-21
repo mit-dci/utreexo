@@ -71,10 +71,11 @@ func UblockNetworkReader(
 		panic(err)
 	}
 
+	var ub UBlock
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
-		block, err := ReadBlock(con)
+		err = ub.Deserialize(con)
 		if err != nil {
 			if err == io.EOF {
 				close(blockChan)
@@ -82,43 +83,36 @@ func UblockNetworkReader(
 			}
 			panic(err)
 		}
-
-		var ub UBlock
-		bReader := bytes.NewReader(block)
-		err = ub.Deserialize(bReader)
-		if err != nil {
-			panic(err)
-		}
 		ub.Height = curHeight
 		blockChan <- ub
 	}
 }
 
-func ReadBlock(con net.Conn) ([]byte, error) {
-	// 4 bytes size of the payload is sent over
-	var sizeb [4]byte
+/*
+func ReadUBlockBytesFromCon(con net.Conn) ([]byte, error) {
+	// 4 bytes size of the whole payload (block + udata)
+	var size uint32
 
-	_, err := io.ReadFull(con, sizeb[:])
+	err := binary.Read(con, binary.BigEndian, &size)
 	if err != nil {
 		fmt.Println("size read err: ", err)
 		return nil, err
 	}
 
-	size := binary.BigEndian.Uint32(sizeb[:])
-	block := make([]byte, size)
+	blockBytes := make([]byte, size)
 
-	_, err = io.ReadFull(con, block)
+	_, err = io.ReadFull(con, blockBytes)
 	if err != nil {
 		fmt.Println("block read err: ", err)
 		return nil, err
 	}
-	return block, nil
+	return blockBytes, nil
 }
-
+*/
 // GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat
 // and gives the proof & utxo data back.
 // Don't ask for block 0, there is no proof of that.
-func GetUDataFromFile(tipnum int32) (ud UData, err error) {
+func GetUDataBytesFromFile(tipnum int32) (b []byte, err error) {
 	if tipnum == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
 		return
@@ -162,19 +156,11 @@ func GetUDataFromFile(tipnum int32) (ud UData, err error) {
 		return
 	}
 
-	// +8 skips the 8 bytes of magicbytes and load size
-	// proofFile.Seek(int64(binary.BigEndian.Uint32(offset[:])+8), 0)
-	ubytes := make([]byte, size)
+	b = make([]byte, size)
 
-	_, err = proofFile.Read(ubytes)
+	_, err = proofFile.Read(b)
 	if err != nil {
 		err = fmt.Errorf("proofFile.Read(ubytes) %s", err.Error())
-		return
-	}
-
-	ud, err = UDataFromBytes(ubytes)
-	if err != nil {
-		err = fmt.Errorf("UDataFromBytes %s", err.Error())
 		return
 	}
 

@@ -168,7 +168,7 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 // Bunch of LeafDatas, prefixed with 2-byte lengths
 func (ud *UData) ToBytes() (b []byte) {
 	batchBytes := ud.AccProof.ToBytes()
-	b = make([]byte, 4 /*len(batchBytes)*/ +len(batchBytes))
+	b = make([]byte, 4+len(batchBytes))
 	// first stick the batch proof on the beginning
 	binary.BigEndian.PutUint32(b, uint32(len(batchBytes)))
 	copy(b[4:], batchBytes)
@@ -183,25 +183,27 @@ func (ud *UData) ToBytes() (b []byte) {
 }
 
 // network serialization for UBlocks (regular block with udata)
-// First 4 bytes is (big endian) lenght of the udata.
-// Then there's just a wire.MsgBlock with the regular serialization.
-// So basically udata, then a block, that's it.
-
+// Firstjust a wire.MsgBlock with the regular serialization.
+// Then there's  4 bytes is (big endian) length of the udata.
+// So basically a block then udata, that's it.
 // Looks like "height" doesn't get sent over this way, but maybe that's OK.
-
 func (ub *UBlock) Deserialize(r io.Reader) (err error) {
+
+	// first deser the block
 	err = ub.Block.Deserialize(r)
 	if err != nil {
 		return
 	}
 
+	fmt.Printf("deser block OK %s\n", ub.Block.Header.BlockHash().String())
 	var uDataLen, bytesRead uint32
 	var n int
-
+	// read udata length
 	err = binary.Read(r, binary.BigEndian, &uDataLen)
 	if err != nil {
 		return
 	}
+	fmt.Printf("server says %d byte uDataLen\n", uDataLen)
 
 	udataBytes := make([]byte, uDataLen)
 
@@ -212,11 +214,13 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 		}
 		bytesRead += uint32(n)
 	}
-
+	fmt.Printf("udataBytes: %x\n", udataBytes)
 	ub.ExtraData, err = UDataFromBytes(udataBytes)
 	return
 }
 
+// We don't actually call serialize since from the server side we don't
+// serialize, we just glom stuff together from the disk and send it over.
 func (ub *UBlock) Serialize(w io.Writer) (err error) {
 	var bw bytes.Buffer
 	err = ub.Block.Serialize(&bw)
@@ -246,6 +250,11 @@ func (ub *UBlock) Serialize(w io.Writer) (err error) {
 }
 
 func UDataFromBytes(b []byte) (ud UData, err error) {
+
+	// if there's no bytes, it's an empty uData
+	if len(b) == 0 {
+		return
+	}
 
 	if len(b) < 4 {
 		err = fmt.Errorf("block proof too short %d bytes", len(b))

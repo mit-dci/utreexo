@@ -22,7 +22,9 @@ func (bp *BatchProof) ToBytes() []byte {
 	// first write the number of targets (4 byte uint32)
 
 	numTargets := uint32(len(bp.Targets))
-
+	if numTargets == 0 {
+		return nil
+	}
 	err := binary.Write(&buf, binary.BigEndian, numTargets)
 	if err != nil {
 		fmt.Printf("huh %s\n", err.Error())
@@ -71,8 +73,14 @@ func (bp *BatchProof) ToString() string {
 func FromBytesBatchProof(b []byte) (BatchProof, error) {
 	var bp BatchProof
 
+	// if empty slice, return empty BatchProof with 0 targets
+	if len(b) == 0 {
+		return bp, nil
+	}
+	// otherwise, if there are less than 4 bytes we can't even see the number
+	// of targets so something is wrong
 	if len(b) < 4 {
-		return bp, fmt.Errorf("blockproof only %d bytes", len(b))
+		return bp, fmt.Errorf("batchproof only %d bytes", len(b))
 	}
 
 	buf := bytes.NewBuffer(b)
