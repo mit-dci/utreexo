@@ -66,41 +66,58 @@ func UblockNetworkReader(
 	}
 	defer con.Close()
 
+	// Send the start height to be requested from the server
+	// Right now, the server just keeps feeding the client
+	// all the blocks it has until it reaches the chain tip
+	err = binary.Write(con, binary.BigEndian, curHeight)
+	if err != nil {
+		panic(err)
+	}
+
 	var ub UBlock
-	var ublen uint32
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
-		err = binary.Write(con, binary.BigEndian, curHeight)
+		// Read from the server
+		block, err := ReadUBlockBytesFromCon(con)
 		if err != nil {
 			fmt.Printf("write error to connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
 			return
 		}
-		// fmt.Printf("asked for height %d\n", curHeight)
-
-		err = binary.Read(con, binary.BigEndian, &ublen)
+		// Deserialize block that was read from the server
+		bReader := bytes.NewReader(block)
+		err = ub.Deserialize(bReader)
 		if err != nil {
-			fmt.Printf("read error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
-			return
+			panic(err)
 		}
-		// fmt.Printf("got len %d\n", ublen)
-
-		b := make([]byte, ublen)
-		_, err = io.ReadFull(con, b)
-		if err != nil {
-			fmt.Printf("ReadFull error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
-			return
-		}
-		// fmt.Printf("copied %d bytes into buffer\n", n)
-
-		err = ub.FromBytes(b)
-
 		ub.Height = curHeight
-		blockChan <- ub
+		blockChan <- ub // send to be added to pollard
 	}
+}
+
+// ReadUBlockBytesFromCon reads two things from the server: size and block + proofs
+// Returned byte slice is the concatenation of the Bitcoin block and the prooflen + proofs
+func ReadUBlockBytesFromCon(con net.Conn) ([]byte, error) {
+	// 4 bytes size of the whole payload (block + udata)
+	var size uint32
+
+	// read the size of the payload
+	err := binary.Read(con, binary.BigEndian, &size)
+	if err != nil {
+		fmt.Println("size read err: ", err)
+		return nil, err
+	}
+
+	blockBytes := make([]byte, size)
+
+	// Read the payload
+	_, err = io.ReadFull(con, blockBytes)
+	if err != nil {
+		fmt.Println("payload read err: ", err)
+		return nil, err
+	}
+	return blockBytes, nil
 }
 
 // GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat

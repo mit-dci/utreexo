@@ -107,17 +107,25 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			return
 		}
-		// send 4 byte udata length
-		// err = binary.Write(c, binary.BigEndian, uint32(len(udb)))
-		// if err != nil {
-		// 	fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
-		// 	return
-		// }
-		// last, send the udata bytes
-		_, err = c.Write(udb)
+		// write the proof itself to the buffer
+		_, err = buf.Write(udb)
 		if err != nil {
 			fmt.Printf("pushBlocks ubb write %s\n", err.Error())
 			return
+		}
+
+		// Send to the client
+		payload := buf.Bytes()
+		// send the payload size to the client
+		err = binary.Write(c, binary.BigEndian, uint32(len(payload)))
+		if err != nil {
+			fmt.Printf("pushBlocks len write %s\n", err.Error())
+			return
+		}
+		// send the block + proofs to the client
+		_, err = c.Write(payload)
+		if err != nil {
+			fmt.Printf("pushBlocks payload write %s\n", err.Error())
 		}
 		// fmt.Printf("wrote %d bytes udb\n", n)
 	}
