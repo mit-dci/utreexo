@@ -78,6 +78,12 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 			return
 		}
 
+		var direction int32 = 1
+		if toHeight < fromHeight {
+			// backwards
+			direction = -1
+		}
+
 		if toHeight > endHeight {
 			toHeight = endHeight
 		}
@@ -86,7 +92,14 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 			break
 		}
 
-		for curHeight := fromHeight; curHeight <= toHeight; curHeight++ {
+		for curHeight := fromHeight; ; curHeight += direction {
+			if direction == 1 && curHeight > toHeight {
+				// forwards request of height above toHeight
+				break
+			} else if direction == -1 && curHeight < toHeight {
+				// backwards request of height below toHeight
+				break
+			}
 			// over the wire send:
 			// 4 byte length prefix for the whole thing
 			// then the block, then the udb len, then udb
