@@ -66,15 +66,14 @@ func UblockNetworkReader(
 	}
 	defer con.Close()
 
-	err = binary.Write(con, binary.BigEndian, curHeight)
-	if err != nil {
-		panic(err)
-	}
-
 	var ub UBlock
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
+		err = binary.Write(con, binary.BigEndian, curHeight)
+		if err != nil {
+			panic(err)
+		}
 		err = ub.Deserialize(con)
 		if err != nil {
 			if err == io.EOF {
