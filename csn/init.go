@@ -3,6 +3,7 @@ package csn
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/adiabat/bech32"
@@ -14,7 +15,8 @@ import (
 )
 
 // RunIBD calls evertyhing to run IBD
-func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) error {
+func RunIBD(
+	p *chaincfg.Params, host, watchAddr string, check bool, sig chan bool) error {
 
 	// check on disk for pre-existing state and load it
 	pol, h, utxos, err := initCSNState()
@@ -27,7 +29,15 @@ func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) err
 	c.CheckSignatures = check
 	c.utxoStore = utxos
 
-	txChan, heightChan, err := c.Start(h, "127.0.0.1:8338", "compactstate", "", p, sig)
+	if host == "" {
+		host = "127.0.0.1:8338"
+	}
+
+	if !strings.ContainsRune(host, ':') {
+		host += ":8338"
+	}
+
+	txChan, heightChan, err := c.Start(h, host, "compactstate", "", p, sig)
 	if err != nil {
 		return err
 	}
@@ -85,7 +95,7 @@ func (c *Csn) Start(height int32,
 
 	c.CurrentHeight = height
 	c.Params = *params
-
+	c.remoteHost = host
 	// start client & connect
 	go c.IBDThread(haltSig)
 

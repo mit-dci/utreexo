@@ -60,7 +60,7 @@ func UblockNetworkReader(
 	curHeight, lookahead int32) {
 
 	d := net.Dialer{Timeout: 2 * time.Second}
-	con, err := d.Dial("tcp", "127.0.0.1:8338")
+	con, err := d.Dial("tcp", remoteServer)
 	if err != nil {
 		panic(err)
 	}
