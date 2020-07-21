@@ -77,7 +77,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 		c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
 
-	saveIBDsimData(c.CurrentHeight, c.pollard)
+	saveIBDsimData(c)
 
 	fmt.Printf("Found %d satoshis in %d utxos\n", c.totalScore, len(c.utxoStore))
 

@@ -17,7 +17,7 @@ import (
 func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) error {
 
 	// check on disk for pre-existing state and load it
-	pol, h, err := initCSNState()
+	pol, h, utxos, err := initCSNState()
 	if err != nil {
 		return err
 	}
@@ -25,6 +25,7 @@ func RunIBD(p *chaincfg.Params, watchAddr string, check bool, sig chan bool) err
 	c := new(Csn)
 	c.pollard = pol
 	c.CheckSignatures = check
+	c.utxoStore = utxos
 
 	txChan, heightChan, err := c.Start(h, "127.0.0.1:8338", "compactstate", "", p, sig)
 	if err != nil {
@@ -73,7 +74,10 @@ func (c *Csn) Start(height int32,
 	// initialize maps
 	c.WatchAdrs = make(map[[20]byte]bool)
 	c.WatchOPs = make(map[wire.OutPoint]bool)
-	c.utxoStore = make(map[wire.OutPoint]util.LeafData)
+	//c.utxoStore = make(map[wire.OutPoint]util.LeafData)
+	for _, utxo := range c.utxoStore {
+		c.totalScore += utxo.Amt
+	}
 
 	// initialize channels
 	c.TxChan = make(chan wire.MsgTx, 10)
@@ -91,7 +95,7 @@ func (c *Csn) Start(height int32,
 // initCSNState attempts to load and initialize the CSN state from the disk.
 // If a CSN state is not present, chain is initialized to the genesis
 func initCSNState() (
-	p accumulator.Pollard, height int32, err error) {
+	p accumulator.Pollard, height int32, utxos map[wire.OutPoint]util.LeafData, err error) {
 
 	var pollardInitialized bool
 
@@ -100,7 +104,7 @@ func initCSNState() (
 
 	if pollardInitialized {
 		fmt.Println("Has access to forestdata, resuming")
-		height, p, err = restorePollard()
+		height, p, utxos, err = restorePollard()
 		if err != nil {
 			return
 		}
@@ -108,6 +112,7 @@ func initCSNState() (
 		fmt.Println("Creating new pollarddata")
 		// start at height 1
 		height = 1
+		utxos = make(map[wire.OutPoint]util.LeafData)
 		// Create file needed for pollard
 		_, err = os.OpenFile(
 			util.PollardFilePath, os.O_CREATE, 0600)
