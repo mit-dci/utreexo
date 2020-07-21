@@ -36,7 +36,10 @@ func restorePollard() (height int32, p accumulator.Pollard,
 		if err != nil {
 			return
 		}
-		util.LeafDataFromBytes(leafBytes)
+		utxo, err = util.LeafDataFromBytes(leafBytes)
+		if err != nil {
+			return
+		}
 
 		utxos[utxo.Outpoint] = utxo
 	}
