@@ -67,21 +67,37 @@ func UblockNetworkReader(
 	defer con.Close()
 
 	var ub UBlock
+	var ublen uint32
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
 		err = binary.Write(con, binary.BigEndian, curHeight)
 		if err != nil {
-			panic(err)
+			fmt.Printf("write error to connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
 		}
-		err = ub.Deserialize(con)
+		// fmt.Printf("asked for height %d\n", curHeight)
+
+		err = binary.Read(con, binary.BigEndian, &ublen)
 		if err != nil {
-			if err == io.EOF {
-				close(blockChan)
-				break
-			}
-			panic(err)
+			fmt.Printf("read error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
 		}
+		// fmt.Printf("got len %d\n", ublen)
+
+		b := make([]byte, ublen)
+		_, err = io.ReadFull(con, b)
+		if err != nil {
+			fmt.Printf("ReadFull error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
+		}
+		// fmt.Printf("copied %d bytes into buffer\n", n)
+
+		err = ub.FromBytes(b)
+
 		ub.Height = curHeight
 		blockChan <- ub
 	}
