@@ -83,6 +83,7 @@ func UblockNetworkReader(
 		if err != nil {
 			fmt.Printf("read error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
+			close(blockChan)
 			return
 		}
 		// fmt.Printf("got len %d\n", ublen)
