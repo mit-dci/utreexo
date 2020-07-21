@@ -2,8 +2,17 @@ package accumulator
 
 import (
 	"fmt"
-	"sync"
 )
+
+const (
+	ErrorNotEnoughTrees uint32 = iota
+	ErrorNoPollardNode
+)
+
+var ErrorStrings = map[uint32]error{
+	ErrorNotEnoughTrees: fmt.Errorf("ErrorNotEnoughTrees"),
+	ErrorNoPollardNode:  fmt.Errorf("ErrorNoPollardNode"),
+}
 
 // Modify is the main function that deletes then adds elements to the accumulator
 func (p *Pollard) Modify(adds []Leaf, dels []uint64) error {
@@ -155,7 +164,6 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
-	wg := new(sync.WaitGroup)
 	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
@@ -212,7 +220,6 @@ func (p *Pollard) rem2(dels []uint64) error {
 		hashDirt = nextHashDirt
 		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
-		wg.Add(len(hnslice))
 		for _, hn := range hnslice {
 			// skip hashes we can't compute
 			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
@@ -221,14 +228,12 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// it'd be better to avoid this and not create hns that aren't
 				// supposed to exist.
 				fmt.Printf("hn %d nil or uncomputable\n", hn.position)
-				wg.Done()
 				continue
 			}
 			// fmt.Printf("giving hasher %d %x %x\n",
 			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
-			go hn.run(wg)
+			hn.dest.data = hn.sib.auntOp()
 		}
-		wg.Wait() // wait for all hashing to finish at end of each row
 		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
@@ -236,7 +241,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	// set new roots
 	nextRootPositions, _ := getRootsReverse(nextNumLeaves, ph)
 	nextRoots := make([]polNode, len(nextRootPositions))
-	for i, _ := range nextRoots {
+	for i := range nextRoots {
 		nt, ntsib, _, err := p.grabPos(nextRootPositions[i])
 		if err != nil {
 			return err
@@ -333,37 +338,36 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
+	// Grab the tree that the position is at
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
-	// fmt.Printf("grab %d, tree %d, bl %d bits %x\n", pos, tree, branchLen, bits)
 	if tree >= uint8(len(p.roots)) {
-		err = fmt.Errorf("want tree %d but only %d trees", tree, len(p.roots))
+		err = ErrorStrings[ErrorNotEnoughTrees]
 		return
 	}
 	n, nsib = &p.roots[tree], &p.roots[tree]
+
 	hn = &hashableNode{dest: n, sib: nsib}
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
+		// grab the sibling of lr
+		lrSib := lr ^ 1
 		if h == 0 { // if at bottom, done
 			hn.dest = nsib // this is kind of confusing eh?
 			hn.sib = n     // but yeah, switch siblingness
-			n, nsib = n.niece[lr^1], n.niece[lr]
-			if nsib == nil || n == nil {
-				// fmt.Printf("gave up ")
-				return // give up and don't make hashable node
-			}
-			// fmt.Printf("h%d n %x nsib %x\n", h, n.data[:4], nsib.data[:4])
+			n, nsib = n.niece[lrSib], n.niece[lr]
 			return
 		}
+
 		// if a sib doesn't exist, need to create it and hook it in
-		if n.niece[lr^1] == nil {
-			n.niece[lr^1] = new(polNode)
+		if n.niece[lrSib] == nil {
+			n.niece[lrSib] = &polNode{}
 		}
-		n, nsib = n.niece[lr], n.niece[lr^1]
-		// fmt.Printf("h%d n %x nsib %x npar %x\n",
-		// 	h, n.data[:4], nsib.data[:4], npar.data[:4])
+		n, nsib = n.niece[lr], n.niece[lrSib]
 		if n == nil {
 			// if a node doesn't exist, crash
-			err = fmt.Errorf("grab %d nil neice on row %d", pos, h)
+			// no niece in this case
+			// TODO error message could be better
+			err = ErrorStrings[ErrorNoPollardNode]
 			return
 		}
 	}
