@@ -11,6 +11,7 @@ import (
 // Bitcoin Core DATADIR
 var LinuxDataDir string = "/.bitcoin/"
 var DarwinDataDir string = "/Library/Application Support/Bitcoin/"
+var WinDataDir string = "\\AppData\\Roaming\\Bitcoin"
 
 // Directory paths
 var OffsetDirPath string = filepath.Join(".", "utree/offsetdata")
@@ -59,6 +60,8 @@ func GetBitcoinDataDir() (dir string) {
 		dir = filepath.Join(home, LinuxDataDir)
 	case "darwin":
 		dir = filepath.Join(home, DarwinDataDir)
+	case "windows":
+		dir = filepath.Join(home, WinDataDir)
 	default:
 		str := fmt.Sprintf("%s unknown, must specify -datadir\n", runtime.GOOS)
 		panic(str)
