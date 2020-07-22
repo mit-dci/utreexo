@@ -48,7 +48,10 @@ type Csn struct {
 	HeightChan chan int32
 
 	CheckSignatures bool
-	Params          chaincfg.Params
+	backwards       bool
+	higherRootSet   accumulator.RootSet
+
+	Params chaincfg.Params
 
 	remoteHost string
 	utxoStore  map[wire.OutPoint]util.LeafData

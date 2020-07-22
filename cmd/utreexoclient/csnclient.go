@@ -45,6 +45,9 @@ var remoteHost = optionCmd.String("host", "", `remote server to connect to`)
 var checkSig = optionCmd.Bool("checksig", true,
 	`check signatures (slower)`)
 
+var backwards = optionCmd.Bool("backwards", false,
+	`verify from tip to genesis`)
+
 func main() {
 	// check if enough arguments were given
 	// if len(os.Args) < 1 {
@@ -91,7 +94,7 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig, *cpuProfCmd)
 
-	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, sig)
+	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, *backwards, sig)
 	if err != nil {
 		panic(err)
 	}

@@ -66,10 +66,19 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
 	var curHeight int32
 
+	// first thing is push the tip height to the remote client so they know
+	// TODO not sure why this is -1, some off by 1 thing
+	err := binary.Write(c, binary.BigEndian, endHeight-1)
+	if err != nil {
+		fmt.Printf("pushBlocks endHeight binary.Write %s\n", err.Error())
+		return
+	}
+
 	for {
-		err := binary.Read(c, binary.BigEndian, &curHeight)
+		err = binary.Read(c, binary.BigEndian, &curHeight)
 		if err != nil {
-			fmt.Printf("pushBlocks Read %s\n", err.Error())
+			fmt.Printf("pushBlocks Read %s close %s\n",
+				err.Error(), c.RemoteAddr().String())
 			return
 		}
 

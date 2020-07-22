@@ -16,7 +16,8 @@ import (
 
 // RunIBD calls evertyhing to run IBD
 func RunIBD(
-	p *chaincfg.Params, host, watchAddr string, check bool, sig chan bool) error {
+	p *chaincfg.Params, host, watchAddr string,
+	check, backwards bool, sig chan bool) error {
 
 	// check on disk for pre-existing state and load it
 	pol, h, utxos, err := initCSNState()
@@ -28,6 +29,10 @@ func RunIBD(
 	c.pollard = pol
 	c.CheckSignatures = check
 	c.utxoStore = utxos
+	c.backwards = backwards
+	if backwards && h == 1 {
+		h = 1 << 30 // will be clamped down to tipHeight later
+	}
 
 	if host == "" {
 		host = "127.0.0.1:8338"

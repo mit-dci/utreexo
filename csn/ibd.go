@@ -35,19 +35,31 @@ func (c *Csn) IBDThread(sig chan bool) {
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go util.UblockNetworkReader(
-		ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
+
+	if c.backwards {
+		go util.BackwardsUblockNetworkReader(
+			ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
+	} else {
+		go util.UblockNetworkReader(
+			ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
+	}
 
 	var plustime time.Duration
 	starttime := time.Now()
 
 	// bool for stopping the below for loop
 	var stop bool
-	for ; !stop; c.CurrentHeight++ {
+	for !stop {
 		blocknproof, open := <-ublockQueue
 		if !open {
 			sig <- true
 			break
+		}
+
+		// if backwards we don't know initial height so get it from here
+		// really only need to do this once, not every time in the loop...
+		if c.backwards && c.CurrentHeight != blocknproof.Height {
+			c.CurrentHeight = blocknproof.Height
 		}
 
 		err := c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime)
@@ -63,6 +75,13 @@ func (c *Csn) IBDThread(sig chan bool) {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
+		}
+
+		if c.backwards {
+			fmt.Printf("backwards! at height %d\n", c.CurrentHeight)
+			c.CurrentHeight--
+		} else {
+			c.CurrentHeight++
 		}
 
 		// Check if stopSig is no longer false
@@ -130,6 +149,8 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 // All the outputs are saved as LeafTXO type.
 func (c *Csn) putBlockInPollard(
 	ub util.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
+
+	// bytes.Equal(c.higherRootSet.Bytes())
 
 	plusstart := time.Now()
 

@@ -36,6 +36,26 @@ type polNode struct {
 	niece [2]*polNode
 }
 
+// a rootSet is just the roots and numleaves, the minimum data to contain the
+// state of the accumulator
+type RootSet struct {
+	numLeaves uint64
+	roots     []Hash
+}
+
+// check if 2 rootSets are equal
+func (a *RootSet) Equals(b RootSet) bool {
+	if a.numLeaves != b.numLeaves || len(a.roots) != len(b.roots) {
+		return false
+	}
+	for i, _ := range a.roots {
+		if a.roots[i] != b.roots[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
 func (n *polNode) auntOp() Hash {
 	return parentHash(n.niece[0].data, n.niece[1].data)
@@ -116,6 +136,16 @@ func (p *Pollard) rootHashesReverse() []Hash {
 		rHashes[len(rHashes)-(1+i)] = n.data
 	}
 	return rHashes
+}
+
+// returns the rootSet of a pollard
+func (p *Pollard) GetRootSet() (r RootSet) {
+	r.numLeaves = p.numLeaves
+	r.roots = make([]Hash, len(p.roots))
+	for i, _ := range r.roots {
+		r.roots[i] = p.roots[i].data
+	}
+	return
 }
 
 //  ------------------ pollard serialization
