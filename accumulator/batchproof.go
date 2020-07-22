@@ -134,6 +134,15 @@ func verifyBatchProof(
 		return false, proofmap
 	}
 
+	// if no roots are given, we are in backwards mode where we don't verify
+	// a batchProof with respect to anything, we just return the populated
+	// map since it can't be wrong
+
+	check := true
+	if len(roots) == 0 {
+		check = false
+	}
+
 	//	fmt.Printf("Reconstruct complete\n")
 	rootPositions, rootRows := getRootsReverse(numLeaves, forestRows)
 
@@ -185,16 +194,19 @@ func verifyBatchProof(
 					fmt.Printf("ERR no proofmap for root at %d\n", left)
 					return false, nil
 				}
-				if computedRoot != roots[0] {
-					fmt.Printf("row %d root, pos %d expect %04x got %04x\n",
-						r, left, roots[0][:4], computedRoot[:4])
-					return false, nil
+				if check {
+					if computedRoot != roots[0] {
+						fmt.Printf("row %d root, pos %d expect %04x got %04x\n",
+							r, left, roots[0][:4], computedRoot[:4])
+						return false, nil
+					}
+					// otherwise OK and pop of the root
+					roots = roots[1:]
 				}
-				// otherwise OK and pop of the root
-				roots = roots[1:]
 				rootPositions = rootPositions[1:]
 				rootRows = rootRows[1:]
 				break
+
 			}
 
 			parpos := parent(left, forestRows)
@@ -213,7 +225,9 @@ func verifyBatchProof(
 		// if done with row and there's a root left on this row, remove it
 		if len(rootRows) > 0 && rootRows[0] == r {
 			// bit ugly to do these all separately eh
-			roots = roots[1:]
+			if check {
+				roots = roots[1:]
+			}
 			rootPositions = rootPositions[1:]
 			rootRows = rootRows[1:]
 		}
