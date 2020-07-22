@@ -13,7 +13,7 @@ import (
 
 type Hash [32]byte
 
-// HashFromString hahes the given string with sha256
+// HashFromString hashes the given string with sha256
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
@@ -58,7 +58,7 @@ type LeafData struct {
 	PkScript  []byte
 }
 
-// turn a LeafData into bytes
+// ToString turns a LeafData into bytes
 func (l *LeafData) ToString() (s string) {
 	s = l.Outpoint.String()
 	// s += fmt.Sprintf(" bh %x ", l.BlockHash)
@@ -114,8 +114,9 @@ func (l *LeafData) ToBytes() []byte {
 // can use tags for PkScript
 // so it's just height, coinbaseness, amt, pkscript tag
 
-// turn a LeafData into bytes (compact, for sending in blockProof) -
-// don't hash this, it doesn't commit to everything
+// ToCompactBytes turns a LeafData into bytes
+// (compact, for sending in blockProof) - don't hash this,
+// it doesn't commit to everything
 func (l *LeafData) ToCompactBytes() []byte {
 	l.Height <<= 1
 	if l.Coinbase {
@@ -149,7 +150,7 @@ func LeafDataFromCompactBytes(b []byte) (LeafData, error) {
 	return l, nil
 }
 
-// turn a LeafData into a LeafHash
+// LeafHash turns a LeafData into a LeafHash
 func (l *LeafData) LeafHash() [32]byte {
 	return sha256.Sum256(l.ToBytes())
 }
@@ -261,7 +262,6 @@ func (ub *UBlock) Serialize(w io.Writer) (err error) {
 }
 
 func UDataFromBytes(b []byte) (ud UData, err error) {
-
 	// if there's no bytes, it's an empty uData
 	if len(b) == 0 {
 		return
@@ -289,7 +289,7 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
 	var ldb []byte
 	// loop until we've filled in every leafData (or something breaks first)
-	for i, _ := range ud.UtxoData {
+	for i := range ud.UtxoData {
 		// fmt.Printf("leaf %d dataBytes %x ", i, leafDataBytes)
 		ldb, leafDataBytes, err = PopPrefixLen16(leafDataBytes)
 		if err != nil {

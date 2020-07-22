@@ -65,7 +65,7 @@ func pollardFullRandomRemember(blocks int32) error {
 
 		err = fp.PosMapSanity()
 		if err != nil {
-			fmt.Printf(fp.ToString())
+			fmt.Print(fp.ToString())
 			return err
 		}
 

@@ -50,9 +50,9 @@ func (p *Pollard) ReconstructStats() (uint64, uint8) {
 func (p *Pollard) add(adds []Leaf) error {
 
 	// General algo goes:
-	// 1 make a new node & assign data (no neices; at bottom)
+	// 1 make a new node & assign data (no nieces; at bottom)
 	// 2 if this node is on a row where there's already a root,
-	// then swap neices with that root, hash the two datas, and build a new
+	// then swap nieces with that root, hash the two datas, and build a new
 	// node 1 higher pointing to them.
 	// goto 2.
 
@@ -86,10 +86,10 @@ in numLeaves.  As soon as we hit a 0 (no root), we're done.
 
 grab: Grab the lowest root.
 pop: pop off the lowest root.
-swap: swap the neices of the node we grabbed and our new node
+swap: swap the nieces of the node we grabbed and our new node
 hash: calculate the hashes of the old root and new node
 new: create a new parent node, with the hash as data, and the old root / prev new node
-as neices (not neices though, children)
+as nieces (not nieces though, children)
 */
 
 // add a single leaf to a pollard
@@ -207,7 +207,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 			}
 			if hn.position == prevHash { // we just did this
 				// fmt.Printf("just did %d\n", prevHash)
-				continue // TODO this doesn't cover eveything
+				continue // TODO this doesn't cover everything
 			}
 			hnslice = append(hnslice, hn)
 			prevHash = hn.position
@@ -227,7 +227,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// TODO when is hn nil?  is this OK?
 				// it'd be better to avoid this and not create hns that aren't
 				// supposed to exist.
-				fmt.Printf("hn %d nil or uncomputable\n", hn.position)
+				fmt.Printf("hn %d nil or incomputable\n", hn.position)
 				continue
 			}
 			// fmt.Printf("giving hasher %d %x %x\n",
@@ -241,7 +241,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	// set new roots
 	nextRootPositions, _ := getRootsReverse(nextNumLeaves, ph)
 	nextRoots := make([]polNode, len(nextRootPositions))
-	for i := range nextRoots {
+	for i, _ := range nextRoots {
 		nt, ntsib, _, err := p.grabPos(nextRootPositions[i])
 		if err != nil {
 			return err
@@ -410,12 +410,12 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 
 		if n == nil && r != 0 {
 			return nil, nil, fmt.Errorf(
-				"descend pos %d nil neice at row %d", pos, r)
+				"descend pos %d nil niece at row %d", pos, r)
 		}
 
-		if n != nil {
-			// fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
-		}
+		// if n != nil {
+		// 	fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
+		// }
 
 		proofs[r], sibs[r] = n, sib
 
@@ -456,7 +456,6 @@ func (p *Pollard) toFull() (*Forest, error) {
 	return ff, nil
 }
 
-//func (p *Pollard) ToString() string {
 func (p *Pollard) ToString() string {
 	f, err := p.toFull()
 	if err != nil {

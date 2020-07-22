@@ -44,7 +44,7 @@ type RawHeaderData struct {
 	UndoPos uint32
 }
 
-// BlockReader is a wrapper around GetRawBlockFromFile so that the process
+// BlockAndRevReader is a wrapper around GetRawBlockFromFile so that the process
 // can be made into a goroutine. As long as it's running, it keeps sending
 // the entire blocktxs and height to bchan with TxToWrite type.
 // It also puts in the proofs.  This will run on the archive server, and the
@@ -286,7 +286,7 @@ type BlockAndRev struct {
 type RevBlock struct {
 	Magic [4]byte   // Network magic bytes
 	Size  [4]byte   // size of the BlockUndo record
-	Txs   []*TxUndo // acutal undo record
+	Txs   []*TxUndo // actual undo record
 	Hash  [32]byte  // 32 byte double sha256 hash of the block
 }
 
@@ -296,8 +296,8 @@ type TxUndo struct {
 	TxIn []*TxInUndo
 }
 
-// TxInUndo is the stucture of the undo transaction
-// Eveything is uncompressed here
+// TxInUndo is the structure of the undo transaction
+// Everything is uncompressed here
 // see github.com/bitcoin/bitcoin/src/undo.h
 type TxInUndo struct {
 	Height int32
@@ -383,7 +383,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 
 	ti.PKScript = decompressScript(r)
 	if ti.PKScript == nil {
-		return fmt.Errorf("nil pkscript on h %d, pks %x\n", ti.Height, ti.PKScript)
+		return fmt.Errorf("nil pkscript on h %d, pks %x", ti.Height, ti.PKScript)
 
 	}
 
@@ -392,8 +392,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 
 // OpenIndexFile returns the db with only read only option enabled
 func OpenIndexFile(dataDir string) (*leveldb.DB, error) {
-	var indexDir string
-	indexDir = filepath.Join(dataDir, "/index")
+	indexDir := filepath.Join(dataDir, "/index")
 	// Read-only and no compression on
 	// Bitcoin Core uses uncompressed leveldb. If that db is
 	// opened EVEN ONCE, with compression on, the user will
@@ -401,7 +400,7 @@ func OpenIndexFile(dataDir string) (*leveldb.DB, error) {
 	o := opt.Options{ReadOnly: true, Compression: opt.NoCompression}
 	lvdb, err := leveldb.OpenFile(indexDir, &o)
 	if err != nil {
-		return nil, fmt.Errorf("can't open %s\n", indexDir)
+		return nil, fmt.Errorf("can't open %s", indexDir)
 	}
 
 	return lvdb, nil

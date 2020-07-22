@@ -9,7 +9,7 @@ import (
 // Hash :
 type Hash [32]byte
 
-// Prefix, for printfs
+// Prefix for printfs
 func (h Hash) Prefix() []byte {
 	return h[:4]
 }
@@ -28,7 +28,7 @@ func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
 
-// an arror describes the movement of a node from one position to another
+// arrow describes the movement of a node from one position to another
 type arrow struct {
 	from, to uint64
 }
@@ -39,11 +39,10 @@ type node struct {
 	Val Hash
 }
 
-// LeafTXOs have a hash and a expiry date (block when that utxo gets used)
+// Leaf contains a hash and a hint about whether it should be saved to
+// memory or not during ibdsim.
 type Leaf struct {
 	Hash
-	// During ibdsim, this will dictate whether it is saved to
-	// the memory or not.
 	Remember bool // this leaf will be deleted soon, remember it
 }
 
@@ -106,7 +105,6 @@ func (s *SimChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 	}
 
 	s.blockHeight--
-	return
 }
 
 func (s *SimChain) ttlString() string {
@@ -116,7 +114,7 @@ func (s *SimChain) ttlString() string {
 		for _, h := range d {
 			x += fmt.Sprintf(" %x ", h[:4])
 		}
-		x += fmt.Sprintf("\n")
+		x += "\n"
 	}
 
 	return x
@@ -140,7 +138,7 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
-	for j := range adds {
+	for j, _ := range adds {
 		adds[j].Hash[0] = uint8(s.leafCounter)
 		adds[j].Hash[1] = uint8(s.leafCounter >> 8)
 		adds[j].Hash[2] = uint8(s.leafCounter >> 16)

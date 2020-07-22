@@ -151,7 +151,7 @@ run_utreexo() {
 
 	# run ibdsim
 	log "running idbsim..."
-	eval "$IBDSIM > $TEST_DATA/ibdsim.log 2>&1"
+	eval "$IBDSIM -host 127.0.0.1 > $TEST_DATA/ibdsim.log 2>&1"
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
 

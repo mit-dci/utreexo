@@ -192,7 +192,7 @@ func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8
 		}
 		if !inForest(hashDest, numLeaves, rows) ||
 			hashDest == 0 || // TODO would be great to use nextNumLeaves... but tricky
-			hashDest == prevHash { // TODO this doesn't cover eveything
+			hashDest == prevHash { // TODO this doesn't cover everything
 			continue
 		}
 		prevHash = hashDest
@@ -215,11 +215,11 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 		// re-descending here which isn't great
 		hashDest := parent(hashDirt[0], rows)
 		return false, hashDest
-	} else {
-		// swapping
-		hashDest := parent(maybeArrow[0].to, rows)
-		return true, hashDest
 	}
+
+	// swapping
+	hashDest := parent(maybeArrow[0].to, rows)
+	return true, hashDest
 }
 
 func (f *Forest) swapNodes(s arrow, row uint8) {
@@ -254,9 +254,6 @@ func (f *Forest) swapNodes(s arrow, row uint8) {
 		b = parent(b, f.rows)
 		run >>= 1
 	}
-
-	// for
-	return
 }
 
 // reHash hashes new data in the forest based on dirty positions.
@@ -307,7 +304,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 		}
 
 		// merge nextRow and the dirtySlice.  They're both sorted so this
-		// should be quick.  Seems like a CS class kindof algo but who knows.
+		// should be quick.  Seems like a CS class kind of algo but who knows.
 		// Should be O(n) anyway.
 
 		currentRow = mergeSortedSlices(currentRow, dirty2d[r])
@@ -395,7 +392,6 @@ func (f *Forest) addv2(adds []Leaf) {
 		}
 		f.numLeaves++
 	}
-	return
 }
 
 // Modify changes the forest, adding and deleting leaves and updating internal nodes.
@@ -545,7 +541,7 @@ func (f *Forest) PosMapSanity() error {
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and rows is stored
 func RestoreForest(
-	miscForestFile *os.File, forestFile *os.File, toRam, cached bool) (*Forest, error) {
+	miscForestFile *os.File, forestFile *os.File, toRAM, cached bool) (*Forest, error) {
 
 	// start a forest for restore
 	f := new(Forest)
@@ -569,7 +565,7 @@ func RestoreForest(
 	diskData := new(diskForestData)
 	diskData.file = forestFile
 
-	if toRam {
+	if toRAM {
 		// for in-ram
 		ramData := new(ramForestData)
 		fmt.Printf("%d rows resize to %d\n", f.rows, 2<<f.rows)
@@ -642,7 +638,7 @@ func (f *Forest) PrintPositionMap() string {
 	return s
 }
 
-// WriteForest writes the numLeaves and rows to miscForestFile
+// WriteMiscData writes the numLeaves and rows to miscForestFile
 func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 	fmt.Println("numLeaves=", f.numLeaves)
 	fmt.Println("f.rows=", f.rows)
@@ -662,7 +658,7 @@ func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 	return nil
 }
 
-// WriteForest writes the whole forest to disk
+// WriteForestToDisk writes the whole forest to disk
 // this only makes sense to do if the forest is in ram.  So it'll return
 // an error if it's not a ramForestData
 func (f *Forest) WriteForestToDisk(dumpFile *os.File) error {
@@ -690,7 +686,7 @@ func (f *Forest) getRoots() []Hash {
 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
 	roots := make([]Hash, len(rootPositions))
 
-	for i := range roots {
+	for i, _ := range roots {
 		roots[i] = f.data.read(rootPositions[i])
 	}
 
@@ -735,7 +731,7 @@ func (f *Forest) ToString() string {
 			if valstring != "" {
 				output[h*2] += fmt.Sprintf("%02d:%s ", pos, valstring)
 			} else {
-				output[h*2] += fmt.Sprintf("        ")
+				output[h*2] += "        "
 			}
 			if h > 0 {
 				//				if x%2 == 0 {

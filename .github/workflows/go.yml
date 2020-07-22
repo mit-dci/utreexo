@@ -29,7 +29,7 @@ jobs:
     - name: Get dependencies
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
-        go get -v -d ./csn ./bridgenode ./cmd/utreexoserver ./cmd/utreexoclient
+        go get -v -d ./...
 
     - name: Build
       shell: bash

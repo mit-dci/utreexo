@@ -88,7 +88,7 @@ func pollardRandomRemember(blocks int32) error {
 		}
 		err = f.PosMapSanity()
 		if err != nil {
-			fmt.Printf(f.ToString())
+			fmt.Print(f.ToString())
 			return err
 		}
 
@@ -186,7 +186,7 @@ func fixedPollard(leaves int32) error {
 	fmt.Printf("pollard post del %s", p.ToString())
 
 	if !p.equalToForest(f) {
-		return fmt.Errorf("p != f (leaves)\n")
+		return fmt.Errorf("p != f (leaves)")
 	}
 
 	return nil

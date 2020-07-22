@@ -41,7 +41,7 @@ In parts of the forest code you'll see these terminology being used.
 	more than 1 top unlike a Merkle tree.
 	Parent - The hash of two leaves concatenated.
 	Sibling - The other leaf that shares the same parent.
-	Aunt - The silbing of the parent leaf.
+	Aunt - The sibling of the parent leaf.
 	Cousin - The children of the parent leaf's sibling.
 
 Forest is a representation of a "full" Utreexo tree. The Forest implementation
@@ -51,7 +51,7 @@ is stored.
 This is done as either:
 
 	1) byte slice
-	2) contingous data in a file
+	2) contiguous data in a file
 
 The ordering of the Utreexo tree is done in a similar fashion to that of a 2x2
 array in row-major order. A Utreexo tree with 8 leaves would look like:

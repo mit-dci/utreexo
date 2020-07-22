@@ -26,7 +26,10 @@ func BenchmarkBuildOffsetFile(b *testing.B) {
 	tmpOffsetFile := filepath.Join(tmpDir, "offsetfile")
 	tmpLastOffsetHeightFile := filepath.Join(tmpDir, "loffsetfile")
 
-	db := OpenIndexFile(testnetDataDir)
+	db, err := OpenIndexFile(testnetDataDir)
+	if err != nil {
+		b.Fatal(err)
+	}
 	defer db.Close()
 
 	hash, err := util.GenHashForNet(chaincfg.TestNet3Params)
@@ -67,7 +70,10 @@ func TestBuildOffsetFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lvdb := OpenIndexFile(testnetDataDir)
+	lvdb, err := OpenIndexFile(testnetDataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bnrChan := make(chan BlockAndRev, 10)
 
 	fmt.Println("checking the offestfile created...")

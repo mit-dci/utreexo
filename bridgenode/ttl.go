@@ -9,7 +9,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// DeathInfo is needed to asynchornously read from the leveldb
+// DeathInfo is needed to asynchronously read from the leveldb
 // Insures that the TxOs are in order
 type DeathInfo struct {
 	// DeathHeight is where the TxOs are spent

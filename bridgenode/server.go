@@ -11,7 +11,6 @@ import (
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
-
 	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
 		fmt.Printf(err.Error())
@@ -117,7 +116,7 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 				return
 			}
 
-			// first send 4 byte lenght for everything
+			// first send 4 byte length for everything
 			// fmt.Printf("h %d send len %d\n", curHeight, len(udb)+len(blkbytes))
 			err = binary.Write(c, binary.BigEndian, uint32(len(udb)+len(blkbytes)))
 			if err != nil {

@@ -30,7 +30,7 @@ func initBridgeNodeState(
 		knownTipHeight, err = restoreLastIndexOffsetHeight(
 			offsetFinished)
 		if err != nil {
-			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s\n", err.Error())
+			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s", err.Error())
 			return
 		}
 	} else {
@@ -38,7 +38,7 @@ func initBridgeNodeState(
 			"Indexing offset for blocks blk*.dat files...")
 		knownTipHeight, err = createOffsetData(p, dataDir, offsetFinished)
 		if err != nil {
-			err = fmt.Errorf("createOffsetData error: %s\n", err.Error())
+			err = fmt.Errorf("createOffsetData error: %s", err.Error())
 			return
 		}
 		fmt.Printf("tip height %d\n", knownTipHeight)
@@ -50,12 +50,12 @@ func initBridgeNodeState(
 		forest, err = restoreForest(
 			util.ForestFilePath, util.MiscForestFilePath, forestInRam, forestCached)
 		if err != nil {
-			err = fmt.Errorf("restoreForest error: %s\n", err.Error())
+			err = fmt.Errorf("restoreForest error: %s", err.Error())
 			return
 		}
 		height, err = restoreHeight()
 		if err != nil {
-			err = fmt.Errorf("restoreHeight error: %s\n", err.Error())
+			err = fmt.Errorf("restoreHeight error: %s", err.Error())
 			return
 		}
 	} else {
@@ -63,7 +63,7 @@ func initBridgeNodeState(
 		forest, err = createForest(forestInRam, forestCached)
 		height = 1 // note that blocks start at 1, block 0 doesn't go into set
 		if err != nil {
-			err = fmt.Errorf("createForest error: %s\n", err.Error())
+			err = fmt.Errorf("createForest error: %s", err.Error())
 			return
 		}
 	}

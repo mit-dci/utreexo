@@ -36,7 +36,7 @@ type polNode struct {
 	niece [2]*polNode
 }
 
-// auntOp returns the hash of a nodes neices. crashes if you call on nil neices.
+// auntOp returns the hash of a nodes nieces. crashes if you call on nil nieces.
 func (n *polNode) auntOp() Hash {
 	return parentHash(n.niece[0].data, n.niece[1].data)
 }
@@ -46,7 +46,7 @@ func (n *polNode) auntable() bool {
 	return n.niece[0] != nil && n.niece[1] != nil
 }
 
-// deadEnd returns true if both neices are nill
+// deadEnd returns true if both nieces are nill
 // could also return true if n itself is nil! (maybe a bad idea?)
 func (n *polNode) deadEnd() bool {
 	// if n == nil {
@@ -79,7 +79,6 @@ func (n *polNode) printout() {
 	} else {
 		fmt.Printf("r %x\n", n.niece[1].data[:4])
 	}
-	return
 }
 
 // prune prunes deadend children.
@@ -94,7 +93,7 @@ func (n *polNode) prune() {
 }
 
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
-// need their siblings so that the siblings' neices can swap.
+// need their siblings so that the siblings' nieces can swap.
 // for a root, just say the root's sibling is itself and it should work.
 func polSwap(a, asib, b, bsib *polNode) error {
 	if a == nil || asib == nil || b == nil || bsib == nil {
