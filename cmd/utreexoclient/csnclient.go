@@ -26,7 +26,7 @@ OPTIONS:
   -memprof                     configure whether to use use heap profiling
 
   -host                        server to connect to.  Default to localhost
-                               if you need a public server, use 35.188.186.244
+                               if you need a public server, try 35.188.186.244
 `
 
 // bit of a hack. Standard flag lib doesn't allow flag.Parse(os.Args[2]).
@@ -40,7 +40,8 @@ var memProfCmd = optionCmd.String("memprof", "",
 	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
 var watchAddr = optionCmd.String("watchaddr", "",
 	`Address to watch & report transactions. Only bech32 p2wpkh supported`)
-var remoteHost = optionCmd.String("host", "", `remote server to connect to`)
+var remoteHost = optionCmd.String("host", "35.188.186.244",
+	`remote server to connect to`)
 
 var checkSig = optionCmd.Bool("checksig", true,
 	`check signatures (slower)`)
