@@ -49,7 +49,9 @@ type Csn struct {
 
 	CheckSignatures bool
 	backwards       bool
-	Params          chaincfg.Params
+	higherRootSet   accumulator.RootSet
+
+	Params chaincfg.Params
 
 	remoteHost string
 	utxoStore  map[wire.OutPoint]util.LeafData

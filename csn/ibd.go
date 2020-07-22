@@ -150,6 +150,8 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 func (c *Csn) putBlockInPollard(
 	ub util.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
 
+	// bytes.Equal(c.higherRootSet.Bytes())
+
 	plusstart := time.Now()
 
 	inskip, outskip := util.DedupeBlock(&ub.Block)
