@@ -71,14 +71,14 @@ func TestForestFixed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf(f.ToString())
-	fmt.Printf(f.PrintPositionMap())
+	fmt.Print(f.ToString())
+	fmt.Print(f.PrintPositionMap())
 	_, err = f.Modify(nil, dels)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf(f.ToString())
-	fmt.Printf(f.PrintPositionMap())
+	fmt.Print(f.ToString())
+	fmt.Print(f.PrintPositionMap())
 }
 
 // Add 2. delete 1.  Repeat.
@@ -89,7 +89,7 @@ func Test2Fwd1Back(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 
-		for j := range adds {
+		for j, _ := range adds {
 			adds[j].Hash[0] = uint8(absidx>>8) | 0xa0
 			adds[j].Hash[1] = uint8(absidx)
 			adds[j].Hash[3] = 0xaa
@@ -165,7 +165,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 	f := NewForest(nil, false)
 	adds := make([]Leaf, nAdds)
 
-	for j := range adds {
+	for j, _ := range adds {
 		adds[j].Hash[0] = uint8(j>>8) | 0xa0
 		adds[j].Hash[1] = uint8(j)
 		adds[j].Hash[3] = 0xaa
@@ -264,10 +264,9 @@ func TestSmallRandomForests(t *testing.T) {
 		// can sort it.
 		// Modify requires a sorted list of leaves to delete.
 		// We use int because we can't sort uint64's.
-		var deletions []int
-		deletions = make([]int, len(leavesToDeleteSet))
+		deletions := make([]int, len(leavesToDeleteSet))
 		i = 0
-		for leafTxo := range leavesToDeleteSet {
+		for leafTxo, _ := range leavesToDeleteSet {
 			deletions[i] = int(f.positionMap[leafTxo.Mini()])
 			i++
 		}

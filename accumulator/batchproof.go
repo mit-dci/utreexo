@@ -65,7 +65,7 @@ func (bp *BatchProof) ToString() string {
 	for _, p := range bp.Proof {
 		s += fmt.Sprintf("%04x\t", p[:4])
 	}
-	s += fmt.Sprintf("\n")
+	s += "\n"
 	return s
 }
 
@@ -91,7 +91,7 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 		return bp, err
 	}
 	bp.Targets = make([]uint64, numTargets)
-	for i := range bp.Targets {
+	for i, _ := range bp.Targets {
 		err := binary.Read(buf, binary.BigEndian, &bp.Targets[i])
 		if err != nil {
 			return bp, err
@@ -104,7 +104,7 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 	}
 	bp.Proof = make([]Hash, remaining/32)
 
-	for i := range bp.Proof {
+	for i, _ := range bp.Proof {
 		copy(bp.Proof[i][:], buf.Next(32))
 	}
 	return bp, nil

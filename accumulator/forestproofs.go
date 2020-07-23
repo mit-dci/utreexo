@@ -43,11 +43,11 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	//	fmt.Printf("nl %d proof for %d len %d\n", f.numLeaves, pos, len(pr.Siblings))
 	//	fmt.Printf("\tprove pos %d %x:\n", pos, pr.Payload[:4])
 	// go up and populate the siblings
-	for h := range pr.Siblings {
+	for h, _ := range pr.Siblings {
 
 		pr.Siblings[h] = f.data.read(pos ^ 1)
 		if pr.Siblings[h] == empty {
-			fmt.Printf(f.ToString())
+			fmt.Print(f.ToString())
 			return pr, fmt.Errorf(
 				"prove: got empty hash proving leaf %d row %d pos %d nl %d",
 				pr.Position, h, pos^1, f.numLeaves)
@@ -154,7 +154,7 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 
 		pos, ok := f.positionMap[wanted.Mini()]
 		if !ok {
-			fmt.Printf(f.ToString())
+			fmt.Print(f.ToString())
 			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 

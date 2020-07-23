@@ -230,7 +230,7 @@ func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string, fileNum uin
 			panic(err)
 		}
 		// check if Bitcoin magic bytes were read
-		if util.CheckMagicByte(buf[:4]) == false {
+		if !util.CheckMagicByte(buf[:4]) {
 			break
 		}
 

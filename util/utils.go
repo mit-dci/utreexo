@@ -51,7 +51,7 @@ func GenHashForNet(p chaincfg.Params) (*Hash, error) {
 	case "regtest":
 		return &regTestGenHash, nil
 	}
-	return nil, fmt.Errorf("net not supported\n")
+	return nil, fmt.Errorf("net not supported")
 }
 
 // UblockNetworkReader gets Ublocks from the remote host and puts em in the
@@ -106,13 +106,18 @@ func UblockNetworkReader(
 		// fmt.Printf("copied %d bytes into buffer\n", n)
 
 		err = ub.FromBytes(b)
+		if err != nil {
+			fmt.Printf("error from connection %s %s\n",
+				con.RemoteAddr().String(), err.Error())
+			return
+		}
 
 		ub.Height = curHeight
 		blockChan <- ub
 	}
 }
 
-// GetUDataFromFile reads the proof data from proof.dat and proofoffset.dat
+// GetUDataBytesFromFile reads the proof data from proof.dat and proofoffset.dat
 // and gives the proof & utxo data back.
 // Don't ask for block 0, there is no proof of that.
 func GetUDataBytesFromFile(height int32) (b []byte, err error) {
@@ -344,9 +349,9 @@ func CheckMagicByte(bytesgiven []byte) bool {
 		bytes.Compare(bytesgiven, []byte{0xfa, 0xbf, 0xb5, 0xda}) != 0 { // regtest
 		fmt.Printf("got non magic bytes %x, finishing\n", bytesgiven)
 		return false
-	} else {
-		return true
 	}
+
+	return true
 }
 
 // HasAccess reports whether we have access to the named file.
@@ -364,8 +369,8 @@ func HasAccess(fileName string) bool {
 	return true
 }
 
-//IsUnspendable determines whether a tx is spenable or not.
-//returns true if spendable, false if unspenable.
+//IsUnspendable determines whether a tx is spendable or not.
+//returns true if spendable, false if unspendable.
 func IsUnspendable(o *wire.TxOut) bool {
 	switch {
 	case len(o.PkScript) > 10000: //len 0 is OK, spendable

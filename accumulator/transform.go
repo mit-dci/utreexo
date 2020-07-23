@@ -72,12 +72,12 @@ func makeCollapse(dels []uint64, delRemains, rootPresent bool, r uint8, numLeave
 	// on the collapses with later rows of swaps
 	case !delRemains && rootPresent:
 		rootSrc := rootPosition(numLeaves, r, forestRows)
-		return []arrow{arrow{from: rootSrc, to: rootDest}}
+		return []arrow{{from: rootSrc, to: rootDest}}
 	case delRemains && !rootPresent:
 		// no root but 1 del: sibling becomes root & collapses
 		// in this case, mark as deleted
 		rootSrc := dels[len(dels)-1] ^ 1
-		return []arrow{arrow{from: rootSrc, to: rootDest}}
+		return []arrow{{from: rootSrc, to: rootDest}}
 	default:
 		return nil
 	}
@@ -194,9 +194,7 @@ func floorTransform(
 				// removeTransform output?
 			}
 			leaves := a.toLeaves(uint8(r), forestRows)
-			for _, l := range leaves {
-				floor = append(floor, l)
-			}
+			floor = append(floor, leaves...)
 		}
 	}
 	return floor

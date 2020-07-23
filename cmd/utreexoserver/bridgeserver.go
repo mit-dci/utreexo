@@ -18,7 +18,7 @@ import (
 var msg = `
 Usage: server [OPTION]
 A dynamic hash based accumulator designed for the Bitcoin UTXO set
-The birdgenode server generates proofs and serves to the CSN node.
+The bridgenode server generates proofs and serves to the CSN node.
 
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.

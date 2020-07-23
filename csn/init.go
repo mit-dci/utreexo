@@ -14,7 +14,7 @@ import (
 	"github.com/mit-dci/utreexo/util"
 )
 
-// RunIBD calls evertyhing to run IBD
+// RunIBD calls everything to run IBD
 func RunIBD(
 	p *chaincfg.Params, host, watchAddr string, check bool, sig chan bool) error {
 
@@ -50,7 +50,7 @@ func RunIBD(
 			return err
 		}
 		if len(adrBytes) != 22 {
-			return fmt.Errorf("need a bech32 p2wpkh address, %s has %d bytes\n",
+			return fmt.Errorf("need a bech32 p2wpkh address, %s has %d bytes",
 				watchAddr, len(adrBytes))
 		}
 
@@ -70,8 +70,6 @@ func RunIBD(
 			}
 		}
 	}
-
-	return nil
 }
 
 // Start starts up a compact state node, and returns channels for txs and
@@ -107,10 +105,8 @@ func (c *Csn) Start(height int32,
 func initCSNState() (
 	p accumulator.Pollard, height int32, utxos map[wire.OutPoint]util.LeafData, err error) {
 
-	var pollardInitialized bool
-
 	// bool to check if the pollarddata is present
-	pollardInitialized = util.HasAccess(util.PollardFilePath)
+	pollardInitialized := util.HasAccess(util.PollardFilePath)
 
 	if pollardInitialized {
 		fmt.Println("Has access to forestdata, resuming")
@@ -138,7 +134,7 @@ func stopRunIBD(sig chan bool, stopGoing chan bool, done chan bool) {
 	// Listen for SIGINT, SIGTERM, and SIGQUIT from the user
 	<-sig
 
-	// Sometimes there are bugs that make the program run forver.
+	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
 		time.Sleep(10 * time.Second)

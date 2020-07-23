@@ -58,8 +58,8 @@ func undoOnceRandom(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf(f.ToString())
-		fmt.Printf(sc.ttlString())
+		fmt.Print(f.ToString())
+		fmt.Print(sc.ttlString())
 		for h, p := range f.positionMap {
 			fmt.Printf("%x@%d ", h[:4], p)
 		}
@@ -70,12 +70,12 @@ func undoOnceRandom(blocks int32) error {
 
 		//undo every 3rd block
 		if b%3 == 2 {
-			fmt.Printf(ub.ToString())
+			fmt.Print(ub.ToString())
 			err := f.Undo(*ub)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("\n post undo map: ")
+			fmt.Print("\n post undo map: ")
 			for h, p := range f.positionMap {
 				fmt.Printf("%x@%d ", h[:4], p)
 			}
@@ -125,8 +125,8 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf(f.ToString())
-	fmt.Printf(ub.ToString())
+	fmt.Print(f.ToString())
+	fmt.Print(ub.ToString())
 	afterTops := f.getRoots()
 	for i, h := range afterTops {
 		fmt.Printf("afterTops %d %x\n", i, h)

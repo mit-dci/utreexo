@@ -62,7 +62,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 		if c.CurrentHeight%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
-				plustime.Seconds(), time.Now().Sub(starttime).Seconds())
+				plustime.Seconds(), time.Since(starttime).Seconds())
 		}
 
 		// Check if stopSig is no longer false
@@ -75,7 +75,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 	}
 	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 		c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
-		plustime.Seconds(), time.Now().Sub(starttime).Seconds())
+		plustime.Seconds(), time.Since(starttime).Seconds())
 
 	saveIBDsimData(c)
 

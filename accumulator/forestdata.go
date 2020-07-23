@@ -9,7 +9,7 @@ import (
 // Length is always 32.
 const leafSize = 32
 
-// A forestData is the thing that holds all the hashes in the forest.  Could
+// ForestData is the thing that holds all the hashes in the forest.  Could
 // be in a file, or in ram, or maybe something else.
 type ForestData interface {
 	read(pos uint64) Hash

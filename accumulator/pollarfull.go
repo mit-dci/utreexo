@@ -37,9 +37,9 @@ func (p *Pollard) PosMapSanity() error {
 
 // TODO make interface to reduce code dupe
 
-// ProveBatch, but for pollard.
+// ProveBatch but for pollard.
 // Now getting really obvious that forest and pollard should both satisfy some
-// kind of utreexoy interface.  And maybe forest shouldn't be called forest.
+// kind of utreexo-like interface.  And maybe forest shouldn't be called forest.
 // Anyway do that after this.
 func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	var bp BatchProof
@@ -64,7 +64,7 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 
 		pos, ok := p.positionMap[wanted.Mini()]
 		if !ok {
-			fmt.Printf(p.ToString())
+			fmt.Print(p.ToString())
 			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 

@@ -81,7 +81,7 @@ func BuildProofs(
 
 	var stop bool // bool for stopping the main loop
 
-	for ; height != knownTipHeight && stop != true; height++ {
+	for ; height != knownTipHeight && !stop; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
@@ -290,14 +290,14 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 	return
 }
 
-// stopBuildProofs listens for the signal from the OS and initiates an exit squence
+// stopBuildProofs listens for the signal from the OS and initiates an exit sequence
 func stopBuildProofs(
 	sig, offsetfinished, haltRequest, haltAccept chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
 
-	// Sometimes there are bugs that make the program run forver.
+	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
 		time.Sleep(60 * time.Second)
@@ -311,24 +311,18 @@ func stopBuildProofs(
 	select {
 	// If offsetfile is there or was built, don't remove it
 	case <-offsetfinished:
-		select {
-		default:
-			haltRequest <- true
-		}
+		haltRequest <- true
 	// If nothing is received, delete offsetfile and other directories
 	// Don't wait for done channel from the main BuildProofs() for loop
 	default:
-		select {
-		default:
-			fmt.Println("offsetfile incomplete, removing...")
-			// May not work sometimes.
-			err := os.RemoveAll(util.OffsetDirPath)
-			if err != nil {
-				fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
-			}
-			fmt.Println("Exiting...")
-			os.Exit(0)
+		fmt.Println("offsetfile incomplete, removing...")
+		// May not work sometimes.
+		err := os.RemoveAll(util.OffsetDirPath)
+		if err != nil {
+			fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
 		}
+		fmt.Println("Exiting...")
+		os.Exit(0)
 	}
 
 	// Wait until BuildProofs() or buildOffsetFile() says it's ok to exit

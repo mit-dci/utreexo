@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// IngestBlockProof populates the Pollard with all needed data to delete the
+// IngestBatchProof populates the Pollard with all needed data to delete the
 // targets in the block proof
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	var empty Hash
