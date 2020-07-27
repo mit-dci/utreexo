@@ -3,6 +3,8 @@ package csn
 import (
 	"fmt"
 	"os"
+	"runtime/pprof"
+	"runtime/trace"
 	"strings"
 	"time"
 
@@ -133,6 +135,8 @@ func initCSNState() (
 func stopRunIBD(sig chan bool, stopGoing chan bool, done chan bool) {
 	// Listen for SIGINT, SIGTERM, and SIGQUIT from the user
 	<-sig
+	pprof.StopCPUProfile()
+	trace.Stop()
 
 	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit

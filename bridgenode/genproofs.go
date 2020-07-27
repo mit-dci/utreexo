@@ -3,6 +3,8 @@ package bridgenode
 import (
 	"fmt"
 	"os"
+	"runtime/pprof"
+	"runtime/trace"
 	"sync"
 	"time"
 
@@ -296,6 +298,9 @@ func stopBuildProofs(
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
+
+	trace.Stop()
+	pprof.StopCPUProfile()
 
 	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
