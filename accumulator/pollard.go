@@ -332,6 +332,38 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	return bhn, nil
 }
 
+func (p *Pollard) readPos(pos uint64) (
+	n, nsib *polNode, hn *hashableNode, err error) {
+	// Grab the tree that the position is at
+	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
+	if tree >= uint8(len(p.roots)) {
+		err = ErrorStrings[ErrorNotEnoughTrees]
+		return
+	}
+	n, nsib = &p.roots[tree], &p.roots[tree]
+
+	for h := branchLen - 1; h != 255; h-- { // go through branch
+		lr := uint8(bits>>h) & 1
+		// grab the sibling of lr
+		lrSib := lr ^ 1
+		if h == 0 { // if at bottom, done
+			n, nsib = n.niece[lrSib], n.niece[lr]
+			return
+		}
+
+		// if a sib is nil, we don't have the node stored. return nil
+		if n.niece[lrSib] == nil {
+			return nil, nil, nil, err
+		}
+
+		n, nsib = n.niece[lr], n.niece[lrSib]
+		if n == nil {
+			return nil, nil, nil, err
+		}
+	}
+	return // only happens when returning a root
+}
+
 // grabPos is like descendToPos but simpler.  Returns the thing you asked for,
 // as well as its sibling. And a hashable node for the position ABOVE pos.
 // And an error if it can't get it.

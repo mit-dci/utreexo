@@ -127,7 +127,7 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 
 // Here we write proofs for all the txs.
 // All the inputs are saved as 32byte sha256 hashes.
-// All the outputs are saved as LeafTXO type.
+// All the outputs are saved as Leaf type.
 func (c *Csn) putBlockInPollard(
 	ub util.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
 
