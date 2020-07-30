@@ -64,6 +64,48 @@ func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 	return swaps
 }
 
+// makeCollapse determines whether a collapse should take place given a list
+// of nodes to delete and misc info. If the collapse is present, it consists
+// of an single arrow (a source index and a destination index).
+//
+// A collapse is a deferred swap, that swaps a root or the sibling of a
+// leftover deletion to its new position in the modified tree. A collapse can
+// not directly be appended to the regular swaps because the collapse
+// destination changes with upper row swaps. swapCollapses turns the collapse
+// into a regular swap by computing a new destination position so that after
+// upper row swaps the node is located at the collapse destination.
+//
+// delRemains must be true if dels has an odd length.
+// r is the row number to generate a collapse for, 0 is the leaf level.
+// rootPresent must be true if there is a tree root in the row r.
+// nextNumLeaves is the final amount of leaves, after the whole deletion
+// process. Note that if r!=0, some dels may already have happened, the slice
+// will be shorter.
+//
+// Example using 15-leaf tree in printout.txt line 21: (forestRows=4, numLeaves=15)
+//
+// Let's say we are deleting nodes 4 through 9 (6 nodes, so delRemains=False).
+//
+// For this example, let's take the call to this function
+// that happens when r=0 (bottom row).
+//
+// In this case, makeCollapse will be called with dels=[18,19] (from extractTwins),
+// since those are parents of twins (in the row above) that will be deleted.
+//
+// rootPresent will be True, and the list of deletions has an even length,
+// so the first switch branch below will be used.
+//
+// Since we are processing the bottom row, nextNumLeaves will be
+// numLeaves-length(dels) = 15-6 = 9,
+// because the dels passed to this function from remTrans2 hasn't been cut yet.
+//
+// So the root source position will be
+// rootPosition(nextNumLeaves=15, row=0, height=4) = 14,
+// and the root destination position will be
+// rootPosition(numLeaves=9, row=0, height=4) = 8.
+//
+// It is a collapse and not a swap because the position 8 is going to be deleted,
+// and a swap will write into that position.
 func makeCollapse(dels []uint64, delRemains, rootPresent bool, r uint8, numLeaves, nextNumLeaves uint64, forestRows uint8) []arrow {
 	rootDest := rootPosition(nextNumLeaves, r, forestRows)
 	switch {
