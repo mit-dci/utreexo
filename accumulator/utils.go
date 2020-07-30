@@ -10,6 +10,16 @@ var verbose = false
 
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
+//
+// Example with 15-leaf tree in printout.txt line 21:
+// If deleting the nodes 4 through 8, the function would be called with
+// nodes=[4,5,6,7,8] and row=4. (note that this example different from
+// others, since it has been constructed to have both parents and dels)
+// It would return (parents=[18,19], dels=[8]) because with the given
+// amount of rows (row=4), only 8 is not a "twin" (it has no siblings
+// to be deleted, note that 7 is in a different tree than 8).
+// [18, 19] are each parents of twins, since their children are nodes
+// 4-7 which are to be deleted.
 func extractTwins(nodes []uint64, row uint8) (parents, dels []uint64) {
 	for i := 0; i < len(nodes); i++ {
 		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
