@@ -54,12 +54,9 @@ type simLeaf struct {
 // Parent gets you the merkle parent.  So far no committing to height.
 // if the left child is zero it should crash...
 func parentHash(l, r Hash) Hash {
-	var empty [32]byte
-	if l == empty {
-		panic("got a left empty here. ")
-	}
-	if r == empty {
-		panic("got a right empty here. ")
+	var empty Hash
+	if l == empty || r == empty {
+		panic("got an empty leaf here. ")
 	}
 	return sha256.Sum256(append(l[:], r[:]...))
 }

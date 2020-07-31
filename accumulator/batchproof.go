@@ -20,7 +20,6 @@ func (bp *BatchProof) ToBytes() []byte {
 	var buf bytes.Buffer
 
 	// first write the number of targets (4 byte uint32)
-
 	numTargets := uint32(len(bp.Targets))
 	if numTargets == 0 {
 		return nil
@@ -121,21 +120,21 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // forest in the blockproof
 func verifyBatchProof(
 	bp BatchProof, roots []Hash,
-	numLeaves uint64, forestRows uint8) (bool, map[uint64]Hash) {
+	numLeaves uint64, rows uint8) (bool, map[uint64]Hash) {
 
 	// if nothing to prove, it worked
 	if len(bp.Targets) == 0 {
 		return true, nil
 	}
 
-	proofmap, err := bp.Reconstruct(numLeaves, forestRows)
+	// Construct a map with positions to hashes
+	proofmap, err := bp.Reconstruct(numLeaves, rows)
 	if err != nil {
 		fmt.Printf("VerifyBlockProof Reconstruct ERROR %s\n", err.Error())
 		return false, proofmap
 	}
 
-	//	fmt.Printf("Reconstruct complete\n")
-	rootPositions, rootRows := getRootsReverse(numLeaves, forestRows)
+	rootPositions, rootRows := getRootsReverse(numLeaves, rows)
 
 	// partial forest is built, go through and hash everything to make sure
 	// you get the right roots
@@ -149,19 +148,20 @@ func verifyBatchProof(
 	// the bottom row is the only thing you actually prove and add/delete,
 	// but it'd be nice if it could all be treated uniformly.
 
-	// if proofmap has a 0-root, check it
 	if verbose {
 		fmt.Printf("tagrow len %d\n", len(tagRow))
 	}
 
 	var left, right uint64
+
 	// iterate through rows
-
-	for r := uint8(0); r <= forestRows; r++ {
+	for row := uint8(0); row <= rows; row++ {
 		// iterate through tagged positions in this row
-
 		for len(tagRow) > 0 {
-			// see if the next tag is a sibling and we get both
+			// Efficiency gains here. If there are two or more things to verify,
+			// check if the next thing to verify is the sibling of the current leaf
+			// we're on. Siblingness can be checked with bitwise XOR but since targets are
+			// sorted, we can do bitwise OR instead.
 			if len(tagRow) > 1 && tagRow[0]|1 == tagRow[1] {
 				left = tagRow[0]
 				right = tagRow[1]
@@ -172,22 +172,24 @@ func verifyBatchProof(
 				tagRow = tagRow[1:]
 			}
 
-			// check for roots
 			if verbose {
 				fmt.Printf("left %d rootPoss %d\n", left, rootPositions[0])
 			}
+			// check for roots
 			if left == rootPositions[0] {
 				if verbose {
 					fmt.Printf("one left in tagrow; should be root\n")
 				}
-				computedRoot, ok := proofmap[left]
+				// Grab the hash of this position from the map
+				computedRootHash, ok := proofmap[left]
 				if !ok {
 					fmt.Printf("ERR no proofmap for root at %d\n", left)
 					return false, nil
 				}
-				if computedRoot != roots[0] {
+				// Verify that this root hash matches the one we stored
+				if computedRootHash != roots[0] {
 					fmt.Printf("row %d root, pos %d expect %04x got %04x\n",
-						r, left, roots[0][:4], computedRoot[:4])
+						row, left, roots[0][:4], computedRootHash[:4])
 					return false, nil
 				}
 				// otherwise OK and pop of the root
@@ -197,21 +199,27 @@ func verifyBatchProof(
 				break
 			}
 
-			parpos := parent(left, forestRows)
+			// Grab the parent position of the leaf we've verified
+			parentPos := parent(left, rows)
 			if verbose {
 				fmt.Printf("%d %04x %d %04x -> %d\n",
-					left, proofmap[left], right, proofmap[right], parpos)
+					left, proofmap[left], right, proofmap[right], parentPos)
 			}
+
 			// this will crash if either is 0000
+			// reconstruct the next row and add the parent to the map
 			parhash := parentHash(proofmap[left], proofmap[right])
-			nextRow = append(nextRow, parpos)
-			proofmap[parpos] = parhash
+			nextRow = append(nextRow, parentPos)
+			proofmap[parentPos] = parhash
 		}
 
+		// Make the nextRow the tagRow so we'll be iterating over it
+		// reset th nextRow
 		tagRow = nextRow
 		nextRow = []uint64{}
+
 		// if done with row and there's a root left on this row, remove it
-		if len(rootRows) > 0 && rootRows[0] == r {
+		if len(rootRows) > 0 && rootRows[0] == row {
 			// bit ugly to do these all separately eh
 			roots = roots[1:]
 			rootPositions = rootPositions[1:]
@@ -223,7 +231,7 @@ func verifyBatchProof(
 }
 
 // Reconstruct takes a number of leaves and rows, and turns a block proof back
-// into a partial proof tree.  Should leave bp intact
+// into a partial proof tree. Should leave bp intact
 func (bp *BatchProof) Reconstruct(
 	numleaves uint64, forestRows uint8) (map[uint64]Hash, error) {
 
@@ -231,17 +239,16 @@ func (bp *BatchProof) Reconstruct(
 		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fr %d\n",
 			len(bp.Targets), len(bp.Proof), numleaves, forestRows)
 	}
-	proofCopy := make([]Hash, len(bp.Proof))
-	copy(proofCopy, bp.Proof)
 	proofTree := make(map[uint64]Hash)
 
+	// If there is nothing to reconstruct, return empty map
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
+	proof := bp.Proof // back up proof
 	targets := bp.Targets
 	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
 
-	//	fmt.Printf("first needrow len %d\n", len(needRow))
 	if verbose {
 		fmt.Printf("%d roots:\t", len(rootPositions))
 		for _, t := range rootPositions {
@@ -302,16 +309,9 @@ func (bp *BatchProof) Reconstruct(
 
 	// now all that's left is the proofs. go bottom to root and iterate the haveRow
 	for h := uint8(1); h < forestRows; h++ {
-		//		fmt.Printf("h %d needrow:\t", h)
-		//		for _, np := range needRow {
-		//			fmt.Printf(" %d", np)
-		//		}
-		//		fmt.Printf("\n")
-
 		for len(needSibRow) > 0 {
 			// if this is a root, it's not needed or given
 			if needSibRow[0] == rootPositions[0] {
-				//				fmt.Printf("\t\tzzz pos %d is h %d root\n", needSibRow[0], h)
 				needSibRow = needSibRow[1:]
 				rootPositions = rootPositions[1:]
 				rootRows = rootRows[1:]
@@ -322,7 +322,6 @@ func (bp *BatchProof) Reconstruct(
 
 			// if we have both siblings here, don't need any proof
 			if len(needSibRow) > 1 && needSibRow[0]^1 == needSibRow[1] {
-				//				fmt.Printf("pop %d, %d\n", needRow[0], needRow[1])
 				needSibRow = needSibRow[2:]
 			} else {
 				// return error if we need a proof and can't get it
@@ -334,7 +333,6 @@ func (bp *BatchProof) Reconstruct(
 				// otherwise we do need proof; place in sibling position and pop off
 				proofTree[needSibRow[0]^1] = bp.Proof[0]
 				bp.Proof = bp.Proof[1:]
-				//				fmt.Printf("place proof at pos %d\n", needSibRow[0]^1)
 				// and get rid of 1 element of needSibRow
 				needSibRow = needSibRow[1:]
 			}
@@ -352,6 +350,6 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Proof) != 0 {
 		return nil, fmt.Errorf("too many proofs, %d remain", len(bp.Proof))
 	}
-	bp.Proof = proofCopy
+	bp.Proof = proof // restore from backup
 	return proofTree, nil
 }
