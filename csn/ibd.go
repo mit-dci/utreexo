@@ -171,9 +171,15 @@ func (c *Csn) putBlockInPollard(
 		return err
 	}
 
+	remember := make([]bool, len(ub.ExtraData.LeafTTLs))
+	for i, ttl := range ub.ExtraData.LeafTTLs {
+		// ttl-ub.Height is the number of blocks until the block is spend.
+		remember[i] = ttl-uint32(ub.Height) < uint32(c.pollard.Lookahead)
+	}
+
 	// get hashes to add into the accumulator
 	blockAdds := util.BlockToAddLeaves(
-		ub.Block, nil, outskip, ub.Height)
+		ub.Block, remember, outskip, ub.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// fmt.Printf("h %d adds %d targets %d\n",

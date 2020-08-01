@@ -157,7 +157,7 @@ func BuildProofs(
 	}
 
 	// should be a goroutine..?  isn't right now
-	blockServer(knownTipHeight, dataDir, haltRequest, haltAccept)
+	blockServer(knownTipHeight, dataDir, haltRequest, haltAccept, lvdb)
 
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true

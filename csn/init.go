@@ -16,13 +16,14 @@ import (
 
 // RunIBD calls everything to run IBD
 func RunIBD(
-	p *chaincfg.Params, host, watchAddr string, check bool, sig chan bool) error {
+	p *chaincfg.Params, host, watchAddr string, check bool, lookahead int, sig chan bool) error {
 
 	// check on disk for pre-existing state and load it
 	pol, h, utxos, err := initCSNState()
 	if err != nil {
 		return err
 	}
+	pol.Lookahead = int32(lookahead)
 	// make a new CSN struct and load the pollard into it
 	c := new(Csn)
 	c.pollard = pol

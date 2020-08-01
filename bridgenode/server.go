@@ -3,14 +3,17 @@ package bridgenode
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"net"
 
 	"github.com/mit-dci/utreexo/util"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
-func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
+func blockServer(endHeight int32, dataDir string, haltRequest,
+	haltAccept chan bool, lvdb *leveldb.DB) {
 	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
 		fmt.Printf(err.Error())
@@ -34,7 +37,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest, haltAccept chan b
 			close(cons)
 			return
 		case con := <-cons:
-			go serveBlocksWorker(con, endHeight, dataDir)
+			go serveBlocksWorker(con, endHeight, dataDir, lvdb)
 		}
 	}
 }
@@ -60,7 +63,7 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 
 // serveBlocksWorker gets height requests from client and sends out the ublock
 // for that height
-func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
+func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *leveldb.DB) {
 	defer c.Close()
 	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
 	var fromHeight, toHeight int32
@@ -109,6 +112,29 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string) {
 				fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 				return
 			}
+			ud, err := util.UDataFromBytes(udb)
+			if err != nil {
+				fmt.Printf("pushBlocks UDataFromBytes %s\n", err.Error())
+				return
+			}
+
+			// set leaf ttl values
+			ud.LeafTTLs = make([]uint32, len(ud.UtxoData))
+			for i, utxo := range ud.UtxoData {
+				outpointHash := util.HashFromString(utxo.Outpoint.String())
+				heightBytes, err := lvdb.Get(outpointHash[:], nil)
+				if err != nil {
+					if err == leveldb.ErrNotFound {
+						// outpoint not spend yet, set leaf ttl to max uint32 value
+						ud.LeafTTLs[i] = math.MaxUint32
+						continue
+					}
+					panic(err)
+				}
+				ud.LeafTTLs[i] = binary.BigEndian.Uint32(heightBytes)
+			}
+			udb = ud.ToBytes()
+
 			// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
 			blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
 			if err != nil {
