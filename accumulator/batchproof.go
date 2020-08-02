@@ -109,125 +109,135 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 	return bp, nil
 }
 
-// TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
-// roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
-
-// verifyBatchProof takes a block proof and reconstructs / verifies it.
-// takes a blockproof to verify, and the known correct roots to check against.
-// also takes the number of leaves and forest rows (those are redundant
-// if we don't do weird stuff with overly-high forests, which we might)
-// it returns a bool of whether the proof worked, and a map of the sparse
-// forest in the blockproof
-func verifyBatchProof(
-	bp BatchProof, roots []Hash,
-	numLeaves uint64, rows uint8) (bool, map[uint64]Hash) {
-
-	// if nothing to prove, it worked
+// verifyBatchProof verifies a batchproof by checking against the set of known correct roots.
+// Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
+// Returns wether or not the proof verified correctly, the partial proof tree,
+// and the subset of roots that was computed.
+func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
+	// cached should be a function that fetches nodes from the pollard and indicates whether they
+	// exist or not, can be nil for the forest
+	cached func(pos uint64) (bool, Hash)) (bool, [][3]node, []node) {
 	if len(bp.Targets) == 0 {
-		return true, nil
+		return true, nil, nil
 	}
 
-	// Construct a map with positions to hashes
-	proofmap, err := bp.Reconstruct(numLeaves, rows)
-	if err != nil {
-		fmt.Printf("VerifyBlockProof Reconstruct ERROR %s\n", err.Error())
-		return false, proofmap
+	if cached == nil {
+		cached = func(_ uint64) (bool, Hash) { return false, empty }
 	}
 
-	rootPositions, rootRows := getRootsReverse(numLeaves, rows)
-
-	// partial forest is built, go through and hash everything to make sure
-	// you get the right roots
-
-	tagRow := bp.Targets
-	nextRow := []uint64{}
-	sortUint64s(tagRow) // probably don't need to sort
-
-	// TODO it's ugly that I keep treating the 0-row as a special case,
-	// and has led to a number of bugs.  It *is* special in a way, in that
-	// the bottom row is the only thing you actually prove and add/delete,
-	// but it'd be nice if it could all be treated uniformly.
-
-	if verbose {
-		fmt.Printf("tagrow len %d\n", len(tagRow))
-	}
-
-	var left, right uint64
-
-	// iterate through rows
-	for row := uint8(0); row <= rows; row++ {
-		// iterate through tagged positions in this row
-		for len(tagRow) > 0 {
-			// Efficiency gains here. If there are two or more things to verify,
-			// check if the next thing to verify is the sibling of the current leaf
-			// we're on. Siblingness can be checked with bitwise XOR but since targets are
-			// sorted, we can do bitwise OR instead.
-			if len(tagRow) > 1 && tagRow[0]|1 == tagRow[1] {
-				left = tagRow[0]
-				right = tagRow[1]
-				tagRow = tagRow[2:]
-			} else { // if not only use one tagged position
-				right = tagRow[0] | 1
-				left = right ^ 1
-				tagRow = tagRow[1:]
-			}
-
-			if verbose {
-				fmt.Printf("left %d rootPoss %d\n", left, rootPositions[0])
-			}
-			// check for roots
-			if left == rootPositions[0] {
-				if verbose {
-					fmt.Printf("one left in tagrow; should be root\n")
-				}
-				// Grab the hash of this position from the map
-				computedRootHash, ok := proofmap[left]
-				if !ok {
-					fmt.Printf("ERR no proofmap for root at %d\n", left)
-					return false, nil
-				}
-				// Verify that this root hash matches the one we stored
-				if computedRootHash != roots[0] {
-					fmt.Printf("row %d root, pos %d expect %04x got %04x\n",
-						row, left, roots[0][:4], computedRootHash[:4])
-					return false, nil
-				}
-				// otherwise OK and pop of the root
-				roots = roots[1:]
-				rootPositions = rootPositions[1:]
-				rootRows = rootRows[1:]
-				break
-			}
-
-			// Grab the parent position of the leaf we've verified
-			parentPos := parent(left, rows)
-			if verbose {
-				fmt.Printf("%d %04x %d %04x -> %d\n",
-					left, proofmap[left], right, proofmap[right], parentPos)
-			}
-
-			// this will crash if either is 0000
-			// reconstruct the next row and add the parent to the map
-			parhash := parentHash(proofmap[left], proofmap[right])
-			nextRow = append(nextRow, parentPos)
-			proofmap[parentPos] = parhash
+	rows := treeRows(numLeaves)
+	proofs := bp.Proof
+	proofPositions, computablePositions := ProofPositions(bp.Targets, numLeaves, rows)
+	// targetNodes holds nodes that are known, on the bottom row those are the targets,
+	// on the upper rows it holds computed nodes.
+	// rootCandidates holds the roots that where computed, and have to be compared to the actual roots
+	// at the end.
+	targetNodes := make([]node, 0, len(bp.Targets)*int(rows))
+	rootCandidates := make([]node, 0, len(roots))
+	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
+	// tuple[0] is the parent, tuple[1] is the left child and tuple[2] is the right child.
+	// trees holds the entire proof tree of the batchproof in this way, sorted by the tuple[0].
+	trees := make([][3]node, 0, len(computablePositions))
+	// initialise the targetNodes for row 0.
+	// TODO: this would be more straight forward if bp.Proofs wouldn't contain the targets
+	proofHashes := make([]Hash, 0, len(proofPositions))
+	targets := bp.Targets
+	var targetsMatched uint64
+	for len(targets) > 0 {
+		if targets[0] == numLeaves-1 && numLeaves&1 == 1 {
+			// row 0 root.
+			rootCandidates = append(rootCandidates, node{Val: roots[0], Pos: targets[0]})
+			proofs = proofs[1:]
+			break
 		}
 
-		// Make the nextRow the tagRow so we'll be iterating over it
-		// reset th nextRow
-		tagRow = nextRow
-		nextRow = []uint64{}
-
-		// if done with row and there's a root left on this row, remove it
-		if len(rootRows) > 0 && rootRows[0] == row {
-			// bit ugly to do these all separately eh
-			roots = roots[1:]
-			rootPositions = rootPositions[1:]
-			rootRows = rootRows[1:]
+		if uint64(len(proofPositions)) > targetsMatched &&
+			targets[0]^1 == proofPositions[targetsMatched] {
+			lr := targets[0] & 1
+			targetNodes = append(targetNodes, node{Pos: targets[0], Val: proofs[lr]})
+			proofHashes = append(proofHashes, proofs[lr^1])
+			targetsMatched++
+			proofs = proofs[2:]
+			targets = targets[1:]
+			continue
 		}
+
+		if len(proofs) < 2 || len(targets) < 2 {
+			return false, nil, nil
+		}
+
+		targetNodes = append(targetNodes,
+			node{Pos: targets[0], Val: proofs[0]},
+			node{Pos: targets[1], Val: proofs[1]})
+		proofs = proofs[2:]
+		targets = targets[2:]
 	}
 
-	return true, proofmap
+	proofHashes = append(proofHashes, proofs...)
+	proofs = proofHashes
+
+	// hash every target node with its sibling (which either is contained in the proof or also a target)
+	for len(targetNodes) > 0 {
+		var target, proof node
+		target = targetNodes[0]
+		if len(proofPositions) > 0 && target.Pos^1 == proofPositions[0] {
+			// target has a sibling in the proof positions, fetch proof
+			proof = node{Pos: proofPositions[0], Val: proofs[0]}
+			proofPositions = proofPositions[1:]
+			proofs = proofs[1:]
+			targetNodes = targetNodes[1:]
+			goto hash
+		}
+
+		// target should have its sibling in targetNodes
+		if len(targetNodes) == 1 {
+			// sibling not found
+			return false, nil, nil
+		}
+
+		proof = targetNodes[1]
+		targetNodes = targetNodes[2:]
+
+	hash:
+		// figure out which node is left and which is right
+		left := target
+		right := proof
+		if target.Pos&1 == 1 {
+			right, left = left, right
+		}
+
+		// get the hash of the parent from the cache or compute it
+		parentPos := parent(target.Pos, rows)
+		isParentCached, hash := cached(parentPos)
+		if !isParentCached {
+			hash = parentHash(left.Val, right.Val)
+		}
+		trees = append(trees, [3]node{{Val: hash, Pos: parentPos}, left, right})
+
+		row := detectRow(parentPos, rows)
+		if numLeaves&(1<<row) > 0 && parentPos == rootPosition(numLeaves, row, rows) {
+			// the parent is a root -> store as candidate, to check against actual roots later.
+			rootCandidates = append(rootCandidates, node{Val: hash, Pos: parentPos})
+			continue
+		}
+		targetNodes = append(targetNodes, node{Val: hash, Pos: parentPos})
+	}
+	if len(rootCandidates) == 0 {
+		// no roots to verify
+		return false, nil, nil
+	}
+	rootMatches := 0
+	for _, root := range roots {
+		if len(rootCandidates) > rootMatches && root == rootCandidates[rootMatches].Val {
+			rootMatches++
+		}
+	}
+	if len(rootCandidates) != rootMatches {
+		// some roots did not match
+		return false, nil, nil
+	}
+
+	return true, trees, rootCandidates
 }
 
 // Reconstruct takes a number of leaves and rows, and turns a block proof back

@@ -114,11 +114,17 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// loop until we find a zero; destroy roots until you make one
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
-		leftRoot := p.roots[len(p.roots)-1]                         // grab
-		p.roots = p.roots[:len(p.roots)-1]                          // pop
-		leftRoot.niece, n.niece = n.niece, leftRoot.niece           // swap
-		nHash := parentHash(leftRoot.data, n.data)                  // hash
-		n = &polNode{data: nHash, niece: [2]*polNode{&leftRoot, n}} // new
+		leftRoot := p.roots[len(p.roots)-1] // grab
+		p.roots = p.roots[:len(p.roots)-1]  // pop
+
+		if h == 0 && remember {
+			// make sure that siblings are always remembered in pairs.
+			leftRoot.niece[0] = leftRoot
+		}
+
+		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
+		nHash := parentHash(leftRoot.data, n.data)                 // hash
+		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
 		p.hashesEver++
 
 		n.prune()
@@ -129,7 +135,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// we got to.  We've already deleted all the lower roots, so append the new
 	// one we just made onto the end.
 
-	p.roots = append(p.roots, *n)
+	p.roots = append(p.roots, n)
 	p.numLeaves++
 	return nil
 }
@@ -165,13 +171,14 @@ func (p *Pollard) rem2(dels []uint64) error {
 	// get all the swaps, then apply them all
 	swaprows := remTrans2(dels, p.numLeaves, ph)
 	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
-	var hashDirt, nextHashDirt []uint64
+	nextHashDirt := make([]uint64, 0, len(dels)*int(ph))
+	var hashDirt []uint64
 	var prevHash uint64
 	var err error
 	// fmt.Printf("start rem %s", p.toString())
 	// swap & hash all the nodes
 	for h := uint8(0); h < ph; h++ {
-		var hnslice []*hashableNode
+		hnslice := make([]*hashableNode, 0, int(ph-h)*len(dels))
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
@@ -240,7 +247,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	// fmt.Printf("preroot %s", p.toString())
 	// set new roots
 	nextRootPositions, _ := getRootsReverse(nextNumLeaves, ph)
-	nextRoots := make([]polNode, len(nextRootPositions))
+	nextRoots := make([]*polNode, len(nextRootPositions))
 	for i, _ := range nextRoots {
 		nt, ntsib, _, err := p.grabPos(nextRootPositions[i])
 		if err != nil {
@@ -256,7 +263,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		} else {
 			nt.niece = ntsib.niece
 		}
-		nextRoots[i] = *nt
+		nextRoots[i] = nt
 	}
 	p.numLeaves = nextNumLeaves
 	reversePolNodeSlice(nextRoots)
@@ -340,7 +347,7 @@ func (p *Pollard) readPos(pos uint64) (
 		err = ErrorStrings[ErrorNotEnoughTrees]
 		return
 	}
-	n, nsib = &p.roots[tree], &p.roots[tree]
+	n, nsib = p.roots[tree], p.roots[tree]
 
 	for h := branchLen - 1; h != 255; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
@@ -352,9 +359,9 @@ func (p *Pollard) readPos(pos uint64) (
 		}
 
 		// if a sib is nil, we don't have the node stored. return nil
-		if n.niece[lrSib] == nil {
-			return nil, nil, nil, err
-		}
+		// if n.niece[lrSib] == nil {
+		// 	return nil, nil, nil, err
+		// }
 
 		n, nsib = n.niece[lr], n.niece[lrSib]
 		if n == nil {
@@ -376,7 +383,7 @@ func (p *Pollard) grabPos(
 		err = ErrorStrings[ErrorNotEnoughTrees]
 		return
 	}
-	n, nsib = &p.roots[tree], &p.roots[tree]
+	n, nsib = p.roots[tree], p.roots[tree]
 
 	hn = &hashableNode{dest: n, sib: nsib}
 	for h := branchLen - 1; h != 255; h-- { // go through branch
@@ -425,7 +432,7 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 	// first find which tree we're in
 	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
 	//	fmt.Printf("DO pos %d root %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
-	n := &p.roots[tNum]
+	n := p.roots[tNum]
 	if branchLen > 64 {
 		return nil, nil, fmt.Errorf("dtp root %d is nil", tNum)
 	}

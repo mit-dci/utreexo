@@ -9,6 +9,88 @@ import (
 // verbose is a global const to get lots of printfs for debugging
 var verbose = false
 
+// ProofPositions returns the positions that are needed to prove that the targets exist.
+func ProofPositions(targets []uint64, numLeaves uint64, forestRows uint8) ([]uint64, []uint64) {
+	// the proofPositions needed without caching.
+	// TODO: find correct upper bound for the size of these slices.
+	proofPositions := make([]uint64, 0, len(targets)*int(forestRows))
+	// the positions that are computed/not included in the proof. (also includes the targets)
+	computedPositions := make([]uint64, 0, len(targets)*int(forestRows))
+	for row := uint8(0); row < forestRows; row++ {
+		computedPositions = append(computedPositions, targets...)
+		if numLeaves&(1<<row) > 0 && len(targets) > 0 &&
+			targets[len(targets)-1] == rootPosition(numLeaves, row, forestRows) {
+			// remove roots from targets
+			targets = targets[:len(targets)-1]
+		}
+
+		var nextTargets []uint64
+		for len(targets) > 0 {
+			switch {
+			// look at the first 4 targets
+			case len(targets) > 3:
+				if (targets[0]|1)^2 == targets[3]|1 {
+					// the first and fourth target are cousins
+					// => target 2 and 3 are also targets, both parents are targets of next row
+					nextTargets = append(nextTargets,
+						parent(targets[0], forestRows), parent(targets[3], forestRows))
+					targets = targets[4:]
+					break
+				}
+				// handle first three targets
+				fallthrough
+
+			// look at the first 3 targets
+			case len(targets) > 2:
+				if (targets[0]|1)^2 == targets[2]|1 {
+					// the first and third target are cousins
+					// => the second target is either the sibling of the first
+					// OR the sibiling of the third
+					// => only the sibling that is not a target is appended to the proof positions
+					if targets[1]|1 == targets[0]|1 {
+						proofPositions = append(proofPositions, targets[2]^1)
+					} else {
+						proofPositions = append(proofPositions, targets[0]^1)
+					}
+					// both parents are targets of next row
+					nextTargets = append(nextTargets,
+						parent(targets[0], forestRows), parent(targets[2], forestRows))
+					targets = targets[3:]
+					break
+				}
+				// handle first two targets
+				fallthrough
+
+			// look at the first 2 targets
+			case len(targets) > 1:
+				if targets[0]|1 == targets[1] {
+					nextTargets = append(nextTargets, parent(targets[0], forestRows))
+					targets = targets[2:]
+					break
+				}
+				if (targets[0]|1)^2 == targets[1]|1 {
+					proofPositions = append(proofPositions, targets[0]^1, targets[1]^1)
+					nextTargets = append(nextTargets,
+						parent(targets[0], forestRows), parent(targets[1], forestRows))
+					targets = targets[2:]
+					break
+				}
+				// not related, handle first target
+				fallthrough
+
+			// look at the first target
+			default:
+				proofPositions = append(proofPositions, targets[0]^1)
+				nextTargets = append(nextTargets, parent(targets[0], forestRows))
+				targets = targets[1:]
+			}
+		}
+		targets = nextTargets
+	}
+
+	return proofPositions, computedPositions
+}
+
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
 //
@@ -22,6 +104,8 @@ var verbose = false
 // [18, 19] are each parents of twins, since their children are nodes
 // 4-7 which are to be deleted.
 func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
+	parents = make([]uint64, 0, len(nodes)>>1)
+	dels = make([]uint64, 0, len(nodes))
 	for i := 0; i < len(nodes); i++ {
 		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
 			parents = append(parents, parent(nodes[i], forestRows))
@@ -361,7 +445,7 @@ func reverseUint64Slice(a []uint64) {
 	}
 }
 
-func reversePolNodeSlice(a []polNode) {
+func reversePolNodeSlice(a []*polNode) {
 	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
 		a[i], a[j] = a[j], a[i]
 	}
@@ -425,11 +509,11 @@ func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
 	maxa := len(a)
 	maxb := len(b)
-	var c []uint64
 	// shortcuts:
 	if maxa == 0 || maxb == 0 {
 		return a
 	}
+	c := make([]uint64, 0, len(a))
 	idxb := 0
 	for j := 0; j < maxa; j++ {
 		// skip over swap destinations less than current dirt

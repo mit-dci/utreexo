@@ -31,7 +31,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	ublockQueue := make(chan util.UBlock, 10)
+	ublockQueue := make(chan util.UBlock, 100)
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
@@ -49,7 +49,6 @@ func (c *Csn) IBDThread(sig chan bool) {
 			sig <- true
 			break
 		}
-
 		err := c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime)
 		if err != nil {
 			// crash if there's a bad proof or signature, OK for testing

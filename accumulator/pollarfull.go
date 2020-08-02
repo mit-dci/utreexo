@@ -85,84 +85,13 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	// guess is no, but that's untested.
 	sortUint64s(bp.Targets)
 
-	// TODO feels like you could do all this with just slices and no maps...
-	// that would be better
-	// proofTree is the partially populated tree of everything needed for the
-	// proofs
-	proofTree := make(map[uint64]Hash)
-
-	// go through each target and add a proof for it up to the intersection
-	for _, pos := range bp.Targets {
-		// add hash for the deletion itself and its sibling
-		// if they already exist, skip the whole thing
-		_, alreadyThere := proofTree[pos]
-		if alreadyThere {
-			//			fmt.Printf("%d omit already there\n", pos)
-			continue
-		}
-		// TODO change this for the real thing; no need to prove 0-tree root.
-		// but we still need to verify it and tag it as a target.
-		if pos == p.numLeaves-1 && pos&1 == 0 {
-			proofTree[pos] = p.read(pos)
-			// fmt.Printf("%d add as root\n", pos)
-			continue
-		}
-
-		// always put in both siblings when on the bottom row
-		// this can be out of order but it will be sorted later
-		proofTree[pos] = p.read(pos)
-		proofTree[pos^1] = p.read(pos ^ 1)
-		// fmt.Printf("added leaves %d, %d\n", pos, pos^1)
-
-		treeRoot := detectSubTreeRows(pos, p.numLeaves, p.rows())
-		pos = parent(pos, p.rows())
-		// go bottom to top and add siblings into the partial tree
-		// start at row 1 though; we always populate the bottom leaf and sibling
-		// This either gets to the top, or intersects before that and deletes
-		// something
-		for r := uint8(1); r < treeRoot; r++ {
-			// check if the sibling is already there, in which case we're done
-			// also check if the parent itself is there, in which case we delete it!
-			// I think this with the early ignore at the bottom make it optimal
-			_, selfThere := proofTree[pos]
-			_, sibThere := proofTree[pos^1]
-			if sibThere {
-				// sibling position already exists in partial tree; done
-				// with this branch
-
-				// TODO seems that this never happens and can be removed
-				panic("this never happens...?")
-			}
-			if selfThere {
-				// self position already there; remove as children are known
-				//				fmt.Printf("remove proof from pos %d\n", pos)
-
-				delete(proofTree, pos)
-				delete(proofTree, pos^1) // right? can delete both..?
-				break
-			}
-			// fmt.Printf("add proof from pos %d\n", pos^1)
-			proofTree[pos^1] = p.read(pos ^ 1)
-			pos = parent(pos, p.rows())
-		}
+	proofPositions, _ := ProofPositions(bp.Targets, p.numLeaves, p.rows())
+	targetsAndProof := mergeSortedSlices(proofPositions, bp.Targets)
+	bp.Proof = make([]Hash, len(targetsAndProof))
+	for i, proofPos := range targetsAndProof {
+		bp.Proof[i] = p.read(proofPos)
 	}
 
-	var nodeSlice []node
-
-	// run through partial tree to turn it into a slice
-	for pos, hash := range proofTree {
-		nodeSlice = append(nodeSlice, node{pos, hash})
-	}
-	// fmt.Printf("made nodeSlice %d nodes\n", len(nodeSlice))
-
-	// sort the slice of nodes (even though we only want the hashes)
-	sortNodeSlice(nodeSlice)
-	// copy the sorted / in-order hashes into a hash slice
-	bp.Proof = make([]Hash, len(nodeSlice))
-
-	for i, n := range nodeSlice {
-		bp.Proof[i] = n.Val
-	}
 	if verbose {
 		fmt.Printf("blockproof targets: %v\n", bp.Targets)
 	}

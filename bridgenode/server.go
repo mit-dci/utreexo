@@ -3,7 +3,6 @@ package bridgenode
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"net"
 
 	"github.com/mit-dci/utreexo/util"
@@ -112,28 +111,6 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *level
 				fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 				return
 			}
-			ud, err := util.UDataFromBytes(udb)
-			if err != nil {
-				fmt.Printf("pushBlocks UDataFromBytes %s\n", err.Error())
-				return
-			}
-
-			// set leaf ttl values
-			ud.LeafTTLs = make([]uint32, len(ud.UtxoData))
-			for i, utxo := range ud.UtxoData {
-				outpointHash := util.HashFromString(utxo.Outpoint.String())
-				heightBytes, err := lvdb.Get(outpointHash[:], nil)
-				if err != nil {
-					if err == leveldb.ErrNotFound {
-						// outpoint not spend yet, set leaf ttl to max uint32 value
-						ud.LeafTTLs[i] = math.MaxUint32
-						continue
-					}
-					panic(err)
-				}
-				ud.LeafTTLs[i] = binary.BigEndian.Uint32(heightBytes)
-			}
-			udb = ud.ToBytes()
 
 			// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
 			blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
