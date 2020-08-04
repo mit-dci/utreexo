@@ -24,7 +24,7 @@ type Pollard struct {
 
 	hashesEver, rememberEver, overWire uint64
 
-	//	Lookahead int32  // remember leafs below this TTL
+	Lookahead int32 // remember leafs below this TTL
 	//	Minleaves uint64 // remember everything below this leaf count
 
 	positionMap map[MiniHash]uint64

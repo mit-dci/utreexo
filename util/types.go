@@ -43,9 +43,9 @@ type UBlock struct {
 }
 
 type UData struct {
-	AccProof       accumulator.BatchProof
-	UtxoData       []LeafData
-	RememberLeaves []bool
+	AccProof accumulator.BatchProof
+	UtxoData []LeafData
+	LeafTTLs []uint32
 }
 
 // LeafData is all the data that goes into a leaf in the utreexo accumulator
@@ -161,26 +161,81 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 	return l, nil
 }
 
-// BlockProof serialization:
+// ToBytes serializes UData into bytes.
 // There's a bunch of variable length things (the batchProof.hashes, and the
 // LeafDatas) so we prefix lengths for those.  Ordering is:
 // batch proof length (4 bytes)
 // batch proof
 // Bunch of LeafDatas, prefixed with 2-byte lengths
-func (ud *UData) ToBytes() (b []byte) {
+// leaf ttls 4 bytes each
+func (ud *UData) ToBytes() []byte {
 	batchBytes := ud.AccProof.ToBytes()
-	b = make([]byte, 4+len(batchBytes))
-	// first stick the batch proof on the beginning
-	binary.BigEndian.PutUint32(b, uint32(len(batchBytes)))
-	copy(b[4:], batchBytes)
-
-	// next, all the leafDatas
-	for _, ld := range ud.UtxoData {
-		ldb := ld.ToBytes()
-		b = append(b, PrefixLen16(ldb)...)
+	buffer := new(bytes.Buffer)
+	// write the length of the batch proof bytes
+	binary.Write(buffer, binary.BigEndian, uint32(len(batchBytes)))
+	// write the batch proof bytes
+	buffer.Write(batchBytes)
+	// write the utxos data
+	for _, utxo := range ud.UtxoData {
+		// write the utxo data prefixed by 2 length bytes
+		buffer.Write(PrefixLen16(utxo.ToBytes()))
+	}
+	// write the TTL values
+	for _, ttl := range ud.LeafTTLs {
+		binary.Write(buffer, binary.BigEndian, ttl)
 	}
 
-	return
+	return buffer.Bytes()
+}
+
+// UDataFromBytes deserializes into UData from bytes.
+func UDataFromBytes(b []byte) (ud UData, err error) {
+	// if there's no bytes, it's an empty uData
+	if len(b) == 0 {
+		return
+	}
+
+	if len(b) < 4 {
+		err = fmt.Errorf("block proof too short %d bytes", len(b))
+		return
+	}
+
+	buffer := bytes.NewBuffer(b)
+
+	// read the length of the batch proof bytes
+	var batchLen uint32
+	binary.Read(buffer, binary.BigEndian, &batchLen)
+	if batchLen > uint32(len(b)-4) {
+		err = fmt.Errorf("block proof says %d bytes but %d remain",
+			batchLen, len(b)-4)
+		return
+	}
+	// read the batch proof bytes
+	ud.AccProof, err = accumulator.FromBytesBatchProof(buffer.Next(int(batchLen)))
+	if err != nil {
+		return
+	}
+	// read the utxo datas, there are as many utxos as there are targets in the proof.
+	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
+	for i, _ := range ud.UtxoData {
+		dataSize := binary.BigEndian.Uint16(buffer.Next(2))
+		dataBytes := buffer.Next(int(dataSize))
+		ud.UtxoData[i], err = LeafDataFromBytes(dataBytes)
+		if err != nil {
+			return
+		}
+	}
+
+	if buffer.Len() > 0 {
+		// read the TTL values, there are as many TTLs as there are targets in the proof.
+		ud.LeafTTLs = make([]uint32, len(ud.AccProof.Targets))
+		for i, _ := range ud.LeafTTLs {
+			// each ttl is 4 bytes (uint32)
+			ud.LeafTTLs[i] = binary.BigEndian.Uint32(buffer.Next(4))
+		}
+	}
+
+	return ud, nil
 }
 
 func (ub *UBlock) FromBytes(argbytes []byte) (err error) {
@@ -259,49 +314,6 @@ func (ub *UBlock) Serialize(w io.Writer) (err error) {
 	_, err = w.Write(payload)
 
 	return
-}
-
-func UDataFromBytes(b []byte) (ud UData, err error) {
-	// if there's no bytes, it's an empty uData
-	if len(b) == 0 {
-		return
-	}
-
-	if len(b) < 4 {
-		err = fmt.Errorf("block proof too short %d bytes", len(b))
-		return
-	}
-	batchLen := binary.BigEndian.Uint32(b[:4])
-	if batchLen > uint32(len(b)-4) {
-		err = fmt.Errorf("block proof says %d bytes but %d remain",
-			batchLen, len(b)-4)
-		return
-	}
-	b = b[4:]
-	batchProofBytes := b[:batchLen]
-	leafDataBytes := b[batchLen:]
-	ud.AccProof, err = accumulator.FromBytesBatchProof(batchProofBytes)
-	if err != nil {
-		return
-	}
-	// got the batch proof part; now populate the leaf data part
-	// first there are as many leafDatas as there are proof targets
-	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
-	var ldb []byte
-	// loop until we've filled in every leafData (or something breaks first)
-	for i := range ud.UtxoData {
-		// fmt.Printf("leaf %d dataBytes %x ", i, leafDataBytes)
-		ldb, leafDataBytes, err = PopPrefixLen16(leafDataBytes)
-		if err != nil {
-			return
-		}
-		ud.UtxoData[i], err = LeafDataFromBytes(ldb)
-		if err != nil {
-			return
-		}
-	}
-
-	return ud, nil
 }
 
 // TODO use compact leafDatas in the block proofs -- probably 50%+ space savings

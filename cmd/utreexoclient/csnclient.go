@@ -45,6 +45,8 @@ var remoteHost = optionCmd.String("host", "35.188.186.244",
 
 var checkSig = optionCmd.Bool("checksig", true,
 	`check signatures (slower)`)
+var lookahead = optionCmd.Int("lookahead", 1000,
+	`size of the look-ahead cache in blocks`)
 
 func main() {
 	// check if enough arguments were given
@@ -92,7 +94,7 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig, *cpuProfCmd)
 
-	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, sig)
+	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, *lookahead, sig)
 	if err != nil {
 		panic(err)
 	}
