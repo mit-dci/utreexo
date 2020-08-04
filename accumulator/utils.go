@@ -20,10 +20,10 @@ var verbose = false
 // to be deleted, note that 7 is in a different tree than 8).
 // [18, 19] are each parents of twins, since their children are nodes
 // 4-7 which are to be deleted.
-func extractTwins(nodes []uint64, row uint8) (parents, dels []uint64) {
+func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 	for i := 0; i < len(nodes); i++ {
 		if i+1 < len(nodes) && nodes[i]|1 == nodes[i+1] {
-			parents = append(parents, parent(nodes[i], row))
+			parents = append(parents, parent(nodes[i], forestRows))
 			i++ // skip one here
 		} else {
 			dels = append(dels, nodes[i])
