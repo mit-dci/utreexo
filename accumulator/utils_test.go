@@ -18,7 +18,7 @@ func TestTreeRows(t *testing.T) {
 
 	}
 	// Test billion leaves
-	for n := uint64(1); n <= 100000000; n++ {
+	for n := uint64(0); n <= 100000000; n++ {
 		Orig := treeRowsOrig(n)
 		New := treeRows(n)
 		if Orig != New {

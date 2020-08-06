@@ -2,7 +2,7 @@ package accumulator
 
 import (
 	"fmt"
-	"math"
+	"math/bits"
 	"sort"
 )
 
@@ -208,7 +208,10 @@ func treeRows(n uint64) uint8 {
 	n++
 
 	// log of 2 is the tree depth/height
-	return uint8(math.Log2(float64(n)))
+	// if n == 0, there will be 64 traling zeros but actually no tree rows.
+	// we clear the 6th bit to return 0 in that case.
+	return uint8(bits.TrailingZeros64(n) & ^int(64))
+
 }
 
 // numRoots is just a popCount function, returning the number of 1 bits
