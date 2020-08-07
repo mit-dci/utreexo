@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
+	"runtime/trace"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -43,6 +44,8 @@ var forestInRam = optionCmd.Bool("inram", false,
 	`keep forest in ram instead of disk.  Faster but needs lots of ram`)
 var forestCache = optionCmd.Bool("cache", false,
 	`use ram-cached forest.  Speed between on disk and fully in-ram`)
+var traceCmd = optionCmd.String("trace", "",
+	`Enable trace. Usage: 'trace='path/to/file'`)
 var cpuProfCmd = optionCmd.String("cpuprof", "",
 	`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 var memProfCmd = optionCmd.String("memprof", "",
@@ -85,6 +88,16 @@ func main() {
 		pprof.WriteHeapProfile(f)
 	}
 
+	if *traceCmd != "" {
+		f, err := os.Create(*traceCmd)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(msg)
+			os.Exit(1)
+		}
+		trace.Start(f)
+	}
+
 	// set datadir
 	var dataDir string
 	if *dataDirCmd == "" { // No custom datadir given by the user
@@ -99,7 +112,7 @@ func main() {
 
 	// listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
-	handleIntSig(sig, *cpuProfCmd)
+	handleIntSig(sig, *cpuProfCmd, *traceCmd)
 
 	fmt.Printf("datadir is %s\n", dataDir)
 	err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
@@ -110,13 +123,17 @@ func main() {
 
 }
 
-func handleIntSig(sig chan bool, cpuProfCmd string) {
+func handleIntSig(sig chan bool, cpuProfCmd, traceCmd string) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
 		<-s
 		if cpuProfCmd != "" {
 			pprof.StopCPUProfile()
+		}
+
+		if traceCmd != "" {
+			trace.Stop()
 		}
 		sig <- true
 	}()

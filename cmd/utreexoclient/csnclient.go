@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/pprof"
+	"runtime/trace"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -38,6 +39,8 @@ var cpuProfCmd = optionCmd.String("cpuprof", "",
 	`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 var memProfCmd = optionCmd.String("memprof", "",
 	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
+var traceCmd = optionCmd.String("trace", "",
+	`Enable trace. Usage: 'trace='path/to/file'`)
 var watchAddr = optionCmd.String("watchaddr", "",
 	`Address to watch & report transactions. Only bech32 p2wpkh supported`)
 var remoteHost = optionCmd.String("host", "35.188.186.244",
@@ -90,9 +93,19 @@ func main() {
 		pprof.WriteHeapProfile(f)
 	}
 
+	if *traceCmd != "" {
+		f, err := os.Create(*traceCmd)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println(msg)
+			os.Exit(1)
+		}
+		trace.Start(f)
+	}
+
 	// listen for SIGINT, SIGTERM, or SIGQUIT from the os
 	sig := make(chan bool, 1)
-	handleIntSig(sig, *cpuProfCmd)
+	handleIntSig(sig, *cpuProfCmd, *traceCmd)
 
 	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, *lookahead, sig)
 	if err != nil {
@@ -100,13 +113,16 @@ func main() {
 	}
 }
 
-func handleIntSig(sig chan bool, cpuProfCmd string) {
+func handleIntSig(sig chan bool, cpuProfCmd, traceCmd string) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
 		<-s
 		if cpuProfCmd != "" {
 			pprof.StopCPUProfile()
+		}
+		if traceCmd != "" {
+			trace.Stop()
 		}
 		sig <- true
 	}()
