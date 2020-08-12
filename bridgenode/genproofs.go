@@ -297,7 +297,13 @@ func stopBuildProofs(
 	sig, offsetfinished, haltRequest, haltAccept chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
-	<-sig
+	// Also listen for an unrequested haltAccept which means upstream is finshed
+	// and to end this goroutine
+	select {
+	case <-haltAccept:
+		return
+	case <-sig:
+	}
 
 	trace.Stop()
 	pprof.StopCPUProfile()

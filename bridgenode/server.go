@@ -6,9 +6,14 @@ import (
 	"math"
 	"net"
 
+	"github.com/adiabat/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
+
+func ServeBlock(param chaincfg.Params, dataDir string, sig chan bool) error {
+	return nil
+}
 
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
