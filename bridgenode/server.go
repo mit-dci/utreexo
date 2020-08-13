@@ -112,28 +112,6 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *level
 				fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 				return
 			}
-			ud, err := util.UDataFromBytes(udb)
-			if err != nil {
-				fmt.Printf("pushBlocks UDataFromBytes %s\n", err.Error())
-				return
-			}
-
-			// set leaf ttl values
-			ud.LeafTTLs = make([]uint32, len(ud.UtxoData))
-			for i, utxo := range ud.UtxoData {
-				outpointHash := util.HashFromString(utxo.Outpoint.String())
-				heightBytes, err := lvdb.Get(outpointHash[:], nil)
-				if err != nil {
-					if err == leveldb.ErrNotFound {
-						// outpoint not spend yet, set leaf ttl to max uint32 value
-						ud.LeafTTLs[i] = math.MaxUint32
-						continue
-					}
-					panic(err)
-				}
-				ud.LeafTTLs[i] = binary.BigEndian.Uint32(heightBytes)
-			}
-			udb = ud.ToBytes()
 
 			// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
 			blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
@@ -141,6 +119,33 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *level
 				fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 				return
 			}
+
+			var ub util.UBlock
+			err = ub.FromBytes(append(blkbytes, udb...))
+			if err != nil {
+				fmt.Printf("pushBlocks ub.FromBytes %s\n", err.Error())
+				return
+			}
+
+			_, outskip := util.DedupeBlock(&ub.Block)
+			// can ignore remember and height here because we only need the number of leaves.
+			outpoints := util.BlockToOutpoints(ub.Block, outskip)
+			// set leaf ttl values
+			ub.ExtraData.LeafTTLs = make([]uint32, len(outpoints))
+			for i, out := range outpoints {
+				outpointHash := util.HashFromString(out.String())
+				heightBytes, err := lvdb.Get(outpointHash[:], nil)
+				if err != nil {
+					if err == leveldb.ErrNotFound {
+						// outpoint not spend yet, set leaf ttl to max uint32 value
+						ub.ExtraData.LeafTTLs[i] = math.MaxUint32
+						continue
+					}
+					panic(err)
+				}
+				ub.ExtraData.LeafTTLs[i] = binary.BigEndian.Uint32(heightBytes)
+			}
+			udb = ub.ExtraData.ToBytes()
 
 			// first send 4 byte length for everything
 			// fmt.Printf("h %d send len %d\n", curHeight, len(udb)+len(blkbytes))

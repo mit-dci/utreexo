@@ -180,6 +180,8 @@ func (ud *UData) ToBytes() []byte {
 		// write the utxo data prefixed by 2 length bytes
 		buffer.Write(PrefixLen16(utxo.ToBytes()))
 	}
+	// write the number off ttls
+	binary.Write(buffer, binary.BigEndian, uint32(len(ud.LeafTTLs)))
 	// write the TTL values
 	for _, ttl := range ud.LeafTTLs {
 		binary.Write(buffer, binary.BigEndian, ttl)
@@ -227,8 +229,9 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 	}
 
 	if buffer.Len() > 0 {
+		ttlCount := binary.BigEndian.Uint32(buffer.Next(4))
 		// read the TTL values, there are as many TTLs as there are targets in the proof.
-		ud.LeafTTLs = make([]uint32, len(ud.AccProof.Targets))
+		ud.LeafTTLs = make([]uint32, ttlCount)
 		for i, _ := range ud.LeafTTLs {
 			// each ttl is 4 bytes (uint32)
 			ud.LeafTTLs[i] = binary.BigEndian.Uint32(buffer.Next(4))

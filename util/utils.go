@@ -183,6 +183,31 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	return
 }
 
+func BlockToOutpoints(blk wire.MsgBlock, skiplist []uint32) (outpoints []wire.OutPoint) {
+	var txonum uint32
+	// bh := bl.Blockhash
+	for _, tx := range blk.Transactions {
+		// cache txid aka txhash
+		txid := tx.TxHash()
+		for i, out := range tx.TxOut {
+			// Skip all the OP_RETURNs
+			if IsUnspendable(out) {
+				txonum++
+				continue
+			}
+			// Skip txos on the skip list
+			if len(skiplist) > 0 && skiplist[0] == txonum {
+				skiplist = skiplist[1:]
+				txonum++
+				continue
+			}
+			outpoints = append(outpoints, wire.OutPoint{Hash: txid, Index: uint32(i)})
+			txonum++
+		}
+	}
+	return
+}
+
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
 // uses remember slice up to number of txos, but doesn't check that it's the
 // right length.  Similar with skiplist, doesn't check it.
