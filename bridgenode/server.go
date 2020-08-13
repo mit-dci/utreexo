@@ -5,14 +5,75 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"os"
+	"runtime/pprof"
+	"runtime/trace"
+	"time"
 
 	"github.com/adiabat/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 func ServeBlock(param chaincfg.Params, dataDir string, sig chan bool) error {
+
+	// Channel to alert the tell the main loop it's ok to exit
+	haltRequest := make(chan bool, 1)
+
+	// Channel for ServeBlock() to wait
+	haltAccept := make(chan bool, 1)
+
+	// Handle user interruptions
+	go stopServer(sig, haltRequest, haltAccept)
+
+	// TODO ****** server shouldn't need levelDB access, fix this
+	ttlpath := "utree/" + param.Name + "ttldb"
+	// Open leveldb
+	o := opt.Options{CompactionTableSizeMultiplier: 8}
+	lvdb, err := leveldb.OpenFile(ttlpath, &o)
+	if err != nil {
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		return err
+	}
+	defer lvdb.Close()
+	// **********************************
+
+	// Init forest and variables. Resumes if the data directory exists
+	maxHeight, err := restoreHeight()
+	if err != nil {
+		return err
+	}
+
+	blockServer(maxHeight, dataDir, haltRequest, haltAccept, lvdb)
+
 	return nil
+}
+
+// stopServer listens for the signal from the OS and initiates an exit sequence
+func stopServer(sig, haltRequest, haltAccept chan bool) {
+
+	// Listen for SIGINT, SIGQUIT, SIGTERM
+	<-sig
+
+	trace.Stop()
+	pprof.StopCPUProfile()
+
+	// Sometimes there are bugs that make the program run forever.
+	// Utreexo binary should never take more than 10 seconds to exit
+	go func() {
+		time.Sleep(60 * time.Second)
+		fmt.Println("Exit timed out. Force quitting.")
+		os.Exit(1)
+	}()
+
+	// Tell the user that the sig is received
+	fmt.Println("User exit signal received. Exiting...")
+
+	// Wait until server says it's ok to exit
+	<-haltAccept
+	os.Exit(0)
 }
 
 // blockServer listens on a TCP port for incoming connections, then gives

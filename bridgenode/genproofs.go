@@ -151,16 +151,6 @@ func BuildProofs(
 
 	fmt.Println("Done writing")
 
-	if stop {
-		// genproofs was paused.
-		// Tell stopBuildProofs that it's ok to exit
-		haltAccept <- true
-		return nil
-	}
-
-	// should be a goroutine..?  isn't right now
-	blockServer(knownTipHeight, dataDir, haltRequest, haltAccept, lvdb)
-
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true
 	return nil
