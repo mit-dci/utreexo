@@ -2,6 +2,7 @@ package accumulator
 
 import (
 	"fmt"
+	"math/big"
 )
 
 // IngestBatchProof populates the Pollard with all needed data to delete the
@@ -207,4 +208,64 @@ func (p *Pollard) verifyBatchProof(
 	}
 
 	return true, proofmap
+}
+
+// CacheSim is a type capable of simulating pollard caching/remembering.
+type CacheSim struct {
+	// A bit set to mark cached positions.
+	// This is not optimal since it has a spatial complexity of O(n) where n is the number of UTXOs
+	// BUT only 1 bit per UTXO.
+	// currently(#643584) there are 66,391,686 UTXOs that means size(cached) = ~8MB.
+	cached *big.Int
+	// The number of leaves in the simulator.
+	numLeaves uint64
+}
+
+// NewCacheSimulator initialises a new cache simulator.
+func NewCacheSimulator(numLeaves uint64) *CacheSim {
+	return &CacheSim{cached: big.NewInt(0), numLeaves: numLeaves}
+}
+
+// Simulate simulates one modification to the pollard.
+// Takes a slice of target positions and a slice of bools representing new leaves (true means "cache the leaf").
+// Returns the proof positions that are needed to prove the targets (including the unkown targets).
+func (c *CacheSim) Simulate(targets []uint64, adds []bool) []uint64 {
+	// Figure out which targets are known/cached and which aren't.
+	var knownTargets, unknownTargets []uint64
+	for _, target := range targets {
+		if c.cached.Bit(int(target)) > 0 {
+			knownTargets = append(knownTargets, target)
+			// Set cached bit to zero because that positions gets deleted.
+			c.cached.SetBit(c.cached, int(target), 0)
+			continue
+		}
+
+		unknownTargets = append(unknownTargets, target)
+	}
+	knownProof, computable := ProofPositions(knownTargets, c.numLeaves, treeRows(c.numLeaves))
+	unknownProof, _ := ProofPositions(unknownTargets, c.numLeaves, treeRows(c.numLeaves))
+
+	// Apply remove transformation swaps to cached positions.
+	leafSwaps := floorTransform(targets, c.numLeaves, treeRows(c.numLeaves))
+	for _, swap := range leafSwaps {
+		fromBit := c.cached.Bit(int(swap.from))
+		c.cached.SetBit(c.cached, int(swap.from), c.cached.Bit(int(swap.to)))
+		c.cached.SetBit(c.cached, int(swap.to), fromBit)
+	}
+
+	// Add the new leafes to the cache.
+	for i, add := range adds {
+		if add {
+			c.cached.SetBit(c.cached, int(c.numLeaves+uint64(i)), 1)
+		} else {
+			c.cached.SetBit(c.cached, int(c.numLeaves+uint64(i)), 0)
+		}
+	}
+	c.numLeaves += uint64(len(adds) - len(targets))
+
+	neededProof := sortedUint64SliceDiff(
+		mergeSortedSlices(unknownProof, unknownTargets),
+		mergeSortedSlices(knownProof, computable),
+	)
+	return neededProof
 }
