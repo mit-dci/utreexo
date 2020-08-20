@@ -214,15 +214,9 @@ func treeRows(n uint64) uint8 {
 
 }
 
-// numRoots is just a popCount function, returning the number of 1 bits
-func numRoots(n uint64) (r uint8) {
-	for n > 0 {
-		if n&1 == 1 {
-			r++
-		}
-		n >>= 1
-	}
-	return
+// numRoots returns the number of 1 bits in n.
+func numRoots(n uint64) uint8 {
+	return uint8(bits.OnesCount64(n))
 }
 
 // rootPosition: given a number of leaves and a row, find the position of the
