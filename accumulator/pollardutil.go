@@ -17,7 +17,7 @@ import (
 type Pollard struct {
 	numLeaves uint64 // number of leaves in the pollard forest
 
-	roots []polNode // slice of the tree roots, which are polNodes.
+	roots []*polNode // slice of the tree roots, which are polNodes.
 	// roots are in big to small order
 	// BUT THEY'RE WEIRD!  The left / right children are actual children,
 	// not nieces as they are in every lower level.
@@ -149,9 +149,10 @@ func (p *Pollard) RestorePollard(r io.Reader) error {
 		return err
 	}
 
-	p.roots = make([]polNode, numRoots(p.numLeaves))
+	p.roots = make([]*polNode, numRoots(p.numLeaves))
 	fmt.Printf("%d leaves %d roots ", p.numLeaves, len(p.roots))
 	for i, _ := range p.roots {
+		p.roots[i] = new(polNode)
 		bytesRead, err := r.Read(p.roots[i].data[:])
 		// ignore EOF error at the end of successful reading
 		if err != nil && !(bytesRead == 32 && err == io.EOF) {
