@@ -463,11 +463,11 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 //func (p *Pollard) toFull() (*Forest, error) {
 func (p *Pollard) toFull() (*Forest, error) {
 
-	ff := NewForest(nil, false)
+	ff := NewForest(nil, false, "", 0)
 	ff.rows = p.rows()
 	ff.numLeaves = p.numLeaves
 	ff.data = new(ramForestData)
-	ff.data.resize(2 << ff.rows)
+	ff.data.resize((2 << ff.rows) - 1)
 	if p.numLeaves == 0 {
 		return ff, nil
 	}

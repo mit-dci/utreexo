@@ -98,16 +98,28 @@ type Forest struct {
 }
 
 // NewForest : use ram if not given a file
-func NewForest(forestFile *os.File, cached bool) *Forest {
+func NewForest(forestFile *os.File, cached bool,
+	cowPath string, cowMaxCache int) *Forest {
+
 	f := new(Forest)
 	f.numLeaves = 0
 	f.rows = 0
 
 	if forestFile == nil {
-		// for in-ram
-		f.data = new(ramForestData)
-	} else {
+		if cowPath == "" {
+			// for in-ram
+			f.data = new(ramForestData)
+		} else {
+			// Init cowForest
+			d, err := initialize(cowPath, cowMaxCache)
+			if err != nil {
+				panic(err)
+			}
+			f.data = d
+		}
 
+	} else {
+		// forest on disk or cached
 		if cached {
 			d := new(cacheForestData)
 			d.file = forestFile
@@ -121,7 +133,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		}
 	}
 
-	f.data.resize(1)
+	f.data.resize((2 << f.rows) - 1)
 	f.positionMap = make(map[MiniHash]uint64)
 	return f
 }
@@ -472,7 +484,7 @@ func (f *Forest) reMap(destRows uint8) error {
 	// matter.  Something to program someday if you feel like it for fun.
 	// fmt.Printf("size is %d\n", f.data.size())
 	// rows increase
-	f.data.resize(2 << destRows)
+	f.data.resize((2 << destRows) - 1)
 	// fmt.Printf("size is %d\n", f.data.size())
 	pos := uint64(1 << destRows) // leftmost position of row 1
 	reach := pos >> 1            // how much to next row up
@@ -541,7 +553,8 @@ func (f *Forest) PosMapSanity() error {
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and rows is stored
 func RestoreForest(
-	miscForestFile *os.File, forestFile *os.File, toRAM, cached bool) (*Forest, error) {
+	miscForestFile *os.File, forestFile *os.File,
+	toRAM, cached bool, cow string, cowMaxCache int) (*Forest, error) {
 
 	// start a forest for restore
 	f := new(Forest)
@@ -561,49 +574,58 @@ func RestoreForest(
 	}
 	fmt.Println("Forest rows:", f.rows)
 
-	// open the forest file on disk even if we're going to ram
-	diskData := new(diskForestData)
-	diskData.file = forestFile
-
-	if toRAM {
-		// for in-ram
-		ramData := new(ramForestData)
-		fmt.Printf("%d rows resize to %d\n", f.rows, 2<<f.rows)
-		ramData.resize(2 << f.rows)
-
-		// Can't read all at once!  There's a (secret? at least not well
-		// documented) maxRW of 1GB.
-		var bytesRead int
-		for bytesRead < len(ramData.m) {
-			n, err := diskData.file.Read(ramData.m[bytesRead:])
-			if err != nil {
-				return nil, err
-			}
-			bytesRead += n
-			fmt.Printf("read %d bytes of forest file into ram\n", bytesRead)
+	if cow != "" {
+		cowData, err := loadCowForest(cow, cowMaxCache)
+		if err != nil {
+			return nil, err
 		}
 
-		f.data = ramData
-
-		// for i := uint64(0); i < f.data.size(); i++ {
-		// f.data.write(i, diskData.read(i))
-		// if i%100000 == 0 && i != 0 {
-		// fmt.Printf("read %d nodes from disk\n", i)
-		// }
-		// }
-
+		f.data = cowData
 	} else {
-		if cached {
-			// on disk, with cache
-			cfd := new(cacheForestData)
-			cfd.cache = newDiskForestCache(20)
-			cfd.file = forestFile
-			f.data = cfd
+		// open the forest file on disk even if we're going to ram
+		diskData := new(diskForestData)
+		diskData.file = forestFile
+
+		if toRAM {
+			// for in-ram
+			ramData := new(ramForestData)
+			fmt.Printf("%d rows resize to %d\n", f.rows, (2<<f.rows - 1))
+			ramData.resize((2 << f.rows) - 1)
+
+			// Can't read all at once!  There's a (secret? at least not well
+			// documented) maxRW of 1GB.
+			var bytesRead int
+			for bytesRead < len(ramData.m) {
+				n, err := diskData.file.Read(ramData.m[bytesRead:])
+				if err != nil {
+					return nil, err
+				}
+				bytesRead += n
+				fmt.Printf("read %d bytes of forest file into ram\n", bytesRead)
+			}
+
+			f.data = ramData
+
+			// for i := uint64(0); i < f.data.size(); i++ {
+			// f.data.write(i, diskData.read(i))
+			// if i%100000 == 0 && i != 0 {
+			// fmt.Printf("read %d nodes from disk\n", i)
+			// }
+			// }
+
 		} else {
-			// on disk, no cache
-			f.data = diskData
+			if cached {
+				// on disk, with cache
+				cfd := new(cacheForestData)
+				cfd.cache = newDiskForestCache(20)
+				cfd.file = forestFile
+				f.data = cfd
+			} else {
+				// on disk, no cache
+				f.data = diskData
+			}
+			// assume no resize needed
 		}
-		// assume no resize needed
 	}
 
 	// Restore positionMap by rebuilding from all leaves
@@ -652,6 +674,12 @@ func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 	if err != nil {
 		return err
 	}
+	for i := uint64(0); i < f.numLeaves; i++ {
+		//f.positionMap[f.data.read(i).Mini()] = i
+		if i%100000 == 0 && i != 0 {
+			fmt.Printf("Added %d leaves %x\n", i, f.data.read(i).Mini())
+		}
+	}
 
 	f.data.close()
 
@@ -661,20 +689,28 @@ func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 // WriteForestToDisk writes the whole forest to disk
 // this only makes sense to do if the forest is in ram.  So it'll return
 // an error if it's not a ramForestData
-func (f *Forest) WriteForestToDisk(dumpFile *os.File) error {
+func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 
-	ramForest, ok := f.data.(*ramForestData)
-	if !ok {
-		return fmt.Errorf("WriteForest only possible with ram forest")
+	if ram {
+		ramForest, ok := f.data.(*ramForestData)
+		if !ok {
+			return fmt.Errorf("WriteForest only possible with ram forest")
+		}
+		_, err := dumpFile.Seek(0, 0)
+		if err != nil {
+			return fmt.Errorf("WriteForest seek %s", err.Error())
+		}
+		_, err = dumpFile.Write(ramForest.m)
+		if err != nil {
+			return fmt.Errorf("WriteForest write %s", err.Error())
+		}
 	}
 
-	_, err := dumpFile.Seek(0, 0)
-	if err != nil {
-		return fmt.Errorf("WriteForest seek %s", err.Error())
-	}
-	_, err = dumpFile.Write(ramForest.m)
-	if err != nil {
-		return fmt.Errorf("WriteForest write %s", err.Error())
+	if cow {
+		//fmt.Println("F.DATA.CLOSE ON COW")
+		//fmt.Println("TYPE:")
+		//fmt.Printf("%T\n", f.data)
+		//f.data.close()
 	}
 
 	return nil
@@ -760,6 +796,7 @@ func (f *Forest) ToString() string {
 		s += output[z] + "\n"
 	}
 	return s
+
 }
 
 // FindLeaf finds a leave from the positionMap and returns a bool

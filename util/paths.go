@@ -17,6 +17,7 @@ var WinDataDir string = "\\AppData\\Roaming\\Bitcoin"
 var OffsetDirPath string = filepath.Join(".", "utree/offsetdata")
 var ProofDirPath string = filepath.Join(".", "utree/proofdata")
 var ForestDirPath string = filepath.Join(".", "utree/forestdata")
+var CowForestDirPath string = filepath.Join(".", "utree/forestdata/cow")
 
 // File paths
 var PollardFilePath string = "pollardFile"
@@ -42,6 +43,8 @@ var ForestFilePath string = filepath.Join(ForestDirPath, "forestfile.dat")
 var MiscForestFilePath string = filepath.Join(ForestDirPath, "miscforestfile.dat")
 var ForestLastSyncedBlockHeightFilePath string = filepath.Join(ForestDirPath,
 	"forestlastsyncedheight.dat")
+
+var CowForestCurFilePath string = filepath.Join(CowForestDirPath, "CURRENT")
 
 // MakePaths makes the necessary paths for all files
 func MakePaths() {
