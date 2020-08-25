@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -152,7 +153,7 @@ func LeafDataFromCompactBytes(b []byte) (LeafData, error) {
 
 // LeafHash turns a LeafData into a LeafHash
 func (l *LeafData) LeafHash() [32]byte {
-	return sha256.Sum256(l.ToBytes())
+	return sha512.Sum512_256(l.ToBytes())
 }
 
 func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {

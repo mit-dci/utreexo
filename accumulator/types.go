@@ -2,6 +2,7 @@ package accumulator
 
 import (
 	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
 	"math/rand"
 )
@@ -58,7 +59,7 @@ func parentHash(l, r Hash) Hash {
 	if l == empty || r == empty {
 		panic("got an empty leaf here. ")
 	}
-	return sha256.Sum256(append(l[:], r[:]...))
+	return sha512.Sum512_256(append(l[:], r[:]...))
 }
 
 // SimChain is for testing; it spits out "blocks" of adds and deletes
