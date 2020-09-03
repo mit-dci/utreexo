@@ -6,8 +6,6 @@ import (
 	"math"
 	"net"
 	"os"
-	"runtime/pprof"
-	"runtime/trace"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -56,14 +54,11 @@ func stopServer(sig, haltRequest, haltAccept chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
-
-	trace.Stop()
-	pprof.StopCPUProfile()
-
+	haltRequest <- true
 	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
-		time.Sleep(60 * time.Second)
+		time.Sleep(2 * time.Second)
 		fmt.Println("Exit timed out. Force quitting.")
 		os.Exit(1)
 	}()
@@ -94,7 +89,6 @@ func blockServer(endHeight int32, dataDir string, haltRequest,
 
 	cons := make(chan net.Conn)
 	go acceptConnections(listener, cons)
-
 	for {
 		select {
 		case <-haltRequest:

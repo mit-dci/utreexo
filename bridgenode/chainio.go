@@ -2,6 +2,7 @@ package bridgenode
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -91,6 +92,9 @@ func restoreHeight() (height int32, err error) {
 		if err != nil {
 			return 0, err
 		}
+	} else {
+		return 0, fmt.Errorf("can't read height at %s\n",
+			util.ForestLastSyncedBlockHeightFilePath)
 	}
 	return
 }

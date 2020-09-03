@@ -117,7 +117,16 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig, *cpuProfCmd, *traceCmd)
 
-	if !*serve {
+	// only do buildProofs or serve; need to restart to serve after
+	// building proofs
+
+	if *serve {
+		err := bridge.ServeBlock(param, dataDir, sig)
+		if err != nil {
+			fmt.Printf("ServeBlocks error: %s\n", err.Error())
+			panic("server halting")
+		}
+	} else {
 		fmt.Printf("datadir is %s\n", dataDir)
 		err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
 		if err != nil {
@@ -125,12 +134,6 @@ func main() {
 			panic("proof build halting")
 		}
 	}
-	err := bridge.ServeBlock(param, dataDir, sig)
-	if err != nil {
-		fmt.Printf("ServeBlocks error: %s\n", err.Error())
-		panic("server halting")
-	}
-
 }
 
 func handleIntSig(sig chan bool, cpuProfCmd, traceCmd string) {
