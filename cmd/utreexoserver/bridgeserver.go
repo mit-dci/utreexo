@@ -30,6 +30,7 @@ OPTIONS:
 
   -cpuprof                     configure whether to use use cpu profiling
   -memprof                     configure whether to use use heap profiling
+  -serve						 immediately serve whatever data is built
 
 `
 
@@ -44,6 +45,8 @@ var forestInRam = optionCmd.Bool("inram", false,
 	`keep forest in ram instead of disk.  Faster but needs lots of ram`)
 var forestCache = optionCmd.Bool("cache", false,
 	`use ram-cached forest.  Speed between on disk and fully in-ram`)
+var serve = optionCmd.Bool("serve", false,
+	`immediately start server without building or checking proof data`)
 var traceCmd = optionCmd.String("trace", "",
 	`Enable trace. Usage: 'trace='path/to/file'`)
 var cpuProfCmd = optionCmd.String("cpuprof", "",
@@ -114,13 +117,22 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig, *cpuProfCmd, *traceCmd)
 
-	fmt.Printf("datadir is %s\n", dataDir)
-	err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
+	// only do buildProofs or serve; need to restart to serve after
+	// building proofs
+
+	if !*serve {
+		fmt.Printf("datadir is %s\n", dataDir)
+		err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
+		if err != nil {
+			fmt.Printf("Buildproofs error: %s\n", err.Error())
+			panic("proof build halting")
+		}
+	}
+	err := bridge.ArchiveServer(param, dataDir, sig)
 	if err != nil {
-		fmt.Printf("Buildproofs error: %s\n", err.Error())
+		fmt.Printf("ArchiveServer error: %s\n", err.Error())
 		panic("server halting")
 	}
-
 }
 
 func handleIntSig(sig chan bool, cpuProfCmd, traceCmd string) {

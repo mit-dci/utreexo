@@ -2,6 +2,7 @@ package bridgenode
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -78,7 +79,6 @@ func restoreForest(
 
 // restoreHeight restores height from util.ForestLastSyncedBlockHeightFilePath
 func restoreHeight() (height int32, err error) {
-
 	// if there is a heightfile, get the height from that
 	// heightFile saves the last block that was written to ttldb
 	if util.HasAccess(util.ForestLastSyncedBlockHeightFilePath) {
@@ -92,6 +92,9 @@ func restoreHeight() (height int32, err error) {
 		if err != nil {
 			return 0, err
 		}
+	} else {
+		return 0, fmt.Errorf("can't read height at %s\n",
+			util.ForestLastSyncedBlockHeightFilePath)
 	}
 	return
 }

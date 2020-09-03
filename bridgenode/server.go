@@ -5,15 +5,82 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"os"
+	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
+
+func ArchiveServer(param chaincfg.Params, dataDir string, sig chan bool) error {
+
+	// Channel to alert the tell the main loop it's ok to exit
+	haltRequest := make(chan bool, 1)
+
+	// Channel for ServeBlock() to wait
+	haltAccept := make(chan bool, 1)
+
+	// Handle user interruptions
+	go stopServer(sig, haltRequest, haltAccept)
+
+	_, err := os.Stat(dataDir)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("%s not found, can't serve blocks\n", dataDir)
+	}
+
+	// TODO ****** server shouldn't need levelDB access, fix this
+	ttlpath := "utree/" + param.Name + "ttldb"
+	// Open leveldb
+	o := opt.Options{CompactionTableSizeMultiplier: 8}
+	lvdb, err := leveldb.OpenFile(ttlpath, &o)
+	if err != nil {
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		return err
+	}
+	defer lvdb.Close()
+	// **********************************
+
+	// Init forest and variables. Resumes if the data directory exists
+	maxHeight, err := restoreHeight()
+	if err != nil {
+		return err
+	}
+
+	blockServer(maxHeight, dataDir, haltRequest, haltAccept, lvdb)
+
+	return nil
+}
+
+// stopServer listens for the signal from the OS and initiates an exit sequence
+func stopServer(sig, haltRequest, haltAccept chan bool) {
+
+	// Listen for SIGINT, SIGQUIT, SIGTERM
+	<-sig
+	haltRequest <- true
+	// Sometimes there are bugs that make the program run forever.
+	// Utreexo binary should never take more than 10 seconds to exit
+	go func() {
+		time.Sleep(2 * time.Second)
+		fmt.Println("Exit timed out. Force quitting.")
+		os.Exit(1)
+	}()
+
+	// Tell the user that the sig is received
+	fmt.Println("User exit signal received. Exiting...")
+
+	// Wait until server says it's ok to exit
+	<-haltAccept
+	os.Exit(0)
+}
 
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest,
 	haltAccept chan bool, lvdb *leveldb.DB) {
+	fmt.Printf("serving up to & including block height %d\n", endHeight)
 	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
 		fmt.Printf(err.Error())
@@ -28,7 +95,6 @@ func blockServer(endHeight int32, dataDir string, haltRequest,
 
 	cons := make(chan net.Conn)
 	go acceptConnections(listener, cons)
-
 	for {
 		select {
 		case <-haltRequest:
@@ -43,6 +109,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest,
 }
 
 func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
+	fmt.Printf("listening for connections on %s\n", listener.Addr().String())
 	for {
 		select {
 		case <-cons:
@@ -63,7 +130,8 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 
 // serveBlocksWorker gets height requests from client and sends out the ublock
 // for that height
-func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *leveldb.DB) {
+func serveBlocksWorker(
+	c net.Conn, endHeight int32, blockDir string, lvdb *leveldb.DB) {
 	defer c.Close()
 	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
 	var fromHeight, toHeight int32
@@ -136,7 +204,8 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *level
 			udb = ud.ToBytes()
 
 			// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
-			blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
+			blkbytes, err := GetBlockBytesFromFile(
+				curHeight, util.OffsetFilePath, blockDir)
 			if err != nil {
 				fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 				return

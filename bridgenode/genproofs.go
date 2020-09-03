@@ -151,16 +151,6 @@ func BuildProofs(
 
 	fmt.Println("Done writing")
 
-	if stop {
-		// genproofs was paused.
-		// Tell stopBuildProofs that it's ok to exit
-		haltAccept <- true
-		return nil
-	}
-
-	// should be a goroutine..?  isn't right now
-	blockServer(knownTipHeight, dataDir, haltRequest, haltAccept, lvdb)
-
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true
 	return nil
@@ -297,7 +287,13 @@ func stopBuildProofs(
 	sig, offsetfinished, haltRequest, haltAccept chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
-	<-sig
+	// Also listen for an unrequested haltAccept which means upstream is finshed
+	// and to end this goroutine
+	select {
+	case <-haltAccept:
+		return
+	case <-sig:
+	}
 
 	trace.Stop()
 	pprof.StopCPUProfile()
