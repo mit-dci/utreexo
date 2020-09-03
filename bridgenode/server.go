@@ -80,7 +80,6 @@ func stopServer(sig, haltRequest, haltAccept chan bool) {
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest,
 	haltAccept chan bool, lvdb *leveldb.DB) {
-	endHeight-- // TODO make sure the -1 makes sense here
 	fmt.Printf("serving up to & including block height %d\n", endHeight)
 	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
