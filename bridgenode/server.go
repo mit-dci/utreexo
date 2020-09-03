@@ -25,6 +25,11 @@ func ServeBlock(param chaincfg.Params, dataDir string, sig chan bool) error {
 	// Handle user interruptions
 	go stopServer(sig, haltRequest, haltAccept)
 
+	_, err := os.Stat(dataDir)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("%s not found, can't serve blocks\n", dataDir)
+	}
+
 	// TODO ****** server shouldn't need levelDB access, fix this
 	ttlpath := "utree/" + param.Name + "ttldb"
 	// Open leveldb
@@ -103,6 +108,7 @@ func blockServer(endHeight int32, dataDir string, haltRequest,
 }
 
 func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
+	fmt.Printf("listening for connections on %s\n", listener.Addr().String())
 	for {
 		select {
 		case <-cons:
@@ -123,7 +129,8 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 
 // serveBlocksWorker gets height requests from client and sends out the ublock
 // for that height
-func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *leveldb.DB) {
+func serveBlocksWorker(
+	c net.Conn, endHeight int32, blockDir string, lvdb *leveldb.DB) {
 	defer c.Close()
 	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
 	var fromHeight, toHeight int32
@@ -196,7 +203,8 @@ func serveBlocksWorker(c net.Conn, endHeight int32, blockDir string, lvdb *level
 			udb = ud.ToBytes()
 
 			// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
-			blkbytes, err := GetBlockBytesFromFile(curHeight, util.OffsetFilePath, blockDir)
+			blkbytes, err := GetBlockBytesFromFile(
+				curHeight, util.OffsetFilePath, blockDir)
 			if err != nil {
 				fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 				return
