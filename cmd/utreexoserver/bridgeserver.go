@@ -130,7 +130,7 @@ func main() {
 	}
 	err := bridge.ArchiveServer(param, dataDir, sig)
 	if err != nil {
-		fmt.Printf("ServeBlocks error: %s\n", err.Error())
+		fmt.Printf("ArchiveServer error: %s\n", err.Error())
 		panic("server halting")
 	}
 }
