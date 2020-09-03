@@ -14,7 +14,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-func ServeBlock(param chaincfg.Params, dataDir string, sig chan bool) error {
+func ArchiveServer(param chaincfg.Params, dataDir string, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -80,6 +80,8 @@ func stopServer(sig, haltRequest, haltAccept chan bool) {
 // ublocks blocks over that connection
 func blockServer(endHeight int32, dataDir string, haltRequest,
 	haltAccept chan bool, lvdb *leveldb.DB) {
+	endHeight--
+	fmt.Printf("serving up to block height %d\n", endHeight)
 	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
 		fmt.Printf(err.Error())

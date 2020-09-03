@@ -120,19 +120,18 @@ func main() {
 	// only do buildProofs or serve; need to restart to serve after
 	// building proofs
 
-	if *serve {
-		err := bridge.ServeBlock(param, dataDir, sig)
-		if err != nil {
-			fmt.Printf("ServeBlocks error: %s\n", err.Error())
-			panic("server halting")
-		}
-	} else {
+	if !*serve {
 		fmt.Printf("datadir is %s\n", dataDir)
 		err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
 		if err != nil {
 			fmt.Printf("Buildproofs error: %s\n", err.Error())
 			panic("proof build halting")
 		}
+	}
+	err := bridge.ArchiveServer(param, dataDir, sig)
+	if err != nil {
+		fmt.Printf("ServeBlocks error: %s\n", err.Error())
+		panic("server halting")
 	}
 }
 
