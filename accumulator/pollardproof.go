@@ -22,7 +22,7 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 			// if there's no branch (1-tree) nothing to prove
 			continue
 		}
-		node := &p.roots[tNum]
+		node := p.roots[tNum]
 		h := branchLen - 1
 		pos := parentMany(target, branchLen, p.rows()) // this works but...
 		// we should have a way to get the root positions from just p.roots
