@@ -125,7 +125,7 @@ func main() {
 			panic("proof build halting")
 		}
 	}
-	err := bridge.ServeBlocks(param, dataDir, sig)
+	err := bridge.ServeBlock(param, dataDir, sig)
 	if err != nil {
 		fmt.Printf("ServeBlocks error: %s\n", err.Error())
 		panic("server halting")

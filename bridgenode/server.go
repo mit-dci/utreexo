@@ -10,7 +10,7 @@ import (
 	"runtime/trace"
 	"time"
 
-	"github.com/adiabat/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
