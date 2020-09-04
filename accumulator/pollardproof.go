@@ -249,11 +249,13 @@ func (c *CacheSim) Simulate(targets []uint64, adds []bool) []uint64 {
 	leafSwaps := floorTransform(targets, c.numLeaves, treeRows(c.numLeaves))
 	for _, swap := range leafSwaps {
 		fromBit := c.cached.Bit(int(swap.from))
-		c.cached.SetBit(c.cached, int(swap.from), c.cached.Bit(int(swap.to)))
+		toBit := c.cached.Bit(int(swap.to))
+		c.cached.SetBit(c.cached, int(swap.from), toBit)
 		c.cached.SetBit(c.cached, int(swap.to), fromBit)
 	}
+	c.numLeaves -= uint64(len(targets))
 
-	// Add the new leafes to the cache.
+	// Add the new leaves to the cache.
 	for i, add := range adds {
 		if add {
 			c.cached.SetBit(c.cached, int(c.numLeaves+uint64(i)), 1)
@@ -261,7 +263,7 @@ func (c *CacheSim) Simulate(targets []uint64, adds []bool) []uint64 {
 			c.cached.SetBit(c.cached, int(c.numLeaves+uint64(i)), 0)
 		}
 	}
-	c.numLeaves += uint64(len(adds) - len(targets))
+	c.numLeaves += uint64(len(adds))
 
 	neededProof := sortedUint64SliceDiff(
 		mergeSortedSlices(unknownProof, unknownTargets),
