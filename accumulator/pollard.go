@@ -354,6 +354,9 @@ func (p *Pollard) readPos(pos uint64) (
 		lrSib := lr ^ 1
 		if h == 0 { // if at bottom, done
 			n, nsib = n.niece[lrSib], n.niece[lr]
+			if n == nil && nsib != nil {
+				n = nsib.niece[0]
+			}
 			return
 		}
 
