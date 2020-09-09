@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/mit-dci/utreexo/util"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -24,20 +25,21 @@ func WriteBlock(bnr BlockAndRev,
 
 	blockBatch := new(leveldb.Batch)
 
+	// write key:value to the ttl db; key is 8 bytes blockheight, txoutnumber
+
 	// iterate through the transactions in a block
 	for blockindex, tx := range bnr.Blk.Transactions {
 		// iterate through individual inputs in a transaction
 		for _, in := range tx.TxIn {
 			if blockindex > 0 { // skip coinbase "spend"
-				opString := in.PreviousOutPoint.String()
-				h := util.HashFromString(opString)
 				heightBytes := make([]byte, 4)
 				binary.BigEndian.PutUint32(
 					heightBytes,
 					uint32(bnr.Height+1), // why +1??
 				)
 				// TODO ^^^^^ yeah why
-				blockBatch.Put(h[:], heightBytes)
+				blockBatch.Put(
+					util.OutpointToBytes(in.PreviousOutPoint), heightBytes)
 			}
 		}
 	}

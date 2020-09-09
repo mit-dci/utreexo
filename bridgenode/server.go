@@ -189,8 +189,8 @@ func serveBlocksWorker(
 			// set leaf ttl values
 			ud.LeafTTLs = make([]uint32, len(ud.UtxoData))
 			for i, utxo := range ud.UtxoData {
-				outpointHash := util.HashFromString(utxo.Outpoint.String())
-				heightBytes, err := lvdb.Get(outpointHash[:], nil)
+				heightBytes, err := lvdb.Get(
+					[]byte(util.OutpointToBytes(utxo.Outpoint)), nil)
 				if err != nil {
 					if err == leveldb.ErrNotFound {
 						// outpoint not spend yet, set leaf ttl to max uint32 value

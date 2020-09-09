@@ -183,6 +183,13 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	return
 }
 
+func OutpointToBytes(op wire.OutPoint) []byte {
+	var buf bytes.Buffer
+	_, _ = buf.Write(op.Hash[:])
+	binary.Write(&buf, binary.BigEndian, op.Index)
+	return buf.Bytes()
+}
+
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
 // uses remember slice up to number of txos, but doesn't check that it's the
 // right length.  Similar with skiplist, doesn't check it.
