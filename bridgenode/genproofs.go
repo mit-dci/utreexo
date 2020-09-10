@@ -61,11 +61,11 @@ func BuildProofs(
 
 	// For ttl value writing
 	var batchwg sync.WaitGroup
-	txoWriteBatchan := make(chan *leveldb.Batch, 10)
+	dbWorkChan := make(chan dbWork, 10)
 
 	// Start 16 workers. Just an arbitrary number
 	for j := 0; j < 16; j++ {
-		go DbWorker(txoWriteBatchan, lvdb, &batchwg)
+		go DbWorker(dbWorkChan, lvdb, &batchwg)
 	}
 
 	// To send/receive blocks from blockreader()
@@ -89,7 +89,7 @@ func BuildProofs(
 		bnr := <-blockAndRevReadQueue
 
 		// Writes the ttl values for each tx to leveldb
-		WriteBlock(bnr, txoWriteBatchan, &batchwg)
+		WriteBlock(bnr, dbWorkChan, &batchwg)
 
 		// Get the add and remove data needed from the block & undo block
 		blockAdds, delLeaves, err := blockToAddDel(bnr)
