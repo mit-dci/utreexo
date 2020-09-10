@@ -24,29 +24,26 @@ type ProofAndHeight struct {
 	Height int32
 }
 
-// Tx defines a bitcoin transaction that provides easier and more efficient
-// manipulation of raw transactions.  It also memoizes the hash for the
-// transaction on its first access so subsequent accesses don't have to repeat
-// the relatively expensive hashing operations.
-type zProofTx struct {
-	msgTx         *wire.MsgTx // Underlying MsgTx
-	txHash        *Hash       // Cached transaction hash
-	txHashWitness *Hash       // Cached transaction witness hash
-	txHasWitness  *bool       // If the transaction has witness data
-	txIndex       int         // Position within a block or TxIndexUnknown
-}
-
 // UBlock is a regular block, with Udata stuck on
 type UBlock struct {
-	Block     wire.MsgBlock
-	ExtraData UData
-	Height    int32
+	UtreexoData UData
+	Block       wire.MsgBlock
 }
 
+/*
+Ublock serialization
+(changed with flatttl branch)
+
+A "Ublock" is a regular bitcoin block, along with Utreexo-specific data.
+The udata comes first, and the height and leafTTLs come first.
+
+*/
+
 type UData struct {
-	AccProof accumulator.BatchProof
+	Height   int32
+	LeafTTLs []int32
 	UtxoData []LeafData
-	LeafTTLs []uint32
+	AccProof accumulator.BatchProof
 }
 
 // LeafData is all the data that goes into a leaf in the utreexo accumulator
@@ -163,16 +160,30 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 }
 
 // ToBytes serializes UData into bytes.
-// There's a bunch of variable length things (the batchProof.hashes, and the
-// LeafDatas) so we prefix lengths for those.  Ordering is:
+// First, height, 4 bytes.
+// Then, number of TTL values (4 bytes, even though we only need 2)
+// Then a bunch of TTL values, one for each txo in the associated block
 // batch proof length (4 bytes)
 // batch proof
-// Bunch of LeafDatas, prefixed with 2-byte lengths
-// leaf ttls 4 bytes each
+// Bunch of LeafDatas, each prefixed with 2-byte lengths
 func (ud *UData) ToBytes() []byte {
 	batchBytes := ud.AccProof.ToBytes()
 	buffer := new(bytes.Buffer)
+
+	_ = binary.Write(buffer, binary.BigEndian, ud.Height)
+	_ = binary.Write(buffer, binary.BigEndian, uint32(len(ud.LeafTTLs)))
+	// write the TTL values
+	// These start 8 bytes into each Ublock, and we need to overwrite these
+	// since we don't initially know what the TTLs are
+	for _, ttl := range ud.LeafTTLs {
+		binary.Write(buffer, binary.BigEndian, ttl)
+	}
+
 	// write the length of the batch proof bytes
+	// currently there's a redundant 4 bytes as the number of TTLs is the same
+	// as the number of targets in batchBytes
+	// TODO remove 4 byte redundant data here?  Annoying / not worth it?
+	// it's the first 4 bytes of batchBytes so could just trim that...
 	binary.Write(buffer, binary.BigEndian, uint32(len(batchBytes)))
 	// write the batch proof bytes
 	buffer.Write(batchBytes)
@@ -181,11 +192,6 @@ func (ud *UData) ToBytes() []byte {
 		// write the utxo data prefixed by 2 length bytes
 		buffer.Write(PrefixLen16(utxo.ToBytes()))
 	}
-	// write the TTL values
-	for _, ttl := range ud.LeafTTLs {
-		binary.Write(buffer, binary.BigEndian, ttl)
-	}
-
 	return buffer.Bytes()
 }
 
@@ -196,12 +202,22 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 		return
 	}
 
-	if len(b) < 4 {
+	if len(b) < 12 {
 		err = fmt.Errorf("block proof too short %d bytes", len(b))
 		return
 	}
 
 	buffer := bytes.NewBuffer(b)
+
+	// read the height
+	_ = binary.Read(buffer, binary.BigEndian, &ud.Height)
+	// read number of TTLs to create the slice
+	var numTTLs uint32
+	_ = binary.Read(buffer, binary.BigEndian, &numTTLs)
+	ud.LeafTTLs = make([]int32, numTTLs)
+	for i, _ := range ud.LeafTTLs { // read each TTL, 4 bytes each
+		_ = binary.Read(buffer, binary.BigEndian, &ud.LeafTTLs[i])
+	}
 
 	// read the length of the batch proof bytes
 	var batchLen uint32
@@ -227,15 +243,6 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 		}
 	}
 
-	if buffer.Len() > 0 {
-		// read the TTL values, there are as many TTLs as there are targets in the proof.
-		ud.LeafTTLs = make([]uint32, len(ud.AccProof.Targets))
-		for i, _ := range ud.LeafTTLs {
-			// each ttl is 4 bytes (uint32)
-			ud.LeafTTLs[i] = binary.BigEndian.Uint32(buffer.Next(4))
-		}
-	}
-
 	return ud, nil
 }
 
@@ -246,7 +253,7 @@ func (ub *UBlock) FromBytes(argbytes []byte) (err error) {
 	if err != nil {
 		return
 	}
-	ub.ExtraData, err = UDataFromBytes(buf.Bytes())
+	ub.UtreexoData, err = UDataFromBytes(buf.Bytes())
 	return
 }
 
@@ -283,7 +290,7 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 		bytesRead += uint32(n)
 	}
 	// fmt.Printf("udataBytes: %x\n", udataBytes)
-	ub.ExtraData, err = UDataFromBytes(udataBytes)
+	ub.UtreexoData, err = UDataFromBytes(udataBytes)
 	return
 }
 
@@ -296,7 +303,7 @@ func (ub *UBlock) Serialize(w io.Writer) (err error) {
 		return
 	}
 
-	udataBytes := ub.ExtraData.ToBytes()
+	udataBytes := ub.UtreexoData.ToBytes()
 	err = binary.Write(&bw, binary.BigEndian, uint32(len(udataBytes)))
 	if err != nil {
 		return

@@ -112,7 +112,7 @@ func UblockNetworkReader(
 			return
 		}
 
-		ub.Height = curHeight
+		ub.UtreexoData.Height = curHeight
 		blockChan <- ub
 	}
 }

@@ -18,15 +18,15 @@ func (ub *UBlock) ProofsProveBlock(inputSkipList []uint32) bool {
 	proveOPs := blockToDelOPs(&ub.Block, inputSkipList)
 
 	// ensure that all outpoints are provided in the extradata
-	if len(proveOPs) != len(ub.ExtraData.UtxoData) {
+	if len(proveOPs) != len(ub.UtreexoData.UtxoData) {
 		fmt.Printf("%d outpoints need proofs but only %d proven\n",
-			len(proveOPs), len(ub.ExtraData.UtxoData))
+			len(proveOPs), len(ub.UtreexoData.UtxoData))
 		return false
 	}
-	for i, _ := range ub.ExtraData.UtxoData {
-		if proveOPs[i] != ub.ExtraData.UtxoData[i].Outpoint {
+	for i, _ := range ub.UtreexoData.UtxoData {
+		if proveOPs[i] != ub.UtreexoData.UtxoData[i].Outpoint {
 			fmt.Printf("block/utxoData mismatch %s v %s\n",
-				proveOPs[i].String(), ub.ExtraData.UtxoData[i].Outpoint.String())
+				proveOPs[i].String(), ub.UtreexoData.UtxoData[i].Outpoint.String())
 			return false
 		}
 	}
@@ -121,7 +121,7 @@ func NewUtxoEntry(
 func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 	// NOTE Whatever happens here is done a million times
 	// be efficient here
-	view := ub.ExtraData.ToUtxoView()
+	view := ub.UtreexoData.ToUtxoView()
 	viewMap := view.Entries()
 	var txonum uint32
 
@@ -142,7 +142,8 @@ func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 		for len(outskip) > 0 && outskip[0] < txonum+outputsInTx {
 			idx := outskip[0] - txonum
 			skipTxo := wire.NewTxOut(tx.TxOut[idx].Value, tx.TxOut[idx].PkScript)
-			skippedEntry := blockchain.NewUtxoEntry(skipTxo, ub.Height, false)
+			skippedEntry := blockchain.NewUtxoEntry(
+				skipTxo, ub.UtreexoData.Height, false)
 			skippedOutpoint := wire.OutPoint{Hash: tx.TxHash(), Index: idx}
 			viewMap[skippedOutpoint] = skippedEntry
 			outskip = outskip[1:] // pop off from output skiplist
@@ -160,7 +161,7 @@ func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 		go func(w *sync.WaitGroup, tx *btcutil.Tx) {
 			// hardcoded testnet3 for now
 			_, err := blockchain.CheckTransactionInputs(
-				utilTx, ub.Height, view, p)
+				utilTx, ub.UtreexoData.Height, view, p)
 			if err != nil {
 				fmt.Printf("Tx %s fails CheckTransactionInputs: %s\n",
 					utilTx.Hash().String(), err.Error())
