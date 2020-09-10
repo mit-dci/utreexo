@@ -3,7 +3,6 @@ package bridgenode
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"net"
 	"os"
 	"time"
@@ -187,19 +186,19 @@ func serveBlocksWorker(
 			}
 
 			// set leaf ttl values
-			ud.LeafTTLs = make([]uint32, len(ud.UtxoData))
+			ud.LeafTTLs = make([]int32, len(ud.UtxoData))
 			for i, utxo := range ud.UtxoData {
 				heightBytes, err := lvdb.Get(
 					[]byte(util.OutpointToBytes(utxo.Outpoint)), nil)
 				if err != nil {
 					if err == leveldb.ErrNotFound {
-						// outpoint not spend yet, set leaf ttl to max uint32 value
-						ud.LeafTTLs[i] = math.MaxUint32
+						// outpoint not spend yet, set to a billion for unknown
+						ud.LeafTTLs[i] = 1 << 30
 						continue
 					}
 					panic(err)
 				}
-				ud.LeafTTLs[i] = binary.BigEndian.Uint32(heightBytes)
+				ud.LeafTTLs[i] = int32(binary.BigEndian.Uint32(heightBytes))
 			}
 			udb = ud.ToBytes()
 
