@@ -135,14 +135,15 @@ func (c *Csn) putBlockInPollard(
 
 	inskip, outskip := util.DedupeBlock(&ub.Block)
 	if !ub.ProofsProveBlock(inskip) {
-		return fmt.Errorf("uData missing utxo data for block %d", ub.Height)
+		return fmt.Errorf(
+			"uData missing utxo data for block %d", ub.UtreexoData.Height)
 	}
 
-	*totalDels += len(ub.ExtraData.AccProof.Targets) // for benchmarking
+	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
 
 	// derive leafHashes from leafData
-	if !ub.ExtraData.Verify(c.pollard.ReconstructStats()) {
-		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.Height)
+	if !ub.UtreexoData.Verify(c.pollard.ReconstructStats()) {
+		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.UtreexoData.Height)
 	}
 
 	// **************************************
@@ -158,36 +159,36 @@ func (c *Csn) putBlockInPollard(
 	if c.CheckSignatures {
 		if !ub.CheckBlock(outskip, &c.Params) {
 			return fmt.Errorf("height %d hash %s block invalid",
-				ub.Height, ub.Block.BlockHash().String())
+				ub.UtreexoData.Height, ub.Block.BlockHash().String())
 		}
 	}
 
 	// sort before ingestion; verify up above unsorts...
-	ub.ExtraData.AccProof.SortTargets()
+	ub.UtreexoData.AccProof.SortTargets()
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := c.pollard.IngestBatchProof(ub.ExtraData.AccProof)
+	err := c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
 	if err != nil {
-		fmt.Printf("height %d ingest error\n", ub.Height)
+		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
 		return err
 	}
 
-	remember := make([]bool, len(ub.ExtraData.LeafTTLs))
-	for i, ttl := range ub.ExtraData.LeafTTLs {
+	remember := make([]bool, len(ub.UtreexoData.LeafTTLs))
+	for i, ttl := range ub.UtreexoData.LeafTTLs {
 		// ttl-ub.Height is the number of blocks until the block is spend.
-		remember[i] = ttl-uint32(ub.Height) < uint32(c.pollard.Lookahead)
+		remember[i] = ttl-ub.UtreexoData.Height < c.pollard.Lookahead
 	}
 
 	// get hashes to add into the accumulator
 	blockAdds := util.BlockToAddLeaves(
-		ub.Block, remember, outskip, ub.Height)
+		ub.Block, remember, outskip, ub.UtreexoData.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// fmt.Printf("h %d adds %d targets %d\n",
-	// ub.Height, len(blockAdds), len(ub.ExtraData.AccProof.Targets))
+	// ub.Height, len(blockAdds), len(ub.UtreexoData.AccProof.Targets))
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
-	err = c.pollard.Modify(blockAdds, ub.ExtraData.AccProof.Targets)
+	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
 	if err != nil {
 		return err
 	}
