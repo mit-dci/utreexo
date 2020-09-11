@@ -183,11 +183,10 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	return
 }
 
-func OutpointToBytes(op wire.OutPoint) []byte {
-	var buf bytes.Buffer
-	_, _ = buf.Write(op.Hash[:])
-	binary.Write(&buf, binary.BigEndian, op.Index)
-	return buf.Bytes()
+func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
+	copy(b[0:32], op.Hash[:])
+	binary.BigEndian.Uint32(b[32:36])
+	return
 }
 
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos

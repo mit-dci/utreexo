@@ -186,20 +186,24 @@ func serveBlocksWorker(
 			}
 
 			// set leaf ttl values
-			ud.LeafTTLs = make([]int32, len(ud.UtxoData))
-			for i, utxo := range ud.UtxoData {
-				heightBytes, err := lvdb.Get(
-					[]byte(util.OutpointToBytes(utxo.Outpoint)), nil)
-				if err != nil {
-					if err == leveldb.ErrNotFound {
-						// outpoint not spend yet, set to a billion for unknown
-						ud.LeafTTLs[i] = 1 << 30
-						continue
+			// now we get them all for free
+
+			/*
+				ud.LeafTTLs = make([]int32, len(ud.UtxoData))
+				for i, utxo := range ud.UtxoData {
+					heightBytes, err := lvdb.Get(
+						[]byte(util.OutpointToBytes(&utxo.Outpoint)), nil)
+					if err != nil {
+						if err == leveldb.ErrNotFound {
+							// outpoint not spend yet, set to a billion for unknown
+							ud.LeafTTLs[i] = 1 << 30
+							continue
+						}
+						panic(err)
 					}
-					panic(err)
+					ud.LeafTTLs[i] = int32(binary.BigEndian.Uint32(heightBytes))
 				}
-				ud.LeafTTLs[i] = int32(binary.BigEndian.Uint32(heightBytes))
-			}
+			*/
 			udb = ud.ToBytes()
 
 			// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))

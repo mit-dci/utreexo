@@ -61,7 +61,7 @@ func BuildProofs(
 
 	// For ttl value writing
 	var batchwg sync.WaitGroup
-	dbWorkChan := make(chan dbWork, 10)
+	dbWorkChan := make(chan ttlBlock, 10)
 
 	// Start 16 workers. Just an arbitrary number
 	for j := 0; j < 16; j++ {
