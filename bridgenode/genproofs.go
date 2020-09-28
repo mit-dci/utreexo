@@ -45,12 +45,14 @@ func BuildProofs(
 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
 		return err
 	}
-	// for testing only
-	// knownTipHeight = 32500
 
 	ttlpath := "utree/" + param.Name + "ttldb"
+
 	// Open leveldb
-	o := opt.Options{CompactionTableSizeMultiplier: 8}
+	o := opt.Options{
+		CompactionTableSizeMultiplier: 8,
+		Compression:                   opt.NoCompression,
+	}
 	lvdb, err := leveldb.OpenFile(ttlpath, &o)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
