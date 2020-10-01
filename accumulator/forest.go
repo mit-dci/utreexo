@@ -674,12 +674,6 @@ func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 	if err != nil {
 		return err
 	}
-	for i := uint64(0); i < f.numLeaves; i++ {
-		//f.positionMap[f.data.read(i).Mini()] = i
-		if i%100000 == 0 && i != 0 {
-			fmt.Printf("Added %d leaves %x\n", i, f.data.read(i).Mini())
-		}
-	}
 
 	f.data.close()
 
