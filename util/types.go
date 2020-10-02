@@ -46,6 +46,17 @@ type UData struct {
 	AccProof accumulator.BatchProof
 }
 
+// all the ttl data that comes from a block
+type TtlBlock struct {
+	Height  int32      // height of the block that consumed all the utxos
+	Created []TxoStart // slice of
+}
+
+type TxoStart struct {
+	TxBlockHeight    int32 // what block created the txo
+	IndexWithinBlock int32 // index in that block where the txo is created
+}
+
 // LeafData is all the data that goes into a leaf in the utreexo accumulator
 type LeafData struct {
 	BlockHash [32]byte

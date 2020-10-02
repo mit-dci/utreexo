@@ -140,7 +140,7 @@ func DbWorker(
 		work := <-dbWorkChan
 		var batch leveldb.Batch
 		// build the batch for writing to levelDB.
-		// Just outpoints to index in block
+		// Just outpoints to index within block
 		for i, op := range work.newTxos {
 			binary.BigEndian.PutUint32(val, uint32(i))
 			batch.Put(op[:], val)

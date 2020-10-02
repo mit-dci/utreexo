@@ -75,9 +75,10 @@ func BuildProofs(
 	// Reads util the lastIndexOffsetHeight
 	go BlockAndRevReader(blockAndRevReadQueue, dataDir, "",
 		knownTipHeight, height)
-	proofChan := make(chan []byte, 10)
+	proofChan := make(chan []byte, 10)      // channel for the bytes of proof data
+	ttlChan := make(chan util.TtlBlock, 10) // channel for ttls to be put in old proofs
 	var fileWait sync.WaitGroup
-	go proofWriterWorker(proofChan, &fileWait)
+	go proofWriterWorker(proofChan, ttlChan, lvdb, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -99,6 +100,8 @@ func BuildProofs(
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
+		// this also includes TTL values, but they are unpopulated right now, because
+		// we don't yet know when the UTXOs in this block die.
 		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
