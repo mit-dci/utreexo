@@ -13,7 +13,7 @@ import (
 // DbWorker writes & reads/deletes everything to the db.
 // It also generates TTLResultBlocks to send to the flat file worker
 func DbWorker(
-	dbWorkChan chan ttlRawBlock, lvdb *leveldb.DB, wg *sync.WaitGroup) {
+	dbWorkChan chan ttlRawBlock, ttlResultChan chan ttlResultBlock, lvdb *leveldb.DB, wg *sync.WaitGroup) {
 
 	// open the offsetFile read-only
 	offsetFile, err := os.Open(util.POffsetFilePath)

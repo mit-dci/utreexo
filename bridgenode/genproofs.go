@@ -58,27 +58,28 @@ func BuildProofs(
 	}
 	defer lvdb.Close()
 
-	// For ttl value writing
 	var batchwg sync.WaitGroup
-	dbWriteChan := make(chan ttlRawBlock, 10)
-	//	dbReadDeleteChan := make(chan ttlFromBlock, 10)
-
-	// Start 16 workers. Just an arbitrary number
-	for j := 0; j < 16; j++ {
-		go DbWorker(dbWriteChan, lvdb, &batchwg)
-	}
 
 	// To send/receive blocks from blockreader()
-	blockAndRevReadQueue := make(chan BlockAndRev, 10)
+	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
+
+	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
+	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat writer
+	proofChan := make(chan []byte, 10)             // from proof processing to flat writer
+
+	// Start 16 workers. Just an arbitrary number
+	//	for j := 0; j < 16; j++ {
+	// I think we can only have one dbworker now, since it needs to all happen in order?
+	go DbWorker(dbWriteChan, ttlResultChan, lvdb, &batchwg)
+	//	}
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go BlockAndRevReader(blockAndRevReadQueue, dataDir, "",
 		knownTipHeight, height)
-	proofChan := make(chan []byte, 10) // channel for the bytes of proof data
-	//	ttlChan := make(chan util.TtlBlock, 10) // channel for ttls to be put in old proofs
+
 	var fileWait sync.WaitGroup
-	go flatFileWriter(proofChan, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -157,7 +158,6 @@ func BuildProofs(
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true
 	return nil
-
 }
 
 // stopBuildProofs listens for the signal from the OS and initiates an exit sequence

@@ -60,7 +60,21 @@ all the ttl values are right there in the block, nothing to do
 That's better, do more work in genproofs since that only happens once and
 serving can happen lots of times.
 
+*/
 
+/*
+general ttl flow here: block n rev read from disk.  Sent to block processing, which
+turns it into a ttlRawBlock.  That gets sent to the DB worker, which does db io, and
+turns the ttlRawBlock into a TtlResultBlock.  The TtlResultBlock then gets sent to the
+flatfile worker which writes the ttl data to the right places within the flat file.
+(the flat file worker is also getting proof data from the other processing which
+has the accumulator, and it should only write ttl result blocks after it has already
+processed the proof block.
+
+Hopefully there are no timing / concurrency conflicts due to these things happening
+on different threads.  I think as long as the flat file worker holds off on any
+ttl blocks that come in too soon it should be OK; the db worker and everything else is
+going sequentially and has buffers
 */
 
 // the data from a block about txo creation and deletion for TTL calculation
@@ -79,12 +93,12 @@ type ttlRawBlock struct {
 
 // all the ttl result data from a block, after checking with the DB
 // to be written to the flat file
-type TTLResultBlock struct {
+type ttlResultBlock struct {
 	Height  int32      // height of the block that consumed all the utxos
-	Created []TxoStart // slice of
+	Created []txoStart // slice of
 }
 
-type TxoStart struct {
+type txoStart struct {
 	TxBlockHeight    int32 // what block created the txo
 	IndexWithinBlock int32 // index in that block where the txo is created
 }

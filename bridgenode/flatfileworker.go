@@ -25,8 +25,10 @@ we're not running on fat32 so works OK for now.
 // pFileWorker takes in blockproof and height information from the channel
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
-func flatFileWriter(
-	proofChan chan []byte, fileWait *sync.WaitGroup) {
+func flatFileWorker(
+	proofChan chan []byte,
+	ttlResultChan chan ttlResultBlock,
+	fileWait *sync.WaitGroup) {
 
 	// for the pFile
 	proofFile, err := os.OpenFile(
@@ -51,36 +53,72 @@ func flatFileWriter(
 		panic(err)
 	}
 
-	// Grab either proof bytes and write em to offset / proof file, OR, get a whole
-	// batch of
+	proofWriteHeight := int32(proofFileLocation / 8)
+
+	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
+	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
+	// it should keep both buffers about even.  If it keeps doing proofs and the ttl
+	// buffer fills, then eventually it'll block...?
+	// Also, is it OK to have 2 different workers here?  It probably is, with the
+	// ttl side having read access to the proof writing side's last written proof.
+	// then the TTL side can do concurrent writes.  Also the TTL writes might be
+	// slow since they're all over the place.  Also the offsets should definitely
+	// be in ram since they'll be accessed a lot.
+
+	// TODO ^^^^^^ all that stuff.
 
 	for {
+		select {
+		// if there's a proof waiting, write that first
+		case pbytes := <-proofChan:
+			// write to offset file first
+			offsetFile.Seek(int64(proofWriteHeight)*8, 0)
+			err = binary.Write(offsetFile, binary.BigEndian, proofFileLocation)
+			if err != nil {
+				fmt.Printf(err.Error())
+				return
+			}
 
-		pbytes := <-proofChan
-		// write to offset file first
-		err = binary.Write(offsetFile, binary.BigEndian, proofFileLocation)
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
+			// write to proof file
+			// first write big endian proof size int64
+			err = binary.Write(proofFile, binary.BigEndian, int64(len(pbytes)))
+			if err != nil {
+				fmt.Printf(err.Error())
+				return
+			}
+
+			// then write the proof
+			written, err := proofFile.Write(pbytes)
+			if err != nil {
+				fmt.Printf(err.Error())
+				return
+			}
+			proofFileLocation += int64(written) + 8
+			proofWriteHeight++
+			fileWait.Done()
 		}
+		// separate select blocks, so that you try doing 1:1 proof & ttl
+		// to prevent one buffer from filling up
+		select {
+		case ttlRes := <-ttlResultChan:
 
-		// write to proof file
-		// first write big endian proof size int64
-		err = binary.Write(proofFile, binary.BigEndian, int64(len(pbytes)))
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
+			if ttlRes.Height > proofWriteHeight {
+				ttlResultChan <- ttlRes
+				continue
+				// this is weird and results in it being out of order, but...
+				// should be OK!  Also if the buffer fills we're deadlocked here, since
+				// this thread is the only thing pulling stuff out of this buffer.
+				// This shouldn't happen since we check both buffers every loop
+			}
+			// write ttl results to disk
+			for _, t := range ttlRes.Created {
+				fmt.Printf("write ttl block %d txo %d lifespan %d\n",
+					t.TxBlockHeight, t.IndexWithinBlock, ttlRes.Height-t.TxBlockHeight)
+
+				// lookup block start point
+
+			}
+
 		}
-		proofFileLocation += 8
-
-		// then write the proof
-		written, err := proofFile.Write(pbytes)
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-		proofFileLocation += int64(written)
-
-		fileWait.Done()
 	}
 }
