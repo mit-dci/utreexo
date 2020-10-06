@@ -80,10 +80,10 @@ going sequentially and has buffers
 // the data from a block about txo creation and deletion for TTL calculation
 // this will be sent to the DB
 type ttlRawBlock struct {
-	blockHeight       int32
-	newTxos           [][36]byte
-	spentTxos         [][36]byte
-	spentStartHeights []int32
+	blockHeight       int32      // height of this block in the chain
+	newTxos           [][36]byte // serialized outpoint for every output
+	spentTxos         [][36]byte // serialized outpoint for every input
+	spentStartHeights []int32    // tied 1:1 to spentTxos
 }
 
 // a TTLResult is the TTL data we learn once a txo is spent & it's lifetime
@@ -95,12 +95,12 @@ type ttlRawBlock struct {
 // to be written to the flat file
 type ttlResultBlock struct {
 	Height  int32      // height of the block that consumed all the utxos
-	Created []txoStart // slice of
+	Created []txoStart // slice of txo creation info
 }
 
 type txoStart struct {
-	TxBlockHeight    int32 // what block created the txo
-	IndexWithinBlock int32 // index in that block where the txo is created
+	createHeight     int32  // what block created the txo
+	indexWithinBlock uint32 // index in that block where the txo is created
 }
 
 // blockToAddDel turns a block into add leaves and del leaves

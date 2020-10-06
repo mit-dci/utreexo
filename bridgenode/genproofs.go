@@ -15,6 +15,34 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+/*
+The pipeline:
+
+The tricky part is that we read blocks, but that block data goes to 2 places.
+It goes to the accumulator to generate a proof, and it goes to the DB to
+get the TTL data.  The proof then gets written to a flat file,
+
+BlockAndRevReader reads from bitcoind flat files
+-> blockAndRevReadQueue -> read by main loop, sent to 2 places
+
+
+  \--> genUData --------> forest.Modify()
+   \               \-----> proofchan -> flatFileBlockWorker -> offsets
+    \
+     \-> ParseBlockForDB -> dbWriteChan -> dbWorker -> ttlResultChan
+
+then flatFileTTLWorker needs both the offsets from the flatFileBlockWorker
+and the TTL data from the dbWorker.
+
+
+this all stays in order, so the flatFileTTLWorker grabs from the offset channel,
+and then only if the offset channel is empty will it grab from ttlResultChan.
+This ensures that it's always got the offset data first.
+if restoring, initially it gets a flood of offset data, so this works OK because
+it grabs all that before trying to look for TTL data.
+
+*/
+
 // build the bridge node / proofs
 func BuildProofs(
 	param chaincfg.Params, dataDir string,
@@ -64,9 +92,9 @@ func BuildProofs(
 	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
 
 	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
-	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat writer
-	proofChan := make(chan []byte, 10)             // from proof processing to flat writer
-
+	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
+	proofChan := make(chan []byte, 10)             // from proof processing to proof writer
+	offsetChan := make(chan int64, 10)             // for offsets from proof writer to ttl writer
 	// Start 16 workers. Just an arbitrary number
 	//	for j := 0; j < 16; j++ {
 	// I think we can only have one dbworker now, since it needs to all happen in order?
@@ -79,7 +107,9 @@ func BuildProofs(
 		knownTipHeight, height)
 
 	var fileWait sync.WaitGroup
-	go flatFileWorker(proofChan, ttlResultChan, &fileWait)
+
+	go flatFileBlockWorker(proofChan, offsetChan, &fileWait)
+	go flatFileTTLWorker(ttlResultChan, offsetChan, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -113,7 +143,7 @@ func BuildProofs(
 
 		// Add to WaitGroup and send data to channel to be written
 		// to disk
-		fileWait.Add(1)
+		fileWait.Add(2) // both block writer and TTL writer call Done()
 		proofChan <- b
 
 		ud.AccProof.SortTargets()
