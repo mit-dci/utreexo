@@ -18,7 +18,8 @@ import (
 
 // RunIBD calls everything to run IBD
 func RunIBD(
-	p *chaincfg.Params, host, watchAddr string, check bool, lookahead int, sig chan bool) error {
+	p *chaincfg.Params, host, watchAddr string, check bool,
+	lookahead int, sig chan bool, quitafter int) error {
 
 	// check on disk for pre-existing state and load it
 	pol, h, utxos, err := initCSNState()
@@ -40,7 +41,7 @@ func RunIBD(
 		host += ":8338"
 	}
 
-	txChan, heightChan, err := c.Start(h, host, "compactstate", "", p, sig)
+	txChan, heightChan, err := c.Start(h, host, "compactstate", "", p, sig, quitafter)
 	if err != nil {
 		return err
 	}
@@ -80,7 +81,7 @@ func RunIBD(
 func (c *Csn) Start(height int32,
 	host, path, proxyURL string,
 	params *chaincfg.Params,
-	haltSig chan bool) (chan wire.MsgTx, chan int32, error) {
+	haltSig chan bool, quitafter int) (chan wire.MsgTx, chan int32, error) {
 
 	// initialize maps
 	c.WatchAdrs = make(map[[20]byte]bool)
@@ -98,7 +99,7 @@ func (c *Csn) Start(height int32,
 	c.Params = *params
 	c.remoteHost = host
 	// start client & connect
-	go c.IBDThread(haltSig)
+	go c.IBDThread(haltSig, quitafter)
 
 	return c.TxChan, c.HeightChan, nil
 }
