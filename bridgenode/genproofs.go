@@ -86,7 +86,7 @@ func BuildProofs(
 	}
 	defer lvdb.Close()
 
-	var batchwg sync.WaitGroup
+	var dbwg sync.WaitGroup
 
 	// To send/receive blocks from blockreader()
 	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
@@ -98,7 +98,7 @@ func BuildProofs(
 	// Start 16 workers. Just an arbitrary number
 	//	for j := 0; j < 16; j++ {
 	// I think we can only have one dbworker now, since it needs to all happen in order?
-	go DbWorker(dbWriteChan, ttlResultChan, lvdb, &batchwg)
+	go DbWorker(dbWriteChan, ttlResultChan, lvdb, &dbwg)
 	//	}
 
 	// Reads block asynchronously from .dat files
@@ -120,11 +120,21 @@ func BuildProofs(
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
-		// Writes the new txos to leveldb, and generates TTL for txos spent in the block
-		ParseBlockForDB(bnr, dbWriteChan, &batchwg)
+		inskip, outskip := util.DedupeBlock(&bnr.Blk)
+
+		// start waitgroups, beyond this point we have to finish all the
+		// disk writes for this iteration of the loop
+		dbwg.Add(1)
+		fileWait.Add(2) // both block writer and TTL writer call Done()
+
+		// Writes the new txos to leveldb,
+		// and generates TTL for txos spent in the block
+		// also wants the skiplist to omit 0-ttl txos
+		ParseBlockForDB(bnr, dbWriteChan, inskip, outskip)
 
 		// Get the add and remove data needed from the block & undo block
-		blockAdds, delLeaves, err := blockToAddDel(bnr)
+		// wants the skiplist to omit proofs
+		blockAdds, delLeaves, err := blockToAddDel(bnr, inskip, outskip)
 		if err != nil {
 			return err
 		}
@@ -141,9 +151,7 @@ func BuildProofs(
 		// convert UData struct to bytes
 		b := ud.ToBytes()
 
-		// Add to WaitGroup and send data to channel to be written
-		// to disk
-		fileWait.Add(2) // both block writer and TTL writer call Done()
+		// send proof data to channel to be written to disk
 		proofChan <- b
 
 		ud.AccProof.SortTargets()
@@ -172,8 +180,9 @@ func BuildProofs(
 
 	// wait until dbWorker() has written to the ttldb file
 	// allows leveldb to close gracefully
-	batchwg.Wait()
+	dbwg.Wait()
 
+	fmt.Printf("blocked on fileWait\n")
 	// Wait for the file workers to finish
 	fileWait.Wait()
 

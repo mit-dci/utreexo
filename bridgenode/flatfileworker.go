@@ -72,6 +72,7 @@ func flatFileBlockWorker(
 
 	var curOffset int64 // the last written location in the proof file
 
+	// initial setup -- send lots of offsets to ttl worker
 	if offsetMax > 0 {
 		// offsetFile already exists so read the whole thing and send over the
 		// channel to the ttl worker.
@@ -135,8 +136,9 @@ func flatFileBlockWorker(
 
 		// send offset to the ttl worker after proofs are written to disk
 		offsetChan <- curOffset
+		fileWait.Done()
+		// fmt.Printf("flatFileBlockWorker h %d done\n", proofWriteHeight)
 	}
-	fileWait.Done()
 
 }
 
@@ -162,8 +164,10 @@ func flatFileTTLWorker(
 			// got an offset, expand in ram offsets and write
 			inRamOffsets = append(inRamOffsets, nextOffset)
 			maxOffsetHeight++
+			fmt.Printf("got offset data h %d\n", maxOffsetHeight)
 
 		case ttlRes := <-ttlResultChan:
+			fmt.Printf("got ttlres h %d\n", ttlRes.Height)
 			for ttlRes.Height > maxOffsetHeight {
 				// we got a ttl result before the offset.  We need the offset data
 				// first, so keep reading offsets until we're caught up
@@ -173,6 +177,10 @@ func flatFileTTLWorker(
 			// for all the TTLs, seek and overwrite the empty values there
 			for _, c := range ttlRes.Created {
 				// seek to the location of that txo's ttl value in the proof file
+
+				// fmt.Printf("want ram offset %d, only have up to %d\n",
+				// 	c.createHeight, len(inRamOffsets))
+
 				_, _ = proofFile.Seek(
 					inRamOffsets[c.createHeight]+4+
 						int64(c.indexWithinBlock*4), 0)
@@ -181,6 +189,8 @@ func flatFileTTLWorker(
 				_ = binary.Write(
 					proofFile, binary.BigEndian, ttlRes.Height-c.createHeight)
 			}
+			fileWait.Done()
+			fmt.Printf("flatFileTTLWorker h %d done\n", ttlRes.Height)
 		}
 	}
 }

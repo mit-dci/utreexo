@@ -43,16 +43,24 @@ func DbWorker(
 			batch.Delete(op[:]) // add this outpoint for deletion
 			idxBytes, err := lvdb.Get(op[:], nil)
 			if err != nil {
+				fmt.Printf("can't find %x in db\n", op)
 				panic(err)
 			}
-			trb.Created[i].indexWithinBlock = binary.BigEndian.Uint32(idxBytes)
-			trb.Created[i].createHeight = dbBlock.spentStartHeights[i]
+
+			// skip txos that live 0 blocks as they'll be deduped out of the
+			// proofs anyway
+			if dbBlock.spentStartHeights[i] != dbBlock.blockHeight {
+				trb.Created[i].indexWithinBlock = binary.BigEndian.Uint32(idxBytes)
+				trb.Created[i].createHeight = dbBlock.spentStartHeights[i]
+			}
 		}
+		// send to flat ttl writer
+		ttlResultChan <- trb
 		err = lvdb.Write(&batch, nil) // actually delete everything
 		if err != nil {
 			fmt.Println(err.Error())
 		}
 
-		wg.Done() // why is this here
+		wg.Done()
 	}
 }

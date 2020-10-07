@@ -183,9 +183,11 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	return
 }
 
+// turns an outpoint into a 36 byte... mixed endian thing.
+// (the 32 bytes txid is "reversed" and the 4 byte index is in order (big)
 func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
 	copy(b[0:32], op.Hash[:])
-	binary.BigEndian.Uint32(b[32:36])
+	binary.BigEndian.PutUint32(b[32:36], op.Index)
 	return
 }
 

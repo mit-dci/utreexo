@@ -2,7 +2,6 @@ package bridgenode
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/btcsuite/btcd/wire"
 
@@ -104,10 +103,9 @@ type txoStart struct {
 }
 
 // blockToAddDel turns a block into add leaves and del leaves
-func blockToAddDel(bnr BlockAndRev) (blockAdds []accumulator.Leaf,
-	delLeaves []util.LeafData, err error) {
+func blockToAddDel(bnr BlockAndRev, inskip, outskip []uint32) (
+	blockAdds []accumulator.Leaf, delLeaves []util.LeafData, err error) {
 
-	inskip, outskip := util.DedupeBlock(&bnr.Blk)
 	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
 	delLeaves, err = blockNRevToDelLeaves(bnr, inskip)
 	if err != nil {
@@ -226,9 +224,13 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 }
 
 // ParseBlockForDB gets a block and creates a ttlRawBlock to send to the DB worker
-func ParseBlockForDB(bnr BlockAndRev, idxChan chan ttlRawBlock, wg *sync.WaitGroup) {
+func ParseBlockForDB(
+	bnr BlockAndRev, idxChan chan ttlRawBlock, inskip, outskip []uint32) {
+
 	var trb ttlRawBlock
 	trb.blockHeight = bnr.Height
+
+	var txoInBlock, txinInBlock uint32
 
 	// iterate through the transactions in a block
 	for txInBlock, tx := range bnr.Blk.Transactions {
@@ -237,27 +239,41 @@ func ParseBlockForDB(bnr BlockAndRev, idxChan chan ttlRawBlock, wg *sync.WaitGro
 		// for all the txouts, get their outpoint & index and throw that into
 		// a db batch
 		for txoInTx, _ := range tx.TxOut {
+			if txoInBlock == outskip[0] {
+				// skip inputs in the txin skiplist
+				outskip = outskip[1:]
+				txoInBlock++
+				continue
+			}
+
 			trb.newTxos = append(trb.newTxos,
 				util.OutpointToBytes(wire.NewOutPoint(&txid, uint32(txoInTx))))
+			txoInBlock++
+		}
 
-			// for all the txins, throw that into the work as well; just a bunch of
-			// outpoints
-
-			for txinInTx, in := range tx.TxIn { // bit of a tounge twister
-				if txInBlock == 0 {
-					break // skip coinbase input
-				}
-				// append outpoint to slice
-				trb.spentTxos = append(trb.spentTxos,
-					util.OutpointToBytes(&in.PreviousOutPoint))
-				// append start height to slice (get from rev data)
-				trb.spentStartHeights = append(trb.spentStartHeights,
-					bnr.Rev.Txs[txInBlock].TxIn[txinInTx].Height)
+		// for all the txins, throw that into the work as well; just a bunch of
+		// outpoints
+		for txinInTx, in := range tx.TxIn { // bit of a tounge twister
+			if txInBlock == 0 {
+				break // skip coinbase input
 			}
+			if txinInBlock == inskip[0] {
+				// skip inputs in the txin skiplist
+				inskip = inskip[1:]
+				txinInBlock++
+				continue
+			}
+			// append outpoint to slice
+			trb.spentTxos = append(trb.spentTxos,
+				util.OutpointToBytes(&in.PreviousOutPoint))
+			// append start height to slice (get from rev data)
+			trb.spentStartHeights = append(trb.spentStartHeights,
+				bnr.Rev.Txs[txInBlock-1].TxIn[txinInTx].Height)
+
+			txinInBlock++
 		}
 	}
 
-	wg.Add(1)
 	// send to dbworker to be written to ttldb asynchronously
 	idxChan <- trb
 }
