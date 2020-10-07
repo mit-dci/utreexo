@@ -225,12 +225,16 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 
 // ParseBlockForDB gets a block and creates a ttlRawBlock to send to the DB worker
 func ParseBlockForDB(
-	bnr BlockAndRev, idxChan chan ttlRawBlock, inskip, outskip []uint32) {
+	bnr BlockAndRev, inskip, outskip []uint32) ttlRawBlock {
 
 	var trb ttlRawBlock
 	trb.blockHeight = bnr.Height
 
 	var txoInBlock, txinInBlock uint32
+
+	if len(inskip) != 0 || len(outskip) != 0 {
+		fmt.Printf("h %d inskip %v outskip %v\n", bnr.Height, inskip, outskip)
+	}
 
 	// iterate through the transactions in a block
 	for txInBlock, tx := range bnr.Blk.Transactions {
@@ -239,8 +243,9 @@ func ParseBlockForDB(
 		// for all the txouts, get their outpoint & index and throw that into
 		// a db batch
 		for txoInTx, _ := range tx.TxOut {
-			if txoInBlock == outskip[0] {
+			if len(outskip) > 0 && txoInBlock == outskip[0] {
 				// skip inputs in the txin skiplist
+				// fmt.Printf("skipping output %s:%d\n", txid.String(), txoInTx)
 				outskip = outskip[1:]
 				txoInBlock++
 				continue
@@ -255,10 +260,12 @@ func ParseBlockForDB(
 		// outpoints
 		for txinInTx, in := range tx.TxIn { // bit of a tounge twister
 			if txInBlock == 0 {
+				txinInBlock += uint32(len(tx.TxIn))
 				break // skip coinbase input
 			}
-			if txinInBlock == inskip[0] {
+			if len(inskip) > 0 && txinInBlock == inskip[0] {
 				// skip inputs in the txin skiplist
+				// fmt.Printf("skipping input %s\n", in.PreviousOutPoint.String())
 				inskip = inskip[1:]
 				txinInBlock++
 				continue
@@ -274,6 +281,5 @@ func ParseBlockForDB(
 		}
 	}
 
-	// send to dbworker to be written to ttldb asynchronously
-	idxChan <- trb
+	return trb
 }

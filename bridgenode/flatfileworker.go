@@ -91,6 +91,7 @@ func flatFileBlockWorker(
 				panic(err)
 			}
 			offsetChan <- curOffset
+			offsetPos += 8
 		}
 	}
 
@@ -148,6 +149,10 @@ func flatFileTTLWorker(
 	fileWait *sync.WaitGroup) {
 
 	var inRamOffsets []int64
+
+	// the offset for block 0 is 0?  kindof weird
+	inRamOffsets = append(inRamOffsets, 0)
+
 	maxOffsetHeight := int32(1) // start at 1?
 
 	// for the pFile
@@ -164,10 +169,9 @@ func flatFileTTLWorker(
 			// got an offset, expand in ram offsets and write
 			inRamOffsets = append(inRamOffsets, nextOffset)
 			maxOffsetHeight++
-			fmt.Printf("got offset data h %d\n", maxOffsetHeight)
 
 		case ttlRes := <-ttlResultChan:
-			fmt.Printf("got ttlres h %d\n", ttlRes.Height)
+			// fmt.Printf("got ttlres h %d\n", ttlRes.Height)
 			for ttlRes.Height > maxOffsetHeight {
 				// we got a ttl result before the offset.  We need the offset data
 				// first, so keep reading offsets until we're caught up
@@ -190,7 +194,7 @@ func flatFileTTLWorker(
 					proofFile, binary.BigEndian, ttlRes.Height-c.createHeight)
 			}
 			fileWait.Done()
-			fmt.Printf("flatFileTTLWorker h %d done\n", ttlRes.Height)
+			// fmt.Printf("flatFileTTLWorker h %d done\n", ttlRes.Height)
 		}
 	}
 }

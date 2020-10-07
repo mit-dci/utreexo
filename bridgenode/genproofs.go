@@ -130,7 +130,7 @@ func BuildProofs(
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
 		// also wants the skiplist to omit 0-ttl txos
-		ParseBlockForDB(bnr, dbWriteChan, inskip, outskip)
+		dbWriteChan <- ParseBlockForDB(bnr, inskip, outskip)
 
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
