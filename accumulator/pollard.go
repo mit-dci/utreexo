@@ -117,18 +117,12 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		leftRoot := p.roots[len(p.roots)-1] // grab
 		p.roots = p.roots[:len(p.roots)-1]  // pop
 
-		if h == 0 && remember {
-			// make sure that siblings are always remembered in pairs.
-			leftRoot.niece[0] = leftRoot
-		}
-
 		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
 		nHash := parentHash(leftRoot.data, n.data)                 // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
 		p.hashesEver++
 
 		n.prune()
-
 	}
 
 	// the new roots are all the 1 bits above where we got to, and nothing below where
@@ -183,6 +177,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
+			var collapse bool
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
 			if len(swaprows[h]) == 0 ||
@@ -206,15 +201,16 @@ func (p *Pollard) rem2(dels []uint64) error {
 				if err != nil {
 					return err
 				}
+				collapse = swaprows[h][0].collapse
 				swaprows[h] = swaprows[h][1:]
 			}
-			if hn == nil {
+			if hn == nil ||
+				hn.position == prevHash ||
+				collapse {
+				// TODO: there are probably more conditions in which a hn could be skipped.
 				continue
 			}
-			if hn.position == prevHash { // we just did this
-				// fmt.Printf("just did %d\n", prevHash)
-				continue // TODO this doesn't cover everything
-			}
+
 			hnslice = append(hnslice, hn)
 			prevHash = hn.position
 			if len(nextHashDirt) == 0 ||
@@ -233,12 +229,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// TODO when is hn nil?  is this OK?
 				// it'd be better to avoid this and not create hns that aren't
 				// supposed to exist.
-				fmt.Printf("hn %d nil or incomputable\n", hn.position)
+				// fmt.Printf("hn %d nil or incomputable\n", hn.position)
 				continue
 			}
 			// fmt.Printf("giving hasher %d %x %x\n",
 			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			hn.dest.data = hn.sib.auntOp()
+			hn.sib.prune()
 		}
 		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}

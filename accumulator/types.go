@@ -32,6 +32,7 @@ func HashFromString(s string) Hash {
 // arrow describes the movement of a node from one position to another
 type arrow struct {
 	from, to uint64
+	collapse bool
 }
 
 // Node :
