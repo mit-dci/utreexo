@@ -10,7 +10,7 @@ import (
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-func (c *Csn) IBDThread(sig chan bool) {
+func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
@@ -43,6 +43,7 @@ func (c *Csn) IBDThread(sig chan bool) {
 
 	// bool for stopping the below for loop
 	var stop bool
+	var blockCount int
 	for ; !stop; c.CurrentHeight++ {
 		blocknproof, open := <-ublockQueue
 		if !open {
@@ -65,13 +66,20 @@ func (c *Csn) IBDThread(sig chan bool) {
 				plustime.Seconds(), time.Since(starttime).Seconds())
 		}
 
+		// quit after `quitafter` blocks if the -quitafter option is set
+		blockCount++
+		if quitafter > -1 && blockCount >= quitafter {
+			fmt.Println("quit after", quitafter, "blocks")
+			sig <- true
+			stop = true
+		}
+
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
 		select {
 		case stop = <-haltRequest:
 		default:
 		}
-
 	}
 	fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
 		c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),

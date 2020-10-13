@@ -50,6 +50,8 @@ var checkSig = optionCmd.Bool("checksig", true,
 	`check signatures (slower)`)
 var lookahead = optionCmd.Int("lookahead", 1000,
 	`size of the look-ahead cache in blocks`)
+var quitafter = optionCmd.Int("quitafter", -1,
+	`quit ibd after n blocks. (for testing)`)
 
 func main() {
 	// check if enough arguments were given
@@ -107,7 +109,7 @@ func main() {
 	sig := make(chan bool, 1)
 	handleIntSig(sig, *cpuProfCmd, *traceCmd)
 
-	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, *lookahead, sig)
+	err := csn.RunIBD(&param, *remoteHost, *watchAddr, *checkSig, *lookahead, sig, *quitafter)
 	if err != nil {
 		panic(err)
 	}
