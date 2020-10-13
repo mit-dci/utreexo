@@ -268,111 +268,17 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
-	proof := bp.Proof // back up proof
-	targets := bp.Targets
-	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
 
-	if verbose {
-		fmt.Printf("%d roots:\t", len(rootPositions))
-		for _, t := range rootPositions {
-			fmt.Printf("%d ", t)
-		}
-	}
-	// needRow / nextrow hold the positions of the data which should be in the blockproof
-	var needSibRow, nextRow []uint64 // only even siblings needed
+	proofPositions, _ := ProofPositions(bp.Targets, numleaves, forestRows)
+	proofPositions = mergeSortedSlices(bp.Targets, proofPositions)
 
-	// a bit strange; pop off 2 hashes at a time, and either 1 or 2 positions
-	for len(bp.Proof) > 0 && len(targets) > 0 {
-
-		if targets[0] == rootPositions[0] {
-			// target is a root; this can only happen at row 0;
-			// there's a "proof" but don't need to actually send it
-			if verbose {
-				fmt.Printf("placed single proof at %d\n", targets[0])
-			}
-			proofTree[targets[0]] = bp.Proof[0]
-			bp.Proof = bp.Proof[1:]
-			targets = targets[1:]
-			continue
-		}
-
-		// there should be 2 proofs left then
-		if len(bp.Proof) < 2 {
-			return nil, fmt.Errorf("only 1 proof left but need 2 for %d",
-				targets[0])
-		}
-
-		// populate first 2 proof hashes
-		right := targets[0] | 1
-		left := right ^ 1
-
-		proofTree[left] = bp.Proof[0]
-		proofTree[right] = bp.Proof[1]
-		needSibRow = append(needSibRow, parent(targets[0], forestRows))
-		// pop em off
-		if verbose {
-			fmt.Printf("placed proofs at %d, %d\n", left, right)
-		}
-		bp.Proof = bp.Proof[2:]
-
-		if len(targets) > 1 && targets[0]|1 == targets[1] {
-			// pop off 2 positions
-			targets = targets[2:]
-		} else {
-			// only pop off 1
-			targets = targets[1:]
-		}
+	if len(proofPositions) != len(bp.Proof) {
+		return nil, fmt.Errorf("invalid BatchProof, not enough proof hashes")
 	}
 
-	// deal with 0-row root, regardless of whether it was used or not
-	if rootRows[0] == 0 {
-		rootPositions = rootPositions[1:]
-		rootRows = rootRows[1:]
+	for i, pos := range proofPositions {
+		proofTree[pos] = bp.Proof[i]
 	}
 
-	// now all that's left is the proofs. go bottom to root and iterate the haveRow
-	for h := uint8(1); h < forestRows; h++ {
-		for len(needSibRow) > 0 {
-			// if this is a root, it's not needed or given
-			if needSibRow[0] == rootPositions[0] {
-				needSibRow = needSibRow[1:]
-				rootPositions = rootPositions[1:]
-				rootRows = rootRows[1:]
-				continue
-			}
-			// either way, we'll get the parent
-			nextRow = append(nextRow, parent(needSibRow[0], forestRows))
-
-			// if we have both siblings here, don't need any proof
-			if len(needSibRow) > 1 && needSibRow[0]^1 == needSibRow[1] {
-				needSibRow = needSibRow[2:]
-			} else {
-				// return error if we need a proof and can't get it
-				if len(bp.Proof) == 0 {
-					fmt.Printf("roots %v needsibrow %v\n", rootPositions, needSibRow)
-					return nil, fmt.Errorf("h %d no proofs left at pos %d ",
-						h, needSibRow[0]^1)
-				}
-				// otherwise we do need proof; place in sibling position and pop off
-				proofTree[needSibRow[0]^1] = bp.Proof[0]
-				bp.Proof = bp.Proof[1:]
-				// and get rid of 1 element of needSibRow
-				needSibRow = needSibRow[1:]
-			}
-		}
-
-		// there could be a root on this row that we don't need / use; if so pop it
-		if len(rootRows) > 0 && rootRows[0] == h {
-			rootPositions = rootPositions[1:]
-			rootRows = rootRows[1:]
-		}
-
-		needSibRow = nextRow
-		nextRow = []uint64{}
-	}
-	if len(bp.Proof) != 0 {
-		return nil, fmt.Errorf("too many proofs, %d remain", len(bp.Proof))
-	}
-	bp.Proof = proof // restore from backup
 	return proofTree, nil
 }
