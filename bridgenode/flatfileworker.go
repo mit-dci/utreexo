@@ -20,6 +20,10 @@ The proof file is: 4 bytes empty (zeros for now, could do something else later)
 Offset file is: 8 byte int64 offset.  Right now it's all 1 big file, can
 change to 4 byte which file and 4 byte offset within file like the blk/rev but
 we're not running on fat32 so works OK for now.
+
+the offset file will start with 16 zero-bytes.  The first offset is 0 because
+there is no block 0.  The next is 0 because block 1 starts at byte 0 of proof.dat.
+then the second offset, at byte 16, is 12 or so, as that's block 2 in the proof.dat.
 */
 
 /*
@@ -44,7 +48,7 @@ offsetInRam values and writing to the correct 4-byte location in the proof file.
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
 func flatFileBlockWorker(
-	proofChan chan []byte,
+	proofChan chan util.UData,
 	offsetChan chan int64,
 	fileWait *sync.WaitGroup) {
 
@@ -72,13 +76,13 @@ func flatFileBlockWorker(
 
 	var curOffset int64 // the last written location in the proof file
 
-	// initial setup -- send lots of offsets to ttl worker
+	// resume setup -- send lots of offsets to ttl worker
 	if offsetMax > 0 {
 		// offsetFile already exists so read the whole thing and send over the
 		// channel to the ttl worker.
 
-		// seek back to the file start (offsetPos starts at 0)
-		offsetPos, err := offsetFile.Seek(0, 0)
+		// seek back to the file start / block 1
+		offsetPos, err := offsetFile.Seek(8, 0)
 		if err != nil {
 			panic(err)
 		}
@@ -97,6 +101,16 @@ func flatFileBlockWorker(
 
 	proofWriteHeight := int32(curOffset / 8)
 
+	if proofWriteHeight == 0 { // there is no block 0 so leave that empty
+		fmt.Printf("setting h=1\n")
+		proofWriteHeight = 1
+		_, err = offsetFile.Write(make([]byte, 4))
+		if err != nil {
+			fmt.Printf(err.Error())
+			return
+		}
+	}
+
 	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
 	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
 	// it should keep both buffers about even.  If it keeps doing proofs and the ttl
@@ -109,30 +123,43 @@ func flatFileBlockWorker(
 
 	// TODO ^^^^^^ all that stuff.
 	for {
-		pbytes := <-proofChan
+		ud := <-proofChan
 		// write to offset file first
-		_, _ = offsetFile.Seek(int64(proofWriteHeight)*8, 0)
+
+		// note that seek does nothing!  Only seek up in the setup phase.
+
 		err = binary.Write(offsetFile, binary.BigEndian, curOffset)
 		if err != nil {
 			fmt.Printf(err.Error())
 			return
 		}
 
+		pb := ud.ToBytes()
+
 		// write to proof file
-		// first write big endian proof size uint32 (proof never more than 4GB)
-		err = binary.Write(proofFile, binary.BigEndian, uint32(len(pbytes)))
+
+		// first write magic 4 bytes
+		_, err = proofFile.Write([]byte{0xaa, 0xff, 0xaa, 0xff})
+		if err != nil {
+			fmt.Printf(err.Error())
+			return
+		}
+
+		// then write big endian proof size uint32 (proof never more than 4GB)
+		err = binary.Write(proofFile, binary.BigEndian, uint32(len(pb)))
 		if err != nil {
 			fmt.Printf(err.Error())
 			return
 		}
 
 		// then write the proof
-		written, err := proofFile.Write(pbytes)
+		written, err := proofFile.Write(pb)
 		if err != nil {
 			fmt.Printf(err.Error())
 			return
 		}
-		curOffset += int64(written) + 4 // the size comes first
+		// arbitrary 32 byte gap between proof blocks
+		curOffset += int64(written) + 8 // 4B magic & 4B size comes first
 		proofWriteHeight++
 
 		// send offset to the ttl worker after proofs are written to disk
@@ -140,7 +167,6 @@ func flatFileBlockWorker(
 		fileWait.Done()
 		// fmt.Printf("flatFileBlockWorker h %d done\n", proofWriteHeight)
 	}
-
 }
 
 func flatFileTTLWorker(
@@ -192,6 +218,11 @@ func flatFileTTLWorker(
 				// 2 or 3 bytes would work)
 				_ = binary.Write(
 					proofFile, binary.BigEndian, ttlRes.Height-c.createHeight)
+
+				// fmt.Printf("wrote ttl %d to blkh %d txo %d (byte %d)\n",
+				// 	ttlRes.Height-c.createHeight, c.createHeight, c.indexWithinBlock,
+				// 	inRamOffsets[c.createHeight]+4+
+				// 		int64(c.indexWithinBlock*4))
 			}
 			fileWait.Done()
 			// fmt.Printf("flatFileTTLWorker h %d done\n", ttlRes.Height)

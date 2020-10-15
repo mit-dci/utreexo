@@ -128,6 +128,8 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	height--
 	var offset int64
 	var size uint32
+	var readMagic [4]byte
+	realMagic := [4]byte{0xaa, 0xff, 0xaa, 0xff}
 	offsetFile, err := os.Open(POffsetFilePath)
 	if err != nil {
 		return
@@ -147,21 +149,42 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		return
 	}
 
+	// read the offset of the block we want from the offset file
 	err = binary.Read(offsetFile, binary.BigEndian, &offset)
 	if err != nil {
 		err = fmt.Errorf("binary.Read h %d offset %d %s", height, offset, err.Error())
 		return
 	}
 
-	// +4 because it has an empty 4 non-magic bytes in front now
-	_, err = proofFile.Seek(offset+4, 0)
+	// seek to that offset
+	_, err = proofFile.Seek(offset, 0)
 	if err != nil {
 		err = fmt.Errorf("proofFile.Seek %s", err.Error())
 		return
 	}
+
+	// first read 4-byte magic aaffaaff
+	n, err := proofFile.Read(readMagic[:])
+	if err != nil {
+		return nil, err
+	}
+	if n != 4 {
+		return nil, fmt.Errorf("only read %d bytes from proof file", n)
+	}
+	if readMagic != realMagic {
+		return nil, fmt.Errorf("expect magic %x but read %x h %d offset %d",
+			realMagic, readMagic, height, offset)
+	}
+
+	fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
 	err = binary.Read(proofFile, binary.BigEndian, &size)
 	if err != nil {
 		return
+	}
+
+	if size > 1<<24 {
+		return nil, fmt.Errorf(
+			"size at offest %d says %d which is too big", offset, size)
 	}
 
 	b = make([]byte, size)
@@ -171,6 +194,8 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		err = fmt.Errorf("proofFile.Read(ubytes) %s", err.Error())
 		return
 	}
+	
+	
 
 	err = offsetFile.Close()
 	if err != nil {

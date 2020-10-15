@@ -19,8 +19,8 @@ func (ub *UBlock) ProofsProveBlock(inputSkipList []uint32) bool {
 
 	// ensure that all outpoints are provided in the extradata
 	if len(proveOPs) != len(ub.UtreexoData.UtxoData) {
-		fmt.Printf("%d outpoints need proofs but only %d proven\n",
-			len(proveOPs), len(ub.UtreexoData.UtxoData))
+		fmt.Printf("height %d %d outpoints need proofs but only %d proven\n",
+			ub.UtreexoData.Height, len(proveOPs), len(ub.UtreexoData.UtxoData))
 		return false
 	}
 	for i, _ := range ub.UtreexoData.UtxoData {

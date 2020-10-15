@@ -178,6 +178,7 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	ud util.UData, err error) {
 
+	ud.Height = height
 	ud.UtxoData = delLeaves
 	// make slice of hashes from leafdata
 	delHashes := make([]accumulator.Hash, len(ud.UtxoData))

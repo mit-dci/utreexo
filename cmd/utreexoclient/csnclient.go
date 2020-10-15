@@ -43,7 +43,7 @@ var traceCmd = optionCmd.String("trace", "",
 	`Enable trace. Usage: 'trace='path/to/file'`)
 var watchAddr = optionCmd.String("watchaddr", "",
 	`Address to watch & report transactions. Only bech32 p2wpkh supported`)
-var remoteHost = optionCmd.String("host", "35.188.186.244",
+var remoteHost = optionCmd.String("host", "127.0.0.1",
 	`remote server to connect to`)
 
 var checkSig = optionCmd.Bool("checksig", true,

@@ -93,7 +93,7 @@ func BuildProofs(
 
 	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
 	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
-	proofChan := make(chan []byte, 10)             // from proof processing to proof writer
+	proofChan := make(chan util.UData, 10)         // from proof processing to proof writer
 	offsetChan := make(chan int64, 10)             // for offsets from proof writer to ttl writer
 	// Start 16 workers. Just an arbitrary number
 	//	for j := 0; j < 16; j++ {
@@ -148,11 +148,8 @@ func BuildProofs(
 			return err
 		}
 
-		// convert UData struct to bytes
-		b := ud.ToBytes()
-
-		// send proof data to channel to be written to disk
-		proofChan <- b
+		// send proof udata to channel to be written to disk
+		proofChan <- ud
 
 		ud.AccProof.SortTargets()
 

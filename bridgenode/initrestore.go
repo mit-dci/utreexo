@@ -198,7 +198,8 @@ func restoreHeight() (height int32, err error) {
 			return 0, err
 		}
 	} else {
-		return 0, fmt.Errorf("can't read height at %s\n",
+		return 0, fmt.Errorf(
+			"can't read height at %s (must build before serving)\n",
 			util.ForestLastSyncedBlockHeightFilePath)
 	}
 	return
