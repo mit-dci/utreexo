@@ -129,7 +129,7 @@ func (ff *flatFileState) ffInit() error {
 		if err != nil {
 			return err
 		}
-
+		ff.offsets = make([]int64, maxHeight)
 		// run through the file, read everything and push into the channel
 		for ff.currentHeight < maxHeight {
 			err = binary.Read(ff.offsetFile, binary.BigEndian, &ff.currentOffset)
@@ -138,6 +138,7 @@ func (ff *flatFileState) ffInit() error {
 				return err
 			}
 			ff.offsets[ff.currentHeight] = ff.currentOffset
+			ff.currentHeight++
 		}
 	} else { // first time startup
 		// there is no block 0 so leave that empty
@@ -158,7 +159,7 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) {
 
 	// get the new block proof
 	// put offset in ram
-	ff.offsets[ff.currentHeight] = ff.currentOffset
+	ff.offsets = append(ff.offsets, ff.currentOffset)
 	// write to offset file so we can resume; offset file is only
 	// read on startup and always incremented so we shouldn't need to seek
 	err := binary.Write(ff.offsetFile, binary.BigEndian, ff.currentOffset)
