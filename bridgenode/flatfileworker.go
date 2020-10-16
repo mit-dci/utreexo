@@ -65,13 +65,13 @@ func flatFileWorker(
 	var err error
 
 	ff.offsetFile, err = os.OpenFile(
-		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
+		util.POffsetFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
 
 	ff.proofFile, err = os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		util.PFilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -190,13 +190,19 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	_, _ = ff.proofFile.Seek(ff.currentOffset, 0)
 
 	info, _ := ff.proofFile.Stat()
-	if info.Size() != ff.currentOffset {
-		return fmt.Errorf("h %d offset should be %d but file is %d bytes",
-			ff.currentHeight, ff.currentOffset, info.Size())
-	}
+	// if info.Size() != ff.currentOffset {
+	// 	return fmt.Errorf("h %d offset should be %d but file is %d bytes",
+	// 		ff.currentHeight, ff.currentOffset, info.Size())
+	// }
+	// ff.proofFile.Sync()
+	// info, _ = ff.proofFile.Stat()
+	// if info.Size() != ff.currentOffset {
+	// 	return fmt.Errorf("h %d offset should be %d but file is %d bytes",
+	// 		ff.currentHeight, ff.currentOffset, info.Size())
+	// }
 
-	// fmt.Printf("h %d wrote %d to offset file %d bytes long\n",
-	// ud.Height, ff.currentOffset, info.Size())
+	fmt.Printf("h %d offset %d proof file %d bytes long\n",
+		ud.Height, ff.currentOffset, info.Size())
 
 	pb := ud.ToBytes()
 
@@ -231,6 +237,11 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
+
+	// if len(ttlRes.Created) != 0 {
+	// 	info, _ := ff.proofFile.Stat()
+	// 	fmt.Printf("proof file is %d bytes long..\n", info.Size())
+	// }
 
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.Created {
