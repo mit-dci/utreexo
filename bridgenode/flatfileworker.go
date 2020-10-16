@@ -106,8 +106,12 @@ func flatFileWorker(
 				panic(err)
 			}
 		case ttlRes := <-ttlResultChan:
+			for _, ttl := range ttlRes.Created {
+				fmt.Printf("%04x ", ttlRes.Height-ttl.createHeight)
+			}
 			fmt.Printf("got ttlres h %d with %d entries\n",
 				ttlRes.Height, len(ttlRes.Created))
+
 			for ttlRes.Height > ff.currentHeight {
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
@@ -249,10 +253,9 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if n != 4 {
 			return fmt.Errorf("non4 bytes")
 		}
-		// fmt.Printf("wrote ttl %d to blkh %d txo %d (byte %d)\n",
-		// 	ttlRes.Height-c.createHeight, c.createHeight, c.indexWithinBlock,
-		// 	inRamOffsets[c.createHeight]+4+
-		// 		int64(c.indexWithinBlock*4))
+		fmt.Printf("supposedly!! wrote %x to offset %d\n",
+			ttlArr,
+			ff.offsets[c.createHeight]+4+int64(c.indexWithinBlock*4))
 	}
 	ff.fileWait.Done()
 	return nil
