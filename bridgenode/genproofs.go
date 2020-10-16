@@ -88,6 +88,12 @@ func BuildProofs(
 
 	var dbwg sync.WaitGroup
 
+	proofFile, err := os.OpenFile(
+		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+
 	// To send/receive blocks from blockreader()
 	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
 
@@ -108,8 +114,8 @@ func BuildProofs(
 
 	var fileWait sync.WaitGroup
 
-	go flatFileBlockWorker(proofChan, offsetChan, &fileWait)
-	go flatFileTTLWorker(ttlResultChan, offsetChan, &fileWait)
+	go flatFileBlockWorker(proofChan, offsetChan, proofFile, &fileWait)
+	go flatFileTTLWorker(ttlResultChan, offsetChan, proofFile, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -167,12 +173,17 @@ func BuildProofs(
 			fmt.Println("On block :", bnr.Height+1)
 		}
 
+		if ud.Height == 385 {
+			stop = true
+		}
+
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
 		select {
 		case stop = <-haltRequest: // receives true from stopBuildProofs()
 		default:
 		}
+
 	}
 
 	// wait until dbWorker() has written to the ttldb file

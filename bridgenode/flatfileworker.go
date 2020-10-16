@@ -50,14 +50,8 @@ offsetInRam values and writing to the correct 4-byte location in the proof file.
 func flatFileBlockWorker(
 	proofChan chan util.UData,
 	offsetChan chan int64,
+	proofFile *os.File,
 	fileWait *sync.WaitGroup) {
-
-	// for the pFile
-	proofFile, err := os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
 
 	offsetFile, err := os.OpenFile(
 		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
@@ -104,7 +98,7 @@ func flatFileBlockWorker(
 	if proofWriteHeight == 0 { // there is no block 0 so leave that empty
 		fmt.Printf("setting h=1\n")
 		proofWriteHeight = 1
-		_, err = offsetFile.Write(make([]byte, 4))
+		_, err = offsetFile.Write(make([]byte, 8))
 		if err != nil {
 			fmt.Printf(err.Error())
 			return
@@ -126,13 +120,19 @@ func flatFileBlockWorker(
 		ud := <-proofChan
 		// write to offset file first
 
-		// note that seek does nothing!  Only seek up in the setup phase.
+		// seek to next block proof location, this file is open in ttl worker
+		// and may write point may have moved
+		_, _ = proofFile.Seek(curOffset, 0)
 
 		err = binary.Write(offsetFile, binary.BigEndian, curOffset)
 		if err != nil {
 			fmt.Printf(err.Error())
 			return
 		}
+		info, _ := proofFile.Stat()
+
+		fmt.Printf("h %d wrote %d to offset file %d bytes long\n",
+			ud.Height, curOffset, info.Size())
 
 		pb := ud.ToBytes()
 
@@ -162,9 +162,12 @@ func flatFileBlockWorker(
 		curOffset += int64(written) + 8 // 4B magic & 4B size comes first
 		proofWriteHeight++
 
+		fmt.Printf(" len(pb)=%d wrote %d\n", len(pb), written)
+
 		// send offset to the ttl worker after proofs are written to disk
 		offsetChan <- curOffset
 		fileWait.Done()
+
 		// fmt.Printf("flatFileBlockWorker h %d done\n", proofWriteHeight)
 	}
 }
@@ -172,21 +175,17 @@ func flatFileBlockWorker(
 func flatFileTTLWorker(
 	ttlResultChan chan ttlResultBlock,
 	offsetChan chan int64,
+	proofFile *os.File,
 	fileWait *sync.WaitGroup) {
 
 	var inRamOffsets []int64
+
+	var ttlToWrite [4]byte
 
 	// the offset for block 0 is 0?  kindof weird
 	inRamOffsets = append(inRamOffsets, 0)
 
 	maxOffsetHeight := int32(1) // start at 1?
-
-	// for the pFile
-	proofFile, err := os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
 
 	for {
 		// get offset data; if there is none, try getting ttl data
@@ -197,7 +196,12 @@ func flatFileTTLWorker(
 			maxOffsetHeight++
 
 		case ttlRes := <-ttlResultChan:
-			// fmt.Printf("got ttlres h %d\n", ttlRes.Height)
+			if len(ttlRes.Created) == 0 {
+				fileWait.Done()
+				continue
+			}
+			fmt.Printf("maxoffset %d, got ttlres h %d ttls %d\n",
+				ttlRes.Height, maxOffsetHeight, len(ttlRes.Created))
 			for ttlRes.Height > maxOffsetHeight {
 				// we got a ttl result before the offset.  We need the offset data
 				// first, so keep reading offsets until we're caught up
@@ -208,17 +212,23 @@ func flatFileTTLWorker(
 			for _, c := range ttlRes.Created {
 				// seek to the location of that txo's ttl value in the proof file
 
-				// fmt.Printf("want ram offset %d, only have up to %d\n",
-				// 	c.createHeight, len(inRamOffsets))
+				fmt.Printf("flatFileTTLWorker write %d at offset %d\n",
+					ttlRes.Height-c.createHeight,
+					inRamOffsets[c.createHeight]+4+int64(c.indexWithinBlock*4))
 
-				_, _ = proofFile.Seek(
-					inRamOffsets[c.createHeight]+4+
-						int64(c.indexWithinBlock*4), 0)
+				binary.BigEndian.PutUint32(
+					ttlToWrite[:], uint32(ttlRes.Height-c.createHeight))
+
 				// write it's lifespan as a 4 byte int32 (bit of a waste as
 				// 2 or 3 bytes would work)
-				_ = binary.Write(
-					proofFile, binary.BigEndian, ttlRes.Height-c.createHeight)
-
+				n, err := proofFile.WriteAt(ttlToWrite[:],
+					inRamOffsets[c.createHeight]+4+int64(c.indexWithinBlock*4))
+				if err != nil {
+					panic(err)
+				}
+				if n != 4 {
+					panic("non4 bytes")
+				}
 				// fmt.Printf("wrote ttl %d to blkh %d txo %d (byte %d)\n",
 				// 	ttlRes.Height-c.createHeight, c.createHeight, c.indexWithinBlock,
 				// 	inRamOffsets[c.createHeight]+4+
