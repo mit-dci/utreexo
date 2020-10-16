@@ -78,7 +78,10 @@ func flatFileWorker(
 
 	ff.fileWait = fileWait
 
-	ff.ffInit()
+	err = ff.ffInit()
+	if err != nil {
+		panic(err)
+	}
 
 	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
 	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
@@ -98,13 +101,24 @@ func flatFileWorker(
 	for {
 		select {
 		case ud := <-proofChan:
-			ff.writeProofBlock(ud)
+			err = ff.writeProofBlock(ud)
+			if err != nil {
+				panic(err)
+			}
 		case ttlRes := <-ttlResultChan:
+			fmt.Printf("got ttlres h %d with %d entries\n",
+				ttlRes.Height, len(ttlRes.Created))
 			for ttlRes.Height > ff.currentHeight {
 				ud := <-proofChan
-				ff.writeProofBlock(ud)
+				err = ff.writeProofBlock(ud)
+				if err != nil {
+					panic(err)
+				}
 			}
-			ff.writeTTLs(ttlRes)
+			err = ff.writeTTLs(ttlRes)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }
@@ -153,7 +167,7 @@ func (ff *flatFileState) ffInit() error {
 	return nil
 }
 
-func (ff *flatFileState) writeProofBlock(ud util.UData) {
+func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	// note that we know the offset for block 2 once we're done writing block 1,
 	// but we don't write the block 2 offset until we get block 2
 
@@ -164,8 +178,7 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) {
 	// read on startup and always incremented so we shouldn't need to seek
 	err := binary.Write(ff.offsetFile, binary.BigEndian, ff.currentOffset)
 	if err != nil {
-		fmt.Printf(err.Error())
-		return
+		return err
 	}
 
 	// seek to next block proof location, this file is open in ttl worker
@@ -173,9 +186,13 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) {
 	_, _ = ff.proofFile.Seek(ff.currentOffset, 0)
 
 	info, _ := ff.proofFile.Stat()
+	if info.Size() != ff.currentOffset {
+		return fmt.Errorf("h %d offset should be %d but file is %d bytes",
+			ff.currentHeight, ff.currentOffset, info.Size())
+	}
 
-	fmt.Printf("h %d wrote %d to offset file %d bytes long\n",
-		ud.Height, ff.currentOffset, info.Size())
+	// fmt.Printf("h %d wrote %d to offset file %d bytes long\n",
+	// ud.Height, ff.currentOffset, info.Size())
 
 	pb := ud.ToBytes()
 
@@ -184,22 +201,19 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) {
 	// first write magic 4 bytes
 	_, err = ff.proofFile.Write([]byte{0xaa, 0xff, 0xaa, 0xff})
 	if err != nil {
-		fmt.Printf(err.Error())
-		return
+		return err
 	}
 
 	// then write big endian proof size uint32 (proof never more than 4GB)
 	err = binary.Write(ff.proofFile, binary.BigEndian, uint32(len(pb)))
 	if err != nil {
-		fmt.Printf(err.Error())
-		return
+		return err
 	}
 
 	// then write the proof
 	written, err := ff.proofFile.Write(pb)
 	if err != nil {
-		fmt.Printf(err.Error())
-		return
+		return err
 	}
 	// arbitrary 32 byte gap between proof blocks
 	ff.currentOffset += int64(written) + 8 // 4B magic & 4B size comes first
@@ -207,9 +221,8 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) {
 
 	fmt.Printf(" len(pb)=%d wrote %d\n", len(pb), written)
 
-	ff.currentHeight++
-
 	// fmt.Printf("flatFileBlockWorker h %d done\n", proofWriteHeight)
+	return nil
 }
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
