@@ -88,19 +88,12 @@ func BuildProofs(
 
 	var dbwg sync.WaitGroup
 
-	proofFile, err := os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-
 	// To send/receive blocks from blockreader()
 	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
 
 	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
 	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
 	proofChan := make(chan util.UData, 10)         // from proof processing to proof writer
-	offsetChan := make(chan int64, 10)             // for offsets from proof writer to ttl writer
 	// Start 16 workers. Just an arbitrary number
 	//	for j := 0; j < 16; j++ {
 	// I think we can only have one dbworker now, since it needs to all happen in order?
@@ -114,8 +107,7 @@ func BuildProofs(
 
 	var fileWait sync.WaitGroup
 
-	go flatFileBlockWorker(proofChan, offsetChan, proofFile, &fileWait)
-	go flatFileTTLWorker(ttlResultChan, offsetChan, proofFile, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -130,8 +122,8 @@ func BuildProofs(
 
 		// start waitgroups, beyond this point we have to finish all the
 		// disk writes for this iteration of the loop
-		dbwg.Add(1)
-		fileWait.Add(2) // both block writer and TTL writer call Done()
+		dbwg.Add(1)     // DbWorker calls Done()
+		fileWait.Add(1) // flatFileWorker calls Done() (when done writing ttls)
 
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
