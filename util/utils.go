@@ -94,20 +94,25 @@ func UblockNetworkReader(
 			close(blockChan)
 			return
 		}
-		// fmt.Printf("got len %d\n", ublen)
+		fmt.Printf("h %d got len %d\t", curHeight, ublen)
 
 		b := make([]byte, ublen)
-		_, err = io.ReadFull(con, b)
+		n, err := io.ReadFull(con, b)
 		if err != nil {
 			fmt.Printf("ReadFull error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
 			return
 		}
-		// fmt.Printf("copied %d bytes into buffer\n", n)
+		fmt.Printf("%d bytes to ub buf\n", n)
+
+		if n != int(ublen) {
+			fmt.Printf("\t###underrun\n")
+
+		}
 
 		err = ub.FromBytes(b)
 		if err != nil {
-			fmt.Printf("error from connection %s %s\n",
+			fmt.Printf("from connection %s ub decode error %s\n",
 				con.RemoteAddr().String(), err.Error())
 			return
 		}
@@ -119,23 +124,24 @@ func UblockNetworkReader(
 
 // GetUDataBytesFromFile reads the proof data from proof.dat and proofoffset.dat
 // and gives the proof & utxo data back.
-// Don't ask for block 0, there is no proof of that.
+// Don't ask for block 0, there is no proof for that.
+// But there is an offset for block 0, which is 0, so it collides with block 1
 func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	if height == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
 		return
 	}
-	height--
+
 	var offset int64
 	var size uint32
 	var readMagic [4]byte
 	realMagic := [4]byte{0xaa, 0xff, 0xaa, 0xff}
-	offsetFile, err := os.Open(POffsetFilePath)
+	offsetFile, err := os.OpenFile(POffsetFilePath, os.O_RDONLY, 0600)
 	if err != nil {
 		return
 	}
 
-	proofFile, err := os.Open(PFilePath)
+	proofFile, err := os.OpenFile(PFilePath, os.O_RDONLY, 0600)
 	if err != nil {
 		return
 	}
@@ -176,7 +182,8 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 			realMagic, readMagic, height, offset)
 	}
 
-	fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
+	// fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
+
 	err = binary.Read(proofFile, binary.BigEndian, &size)
 	if err != nil {
 		return
@@ -186,7 +193,7 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		return nil, fmt.Errorf(
 			"size at offest %d says %d which is too big", offset, size)
 	}
-
+	fmt.Printf("read size %d ", size)
 	b = make([]byte, size)
 
 	_, err = proofFile.Read(b)
@@ -194,8 +201,6 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		err = fmt.Errorf("proofFile.Read(ubytes) %s", err.Error())
 		return
 	}
-	
-	
 
 	err = offsetFile.Close()
 	if err != nil {

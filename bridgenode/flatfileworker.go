@@ -65,7 +65,7 @@ func flatFileWorker(
 	var err error
 
 	ff.offsetFile, err = os.OpenFile(
-		util.POffsetFilePath, os.O_CREATE|os.O_WRONLY, 0600)
+		util.POffsetFilePath, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -106,11 +106,11 @@ func flatFileWorker(
 				panic(err)
 			}
 		case ttlRes := <-ttlResultChan:
-			for _, ttl := range ttlRes.Created {
-				fmt.Printf("%04x ", ttlRes.Height-ttl.createHeight)
-			}
-			fmt.Printf("got ttlres h %d with %d entries\n",
-				ttlRes.Height, len(ttlRes.Created))
+			// for _, ttl := range ttlRes.Created {
+			// 	fmt.Printf("%04x ", ttlRes.Height-ttl.createHeight)
+			// }
+			// fmt.Printf("got ttlres h %d with %d entries\n",
+			// 	ttlRes.Height, len(ttlRes.Created))
 
 			for ttlRes.Height > ff.currentHeight {
 				ud := <-proofChan
@@ -165,6 +165,8 @@ func (ff *flatFileState) ffInit() error {
 		if err != nil {
 			return err
 		}
+		// do the same with the in-ram slice
+		ff.offsets = make([]int64, 1)
 		// start writing at block 1
 		ff.currentHeight = 1
 	}
@@ -175,9 +177,13 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	// note that we know the offset for block 2 once we're done writing block 1,
 	// but we don't write the block 2 offset until we get block 2
 
+	fmt.Printf("writeProofBlock gets h %d ud %d utxodatas\n",
+		ud.Height, len(ud.UtxoData))
+
 	// get the new block proof
 	// put offset in ram
 	ff.offsets = append(ff.offsets, ff.currentOffset)
+	fmt.Printf("expand offsets to %d\n", len(ff.offsets))
 	// write to offset file so we can resume; offset file is only
 	// read on startup and always incremented so we shouldn't need to seek
 	err := binary.Write(ff.offsetFile, binary.BigEndian, ff.currentOffset)
@@ -189,31 +195,14 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	// and may write point may have moved
 	_, _ = ff.proofFile.Seek(ff.currentOffset, 0)
 
-	info, _ := ff.proofFile.Stat()
-	// if info.Size() != ff.currentOffset {
-	// 	return fmt.Errorf("h %d offset should be %d but file is %d bytes",
-	// 		ff.currentHeight, ff.currentOffset, info.Size())
-	// }
-	// ff.proofFile.Sync()
-	// info, _ = ff.proofFile.Stat()
-	// if info.Size() != ff.currentOffset {
-	// 	return fmt.Errorf("h %d offset should be %d but file is %d bytes",
-	// 		ff.currentHeight, ff.currentOffset, info.Size())
-	// }
-
-	fmt.Printf("h %d offset %d proof file %d bytes long\n",
-		ud.Height, ff.currentOffset, info.Size())
-
-	pb := ud.ToBytes()
-
 	// write to proof file
-
 	// first write magic 4 bytes
 	_, err = ff.proofFile.Write([]byte{0xaa, 0xff, 0xaa, 0xff})
 	if err != nil {
 		return err
 	}
 
+	pb := ud.ToBytes()
 	// then write big endian proof size uint32 (proof never more than 4GB)
 	err = binary.Write(ff.proofFile, binary.BigEndian, uint32(len(pb)))
 	if err != nil {
@@ -225,11 +214,9 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	if err != nil {
 		return err
 	}
-	// arbitrary 32 byte gap between proof blocks
+
 	ff.currentOffset += int64(written) + 8 // 4B magic & 4B size comes first
 	ff.currentHeight++
-
-	fmt.Printf(" len(pb)=%d wrote %d\n", len(pb), written)
 
 	// fmt.Printf("flatFileBlockWorker h %d done\n", proofWriteHeight)
 	return nil
@@ -237,38 +224,26 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
-
-	// if len(ttlRes.Created) != 0 {
-	// 	info, _ := ff.proofFile.Stat()
-	// 	fmt.Printf("proof file is %d bytes long..\n", info.Size())
-	// }
-
+	fmt.Printf("height %d got %d ttls\n",
+		ttlRes.Height, len(ttlRes.Created))
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.Created {
 		// seek to the location of that txo's ttl value in the proof file
 
-		// fmt.Printf("flatFileTTLWorker write %d at offset %d\n",
-		// 	ttlRes.Height-c.createHeight,
-		// 	ff.offsets[c.createHeight]+4+int64(c.indexWithinBlock*4))
-
+		fmt.Printf("write ttl back to block %d\n", c.createHeight)
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
 
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
-		n, err := ff.proofFile.WriteAt(ttlArr[:],
-			ff.offsets[c.createHeight]+4+int64(c.indexWithinBlock*4))
+		// add 12: 4 for magic, 4 for size, 4 for height, then ttls start
+		_, err := ff.proofFile.WriteAt(ttlArr[:],
+			ff.offsets[c.createHeight]+12+int64(c.indexWithinBlock*4))
 		if err != nil {
 			return err
 		}
-		if n != 4 {
-			return fmt.Errorf("non4 bytes")
-		}
-		fmt.Printf("supposedly!! wrote %x to offset %d\n",
-			ttlArr,
-			ff.offsets[c.createHeight]+4+int64(c.indexWithinBlock*4))
+
 	}
 	ff.fileWait.Done()
 	return nil
-	// fmt.Printf("flatFileTTLWorker h %d done\n", ttlRes.Height)
 }
