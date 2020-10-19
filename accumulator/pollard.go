@@ -346,22 +346,29 @@ func (p *Pollard) readPos(pos uint64) (
 		err = ErrorStrings[ErrorNotEnoughTrees]
 		return
 	}
+
 	n, nsib = p.roots[tree], p.roots[tree]
 
-	for h := branchLen - 1; h != 255; h-- { // go through branch
+	if branchLen == 0 {
+		return
+	}
+
+	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
 		// grab the sibling of lr
 		lrSib := lr ^ 1
-		if h == 0 { // if at bottom, done
-			n, nsib = n.niece[lrSib], n.niece[lr]
-			return
-		}
 
 		n, nsib = n.niece[lr], n.niece[lrSib]
 		if n == nil {
 			return nil, nil, nil, err
 		}
 	}
+
+	lr := uint8(bits) & 1
+	// grab the sibling of lr
+	lrSib := lr ^ 1
+
+	n, nsib = n.niece[lrSib], n.niece[lr]
 	return // only happens when returning a root
 }
 
@@ -380,16 +387,15 @@ func (p *Pollard) grabPos(
 	n, nsib = p.roots[tree], p.roots[tree]
 
 	hn = &hashableNode{dest: n, sib: nsib}
-	for h := branchLen - 1; h != 255; h-- { // go through branch
+
+	if branchLen == 0 {
+		return
+	}
+
+	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
 		// grab the sibling of lr
 		lrSib := lr ^ 1
-		if h == 0 { // if at bottom, done
-			hn.dest = nsib // this is kind of confusing eh?
-			hn.sib = n     // but yeah, switch siblingness
-			n, nsib = n.niece[lrSib], n.niece[lr]
-			return
-		}
 
 		// if a sib doesn't exist, need to create it and hook it in
 		if n.niece[lrSib] == nil {
@@ -404,6 +410,14 @@ func (p *Pollard) grabPos(
 			return
 		}
 	}
+
+	lr := uint8(bits) & 1
+	// grab the sibling of lr
+	lrSib := lr ^ 1
+
+	hn.dest = nsib // this is kind of confusing eh?
+	hn.sib = n     // but yeah, switch siblingness
+	n, nsib = n.niece[lrSib], n.niece[lr]
 	return // only happens when returning a root
 }
 
