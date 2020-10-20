@@ -114,12 +114,12 @@ func makeCollapse(dels []uint64, delRemains, rootPresent bool, r uint8, numLeave
 	// on the collapses with later rows of swaps
 	case !delRemains && rootPresent:
 		rootSrc := rootPosition(numLeaves, r, forestRows)
-		return []arrow{{from: rootSrc, to: rootDest}}
+		return []arrow{{from: rootSrc, to: rootDest, collapse: true}}
 	case delRemains && !rootPresent:
 		// no root but 1 del: sibling becomes root & collapses
 		// in this case, mark as deleted
 		rootSrc := dels[len(dels)-1] ^ 1
-		return []arrow{{from: rootSrc, to: rootDest}}
+		return []arrow{{from: rootSrc, to: rootDest, collapse: true}}
 	default:
 		return nil
 	}
