@@ -112,7 +112,7 @@ func UblockNetworkReader(
 
 		err = ub.FromBytes(b)
 		if err != nil {
-			fmt.Printf("from connection %s ub decode error %s\n",
+			fmt.Printf("from connection %s ub decode error: %s\n",
 				con.RemoteAddr().String(), err.Error())
 			return
 		}

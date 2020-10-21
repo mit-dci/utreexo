@@ -193,6 +193,14 @@ func serveBlocksWorker(
 		}
 		fmt.Printf("wrote %d byte block\t", n)
 
+		// make sure we can decode
+
+		_, err = util.UDataFromBytes(udb)
+		if err != nil {
+			fmt.Printf("UDataFromBytes err: %s\n", err.Error())
+			break
+		}
+
 		// send 4 byte udata length
 		// err = binary.Write(c, binary.BigEndian, uint32(len(udb)))
 		// if err != nil {

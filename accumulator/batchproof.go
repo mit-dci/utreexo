@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 )
 
 // BatchProof :
@@ -47,6 +48,78 @@ func (bp *BatchProof) ToBytes() []byte {
 	}
 
 	return buf.Bytes()
+}
+
+// Serialize a batchproof to a writer.
+func (bp *BatchProof) Serialize(w io.Writer) (err error) {
+	// first write the number of targets (4 byte uint32)
+	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Targets)))
+	if err != nil {
+		return err
+	}
+	// if there are no targets, finish early & don't write proofs
+	if len(bp.Targets) == 0 {
+		return
+	}
+
+	// write out each target
+	for _, t := range bp.Targets {
+		// there's no need for these to be 64 bit for the next few decades...
+		err = binary.Write(w, binary.BigEndian, t)
+		if err != nil {
+			return
+		}
+	}
+	// write out number of hashes in the proof
+	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Proof)))
+	if err != nil {
+		return
+	}
+	// then the rest is just hashes
+	for _, h := range bp.Proof {
+		_, err = w.Write(h[:])
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+// FromBytesBatchProof gives a block proof back from the serialized bytes
+func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
+	var numTargets, numHashes uint32
+	err = binary.Read(r, binary.BigEndian, &numTargets)
+	if err != nil || numTargets == 0 {
+		if err == io.EOF && numTargets == 0 {
+			err = nil // EOF at the end is not an error...
+		}
+		return // finish early if 0 targets
+	}
+
+	bp.Targets = make([]uint64, numTargets)
+	for i, _ := range bp.Targets {
+		err = binary.Read(r, binary.BigEndian, &bp.Targets[i])
+		if err != nil {
+			return
+		}
+	}
+
+	// read number of hashes
+	err = binary.Read(r, binary.BigEndian, &numHashes)
+	if err != nil {
+		return
+	}
+	bp.Proof = make([]Hash, numHashes)
+	for i, _ := range bp.Proof {
+		_, err = r.Read(bp.Proof[i][:])
+		if err != nil {
+			if err == io.EOF && i == len(bp.Proof) {
+				err = nil // EOF at the end is not an error...
+			}
+			return
+		}
+	}
+	return
 }
 
 // ToString for debugging, shows the blockproof

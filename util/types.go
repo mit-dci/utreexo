@@ -159,13 +159,6 @@ func LeafDataFromTxo(txo wire.TxOut) (LeafData, error) {
 	return l, nil
 }
 
-// ToBytes serializes UData into bytes.
-// First, height, 4 bytes.
-// Then, number of TTL values (4 bytes, even though we only need 2)
-// Then a bunch of TTL values, one for each txo in the associated block
-// batch proof length (4 bytes)
-// batch proof
-// Bunch of LeafDatas, each prefixed with 2-byte lengths
 func (ud *UData) ToBytes() []byte {
 	batchBytes := ud.AccProof.ToBytes()
 	buffer := new(bytes.Buffer)
@@ -180,10 +173,6 @@ func (ud *UData) ToBytes() []byte {
 	}
 
 	// write the length of the batch proof bytes
-	// currently there's a redundant 4 bytes as the number of TTLs is the same
-	// as the number of targets in batchBytes
-	// TODO remove 4 byte redundant data here?  Annoying / not worth it?
-	// it's the first 4 bytes of batchBytes so could just trim that...
 	binary.Write(buffer, binary.BigEndian, uint32(len(batchBytes)))
 	// write the batch proof bytes
 	buffer.Write(batchBytes)
@@ -193,6 +182,37 @@ func (ud *UData) ToBytes() []byte {
 		buffer.Write(PrefixLen16(utxo.ToBytes()))
 	}
 	return buffer.Bytes()
+}
+
+// ToBytes serializes UData into bytes.
+// First, height, 4 bytes.
+// Then, number of TTL values (4 bytes, even though we only need 2)
+// Then a bunch of TTL values, one for each txo in the associated block
+// batch proof length (4 bytes)
+// batch proof
+// Bunch of LeafDatas, each prefixed with 2-byte lengths
+func (ud *UData) Serialize(w io.Writer) (err error) {
+	err = binary.Write(w, binary.BigEndian, ud.Height)
+	if err != nil { // ^ 4B block height
+		return
+	}
+	err = binary.Write(w, binary.BigEndian, uint32(len(ud.LeafTTLs)))
+	if err != nil { // ^ 4B num ttls
+		return
+	}
+	for _, ttlval := range ud.LeafTTLs { // write all ttls
+		err = binary.Write(w, binary.BigEndian, ttlval)
+	}
+	// err = binary.Write(w, binary.BigEndian,  )
+	if err != nil { // ^ 4B num ttls
+		return
+	}
+	ud.AccProof.ToBytes()
+
+}
+
+func (ud *UData) Deserialize(r io.Reader) (err error) {
+
 }
 
 // UDataFromBytes deserializes into UData from bytes.
