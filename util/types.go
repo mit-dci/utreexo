@@ -41,8 +41,8 @@ The udata comes first, and the height and leafTTLs come first.
 
 type UData struct {
 	Height   int32
-	LeafTTLs []int32
-	UtxoData []LeafData
+	TxoTTLs  []int32
+	Stxos    []LeafData
 	AccProof accumulator.BatchProof
 }
 
@@ -106,6 +106,51 @@ func (l *LeafData) ToBytes() []byte {
 	return buf.Bytes()
 }
 
+// Serialize puts LeafData onto a writer
+func (l *LeafData) Serialize(w io.Writer) (err error) {
+	hcb := l.Height << 1
+	if l.Coinbase {
+		hcb |= 1
+	}
+
+	_, err = w.Write(l.BlockHash[:])
+	_, err = w.Write(l.Outpoint.Hash[:])
+	err = binary.Write(w, binary.BigEndian, l.Outpoint.Index)
+	err = binary.Write(w, binary.BigEndian, hcb)
+	err = binary.Write(w, binary.BigEndian, l.Amt)
+	err = binary.Write(w, binary.BigEndian, uint32(len(l.PkScript)))
+	_, err = w.Write(l.PkScript)
+
+	// lazy but I guess if err is ever non-nil it'll keep doing that
+	return
+}
+
+// SerializeSize says how big a leafdata is
+func (l *LeafData) SerializeSize() int {
+	// 32B blockhash, 36B outpoint, 4B h/coinbase, 8B amt, 4B pkslen, pks
+	// so 84B + pks
+	return 84 + len(l.PkScript)
+}
+
+func (l *LeafData) Deserialize(r io.Reader) (err error) {
+	_, err = r.Read(l.BlockHash[:])
+	_, err = r.Read(l.Outpoint.Hash[:])
+	err = binary.Read(r, binary.BigEndian, &l.Outpoint.Index)
+	err = binary.Read(r, binary.BigEndian, &l.Height)
+	err = binary.Read(r, binary.BigEndian, &l.Amt)
+
+	var pkSize uint32
+	err = binary.Read(r, binary.BigEndian, &pkSize)
+	l.PkScript = make([]byte, pkSize)
+	_, err = r.Read(l.PkScript)
+
+	if l.Height&1 == 1 {
+		l.Coinbase = true
+	}
+	l.Height >>= 1
+	return
+}
+
 // compact serialization for LeafData:
 // don't need to send BlockHash; figure it out from height
 // don't need to send outpoint, it's already in the msgBlock
@@ -164,11 +209,11 @@ func (ud *UData) ToBytes() []byte {
 	buffer := new(bytes.Buffer)
 
 	_ = binary.Write(buffer, binary.BigEndian, ud.Height)
-	_ = binary.Write(buffer, binary.BigEndian, uint32(len(ud.LeafTTLs)))
+	_ = binary.Write(buffer, binary.BigEndian, uint32(len(ud.TxoTTLs)))
 	// write the TTL values
 	// These start 8 bytes into each Ublock, and we need to overwrite these
 	// since we don't initially know what the TTLs are
-	for _, ttl := range ud.LeafTTLs {
+	for _, ttl := range ud.TxoTTLs {
 		binary.Write(buffer, binary.BigEndian, ttl)
 	}
 
@@ -177,12 +222,16 @@ func (ud *UData) ToBytes() []byte {
 	// write the batch proof bytes
 	buffer.Write(batchBytes)
 	// write the utxos data
-	for _, utxo := range ud.UtxoData {
+	for _, utxo := range ud.Stxos {
 		// write the utxo data prefixed by 2 length bytes
 		buffer.Write(PrefixLen16(utxo.ToBytes()))
 	}
 	return buffer.Bytes()
 }
+
+// on disk
+// aaff aaff 0000 0014 0000 0001 0000 0001 0000 0000 0000 0000 0000 0000
+//  magic   |   size  |  height | numttls |   ttl0  | numTgts | ????
 
 // ToBytes serializes UData into bytes.
 // First, height, 4 bytes.
@@ -191,28 +240,93 @@ func (ud *UData) ToBytes() []byte {
 // batch proof length (4 bytes)
 // batch proof
 // Bunch of LeafDatas, each prefixed with 2-byte lengths
+
 func (ud *UData) Serialize(w io.Writer) (err error) {
 	err = binary.Write(w, binary.BigEndian, ud.Height)
 	if err != nil { // ^ 4B block height
 		return
 	}
-	err = binary.Write(w, binary.BigEndian, uint32(len(ud.LeafTTLs)))
+	err = binary.Write(w, binary.BigEndian, uint32(len(ud.TxoTTLs)))
 	if err != nil { // ^ 4B num ttls
 		return
 	}
-	for _, ttlval := range ud.LeafTTLs { // write all ttls
+	for _, ttlval := range ud.TxoTTLs { // write all ttls
 		err = binary.Write(w, binary.BigEndian, ttlval)
+		if err != nil {
+			return
+		}
 	}
-	// err = binary.Write(w, binary.BigEndian,  )
-	if err != nil { // ^ 4B num ttls
+
+	err = ud.AccProof.Serialize(w)
+	if err != nil { // ^ batch proof with lengths internal
 		return
 	}
-	ud.AccProof.ToBytes()
+	fmt.Printf("accproof %d bytes\n", ud.AccProof.SerializeSize())
 
+	// write all the leafdatas
+	for _, ld := range ud.Stxos {
+		err = ld.Serialize(w)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+//
+func (ud *UData) SerializeSize() int {
+	var ldsize int
+	for _, l := range ud.Stxos {
+		ldsize += l.SerializeSize()
+	}
+	// 8B height & numTTLs, 4B per TTL, accProof size, leaf sizes
+	return 8 + (4 * len(ud.TxoTTLs)) + ud.AccProof.SerializeSize() + ldsize
 }
 
 func (ud *UData) Deserialize(r io.Reader) (err error) {
 
+	err = binary.Read(r, binary.BigEndian, &ud.Height)
+	if err != nil { // ^ 4B block height
+		fmt.Printf("ud deser Height err %s\n", err.Error())
+		return
+	}
+
+	var numTTLs int32
+	err = binary.Read(r, binary.BigEndian, &numTTLs)
+	if err != nil { // ^ 4B num ttls
+		fmt.Printf("ud deser numTTLs err %s\n", err.Error())
+		return
+	}
+
+	fmt.Printf("UData deser read h %d - %d ttls ", ud.Height, numTTLs)
+
+	ud.TxoTTLs = make([]int32, numTTLs)
+	for i, _ := range ud.TxoTTLs { // write all ttls
+		err = binary.Read(r, binary.BigEndian, ud.TxoTTLs[i])
+		if err != nil {
+			fmt.Printf("ud deser LeafTTLs[%d] err %s\n", i, err.Error())
+			return
+		}
+	}
+
+	err = ud.AccProof.Deserialize(r)
+	if err != nil { // ^ batch proof with lengths internal
+		fmt.Printf("ud deser AccProof err %s\n", err.Error())
+		return
+	}
+	fmt.Printf("%d leaves\n", len(ud.AccProof.Targets))
+	// we've already gotten targets.  1 leafdata per target
+	ud.Stxos = make([]LeafData, len(ud.AccProof.Targets))
+	for i, _ := range ud.Stxos {
+		err = ud.Stxos[i].Deserialize(r)
+		if err != nil {
+			fmt.Printf("ud deser UtxoData[%d] err %s\n", i, err.Error())
+			return
+		}
+	}
+
+	return
 }
 
 // UDataFromBytes deserializes into UData from bytes.
@@ -234,9 +348,9 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 	// read number of TTLs to create the slice
 	var numTTLs uint32
 	_ = binary.Read(buffer, binary.BigEndian, &numTTLs)
-	ud.LeafTTLs = make([]int32, numTTLs)
-	for i, _ := range ud.LeafTTLs { // read each TTL, 4 bytes each
-		_ = binary.Read(buffer, binary.BigEndian, &ud.LeafTTLs[i])
+	ud.TxoTTLs = make([]int32, numTTLs)
+	for i, _ := range ud.TxoTTLs { // read each TTL, 4 bytes each
+		_ = binary.Read(buffer, binary.BigEndian, &ud.TxoTTLs[i])
 	}
 
 	// read the length of the batch proof bytes
@@ -253,11 +367,11 @@ func UDataFromBytes(b []byte) (ud UData, err error) {
 		return
 	}
 	// read the utxo datas, there are as many utxos as there are targets in the proof.
-	ud.UtxoData = make([]LeafData, len(ud.AccProof.Targets))
-	for i, _ := range ud.UtxoData {
+	ud.Stxos = make([]LeafData, len(ud.AccProof.Targets))
+	for i, _ := range ud.Stxos {
 		dataSize := binary.BigEndian.Uint16(buffer.Next(2))
 		dataBytes := buffer.Next(int(dataSize))
-		ud.UtxoData[i], err = LeafDataFromBytes(dataBytes)
+		ud.Stxos[i], err = LeafDataFromBytes(dataBytes)
 		if err != nil {
 			return
 		}
@@ -277,71 +391,31 @@ func (ub *UBlock) FromBytes(argbytes []byte) (err error) {
 	return
 }
 
-// network serialization for UBlocks (regular block with udata)
-// Firstjust a wire.MsgBlock with the regular serialization.
-// Then there's  4 bytes is (big endian) length of the udata.
-// So basically a block then udata, that's it.
-// Looks like "height" doesn't get sent over this way, but maybe that's OK.
+// Deserialize a UBlock.  It's just a block then udata.
 func (ub *UBlock) Deserialize(r io.Reader) (err error) {
-
-	// first deser the block
 	err = ub.Block.Deserialize(r)
 	if err != nil {
-		return
+		return err
 	}
-
-	// fmt.Printf("deser block OK %s\n", ub.Block.Header.BlockHash().String())
-	var uDataLen, bytesRead uint32
-	var n int
-	// read udata length
-	err = binary.Read(r, binary.BigEndian, &uDataLen)
-	if err != nil {
-		return
-	}
-	// fmt.Printf("server says %d byte uDataLen\n", uDataLen)
-
-	udataBytes := make([]byte, uDataLen)
-
-	for bytesRead < uDataLen {
-		n, err = r.Read(udataBytes[bytesRead:])
-		if err != nil {
-			return
-		}
-		bytesRead += uint32(n)
-	}
-	// fmt.Printf("udataBytes: %x\n", udataBytes)
-	ub.UtreexoData, err = UDataFromBytes(udataBytes)
+	fmt.Printf("got a block %s\n", ub.Block.Header.BlockHash().String())
+	err = ub.UtreexoData.Deserialize(r)
 	return
 }
 
 // We don't actually call serialize since from the server side we don't
 // serialize, we just glom stuff together from the disk and send it over.
 func (ub *UBlock) Serialize(w io.Writer) (err error) {
-	var bw bytes.Buffer
-	err = ub.Block.Serialize(&bw)
+	err = ub.Block.Serialize(w)
 	if err != nil {
 		return
 	}
-
-	udataBytes := ub.UtreexoData.ToBytes()
-	err = binary.Write(&bw, binary.BigEndian, uint32(len(udataBytes)))
-	if err != nil {
-		return
-	}
-
-	_, err = bw.Write(udataBytes)
-	if err != nil {
-		return err
-	}
-
-	payload := bw.Bytes()
-	err = binary.Write(w, binary.BigEndian, uint32(len(payload)))
-	if err != nil {
-		return
-	}
-	_, err = w.Write(payload)
-
+	err = ub.UtreexoData.Serialize(w)
 	return
+}
+
+// SerializeSize: how big is it, in bytes.
+func (ub *UBlock) SerializeSize() int {
+	return ub.Block.SerializeSize() + ub.UtreexoData.SerializeSize()
 }
 
 // TODO use compact leafDatas in the block proofs -- probably 50%+ space savings

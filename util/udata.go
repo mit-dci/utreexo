@@ -18,15 +18,15 @@ func (ub *UBlock) ProofsProveBlock(inputSkipList []uint32) bool {
 	proveOPs := blockToDelOPs(&ub.Block, inputSkipList)
 
 	// ensure that all outpoints are provided in the extradata
-	if len(proveOPs) != len(ub.UtreexoData.UtxoData) {
+	if len(proveOPs) != len(ub.UtreexoData.Stxos) {
 		fmt.Printf("height %d %d outpoints need proofs but only %d proven\n",
-			ub.UtreexoData.Height, len(proveOPs), len(ub.UtreexoData.UtxoData))
+			ub.UtreexoData.Height, len(proveOPs), len(ub.UtreexoData.Stxos))
 		return false
 	}
-	for i, _ := range ub.UtreexoData.UtxoData {
-		if proveOPs[i] != ub.UtreexoData.UtxoData[i].Outpoint {
+	for i, _ := range ub.UtreexoData.Stxos {
+		if proveOPs[i] != ub.UtreexoData.Stxos[i].Outpoint {
 			fmt.Printf("block/utxoData mismatch %s v %s\n",
-				proveOPs[i].String(), ub.UtreexoData.UtxoData[i].Outpoint.String())
+				proveOPs[i].String(), ub.UtreexoData.Stxos[i].Outpoint.String())
 			return false
 		}
 	}
@@ -52,9 +52,9 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 
 	// make sure the udata is consistent, with the same number of leafDatas
 	// as targets in the accumulator batch proof
-	if len(ud.AccProof.Targets) != len(ud.UtxoData) {
+	if len(ud.AccProof.Targets) != len(ud.Stxos) {
 		fmt.Printf("Verify failed: %d targets but %d leafdatas\n",
-			len(ud.AccProof.Targets), len(ud.UtxoData))
+			len(ud.AccProof.Targets), len(ud.Stxos))
 	}
 
 	for i, pos := range presort {
@@ -64,10 +64,10 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 			return false
 		}
 		// check if leafdata hashes to the hash in the proof at the target
-		if ud.UtxoData[i].LeafHash() != hashInProof {
+		if ud.Stxos[i].LeafHash() != hashInProof {
 			fmt.Printf("Verify failed: txo %s position %d leafdata %x proof %x\n",
-				ud.UtxoData[i].Outpoint.String(), pos,
-				ud.UtxoData[i].LeafHash(), hashInProof)
+				ud.Stxos[i].Outpoint.String(), pos,
+				ud.Stxos[i].LeafHash(), hashInProof)
 			sib, exists := mp[pos^1]
 			if exists {
 				fmt.Printf("sib exists, %x\n", sib)
@@ -88,7 +88,7 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 	m := v.Entries()
 	// loop through leafDatas and convert them into UtxoEntries (pretty much the
 	// same thing
-	for _, ld := range ud.UtxoData {
+	for _, ld := range ud.Stxos {
 		txo := wire.NewTxOut(ld.Amt, ld.PkScript)
 		utxo := blockchain.NewUtxoEntry(txo, ld.Height, ld.Coinbase)
 		m[ld.Outpoint] = utxo

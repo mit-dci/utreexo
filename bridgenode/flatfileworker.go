@@ -178,7 +178,7 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	// but we don't write the block 2 offset until we get block 2
 
 	fmt.Printf("writeProofBlock gets h %d ud %d utxodatas\n",
-		ud.Height, len(ud.UtxoData))
+		ud.Height, len(ud.Stxos))
 
 	// get the new block proof
 	// put offset in ram
@@ -202,23 +202,24 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 		return err
 	}
 
-	pb := ud.ToBytes()
-	// then write big endian proof size uint32 (proof never more than 4GB)
-	err = binary.Write(ff.proofFile, binary.BigEndian, uint32(len(pb)))
+	// prefix with size
+	err = binary.Write(ff.proofFile, binary.BigEndian, uint32(ud.SerializeSize()))
 	if err != nil {
 		return err
 	}
 
-	// then write the proof
-	written, err := ff.proofFile.Write(pb)
+	// then write the whole proof
+	err = ud.Serialize(ff.proofFile)
 	if err != nil {
 		return err
 	}
 
-	ff.currentOffset += int64(written) + 8 // 4B magic & 4B size comes first
+	// 4B magic & 4B size comes first
+	ff.currentOffset += int64(ud.SerializeSize()) + 8
 	ff.currentHeight++
 
-	// fmt.Printf("flatFileBlockWorker h %d done\n", proofWriteHeight)
+	fmt.Printf("flatFileBlockWorker h %d wrote %d bytes to offset %d\n",
+		ff.currentHeight, ud.SerializeSize()+8, ff.currentOffset)
 	return nil
 }
 
@@ -236,9 +237,9 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
-		// add 12: 4 for magic, 4 for size, 4 for height, then ttls start
+		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
 		_, err := ff.proofFile.WriteAt(ttlArr[:],
-			ff.offsets[c.createHeight]+12+int64(c.indexWithinBlock*4))
+			ff.offsets[c.createHeight]+16+int64(c.indexWithinBlock*4))
 		if err != nil {
 			return err
 		}

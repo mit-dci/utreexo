@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -158,19 +159,13 @@ func serveBlocksWorker(
 			// backwards request of height below toHeight
 			break
 		}
-		// over the wire send:
-		// 4 byte length prefix for the whole thing
-		// then the block, then the udb len, then udb
 
-		// fmt.Printf("push %d\n", curHeight)
 		udb, err := util.GetUDataBytesFromFile(curHeight)
 		if err != nil {
 			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			break
 		}
-		fmt.Printf("read %d byte udb\t", len(udb))
 
-		// fmt.Printf("h %d read %d byte udb\n", curHeight, len(udb))
 		blkbytes, err := GetBlockBytesFromFile(
 			curHeight, util.OffsetFilePath, blockDir)
 		if err != nil {
@@ -178,42 +173,32 @@ func serveBlocksWorker(
 			break
 		}
 
-		// first send 4 byte length for everything
-		// fmt.Printf("h %d send len %d\n", curHeight, len(udb)+len(blkbytes))
-		err = binary.Write(c, binary.BigEndian, uint32(len(udb)+len(blkbytes)))
+		// TODO this is just for testing -- we don't have to deserialize
+		// the whole thing then re-serialize to send it
+		// Also currently skipping the size prefix to run deserialize
+		// ... just like bitcoin blocks
+
+		var buf bytes.Buffer
+		var ub util.UBlock
+		buf.Write(blkbytes)
+		buf.Write(udb)
+		fmt.Printf("buf len %d\n", buf.Len())
+
+		// should be able to read the whole thing from the buffer
+		err = ub.Deserialize(&buf)
 		if err != nil {
-			fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
+			fmt.Printf("ub.Deserialize 1 %s\n", err.Error())
 			break
 		}
-		// next, send the block bytes
-		n, err := c.Write(blkbytes)
+		fmt.Printf("remaining: %x \n", buf.Bytes())
+
+		// send
+		n, err := c.Write(buf.Bytes())
 		if err != nil {
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			break
 		}
-		fmt.Printf("wrote %d byte block\t", n)
-
-		// make sure we can decode
-
-		_, err = util.UDataFromBytes(udb)
-		if err != nil {
-			fmt.Printf("UDataFromBytes err: %s\n", err.Error())
-			break
-		}
-
-		// send 4 byte udata length
-		// err = binary.Write(c, binary.BigEndian, uint32(len(udb)))
-		// if err != nil {
-		// 	fmt.Printf("pushBlocks binary.Write %s\n", err.Error())
-		// 	return
-		// }
-		// last, send the udata bytes
-		n, err = c.Write(udb)
-		if err != nil {
-			fmt.Printf("pushBlocks ubb write %s\n", err.Error())
-			break
-		}
-		fmt.Printf("wrote %d byte udb\n", n)
+		fmt.Printf("sent %d bytes\n", n)
 	}
 	err = c.Close()
 	if err != nil {

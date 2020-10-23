@@ -139,13 +139,12 @@ func BuildProofs(
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
-		// this also includes TTL values, but they are unpopulated right now, because
-		// we don't yet know when the UTXOs in this block die.
 		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
-
+		// We don't know the TTL values, but know how many spots to allocate
+		ud.TxoTTLs = make([]int32, len(blockAdds))
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
@@ -165,9 +164,9 @@ func BuildProofs(
 			fmt.Println("On block :", bnr.Height+1)
 		}
 
-		// if ud.Height == 800 {
-		// stop = true
-		// }
+		if ud.Height == 800 {
+			stop = true
+		}
 
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit

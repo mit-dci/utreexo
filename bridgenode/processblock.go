@@ -179,11 +179,11 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	ud util.UData, err error) {
 
 	ud.Height = height
-	ud.UtxoData = delLeaves
+	ud.Stxos = delLeaves
 	// make slice of hashes from leafdata
-	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
-	for i, _ := range ud.UtxoData {
-		delHashes[i] = ud.UtxoData[i].LeafHash()
+	delHashes := make([]accumulator.Hash, len(ud.Stxos))
+	for i, _ := range ud.Stxos {
+		delHashes[i] = ud.Stxos[i].LeafHash()
 		// fmt.Printf("del %s -> %x\n",
 		// ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
 	}

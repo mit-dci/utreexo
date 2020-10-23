@@ -85,21 +85,40 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	return
 }
 
+func (bp *BatchProof) SerializeSize() int {
+	// empty batchProofs are 4 bytes
+	if len(bp.Targets) == 0 {
+		return 4
+	}
+	// 8B for numTargets and numHashes, 4B per target, 32B per hash
+	return 8 + (4 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
+}
+
 // FromBytesBatchProof gives a block proof back from the serialized bytes
 func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 	var numTargets, numHashes uint32
 	err = binary.Read(r, binary.BigEndian, &numTargets)
-	if err != nil || numTargets == 0 {
+	if err != nil {
 		if err == io.EOF && numTargets == 0 {
 			err = nil // EOF at the end is not an error...
 		}
 		return // finish early if 0 targets
 	}
+	if numTargets == 0 {
+		return
+	}
+
+	if numTargets > 1<<16 {
+		fmt.Printf("%d targets - too many\n", numTargets)
+		panic("too many")
+	}
 
 	bp.Targets = make([]uint64, numTargets)
+
 	for i, _ := range bp.Targets {
 		err = binary.Read(r, binary.BigEndian, &bp.Targets[i])
 		if err != nil {
+			fmt.Printf("bp deser err %s\n", err.Error())
 			return
 		}
 	}
@@ -107,12 +126,19 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 	// read number of hashes
 	err = binary.Read(r, binary.BigEndian, &numHashes)
 	if err != nil {
+		fmt.Printf("bp deser err %s\n", err.Error())
 		return
+	}
+
+	if numHashes > 1<<16 {
+		fmt.Printf("%d hashes - too many\n", numHashes)
+		panic("too many")
 	}
 	bp.Proof = make([]Hash, numHashes)
 	for i, _ := range bp.Proof {
 		_, err = r.Read(bp.Proof[i][:])
 		if err != nil {
+			fmt.Printf("bp deser err %s\n", err.Error())
 			if err == io.EOF && i == len(bp.Proof) {
 				err = nil // EOF at the end is not an error...
 			}

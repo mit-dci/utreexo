@@ -172,8 +172,8 @@ func (c *Csn) putBlockInPollard(
 		return err
 	}
 
-	remember := make([]bool, len(ub.UtreexoData.LeafTTLs))
-	for i, ttl := range ub.UtreexoData.LeafTTLs {
+	remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
+	for i, ttl := range ub.UtreexoData.TxoTTLs {
 		// ttl-ub.Height is the number of blocks until the block is spend.
 		remember[i] = ttl-ub.UtreexoData.Height < c.pollard.Lookahead
 	}

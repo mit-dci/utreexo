@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"net"
 	"os"
@@ -68,7 +67,7 @@ func UblockNetworkReader(
 	defer con.Close()
 
 	var ub UBlock
-	var ublen uint32
+	// var ublen uint32
 	// request range from curHeight to latest block
 	err = binary.Write(con, binary.BigEndian, curHeight)
 	if err != nil {
@@ -86,38 +85,17 @@ func UblockNetworkReader(
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
-		// fmt.Printf("asked for height %d\n", curHeight)
-		err = binary.Read(con, binary.BigEndian, &ublen)
+
+		err = ub.Deserialize(con)
 		if err != nil {
-			fmt.Printf("read error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
-			close(blockChan)
-			return
-		}
-		fmt.Printf("h %d got len %d\t", curHeight, ublen)
-
-		b := make([]byte, ublen)
-		n, err := io.ReadFull(con, b)
-		if err != nil {
-			fmt.Printf("ReadFull error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
-			return
-		}
-		fmt.Printf("%d bytes to ub buf\n", n)
-
-		if n != int(ublen) {
-			fmt.Printf("\t###underrun\n")
-
-		}
-
-		err = ub.FromBytes(b)
-		if err != nil {
-			fmt.Printf("from connection %s ub decode error: %s\n",
+			fmt.Printf("Deserialize error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
 			return
 		}
 
-		ub.UtreexoData.Height = curHeight
+		fmt.Printf("got ublock h %d, total size %d\n",
+			ub.UtreexoData.Height, ub.SerializeSize())
+
 		blockChan <- ub
 	}
 }
@@ -193,7 +171,7 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		return nil, fmt.Errorf(
 			"size at offest %d says %d which is too big", offset, size)
 	}
-	fmt.Printf("read size %d ", size)
+	fmt.Printf("GetUDataBytesFromFile read size %d ", size)
 	b = make([]byte, size)
 
 	_, err = proofFile.Read(b)
