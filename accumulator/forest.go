@@ -398,17 +398,21 @@ func (f *Forest) addv2(adds []Leaf) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
-	numdels, numadds := len(dels), len(adds)
+func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
+	numdels, numadds := len(delsUn), len(adds)
 	delta := int64(numadds - numdels) // watch 32/64 bit
 	if int64(f.numLeaves)+delta < 0 {
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
-			len(dels), f.numLeaves)
+			len(delsUn), f.numLeaves)
 	}
-	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
-		fmt.Printf("%v\n", dels)
-		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
-	}
+	// if !checkSortedNoDupes(dels) { // check for sorted deletion slice
+	// fmt.Printf("%v\n", dels)
+	// return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
+	// }
+	// TODO for now just sort
+	dels := delsUn
+	sortUint64s(dels)
+
 	for _, a := range adds { // check for empty leaves
 		if a.Hash == empty {
 			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")

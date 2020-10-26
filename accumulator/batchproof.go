@@ -14,6 +14,14 @@ type BatchProof struct {
 	// the position of the hashes is implied / computable from the leaf positions
 }
 
+/*
+Batchproof serialization is:
+4bytes numTargets
+4bytes numHashes
+[]Targets (8 bytes each)
+[]Hashes (32 bytes each)
+*/
+
 // Serialize a batchproof to a writer.
 func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	// first write the number of targets (4 byte uint32)
@@ -22,7 +30,12 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 		return err
 	}
 	// if there are no targets, finish early & don't write proofs
-	if len(bp.Targets) == 0 {
+	// if len(bp.Targets) == 0 {
+	// return
+	// }
+	// write out number of hashes in the proof
+	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Proof)))
+	if err != nil {
 		return
 	}
 
@@ -34,11 +47,7 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 			return
 		}
 	}
-	// write out number of hashes in the proof
-	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Proof)))
-	if err != nil {
-		return
-	}
+
 	// then the rest is just hashes
 	for _, h := range bp.Proof {
 		_, err = w.Write(h[:])
@@ -49,13 +58,15 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	return
 }
 
+// TODO: could make this more efficient by not encoding as much empty stuff
+
 func (bp *BatchProof) SerializeSize() int {
 	// empty batchProofs are 4 bytes
-	if len(bp.Targets) == 0 {
-		return 4
-	}
-	// 8B for numTargets and numHashes, 4B per target, 32B per hash
-	return 8 + (4 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
+	// if len(bp.Targets) == 0 {
+	// 	return 4
+	// }
+	// 8B for numTargets and numHashes, 8B per target, 32B per hash
+	return 8 + (8 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
 }
 
 // Deserialize gives a block proof back from the serialized bytes
@@ -66,25 +77,15 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 		if err == io.EOF && numTargets == 0 {
 			err = nil // EOF at the end is not an error...
 		}
-		return // finish early if 0 targets
-	}
-	if numTargets == 0 {
 		return
 	}
+	// if numTargets == 0 {
+	// return // finish early if 0 targets
+	// }
 
 	if numTargets > 1<<16 {
-		fmt.Printf("%d targets - too many\n", numTargets)
-		panic("too many")
-	}
-
-	bp.Targets = make([]uint64, numTargets)
-
-	for i, _ := range bp.Targets {
-		err = binary.Read(r, binary.BigEndian, &bp.Targets[i])
-		if err != nil {
-			fmt.Printf("bp deser err %s\n", err.Error())
-			return
-		}
+		err = fmt.Errorf("%d targets - too many\n", numTargets)
+		return
 	}
 
 	// read number of hashes
@@ -93,11 +94,20 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 		fmt.Printf("bp deser err %s\n", err.Error())
 		return
 	}
-
 	if numHashes > 1<<16 {
-		fmt.Printf("%d hashes - too many\n", numHashes)
-		panic("too many")
+		err = fmt.Errorf("%d hashes - too many\n", numHashes)
+		return
 	}
+
+	bp.Targets = make([]uint64, numTargets)
+	for i, _ := range bp.Targets {
+		err = binary.Read(r, binary.BigEndian, &bp.Targets[i])
+		if err != nil {
+			fmt.Printf("bp deser err %s\n", err.Error())
+			return
+		}
+	}
+
 	bp.Proof = make([]Hash, numHashes)
 	for i, _ := range bp.Proof {
 		_, err = r.Read(bp.Proof[i][:])
@@ -113,15 +123,10 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 }
 
 // ToString for debugging, shows the blockproof
-func (bp *BatchProof) SortTargets() {
-	sortUint64s(bp.Targets)
-}
-
-// ToString for debugging, shows the blockproof
 func (bp *BatchProof) ToString() string {
 	s := fmt.Sprintf("%d targets: ", len(bp.Targets))
 	for _, t := range bp.Targets {
-		s += fmt.Sprintf("%d\t", t)
+		s += fmt.Sprintf("%d ", t)
 	}
 	s += fmt.Sprintf("\n%d proofs: ", len(bp.Proof))
 	for _, p := range bp.Proof {
@@ -267,8 +272,9 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
-	proof := bp.Proof // back up proof
-	targets := bp.Targets
+	proof := bp.Proof     // copy of proof
+	targets := bp.Targets // copy of targets & sort them
+	sortUint64s(targets)
 	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
 
 	if verbose {
@@ -281,7 +287,7 @@ func (bp *BatchProof) Reconstruct(
 	var needSibRow, nextRow []uint64 // only even siblings needed
 
 	// a bit strange; pop off 2 hashes at a time, and either 1 or 2 positions
-	for len(bp.Proof) > 0 && len(targets) > 0 {
+	for len(proof) > 0 && len(targets) > 0 {
 
 		if targets[0] == rootPositions[0] {
 			// target is a root; this can only happen at row 0;
@@ -289,14 +295,14 @@ func (bp *BatchProof) Reconstruct(
 			if verbose {
 				fmt.Printf("placed single proof at %d\n", targets[0])
 			}
-			proofTree[targets[0]] = bp.Proof[0]
-			bp.Proof = bp.Proof[1:]
+			proofTree[targets[0]] = proof[0]
+			proof = proof[1:]
 			targets = targets[1:]
 			continue
 		}
 
 		// there should be 2 proofs left then
-		if len(bp.Proof) < 2 {
+		if len(proof) < 2 {
 			return nil, fmt.Errorf("only 1 proof left but need 2 for %d",
 				targets[0])
 		}
@@ -305,14 +311,14 @@ func (bp *BatchProof) Reconstruct(
 		right := targets[0] | 1
 		left := right ^ 1
 
-		proofTree[left] = bp.Proof[0]
-		proofTree[right] = bp.Proof[1]
+		proofTree[left] = proof[0]
+		proofTree[right] = proof[1]
 		needSibRow = append(needSibRow, parent(targets[0], forestRows))
 		// pop em off
 		if verbose {
 			fmt.Printf("placed proofs at %d, %d\n", left, right)
 		}
-		bp.Proof = bp.Proof[2:]
+		proof = proof[2:]
 
 		if len(targets) > 1 && targets[0]|1 == targets[1] {
 			// pop off 2 positions
@@ -347,14 +353,14 @@ func (bp *BatchProof) Reconstruct(
 				needSibRow = needSibRow[2:]
 			} else {
 				// return error if we need a proof and can't get it
-				if len(bp.Proof) == 0 {
+				if len(proof) == 0 {
 					fmt.Printf("roots %v needsibrow %v\n", rootPositions, needSibRow)
 					return nil, fmt.Errorf("h %d no proofs left at pos %d ",
 						h, needSibRow[0]^1)
 				}
 				// otherwise we do need proof; place in sibling position and pop off
-				proofTree[needSibRow[0]^1] = bp.Proof[0]
-				bp.Proof = bp.Proof[1:]
+				proofTree[needSibRow[0]^1] = proof[0]
+				proof = proof[1:]
 				// and get rid of 1 element of needSibRow
 				needSibRow = needSibRow[1:]
 			}
@@ -369,9 +375,9 @@ func (bp *BatchProof) Reconstruct(
 		needSibRow = nextRow
 		nextRow = []uint64{}
 	}
-	if len(bp.Proof) != 0 {
-		return nil, fmt.Errorf("too many proofs, %d remain", len(bp.Proof))
+	if len(proof) != 0 {
+		return nil, fmt.Errorf("too many proofs, %d remain", len(proof))
 	}
-	bp.Proof = proof // restore from backup
+	// bp.Proof = proof // restore from backup
 	return proofTree, nil
 }

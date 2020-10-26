@@ -213,15 +213,16 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	if err != nil {
 		return err
 	}
+
+	// verify that offset is calculated correctly
 	off, err := ff.proofFile.Seek(0, 1)
 	if err != nil {
 		return err
 	}
-
-	// verify that offset is calculated correctly
 	if off != ff.currentOffset+int64(ud.SerializeSize())+8 {
 		return fmt.Errorf("h %d offset %x calculated length %d but observed %d",
-			ff.currentHeight, ff.currentOffset, int64(ud.SerializeSize())+8, off)
+			ff.currentHeight, ff.currentOffset,
+			int64(ud.SerializeSize())+8, off-ff.currentOffset)
 	}
 
 	// 4B magic & 4B size comes first

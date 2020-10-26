@@ -93,8 +93,9 @@ func UblockNetworkReader(
 			return
 		}
 
-		fmt.Printf("got ublock h %d, total size %d\n",
-			ub.UtreexoData.Height, ub.SerializeSize())
+		// fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
+		// ub.UtreexoData.Height, ub.SerializeSize(),
+		// ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
 
 		blockChan <- ub
 	}

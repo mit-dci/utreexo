@@ -40,13 +40,15 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	// this is really ugly and basically copies the whole thing to avoid
 	// destroying it while verifying...
 
-	presort := make([]uint64, len(ud.AccProof.Targets))
-	copy(presort, ud.AccProof.Targets)
+	// presort := make([]uint64, len(ud.AccProof.Targets))
+	// copy(presort, ud.AccProof.Targets)
 
-	ud.AccProof.SortTargets()
+	fmt.Printf(ud.AccProof.ToString())
+
+	// ud.AccProof.SortTargets()
 	mp, err := ud.AccProof.Reconstruct(nl, h)
 	if err != nil {
-		fmt.Printf(" Reconstruct failed %s\n", err.Error())
+		fmt.Printf("Reconstruct failed %s\n", err.Error())
 		return false
 	}
 
@@ -57,7 +59,7 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 			len(ud.AccProof.Targets), len(ud.Stxos))
 	}
 
-	for i, pos := range presort {
+	for i, pos := range ud.AccProof.Targets {
 		hashInProof, exists := mp[pos]
 		if !exists {
 			fmt.Printf("Verify failed: Target %d not in map\n", pos)
@@ -65,7 +67,7 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 		}
 		// check if leafdata hashes to the hash in the proof at the target
 		if ud.Stxos[i].LeafHash() != hashInProof {
-			fmt.Printf("Verify failed: txo %s position %d leafdata %x proof %x\n",
+			fmt.Printf("Verify failed: txo %s pos %d leafdata %x in proof %x\n",
 				ud.Stxos[i].Outpoint.String(), pos,
 				ud.Stxos[i].LeafHash(), hashInProof)
 			sib, exists := mp[pos^1]
@@ -76,7 +78,7 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 		}
 	}
 	// return to presorted target list
-	ud.AccProof.Targets = presort
+	// ud.AccProof.Targets = presort
 	return true
 }
 

@@ -203,7 +203,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 		return
 	}
 
-	// fmt.Printf(batchProof.ToString())
+	fmt.Printf(ud.AccProof.ToString())
 	// Optional Sanity check. Should never fail.
 
 	// unsort := make([]uint64, len(ud.AccProof.Targets))

@@ -92,9 +92,9 @@ func (l *LeafData) Serialize(w io.Writer) (err error) {
 
 // SerializeSize says how big a leafdata is
 func (l *LeafData) SerializeSize() int {
-	// 32B blockhash, 36B outpoint, 4B h/coinbase, 8B amt, 4B pkslen, pks
-	// so 84B + pks
-	return 84 + len(l.PkScript)
+	// 32B blockhash, 36B outpoint, 4B h/coinbase, 8B amt, 2B pkslen, pks
+	// so 82B + pks
+	return 82 + len(l.PkScript)
 }
 
 func (l *LeafData) Deserialize(r io.Reader) (err error) {
@@ -139,10 +139,10 @@ func (l *LeafData) LeafHash() [32]byte {
 // ToBytes serializes UData into bytes.
 // First, height, 4 bytes.
 // Then, number of TTL values (4 bytes, even though we only need 2)
-// Then a bunch of TTL values, one for each txo in the associated block
+// Then a bunch of TTL values, (4B each) one for each txo in the associated block
 // batch proof length (4 bytes)
 // batch proof
-// Bunch of LeafDatas, each prefixed with 2-byte lengths
+// Bunch of LeafDatas
 
 func (ud *UData) Serialize(w io.Writer) (err error) {
 	err = binary.Write(w, binary.BigEndian, ud.Height)
@@ -164,11 +164,12 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 	if err != nil { // ^ batch proof with lengths internal
 		return
 	}
-	fmt.Printf("accproof %d bytes\n", ud.AccProof.SerializeSize())
+
+	// fmt.Printf("accproof %d bytes\n", ud.AccProof.SerializeSize())
 
 	// write all the leafdatas
-	for i, ld := range ud.Stxos {
-		fmt.Printf("writing ld %d %s\n", i, ld.ToString())
+	for _, ld := range ud.Stxos {
+		// fmt.Printf("writing ld %d %s\n", i, ld.ToString())
 		err = ld.Serialize(w)
 		if err != nil {
 			return
@@ -181,13 +182,29 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 //
 func (ud *UData) SerializeSize() int {
 	var ldsize int
+	var b bytes.Buffer
+
 	for _, l := range ud.Stxos {
 		ldsize += l.SerializeSize()
-		fmt.Printf("pks %x ldsize %d\n", l.PkScript, l.SerializeSize())
+		b.Reset()
+		l.Serialize(&b)
+		if b.Len() != l.SerializeSize() {
+			fmt.Printf(" b.Len() %d, l.SerializeSize() %d\n",
+				b.Len(), l.SerializeSize())
+		}
 	}
 
+	b.Reset()
+	ud.AccProof.Serialize(&b)
+	if b.Len() != ud.AccProof.SerializeSize() {
+		fmt.Printf(" b.Len() %d, AccProof.SerializeSize() %d\n",
+			b.Len(), ud.AccProof.SerializeSize())
+	}
+
+	guess := 8 + (4 * len(ud.TxoTTLs)) + ud.AccProof.SerializeSize() + ldsize
+
 	// 8B height & numTTLs, 4B per TTL, accProof size, leaf sizes
-	return 8 + (4 * len(ud.TxoTTLs)) + ud.AccProof.SerializeSize() + ldsize
+	return guess
 }
 
 func (ud *UData) Deserialize(r io.Reader) (err error) {
@@ -197,6 +214,7 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 		fmt.Printf("ud deser Height err %s\n", err.Error())
 		return
 	}
+	// fmt.Printf("read height %d\n", ud.Height)
 
 	var numTTLs int32
 	err = binary.Read(r, binary.BigEndian, &numTTLs)
@@ -204,8 +222,8 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 		fmt.Printf("ud deser numTTLs err %s\n", err.Error())
 		return
 	}
-
-	fmt.Printf("UData deser read h %d - %d ttls ", ud.Height, numTTLs)
+	// fmt.Printf("read ttls %d\n", numTTLs)
+	// fmt.Printf("UData deser read h %d - %d ttls ", ud.Height, numTTLs)
 
 	ud.TxoTTLs = make([]int32, numTTLs)
 	for i, _ := range ud.TxoTTLs { // write all ttls
@@ -214,6 +232,7 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 			fmt.Printf("ud deser LeafTTLs[%d] err %s\n", i, err.Error())
 			return
 		}
+		// fmt.Printf("read ttl[%d] %d\n", i, ud.TxoTTLs[i])
 	}
 
 	err = ud.AccProof.Deserialize(r)
@@ -221,7 +240,9 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 		fmt.Printf("ud deser AccProof err %s\n", err.Error())
 		return
 	}
-	fmt.Printf("%d targets\n", len(ud.AccProof.Targets))
+
+	// fmt.Printf("%d byte accproof, read %d targets\n",
+	// ud.AccProof.SerializeSize(), len(ud.AccProof.Targets))
 	// we've already gotten targets.  1 leafdata per target
 	ud.Stxos = make([]LeafData, len(ud.AccProof.Targets))
 	for i, _ := range ud.Stxos {
@@ -230,8 +251,7 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 			fmt.Printf("ud deser UtxoData[%d] err %s\n", i, err.Error())
 			return
 		}
-		fmt.Printf("target %d %s\n",
-			i, ud.Stxos[i].PkScript, ud.Stxos[i].ToString())
+		// fmt.Printf("ud deser target %d %s\n", i, ud.Stxos[i].ToString())
 	}
 
 	return
@@ -243,7 +263,8 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("got a block %s\n", ub.Block.Header.BlockHash().String())
+	// fmt.Printf("deser'd block %s %d bytes\n",
+	// ub.Block.Header.BlockHash().String(), ub.Block.SerializeSize())
 	err = ub.UtreexoData.Deserialize(r)
 	return
 }

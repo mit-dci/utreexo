@@ -164,7 +164,9 @@ func (c *Csn) putBlockInPollard(
 	}
 
 	// sort before ingestion; verify up above unsorts...
-	ub.UtreexoData.AccProof.SortTargets()
+	// ub.UtreexoData.AccProof.SortTargets()
+	// TODO sorting is now internal to accumulator...
+
 	// Fills in the empty(nil) nieces for verification && deletion
 	err := c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
 	if err != nil {
@@ -183,8 +185,11 @@ func (c *Csn) putBlockInPollard(
 		ub.Block, remember, outskip, ub.UtreexoData.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
+	for i, leaf := range blockAdds {
+		fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
+	}
 	// fmt.Printf("h %d adds %d targets %d\n",
-	// ub.Height, len(blockAdds), len(ub.UtreexoData.AccProof.Targets))
+	// ub.UtreexoData.Height, len(blockAdds), len(ub.UtreexoData.AccProof.Targets))
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete

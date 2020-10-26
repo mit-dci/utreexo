@@ -148,7 +148,7 @@ func BuildProofs(
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
-		ud.AccProof.SortTargets()
+		// ud.AccProof.SortTargets()
 
 		// fmt.Printf("h %d adds %d targets %d\n",
 		// 	height, len(blockAdds), len(ud.AccProof.Targets))
@@ -159,6 +159,7 @@ func BuildProofs(
 		if err != nil {
 			return err
 		}
+		fmt.Printf(ud.AccProof.ToString())
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
