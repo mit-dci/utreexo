@@ -272,8 +272,10 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
-	proof := bp.Proof     // copy of proof
-	targets := bp.Targets // copy of targets & sort them
+	// TODO no reason to copy proof right?
+	proof := bp.Proof                          // copy of proof <- pointless?
+	targets := make([]uint64, len(bp.Targets)) // copy of targets & sort them
+	copy(targets, bp.Targets)
 	sortUint64s(targets)
 	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
 

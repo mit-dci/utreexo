@@ -410,7 +410,8 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
 	// return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
 	// }
 	// TODO for now just sort
-	dels := delsUn
+	dels := make([]uint64, len(delsUn))
+	copy(dels, delsUn)
 	sortUint64s(dels)
 
 	for _, a := range adds { // check for empty leaves
