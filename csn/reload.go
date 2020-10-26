@@ -31,12 +31,8 @@ func restorePollard() (height int32, p accumulator.Pollard,
 	utxos = make(map[wire.OutPoint]util.LeafData)
 	for ; numUtxos > 0; numUtxos-- {
 		var utxo util.LeafData
-		leafBytes := make([]byte, 32+32+4+4+8)
-		_, err = pollardFile.Read(leafBytes[:])
-		if err != nil {
-			return
-		}
-		utxo, err = util.LeafDataFromBytes(leafBytes)
+
+		err = utxo.Deserialize(pollardFile)
 		if err != nil {
 			return
 		}
@@ -75,7 +71,7 @@ func saveIBDsimData(csn *Csn) error {
 	}
 
 	for _, utxo := range csn.utxoStore {
-		_, err = polFile.Write(utxo.ToBytes()[:32+32+4+4+8])
+		err = utxo.Serialize(polFile)
 		if err != nil {
 			return err
 		}

@@ -164,7 +164,7 @@ func BuildProofs(
 			fmt.Println("On block :", bnr.Height+1)
 		}
 
-		if ud.Height == 800 {
+		if ud.Height == 385 {
 			stop = true
 		}
 

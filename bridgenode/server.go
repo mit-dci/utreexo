@@ -182,7 +182,7 @@ func serveBlocksWorker(
 		var ub util.UBlock
 		buf.Write(blkbytes)
 		buf.Write(udb)
-		fmt.Printf("buf len %d\n", buf.Len())
+		// fmt.Printf("buf len %d\n", buf.Len())
 
 		// should be able to read the whole thing from the buffer
 		err = ub.Deserialize(&buf)
@@ -190,10 +190,10 @@ func serveBlocksWorker(
 			fmt.Printf("ub.Deserialize 1 %s\n", err.Error())
 			break
 		}
-		fmt.Printf("remaining: %x \n", buf.Bytes())
+		// fmt.Printf("remaining: %x \n", buf.Bytes())
 
 		// send
-		n, err := c.Write(buf.Bytes())
+		n, err := c.Write(append(blkbytes, udb...))
 		if err != nil {
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			break

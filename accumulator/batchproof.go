@@ -1,7 +1,6 @@
 package accumulator
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -13,41 +12,6 @@ type BatchProof struct {
 	Proof   []Hash
 	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
 	// the position of the hashes is implied / computable from the leaf positions
-}
-
-// ToBytes give the bytes for a BatchProof.  It errors out silently because
-// I don't think the binary.Write errors ever actually happen
-func (bp *BatchProof) ToBytes() []byte {
-	var buf bytes.Buffer
-
-	// first write the number of targets (4 byte uint32)
-	numTargets := uint32(len(bp.Targets))
-	if numTargets == 0 {
-		return nil
-	}
-	err := binary.Write(&buf, binary.BigEndian, numTargets)
-	if err != nil {
-		fmt.Printf("huh %s\n", err.Error())
-		return nil
-	}
-	for _, t := range bp.Targets {
-		// there's no need for these to be 64 bit for the next few decades...
-		err := binary.Write(&buf, binary.BigEndian, t)
-		if err != nil {
-			fmt.Printf("huh %s\n", err.Error())
-			return nil
-		}
-	}
-	// then the rest is just hashes
-	for _, h := range bp.Proof {
-		_, err = buf.Write(h[:])
-		if err != nil {
-			fmt.Printf("huh %s\n", err.Error())
-			return nil
-		}
-	}
-
-	return buf.Bytes()
 }
 
 // Serialize a batchproof to a writer.
@@ -94,7 +58,7 @@ func (bp *BatchProof) SerializeSize() int {
 	return 8 + (4 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
 }
 
-// FromBytesBatchProof gives a block proof back from the serialized bytes
+// Deserialize gives a block proof back from the serialized bytes
 func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 	var numTargets, numHashes uint32
 	err = binary.Read(r, binary.BigEndian, &numTargets)
@@ -165,47 +129,6 @@ func (bp *BatchProof) ToString() string {
 	}
 	s += "\n"
 	return s
-}
-
-// FromBytesBatchProof gives a block proof back from the serialized bytes
-func FromBytesBatchProof(b []byte) (BatchProof, error) {
-	var bp BatchProof
-
-	// if empty slice, return empty BatchProof with 0 targets
-	if len(b) == 0 {
-		return bp, nil
-	}
-	// otherwise, if there are less than 4 bytes we can't even see the number
-	// of targets so something is wrong
-	if len(b) < 4 {
-		return bp, fmt.Errorf("batchproof only %d bytes", len(b))
-	}
-
-	buf := bytes.NewBuffer(b)
-	// read 4 byte number of targets
-	var numTargets uint32
-	err := binary.Read(buf, binary.BigEndian, &numTargets)
-	if err != nil {
-		return bp, err
-	}
-	bp.Targets = make([]uint64, numTargets)
-	for i, _ := range bp.Targets {
-		err := binary.Read(buf, binary.BigEndian, &bp.Targets[i])
-		if err != nil {
-			return bp, err
-		}
-	}
-	remaining := buf.Len()
-	// the rest is hashes
-	if remaining%32 != 0 {
-		return bp, fmt.Errorf("%d bytes left, should be n*32", buf.Len())
-	}
-	bp.Proof = make([]Hash, remaining/32)
-
-	for i, _ := range bp.Proof {
-		copy(bp.Proof[i][:], buf.Next(32))
-	}
-	return bp, nil
 }
 
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
