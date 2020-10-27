@@ -107,7 +107,8 @@ func (l *LeafData) Deserialize(r io.Reader) (err error) {
 	var pkSize uint16
 	err = binary.Read(r, binary.BigEndian, &pkSize)
 	if pkSize > 10000 {
-		err = fmt.Errorf("pksize too long")
+		err = fmt.Errorf("bh %x op %s pksize %d byte too long",
+			l.BlockHash, l.Outpoint.String(), pkSize)
 		return
 	}
 	l.PkScript = make([]byte, pkSize)
@@ -168,12 +169,14 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 	// fmt.Printf("accproof %d bytes\n", ud.AccProof.SerializeSize())
 
 	// write all the leafdatas
-	for _, ld := range ud.Stxos {
+	for i, ld := range ud.Stxos {
 		// fmt.Printf("writing ld %d %s\n", i, ld.ToString())
 		err = ld.Serialize(w)
 		if err != nil {
 			return
 		}
+		fmt.Printf("h %d leaf %d %s len %d\n",
+			ud.Height, i, ld.Outpoint.String(), len(ld.PkScript))
 	}
 
 	return
@@ -184,6 +187,7 @@ func (ud *UData) SerializeSize() int {
 	var ldsize int
 	var b bytes.Buffer
 
+	// TODO this is slow, can remove double checking once it works reliably
 	for _, l := range ud.Stxos {
 		ldsize += l.SerializeSize()
 		b.Reset()
@@ -248,10 +252,14 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 	for i, _ := range ud.Stxos {
 		err = ud.Stxos[i].Deserialize(r)
 		if err != nil {
-			fmt.Printf("ud deser UtxoData[%d] err %s\n", i, err.Error())
+			err = fmt.Errorf(
+				"ud deser h %d nttl %d targets %d UtxoData[%d] err %s\n",
+				ud.Height, numTTLs, len(ud.AccProof.Targets), i, err.Error())
 			return
 		}
-		// fmt.Printf("ud deser target %d %s\n", i, ud.Stxos[i].ToString())
+		fmt.Printf("h %d leaf %d %s len %d\n",
+			ud.Height, i, ud.Stxos[i].Outpoint.String(), len(ud.Stxos[i].PkScript))
+
 	}
 
 	return

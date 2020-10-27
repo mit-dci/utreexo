@@ -44,8 +44,10 @@ func (c *Csn) IBDThread(sig chan bool) {
 	// bool for stopping the below for loop
 	var stop bool
 	for ; !stop; c.CurrentHeight++ {
+
 		blocknproof, open := <-ublockQueue
 		if !open {
+			fmt.Printf("ublockQueue channel closed ")
 			sig <- true
 			break
 		}
@@ -185,9 +187,9 @@ func (c *Csn) putBlockInPollard(
 		ub.Block, remember, outskip, ub.UtreexoData.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
-	for i, leaf := range blockAdds {
-		fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
-	}
+	// for i, leaf := range blockAdds {
+	// fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
+	// }
 	// fmt.Printf("h %d adds %d targets %d\n",
 	// ub.UtreexoData.Height, len(blockAdds), len(ub.UtreexoData.AccProof.Targets))
 

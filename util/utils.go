@@ -73,12 +73,14 @@ func UblockNetworkReader(
 	if err != nil {
 		fmt.Printf("write error to connection %s %s\n",
 			con.RemoteAddr().String(), err.Error())
+		panic("UblockNetworkReader")
 		return
 	}
 	err = binary.Write(con, binary.BigEndian, int32(math.MaxInt32))
 	if err != nil {
 		fmt.Printf("write error to connection %s %s\n",
 			con.RemoteAddr().String(), err.Error())
+		panic("UblockNetworkReader")
 		return
 	}
 
@@ -90,12 +92,13 @@ func UblockNetworkReader(
 		if err != nil {
 			fmt.Printf("Deserialize error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
+			panic("UblockNetworkReader")
 			return
 		}
 
-		// fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
-		// ub.UtreexoData.Height, ub.SerializeSize(),
-		// ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
+		fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
+			ub.UtreexoData.Height, ub.SerializeSize(),
+			ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
 
 		blockChan <- ub
 	}

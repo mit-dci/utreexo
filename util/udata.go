@@ -43,7 +43,7 @@ func (ud *UData) Verify(nl uint64, h uint8) bool {
 	// presort := make([]uint64, len(ud.AccProof.Targets))
 	// copy(presort, ud.AccProof.Targets)
 
-	fmt.Printf(ud.AccProof.ToString())
+	// fmt.Printf(ud.AccProof.ToString())
 
 	// ud.AccProof.SortTargets()
 	mp, err := ud.AccProof.Reconstruct(nl, h)
