@@ -65,6 +65,28 @@ func stopServer(sig, haltRequest, haltAccept chan bool) {
 // ublocks blocks over that connection
 func blockServer(
 	endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
+
+	// before doing anything... this breaks
+
+	udb, err := util.GetUDataBytesFromFile(4121)
+	if err != nil {
+		fmt.Printf(err.Error())
+		panic("ded")
+	}
+
+	var buf bytes.Buffer
+	var ud util.UData
+	buf.Write(udb)
+	fmt.Printf("buf len %d\n", buf.Len())
+	err = ud.Deserialize(&buf)
+	if err != nil {
+		fmt.Printf(" ubd %s\n", err.Error())
+		panic("ded")
+	}
+	fmt.Printf("h %d ud %d targets %d ttls\n",
+		ud.Height, len(ud.AccProof.Targets), len(ud.TxoTTLs))
+	// --------------
+
 	fmt.Printf("serving up to & including block height %d\n", endHeight)
 	listenAdr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:8338")
 	if err != nil {
@@ -188,7 +210,7 @@ func serveBlocksWorker(
 		// should be able to read the whole thing from the buffer
 		err = ub.Deserialize(&buf)
 		if err != nil {
-			fmt.Printf("ub.Deserialize 1 %s\n", err.Error())
+			fmt.Printf("ub.Deserialize %s\n", err.Error())
 			break
 		}
 		if buflen != ub.SerializeSize() {

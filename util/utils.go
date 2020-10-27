@@ -65,6 +65,7 @@ func UblockNetworkReader(
 		panic(err)
 	}
 	defer con.Close()
+	defer close(blockChan)
 
 	var ub UBlock
 	// var ublen uint32
@@ -92,13 +93,13 @@ func UblockNetworkReader(
 		if err != nil {
 			fmt.Printf("Deserialize error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
-			panic("UblockNetworkReader")
+			// panic("UblockNetworkReader")
 			return
 		}
 
-		fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
-			ub.UtreexoData.Height, ub.SerializeSize(),
-			ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
+		// fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
+		// 	ub.UtreexoData.Height, ub.SerializeSize(),
+		// 	ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
 
 		blockChan <- ub
 	}
