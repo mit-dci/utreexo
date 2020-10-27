@@ -369,9 +369,9 @@ func (p *Pollard) readPos(pos uint64) (
 	return // only happens when returning a root
 }
 
-// grabPos is like descendToPos but simpler.  Returns the thing you asked for,
-// as well as its sibling. And a hashable node for the position ABOVE pos.
-// And an error if it can't get it.
+// grabPos returns the thing you asked for, as well as its sibling
+// and a hashable node for the position ABOVE pos
+// Returns an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
@@ -418,62 +418,10 @@ func (p *Pollard) grabPos(
 	return // only happens when returning a root
 }
 
-// DescendToPos returns the path to the target node, as well as the sibling
-// path.  Returns paths in bottom-to-top order (backwards)
-// sibs[0] is the node you actually asked for
-func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
-	// interate to descend.  It's like the leafnum, xored with ...1111110
-	// so flip every bit except the last one.
-	// example: I want leaf 12.  That's 1100.  xor to get 0010.
-	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
-	// need to figure out offsets for smaller trees.
-
-	if !inForest(pos, p.numLeaves, p.rows()) {
-		//	if pos >= (p.numLeaves*2)-1 {
-		return nil, nil,
-			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)
-	}
-
-	// first find which tree we're in
-	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
-	//	fmt.Printf("DO pos %d root %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
-	n := p.roots[tNum]
-	if branchLen > 64 {
-		return nil, nil, fmt.Errorf("dtp root %d is nil", tNum)
-	}
-
-	proofs := make([]*polNode, branchLen+1)
-	sibs := make([]*polNode, branchLen+1)
-	// at the top of the branch, the proof and sib are the same
-	proofs[branchLen], sibs[branchLen] = n, n
-	for r := branchLen - 1; r < 64; r-- {
-		lr := (bits >> r) & 1
-
-		sib := n.niece[lr^1]
-		n = n.niece[lr]
-
-		if n == nil && r != 0 {
-			return nil, nil, fmt.Errorf(
-				"descend pos %d nil niece at row %d", pos, r)
-		}
-
-		// if n != nil {
-		// 	fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
-		// }
-
-		proofs[r], sibs[r] = n, sib
-
-	}
-	//	fmt.Printf("\n")
-	return proofs, sibs, nil
-}
-
 // toFull takes a pollard and converts to a forest.
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
-//func (p *Pollard) toFull() (*Forest, error) {
 func (p *Pollard) toFull() (*Forest, error) {
-
 	ff := NewForest(nil, false, "", 0)
 	ff.rows = p.rows()
 	ff.numLeaves = p.numLeaves
@@ -483,18 +431,19 @@ func (p *Pollard) toFull() (*Forest, error) {
 		return ff, nil
 	}
 
+	// very naive loop looping outside the edge of the tree
 	for i := uint64(0); i < (2<<ff.rows)-1; i++ {
-		_, sib, err := p.descendToPos(i)
-		if err != nil {
-			//	fmt.Printf("can't get pos %d: %s\n", i, err.Error())
+		// check if the leaf is within the tree
+		if !inForest(i, ff.numLeaves, ff.rows) {
 			continue
-			//			return nil, err
 		}
-		if sib[0] != nil {
-			ff.data.write(i, sib[0].data)
-			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
+		n, _, _, err := p.readPos(i)
+		if err != nil {
+			return nil, err
 		}
-
+		if n != nil {
+			ff.data.write(i, n.data)
+		}
 	}
 
 	return ff, nil
