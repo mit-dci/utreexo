@@ -110,7 +110,7 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 
 	bp.Proof = make([]Hash, numHashes)
 	for i, _ := range bp.Proof {
-		_, err = r.Read(bp.Proof[i][:])
+		_, err = io.ReadFull(r, bp.Proof[i][:])
 		if err != nil {
 			fmt.Printf("bp deser err %s\n", err.Error())
 			if err == io.EOF && i == len(bp.Proof) {

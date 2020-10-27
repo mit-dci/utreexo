@@ -98,8 +98,8 @@ func (l *LeafData) SerializeSize() int {
 }
 
 func (l *LeafData) Deserialize(r io.Reader) (err error) {
-	_, err = r.Read(l.BlockHash[:])
-	_, err = r.Read(l.Outpoint.Hash[:])
+	_, err = io.ReadFull(r, l.BlockHash[:])
+	_, err = io.ReadFull(r, l.Outpoint.Hash[:])
 	err = binary.Read(r, binary.BigEndian, &l.Outpoint.Index)
 	err = binary.Read(r, binary.BigEndian, &l.Height)
 	err = binary.Read(r, binary.BigEndian, &l.Amt)
@@ -112,7 +112,7 @@ func (l *LeafData) Deserialize(r io.Reader) (err error) {
 		return
 	}
 	l.PkScript = make([]byte, pkSize)
-	_, err = r.Read(l.PkScript)
+	_, err = io.ReadFull(r, l.PkScript)
 	if l.Height&1 == 1 {
 		l.Coinbase = true
 	}
@@ -257,8 +257,8 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 				ud.Height, numTTLs, len(ud.AccProof.Targets), i, err.Error())
 			return
 		}
-		fmt.Printf("h %d leaf %d %s len %d\n",
-			ud.Height, i, ud.Stxos[i].Outpoint.String(), len(ud.Stxos[i].PkScript))
+		// fmt.Printf("h %d leaf %d %s len %d\n",
+		// ud.Height, i, ud.Stxos[i].Outpoint.String(), len(ud.Stxos[i].PkScript))
 
 	}
 
