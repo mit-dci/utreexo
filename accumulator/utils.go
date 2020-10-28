@@ -310,7 +310,7 @@ func numRoots(n uint64) uint8 {
 func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 	mask := uint64(2<<forestRows) - 1
 	before := leaves & (mask << (h + 1))
-	shifted := (before >> h) | (mask << (forestRows - (h - 1)))
+	shifted := (before >> h) | (mask << (forestRows + 1 - h))
 	return shifted & mask
 }
 
