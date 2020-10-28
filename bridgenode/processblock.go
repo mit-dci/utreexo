@@ -226,11 +226,15 @@ func ParseBlockForDB(
 
 		// for all the txouts, get their outpoint & index and throw that into
 		// a db batch
-		for txoInTx, _ := range tx.TxOut {
+		for txoInTx, txo := range tx.TxOut {
 			if len(outskip) > 0 && txoInBlock == outskip[0] {
 				// skip inputs in the txin skiplist
 				// fmt.Printf("skipping output %s:%d\n", txid.String(), txoInTx)
 				outskip = outskip[1:]
+				txoInBlock++
+				continue
+			}
+			if util.IsUnspendable(txo) {
 				txoInBlock++
 				continue
 			}
