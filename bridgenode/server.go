@@ -173,7 +173,7 @@ func serveBlocksWorker(
 	}
 
 	for curHeight := fromHeight; ; curHeight += direction {
-		fmt.Printf("client %s, curHeight %d\t", c.RemoteAddr().String(), curHeight)
+		// fmt.Printf("client %s, curHeight %d\t", c.RemoteAddr().String(), curHeight)
 		if direction == 1 && curHeight > toHeight {
 			// forwards request of height above toHeight
 			break
@@ -210,22 +210,29 @@ func serveBlocksWorker(
 		// should be able to read the whole thing from the buffer
 		err = ub.Deserialize(&buf)
 		if err != nil {
-			fmt.Printf("ub.Deserialize %s\n", err.Error())
+			fmt.Printf("h %d ub.Deserialize %s\n", curHeight, err.Error())
 			break
 		}
 		if buflen != ub.SerializeSize() {
-			fmt.Printf("h % buflen %d but sersize %d\n",
+			fmt.Printf("h %d buflen %d but sersize %d\n",
 				curHeight, buflen, ub.SerializeSize())
+			for i, stxo := range ub.UtreexoData.Stxos {
+				fmt.Printf("%d %s\n", i, stxo.ToString())
+			}
+			for i, ttl := range ub.UtreexoData.TxoTTLs {
+				fmt.Printf("%d %d\n", i, ttl)
+			}
+			fmt.Printf(ub.UtreexoData.AccProof.ToString())
 		}
 
 		// send
-		n, err := c.Write(append(blkbytes, udb...))
+		_, err = c.Write(append(blkbytes, udb...))
 		if err != nil {
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			break
 		}
-		fmt.Printf("sent %d bytes: %d block, %d udata\n",
-			n, len(blkbytes), len(udb))
+		// fmt.Printf("sent %d bytes: %d block, %d udata\n",
+		// n, len(blkbytes), len(udb))
 		// fmt.Printf("udata hex: %x\n", udb)
 	}
 	err = c.Close()

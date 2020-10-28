@@ -176,7 +176,7 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		return nil, fmt.Errorf(
 			"size at offest %d says %d which is too big", offset, size)
 	}
-	fmt.Printf("GetUDataBytesFromFile read size %d ", size)
+	// fmt.Printf("GetUDataBytesFromFile read size %d ", size)
 	b = make([]byte, size)
 
 	_, err = proofFile.Read(b)
@@ -396,7 +396,7 @@ func IsUnspendable(o *wire.TxOut) bool {
 	switch {
 	case len(o.PkScript) > 10000: //len 0 is OK, spendable
 		return true
-	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: //OP_RETURN is 0x6a
+	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: // OP_RETURN is 0x6a
 		return true
 	default:
 		return false

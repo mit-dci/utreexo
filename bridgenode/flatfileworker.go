@@ -177,13 +177,13 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	// note that we know the offset for block 2 once we're done writing block 1,
 	// but we don't write the block 2 offset until we get block 2
 
-	fmt.Printf("writeProofBlock gets h %d ud %d utxodatas\n",
-		ud.Height, len(ud.Stxos))
+	// fmt.Printf("writeProofBlock gets h %d ud %d utxodatas\n",
+	// ud.Height, len(ud.Stxos))
 
 	// get the new block proof
 	// put offset in ram
 	ff.offsets = append(ff.offsets, ff.currentOffset)
-	fmt.Printf("expand offsets to %d\n", len(ff.offsets))
+	// fmt.Printf("expand offsets to %d\n", len(ff.offsets))
 	// write to offset file so we can resume; offset file is only
 	// read on startup and always incremented so we shouldn't need to seek
 	err := binary.Write(ff.offsetFile, binary.BigEndian, ff.currentOffset)
@@ -229,20 +229,20 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	ff.currentOffset += int64(ud.SerializeSize()) + 8
 	ff.currentHeight++
 
-	fmt.Printf("flatFileBlockWorker h %d wrote %d bytes to offset %d\n",
-		ff.currentHeight, ud.SerializeSize()+8, ff.currentOffset)
+	// fmt.Printf("flatFileBlockWorker h %d wrote %d bytes to offset %d\n",
+	// ff.currentHeight, ud.SerializeSize()+8, ff.currentOffset)
 	return nil
 }
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
-	fmt.Printf("height %d got %d ttls\n",
-		ttlRes.Height, len(ttlRes.Created))
+	// fmt.Printf("height %d got %d ttls\n",
+	// ttlRes.Height, len(ttlRes.Created))
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.Created {
 		// seek to the location of that txo's ttl value in the proof file
 
-		fmt.Printf("write ttl back to block %d\n", c.createHeight)
+		// fmt.Printf("write ttl back to block %d\n", c.createHeight)
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
 

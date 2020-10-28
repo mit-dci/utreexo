@@ -159,7 +159,7 @@ func BuildProofs(
 		if err != nil {
 			return err
 		}
-		fmt.Printf(ud.AccProof.ToString())
+		// fmt.Printf(ud.AccProof.ToString())
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)

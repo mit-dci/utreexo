@@ -203,24 +203,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 		return
 	}
 
-	fmt.Printf(ud.AccProof.ToString())
-	// Optional Sanity check. Should never fail.
-
-	// unsort := make([]uint64, len(ud.AccProof.Targets))
-	// copy(unsort, ud.AccProof.Targets)
-	// ud.AccProof.SortTargets()
-	// ok := f.VerifyBatchProof(ud.AccProof)
-	// if !ok {
-	// 	return ud, fmt.Errorf("VerifyBatchProof failed at block %d", height)
-	// }
-	// ud.AccProof.Targets = unsort
-
-	// also optional, no reason to do this other than bug checking
-
-	// if !ud.Verify(f.ReconstructStats()) {
-	// 	err = fmt.Errorf("height %d LeafData / Proof mismatch", height)
-	// 	return
-	// }
+	// fmt.Printf(ud.AccProof.ToString())
 	return
 }
 
@@ -233,9 +216,9 @@ func ParseBlockForDB(
 
 	var txoInBlock, txinInBlock uint32
 
-	if len(inskip) != 0 || len(outskip) != 0 {
-		fmt.Printf("h %d inskip %v outskip %v\n", bnr.Height, inskip, outskip)
-	}
+	// if len(inskip) != 0 || len(outskip) != 0 {
+	// fmt.Printf("h %d inskip %v outskip %v\n", bnr.Height, inskip, outskip)
+	// }
 
 	// iterate through the transactions in a block
 	for txInBlock, tx := range bnr.Blk.Transactions {

@@ -141,7 +141,6 @@ func (l *LeafData) LeafHash() [32]byte {
 // First, height, 4 bytes.
 // Then, number of TTL values (4 bytes, even though we only need 2)
 // Then a bunch of TTL values, (4B each) one for each txo in the associated block
-// batch proof length (4 bytes)
 // batch proof
 // Bunch of LeafDatas
 
@@ -169,14 +168,14 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 	// fmt.Printf("accproof %d bytes\n", ud.AccProof.SerializeSize())
 
 	// write all the leafdatas
-	for i, ld := range ud.Stxos {
+	for _, ld := range ud.Stxos {
 		// fmt.Printf("writing ld %d %s\n", i, ld.ToString())
 		err = ld.Serialize(w)
 		if err != nil {
 			return
 		}
-		fmt.Printf("h %d leaf %d %s len %d\n",
-			ud.Height, i, ld.Outpoint.String(), len(ld.PkScript))
+		// fmt.Printf("h %d leaf %d %s len %d\n",
+		// ud.Height, i, ld.Outpoint.String(), len(ld.PkScript))
 	}
 
 	return
