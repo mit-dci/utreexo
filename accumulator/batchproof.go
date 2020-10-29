@@ -133,38 +133,48 @@ func (bp *BatchProof) ToString() string {
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
 
-// verifyBatchProof verifies a batchproof by checking against the set of known correct roots.
+// verifyBatchProof verifies a batchproof by checking against the set of known
+// correct roots.
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
 func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
-	// cached should be a function that fetches nodes from the pollard and indicates whether they
-	// exist or not, this is only useful for the pollard and nil should be passed for the forest.
+	// cached should be a function that fetches nodes from the pollard and
+	// indicates whether they exist or not, this is only useful for the pollard
+	// and nil should be passed for the forest.
 	cached func(pos uint64) (bool, Hash)) (bool, [][3]node, []node) {
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
+
+	// copy targets to leave them in original order
+	targets := make([]uint64, len(bp.Targets))
+	copy(targets, bp.Targets)
+	sortUint64s(targets)
 
 	if cached == nil {
 		cached = func(_ uint64) (bool, Hash) { return false, empty }
 	}
 
 	rows := treeRows(numLeaves)
-	proofPositions, computablePositions := ProofPositions(bp.Targets, numLeaves, rows)
-	// targetNodes holds nodes that are known, on the bottom row those are the targets,
-	// on the upper rows it holds computed nodes.
-	// rootCandidates holds the roots that where computed, and have to be compared to the actual roots
-	// at the end.
-	targetNodes := make([]node, 0, len(bp.Targets)*int(rows))
+	proofPositions, computablePositions :=
+		ProofPositions(targets, numLeaves, rows)
+	// targetNodes holds nodes that are known, on the bottom row those
+	// are the targets, on the upper rows it holds computed nodes.
+	// rootCandidates holds the roots that where computed, and have to be
+	// compared to the actual roots at the end.
+	targetNodes := make([]node, 0, len(targets)*int(rows))
 	rootCandidates := make([]node, 0, len(roots))
 	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
-	// tuple[0] is the parent, tuple[1] is the left child and tuple[2] is the right child.
-	// trees holds the entire proof tree of the batchproof in this way, sorted by the tuple[0].
+	// tuple[0] is the parent, tuple[1] is the left child and tuple[2]
+	// is the right child.
+	// trees holds the entire proof tree of the batchproof in this way,
+	// sorted by the tuple[0].
 	trees := make([][3]node, 0, len(computablePositions))
 	// initialise the targetNodes for row 0.
-	// TODO: this would be more straight forward if bp.Proofs wouldn't contain the targets
+	// TODO: this would be more straight forward if bp.Proofs wouldn't
+	// contain the targets
 	proofHashes := make([]Hash, 0, len(proofPositions))
-	targets := bp.Targets
 	var targetsMatched uint64
 	for len(targets) > 0 {
 		// check if the target is the row 0 root.
@@ -172,7 +182,8 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		// AND the tree has a root at row 0 (numLeaves&1==1)
 		if targets[0] == numLeaves-1 && numLeaves&1 == 1 {
 			// target is the row 0 root, append it to the root candidates.
-			rootCandidates = append(rootCandidates, node{Val: roots[0], Pos: targets[0]})
+			rootCandidates = append(rootCandidates,
+				node{Val: roots[0], Pos: targets[0]})
 			bp.Proof = bp.Proof[1:]
 			break
 		}
@@ -191,9 +202,10 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 			continue
 		}
 
-		// the sibling is not included in the proof positions, therefore it has to be included in `targets.
-		// if there are less than 2 proof hashes or less than 2 targets left the proof is invalid
-		// because there is a target without matching proof.
+		// the sibling is not included in the proof positions, therefore
+		// it has to be included in targets. if there are less than 2 proof
+		// hashes or less than 2 targets left the proof is invalid because
+		// there is a target without matching proof.
 		if len(bp.Proof) < 2 || len(targets) < 2 {
 			return false, nil, nil
 		}
@@ -208,7 +220,8 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	proofHashes = append(proofHashes, bp.Proof...)
 	bp.Proof = proofHashes
 
-	// hash every target node with its sibling (which either is contained in the proof or also a target)
+	// hash every target node with its sibling (which either is contained
+	// in the proof or also a target)
 	for len(targetNodes) > 0 {
 		var target, proof node
 		target = targetNodes[0]
@@ -246,7 +259,8 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 
 		row := detectRow(parentPos, rows)
 		if numLeaves&(1<<row) > 0 && parentPos == rootPosition(numLeaves, row, rows) {
-			// the parent is a root -> store as candidate, to check against actual roots later.
+			// the parent is a root -> store as candidate, to check against
+			// actual roots later.
 			rootCandidates = append(rootCandidates, node{Val: hash, Pos: parentPos})
 			continue
 		}
@@ -258,16 +272,19 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		return false, nil, nil
 	}
 
-	// `roots` is ordered, therefore to verify that `rootCandidates` holds a subset of the roots
+	// `roots` is ordered, therefore to verify that `rootCandidates`
+	// holds a subset of the roots
 	// we count the roots that match in order.
 	rootMatches := 0
 	for _, root := range roots {
-		if len(rootCandidates) > rootMatches && root == rootCandidates[rootMatches].Val {
+		if len(rootCandidates) > rootMatches &&
+			root == rootCandidates[rootMatches].Val {
 			rootMatches++
 		}
 	}
 	if len(rootCandidates) != rootMatches {
-		// the proof is invalid because some root candidates were not included in `roots`.
+		// the proof is invalid because some root candidates were not
+		// included in `roots`.
 		return false, nil, nil
 	}
 
@@ -289,114 +306,20 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
-	// TODO no reason to copy proof right?
-	proof := bp.Proof                          // copy of proof <- pointless?
-	targets := make([]uint64, len(bp.Targets)) // copy of targets & sort them
+	// copy bp.targets and send copy
+	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
 	sortUint64s(targets)
-	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
+	proofPositions, _ := ProofPositions(targets, numleaves, forestRows)
+	proofPositions = mergeSortedSlices(targets, proofPositions)
 
-	if verbose {
-		fmt.Printf("%d roots:\t", len(rootPositions))
-		for _, t := range rootPositions {
-			fmt.Printf("%d ", t)
-		}
-	}
-	// needRow / nextrow hold the positions of the data which should be in the blockproof
-	var needSibRow, nextRow []uint64 // only even siblings needed
-
-	// a bit strange; pop off 2 hashes at a time, and either 1 or 2 positions
-	for len(proof) > 0 && len(targets) > 0 {
-
-		if targets[0] == rootPositions[0] {
-			// target is a root; this can only happen at row 0;
-			// there's a "proof" but don't need to actually send it
-			if verbose {
-				fmt.Printf("placed single proof at %d\n", targets[0])
-			}
-			proofTree[targets[0]] = proof[0]
-			proof = proof[1:]
-			targets = targets[1:]
-			continue
-		}
-
-		// there should be 2 proofs left then
-		if len(proof) < 2 {
-			return nil, fmt.Errorf("only 1 proof left but need 2 for %d",
-				targets[0])
-		}
-
-		// populate first 2 proof hashes
-		right := targets[0] | 1
-		left := right ^ 1
-
-		proofTree[left] = proof[0]
-		proofTree[right] = proof[1]
-		needSibRow = append(needSibRow, parent(targets[0], forestRows))
-		// pop em off
-		if verbose {
-			fmt.Printf("placed proofs at %d, %d\n", left, right)
-		}
-		proof = proof[2:]
-
-		if len(targets) > 1 && targets[0]|1 == targets[1] {
-			// pop off 2 positions
-			targets = targets[2:]
-		} else {
-			// only pop off 1
-			targets = targets[1:]
-		}
+	if len(proofPositions) != len(bp.Proof) {
+		return nil, fmt.Errorf("invalid BatchProof, not enough proof hashes")
 	}
 
-	// deal with 0-row root, regardless of whether it was used or not
-	if rootRows[0] == 0 {
-		rootPositions = rootPositions[1:]
-		rootRows = rootRows[1:]
+	for i, pos := range proofPositions {
+		proofTree[pos] = bp.Proof[i]
 	}
 
-	// now all that's left is the proofs. go bottom to root and iterate the haveRow
-	for h := uint8(1); h < forestRows; h++ {
-		for len(needSibRow) > 0 {
-			// if this is a root, it's not needed or given
-			if needSibRow[0] == rootPositions[0] {
-				needSibRow = needSibRow[1:]
-				rootPositions = rootPositions[1:]
-				rootRows = rootRows[1:]
-				continue
-			}
-			// either way, we'll get the parent
-			nextRow = append(nextRow, parent(needSibRow[0], forestRows))
-
-			// if we have both siblings here, don't need any proof
-			if len(needSibRow) > 1 && needSibRow[0]^1 == needSibRow[1] {
-				needSibRow = needSibRow[2:]
-			} else {
-				// return error if we need a proof and can't get it
-				if len(proof) == 0 {
-					fmt.Printf("roots %v needsibrow %v\n", rootPositions, needSibRow)
-					return nil, fmt.Errorf("h %d no proofs left at pos %d ",
-						h, needSibRow[0]^1)
-				}
-				// otherwise we do need proof; place in sibling position and pop off
-				proofTree[needSibRow[0]^1] = proof[0]
-				proof = proof[1:]
-				// and get rid of 1 element of needSibRow
-				needSibRow = needSibRow[1:]
-			}
-		}
-
-		// there could be a root on this row that we don't need / use; if so pop it
-		if len(rootRows) > 0 && rootRows[0] == h {
-			rootPositions = rootPositions[1:]
-			rootRows = rootRows[1:]
-		}
-
-		needSibRow = nextRow
-		nextRow = []uint64{}
-	}
-	if len(proof) != 0 {
-		return nil, fmt.Errorf("too many proofs, %d remain", len(proof))
-	}
-	// bp.Proof = proof // restore from backup
 	return proofTree, nil
 }
