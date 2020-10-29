@@ -67,26 +67,26 @@ func blockServer(
 	endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
 
 	// before doing anything... this breaks
+	/*
+		udb, err := util.GetUDataBytesFromFile(385)
+		if err != nil {
+			fmt.Printf(err.Error())
+			panic("ded")
+		}
 
-	udb, err := util.GetUDataBytesFromFile(385)
-	if err != nil {
-		fmt.Printf(err.Error())
-		panic("ded")
-	}
-
-	var buf bytes.Buffer
-	var ud util.UData
-	buf.Write(udb)
-	fmt.Printf("buf len %d\n", buf.Len())
-	err = ud.Deserialize(&buf)
-	if err != nil {
-		fmt.Printf(" ubd %s\n", err.Error())
-		panic("ded")
-	}
-	fmt.Printf(ud.AccProof.ToString())
-	fmt.Printf("h %d ud %d targets %d ttls\n",
-		ud.Height, len(ud.AccProof.Targets), len(ud.TxoTTLs))
-
+		var buf bytes.Buffer
+		var ud util.UData
+		buf.Write(udb)
+		fmt.Printf("buf len %d\n", buf.Len())
+		err = ud.Deserialize(&buf)
+		if err != nil {
+			fmt.Printf(" ubd %s\n", err.Error())
+			panic("ded")
+		}
+		fmt.Printf(ud.AccProof.ToString())
+		fmt.Printf("h %d ud %d targets %d ttls\n",
+			ud.Height, len(ud.AccProof.Targets), len(ud.TxoTTLs))
+	*/
 	// --------------
 
 	fmt.Printf("serving up to & including block height %d\n", endHeight)
