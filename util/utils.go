@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"net"
 	"os"
@@ -66,74 +65,66 @@ func UblockNetworkReader(
 		panic(err)
 	}
 	defer con.Close()
+	defer close(blockChan)
 
 	var ub UBlock
-	var ublen uint32
+	// var ublen uint32
 	// request range from curHeight to latest block
 	err = binary.Write(con, binary.BigEndian, curHeight)
 	if err != nil {
 		fmt.Printf("write error to connection %s %s\n",
 			con.RemoteAddr().String(), err.Error())
+		panic("UblockNetworkReader")
 		return
 	}
 	err = binary.Write(con, binary.BigEndian, int32(math.MaxInt32))
 	if err != nil {
 		fmt.Printf("write error to connection %s %s\n",
 			con.RemoteAddr().String(), err.Error())
+		panic("UblockNetworkReader")
 		return
 	}
 
 	// TODO goroutines for only the Deserialize part might be nice.
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
-		// fmt.Printf("asked for height %d\n", curHeight)
-		err = binary.Read(con, binary.BigEndian, &ublen)
-		if err != nil {
-			fmt.Printf("read error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
-			close(blockChan)
-			return
-		}
-		// fmt.Printf("got len %d\n", ublen)
 
-		b := make([]byte, ublen)
-		_, err = io.ReadFull(con, b)
+		err = ub.Deserialize(con)
 		if err != nil {
-			fmt.Printf("ReadFull error from connection %s %s\n",
+			fmt.Printf("Deserialize error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
-			return
-		}
-		// fmt.Printf("copied %d bytes into buffer\n", n)
-
-		err = ub.FromBytes(b)
-		if err != nil {
-			fmt.Printf("error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
+			// panic("UblockNetworkReader")
 			return
 		}
 
-		ub.Height = curHeight
+		// fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
+		// 	ub.UtreexoData.Height, ub.SerializeSize(),
+		// 	ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
+
 		blockChan <- ub
 	}
 }
 
 // GetUDataBytesFromFile reads the proof data from proof.dat and proofoffset.dat
 // and gives the proof & utxo data back.
-// Don't ask for block 0, there is no proof of that.
+// Don't ask for block 0, there is no proof for that.
+// But there is an offset for block 0, which is 0, so it collides with block 1
 func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	if height == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
 		return
 	}
-	height--
+
 	var offset int64
 	var size uint32
-	offsetFile, err := os.Open(POffsetFilePath)
+	var readMagic [4]byte
+	realMagic := [4]byte{0xaa, 0xff, 0xaa, 0xff}
+	offsetFile, err := os.OpenFile(POffsetFilePath, os.O_RDONLY, 0600)
 	if err != nil {
 		return
 	}
 
-	proofFile, err := os.Open(PFilePath)
+	proofFile, err := os.OpenFile(PFilePath, os.O_RDONLY, 0600)
 	if err != nil {
 		return
 	}
@@ -147,23 +138,45 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 		return
 	}
 
+	// read the offset of the block we want from the offset file
 	err = binary.Read(offsetFile, binary.BigEndian, &offset)
 	if err != nil {
 		err = fmt.Errorf("binary.Read h %d offset %d %s", height, offset, err.Error())
 		return
 	}
 
-	// +4 because it has an empty 4 non-magic bytes in front now
-	_, err = proofFile.Seek(offset+4, 0)
+	// seek to that offset
+	_, err = proofFile.Seek(offset, 0)
 	if err != nil {
 		err = fmt.Errorf("proofFile.Seek %s", err.Error())
 		return
 	}
+
+	// first read 4-byte magic aaffaaff
+	n, err := proofFile.Read(readMagic[:])
+	if err != nil {
+		return nil, err
+	}
+	if n != 4 {
+		return nil, fmt.Errorf("only read %d bytes from proof file", n)
+	}
+	if readMagic != realMagic {
+		return nil, fmt.Errorf("expect magic %x but read %x h %d offset %d",
+			realMagic, readMagic, height, offset)
+	}
+
+	// fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
+
 	err = binary.Read(proofFile, binary.BigEndian, &size)
 	if err != nil {
 		return
 	}
 
+	if size > 1<<24 {
+		return nil, fmt.Errorf(
+			"size at offest %d says %d which is too big", offset, size)
+	}
+	// fmt.Printf("GetUDataBytesFromFile read size %d ", size)
 	b = make([]byte, size)
 
 	_, err = proofFile.Read(b)
@@ -180,6 +193,14 @@ func GetUDataBytesFromFile(height int32) (b []byte, err error) {
 	if err != nil {
 		return
 	}
+	return
+}
+
+// turns an outpoint into a 36 byte... mixed endian thing.
+// (the 32 bytes txid is "reversed" and the 4 byte index is in order (big)
+func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
+	copy(b[0:32], op.Hash[:])
+	binary.BigEndian.PutUint32(b[32:36], op.Index)
 	return
 }
 
@@ -276,7 +297,7 @@ func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
 	// go through txs then inputs building map
 	for cbif0, tx := range blk.Transactions {
 		if cbif0 == 0 { // coinbase tx can't be deduped
-			i++
+			i++ // coinbase has 1 input
 			continue
 		}
 		for _, in := range tx.TxIn {
@@ -290,7 +311,7 @@ func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
 	// start over, go through outputs finding skips
 	for cbif0, tx := range blk.Transactions {
 		if cbif0 == 0 { // coinbase tx can't be deduped
-			i += uint32(len(tx.TxOut))
+			i += uint32(len(tx.TxOut)) // coinbase can have multiple inputs
 			continue
 		}
 		txid := tx.TxHash()
@@ -375,7 +396,7 @@ func IsUnspendable(o *wire.TxOut) bool {
 	switch {
 	case len(o.PkScript) > 10000: //len 0 is OK, spendable
 		return true
-	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: //OP_RETURN is 0x6a
+	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: // OP_RETURN is 0x6a
 		return true
 	default:
 		return false

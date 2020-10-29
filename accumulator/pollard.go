@@ -15,7 +15,12 @@ var ErrorStrings = map[uint32]error{
 }
 
 // Modify is the main function that deletes then adds elements to the accumulator
-func (p *Pollard) Modify(adds []Leaf, dels []uint64) error {
+func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
+
+	dels := make([]uint64, len(delsUn))
+	copy(dels, delsUn)
+	sortUint64s(dels)
+
 	err := p.rem2(dels)
 	if err != nil {
 		return err
@@ -163,8 +168,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 
 	// get all the swaps, then apply them all
-	swaprows := remTrans2(dels, p.numLeaves, ph)
-	// fmt.Printf(" @@@@@@ rem2 nl %d ph %d rem %v\n", p.numLeaves, ph, dels)
+	// fmt.Printf("call rem2 nl %d rem %v\n", p.numLeaves, dels)
+	swapRows := remTrans2(dels, p.numLeaves, ph)
+	// fmt.Printf("got swaps %v\n", swapRows)
+
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
@@ -173,15 +180,15 @@ func (p *Pollard) rem2(dels []uint64) error {
 	for h := uint8(0); h < ph; h++ {
 		var hnslice []*hashableNode
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
-		hashDirt = dedupeSwapDirt(hashDirt, swaprows[h])
+		hashDirt = dedupeSwapDirt(hashDirt, swapRows[h])
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
-		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
+		for len(swapRows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
 			var collapse bool
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
-			if len(swaprows[h]) == 0 ||
-				len(hashDirt) != 0 && hashDirt[0] > swaprows[h][0].to {
+			if len(swapRows[h]) == 0 ||
+				len(hashDirt) != 0 && hashDirt[0] > swapRows[h][0].to {
 				// re-descending here which isn't great
 				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
 				hn, err = p.hnFromPos(hashDirt[0])
@@ -191,22 +198,21 @@ func (p *Pollard) rem2(dels []uint64) error {
 				hashDirt = hashDirt[1:]
 			} else { // swapping
 				// fmt.Printf("swapping %v\n", swaprows[h][0])
-				if swaprows[h][0].from == swaprows[h][0].to {
+				if swapRows[h][0].from == swapRows[h][0].to {
 					// TODO should get rid of these upstream
 					// panic("got non-moving swap")
-					swaprows[h] = swaprows[h][1:]
+					swapRows[h] = swapRows[h][1:]
 					continue
 				}
-				hn, err = p.swapNodes(swaprows[h][0], h)
+				hn, err = p.swapNodes(swapRows[h][0], h)
 				if err != nil {
 					return err
 				}
-				collapse = swaprows[h][0].collapse
-				swaprows[h] = swaprows[h][1:]
+				collapse = swapRows[h][0].collapse
+				swapRows[h] = swapRows[h][1:]
 			}
 			if hn == nil ||
-				hn.position == prevHash ||
-				collapse {
+				hn.position == prevHash || collapse {
 				// TODO: there are probably more conditions in which a hn could be skipped.
 				continue
 			}
@@ -283,10 +289,12 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 // swapNodes swaps the nodes at positions a and b.
 // returns a hashable node with b, bsib, and bpar
 func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
-	if !inForest(s.from, p.numLeaves, p.rows()) ||
-		!inForest(s.to, p.numLeaves, p.rows()) {
-		return nil, fmt.Errorf("swapNodes %d %d out of bounds", s.from, s.to)
-	}
+
+	// if !inForest(s.from, p.numLeaves, p.rows()) ||
+	// !inForest(s.to, p.numLeaves, p.rows()) {
+	// return nil, fmt.Errorf("swapNodes %d %d out of bounds nl %d",
+	// s.from, s.to, p.numLeaves)
+	// }
 
 	if p.positionMap != nil {
 		a := childMany(s.from, row, p.rows())

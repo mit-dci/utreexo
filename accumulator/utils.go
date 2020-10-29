@@ -10,10 +10,12 @@ import (
 var verbose = false
 
 // ProofPositions returns the positions that are needed to prove that the targets exist.
-func ProofPositions(targets []uint64, numLeaves uint64, forestRows uint8) ([]uint64, []uint64) {
+func ProofPositions(
+	targets []uint64, numLeaves uint64, forestRows uint8) ([]uint64, []uint64) {
 	// the proofPositions needed without caching.
 	proofPositions := make([]uint64, 0, len(targets)*int(forestRows))
-	// the positions that are computed/not included in the proof. (also includes the targets)
+	// the positions that are computed/not included in the proof.
+	// (also includes the targets)
 	computedPositions := make([]uint64, 0, len(targets)*int(forestRows))
 	for row := uint8(0); row < forestRows; row++ {
 		computedPositions = append(computedPositions, targets...)
@@ -30,7 +32,8 @@ func ProofPositions(targets []uint64, numLeaves uint64, forestRows uint8) ([]uin
 			case len(targets) > 3:
 				if (targets[0]|1)^2 == targets[3]|1 {
 					// the first and fourth target are cousins
-					// => target 2 and 3 are also targets, both parents are targets of next row
+					// => target 2 and 3 are also targets, both parents are
+					// targets of next row
 					nextTargets = append(nextTargets,
 						parent(targets[0], forestRows), parent(targets[3], forestRows))
 					targets = targets[4:]
@@ -45,7 +48,8 @@ func ProofPositions(targets []uint64, numLeaves uint64, forestRows uint8) ([]uin
 					// the first and third target are cousins
 					// => the second target is either the sibling of the first
 					// OR the sibiling of the third
-					// => only the sibling that is not a target is appended to the proof positions
+					// => only the sibling that is not a target is appended
+					// to the proof positions
 					if targets[1]|1 == targets[0]|1 {
 						proofPositions = append(proofPositions, targets[2]^1)
 					} else {
@@ -335,7 +339,8 @@ func getRootsReverse(leaves uint64, forestRows uint8) (roots []uint64, rows []ui
 }
 
 // subTreePositions takes in a node position and forestRows and returns the
-// positions of all children that need to move AND THE NODE ITSELF.  (it works nicer that way)
+// positions of all children that need to move AND THE NODE ITSELF.  (it works
+// nicer that way)
 // Also it returns where they should move to, given the destination of the
 // sub-tree root.
 // can also be used with the "to" return discarded to just enumerate a subtree

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/mit-dci/utreexo/util"
 )
@@ -123,83 +122,10 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 	return lastOffsetHeight, nil
 }
 
-/*
-Proof file format is somewhat like the blk.dat and rev.dat files.  But it's
-always in order!  The offset file is in 8 byte chunks, so to find the proof
-data for block 100 (really 101), seek to byte 800 and read 8 bytes.
-
-The proof file is: 4 bytes empty (zeros for now, could do something else later)
-4 bytes proof length, then the proof data.
-
-Offset file is: 8 byte int64 offset.  Right now it's all 1 big file, can
-change to 4 byte which file and 4 byte offset within file like the blk/rev but
-we're not running on fat32 so works OK for now.
-*/
-
-// pFileWorker takes in blockproof and height information from the channel
-// and writes to disk. MUST NOT have more than one worker as the proofs need to be
-// in order
-func proofWriterWorker(
-	proofChan chan []byte, fileWait *sync.WaitGroup) {
-
-	// for the pFile
-	proofFile, err := os.OpenFile(
-		util.PFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	offsetFile, err := os.OpenFile(
-		util.POffsetFilePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = offsetFile.Seek(0, 2)
-	if err != nil {
-		panic(err)
-	}
-
-	proofFileLocation, err := proofFile.Seek(0, 2)
-	if err != nil {
-		panic(err)
-
-	}
-	// TODO: optimization - don't write anything to proof file for blocks with
-	// no deletions (inputs).  Lots of em in testnet.  Not so many on mainnet
-	// I guess.  But in testnet would save millions *8 bytes.
-	for {
-		pbytes := <-proofChan
-		// write to offset file first
-		err = binary.Write(offsetFile, binary.BigEndian, proofFileLocation)
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-
-		// write to proof file
-		// first write big endian proof size int64
-		err = binary.Write(proofFile, binary.BigEndian, int64(len(pbytes)))
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-		proofFileLocation += 8
-
-		// then write the proof
-		written, err := proofFile.Write(pbytes)
-		if err != nil {
-			fmt.Printf(err.Error())
-			return
-		}
-		proofFileLocation += int64(written)
-
-		fileWait.Done()
-	}
-}
-
 // readRawHeadersFromFile reads only the headers from the given .dat file
-func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string, fileNum uint32, bufMap map[[32]byte]uint32) ([]RawHeaderData, error) {
+func readRawHeadersFromFile(
+	bufReader *bufio.Reader, fileDir string,
+	fileNum uint32, bufMap map[[32]byte]uint32) ([]RawHeaderData, error) {
 	var blockHeaders []RawHeaderData
 
 	f, err := os.Open(fileDir)
@@ -268,12 +194,12 @@ func readRawHeadersFromFile(bufReader *bufio.Reader, fileDir string, fileNum uin
 
 // Sorts and writes the block offset from the passed in blockHeaders.
 func writeBlockOffset(
-	blockHeaders []RawHeaderData, //        All headers from the select .dat file
-	nextMap map[[32]byte]RawHeaderData, //  Map to save the current block hash
-	wr *bufio.Writer, //buffered writer
-	offsetFile *os.File, //                 File to save the sorted blocks and locations to
-	tipnum int32, //                          Current block it's on
-	tip util.Hash) ( //                Current hash of the block it's on
+	blockHeaders []RawHeaderData, // All headers from the select .dat file
+	nextMap map[[32]byte]RawHeaderData, // Map to save the current block hash
+	wr *bufio.Writer, // buffered writer
+	offsetFile *os.File, // File to save the sorted blocks and locations to
+	tipnum int32, // Current block it's on
+	tip util.Hash) ( // Current hash of the block it's on
 	util.Hash, int32, error) {
 
 	wr.Reset(offsetFile)
