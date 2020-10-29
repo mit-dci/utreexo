@@ -112,7 +112,7 @@ func flatFileWorker(
 			// fmt.Printf("got ttlres h %d with %d entries\n",
 			// 	ttlRes.Height, len(ttlRes.Created))
 
-			for ttlRes.Height >= ff.currentHeight {
+			for ttlRes.Height > ff.currentHeight {
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
 				if err != nil {
@@ -179,11 +179,6 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 
 	// fmt.Printf("writeProofBlock gets h %d ud %d utxodatas\n",
 	// ud.Height, len(ud.Stxos))
-
-	if ud.Height != ff.currentHeight {
-		return fmt.Errorf("writeProofBlock expect height %d but got %d\n",
-			ff.currentHeight, ud.Height)
-	}
 
 	// get the new block proof
 	// put offset in ram

@@ -135,11 +135,6 @@ func (c *Csn) putBlockInPollard(
 
 	plusstart := time.Now()
 
-	if c.CurrentHeight != ub.UtreexoData.Height {
-		return fmt.Errorf("expected height %d but got block claiming %d\n",
-			c.CurrentHeight, ub.UtreexoData.Height)
-	}
-
 	inskip, outskip := util.DedupeBlock(&ub.Block)
 	if !ub.ProofsProveBlock(inskip) {
 		return fmt.Errorf(

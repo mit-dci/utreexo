@@ -200,30 +200,30 @@ func serveBlocksWorker(
 		// Also currently skipping the size prefix to run deserialize
 		// ... just like bitcoin blocks
 
-		// var buf bytes.Buffer
-		// var ub util.UBlock
-		// buf.Write(blkbytes)
-		// buf.Write(udb)
+		var buf bytes.Buffer
+		var ub util.UBlock
+		buf.Write(blkbytes)
+		buf.Write(udb)
 
 		// fmt.Printf("buf len %d\n", buf.Len())
-		// buflen := buf.Len()
+		buflen := buf.Len()
 		// should be able to read the whole thing from the buffer
-		// err = ub.Deserialize(&buf)
-		// if err != nil {
-		// fmt.Printf("h %d ub.Deserialize %s\n", curHeight, err.Error())
-		// break
-		// }
-		// if buflen != ub.SerializeSize() {
-		// fmt.Printf("h %d buflen %d but sersize %d\n",
-		// curHeight, buflen, ub.SerializeSize())
-		// for i, stxo := range ub.UtreexoData.Stxos {
-		// fmt.Printf("%d %s\n", i, stxo.ToString())
-		// }
-		// for i, ttl := range ub.UtreexoData.TxoTTLs {
-		// fmt.Printf("%d %d\n", i, ttl)
-		// }
-		// fmt.Printf(ub.UtreexoData.AccProof.ToString())
-		// }
+		err = ub.Deserialize(&buf)
+		if err != nil {
+			fmt.Printf("h %d ub.Deserialize %s\n", curHeight, err.Error())
+			break
+		}
+		if buflen != ub.SerializeSize() {
+			fmt.Printf("h %d buflen %d but sersize %d\n",
+				curHeight, buflen, ub.SerializeSize())
+			for i, stxo := range ub.UtreexoData.Stxos {
+				fmt.Printf("%d %s\n", i, stxo.ToString())
+			}
+			for i, ttl := range ub.UtreexoData.TxoTTLs {
+				fmt.Printf("%d %d\n", i, ttl)
+			}
+			fmt.Printf(ub.UtreexoData.AccProof.ToString())
+		}
 
 		// send
 		_, err = c.Write(append(blkbytes, udb...))
