@@ -68,7 +68,7 @@ func blockServer(
 
 	// before doing anything... this breaks
 
-	udb, err := util.GetUDataBytesFromFile(4121)
+	udb, err := util.GetUDataBytesFromFile(385)
 	if err != nil {
 		fmt.Printf(err.Error())
 		panic("ded")
@@ -83,8 +83,10 @@ func blockServer(
 		fmt.Printf(" ubd %s\n", err.Error())
 		panic("ded")
 	}
+	fmt.Printf(ud.AccProof.ToString())
 	fmt.Printf("h %d ud %d targets %d ttls\n",
 		ud.Height, len(ud.AccProof.Targets), len(ud.TxoTTLs))
+
 	// --------------
 
 	fmt.Printf("serving up to & including block height %d\n", endHeight)

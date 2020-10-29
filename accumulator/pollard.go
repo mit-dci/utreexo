@@ -288,7 +288,8 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	if !inForest(s.from, p.numLeaves, p.rows()) ||
 		!inForest(s.to, p.numLeaves, p.rows()) {
-		return nil, fmt.Errorf("swapNodes %d %d out of bounds", s.from, s.to)
+		return nil, fmt.Errorf("swapNodes %d %d out of bounds nl %d",
+			s.from, s.to, p.numLeaves)
 	}
 
 	if p.positionMap != nil {

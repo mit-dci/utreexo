@@ -197,7 +197,8 @@ func (c *Csn) putBlockInPollard(
 	// bp.Targets are the positions of the leaves to delete
 	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
 	if err != nil {
-		return err
+
+		return fmt.Errorf("csn h %d modify %s", c.CurrentHeight, err.Error())
 	}
 
 	donetime := time.Now()

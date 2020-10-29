@@ -417,6 +417,7 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(delsUn), f.numLeaves)
 	}
+
 	// if !checkSortedNoDupes(dels) { // check for sorted deletion slice
 	// fmt.Printf("%v\n", dels)
 	// return nil, fmt.Errorf("Deletions in incorrect order or duplicated")

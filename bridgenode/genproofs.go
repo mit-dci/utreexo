@@ -159,7 +159,6 @@ func BuildProofs(
 		proofChan <- ud
 
 		// ud.AccProof.SortTargets()
-
 		// fmt.Printf("h %d adds %d targets %d\n",
 		// 	height, len(blockAdds), len(ud.AccProof.Targets))
 
