@@ -1,7 +1,6 @@
 package accumulator
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -43,7 +42,6 @@ func TestForestAddDel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bp.SortTargets()
 		_, err = f.Modify(adds, bp.Targets)
 		if err != nil {
 			t.Fatal(err)
@@ -75,22 +73,10 @@ func TestCowForestAddDelComp(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cowPBytes := cowBP.ToBytes()
-		memPBytes := memBP.ToBytes()
-
-		if !bytes.Equal(cowPBytes, memPBytes) {
-			fmt.Printf("nl %d %s\n", cowF.numLeaves, cowF.ToString())
-			fmt.Printf("nl %d %s\n", memF.numLeaves, memF.ToString())
-			t.Fatal("cowBP and memBP are not equal")
-		}
-
-		cowBP.SortTargets()
 		_, err = cowF.Modify(adds, cowBP.Targets)
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		memBP.SortTargets()
 		_, err = memF.Modify(adds, memBP.Targets)
 		if err != nil {
 			t.Fatal(err)
@@ -202,8 +188,6 @@ func TestCowForestAddDel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		cowBP.SortTargets()
 		_, err = cowF.Modify(adds, cowBP.Targets)
 		if err != nil {
 			t.Fatal(err)
@@ -348,7 +332,6 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 	if err != nil {
 		return err
 	}
-	bp.SortTargets()
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
 	worked, _, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, nil)
 	//	worked := f.VerifyBatchProof(bp)

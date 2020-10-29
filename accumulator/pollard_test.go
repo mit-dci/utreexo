@@ -59,7 +59,6 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		bp.SortTargets()
 		// verify proofs on rad node
 		err = p.IngestBatchProof(bp)
 		if err != nil {
@@ -210,9 +209,6 @@ func TestCache(t *testing.T) {
 		if err != nil {
 			t.Fatal("ProveBatch failed", err)
 		}
-
-		proof.SortTargets()
-
 		_, err = f.Modify(adds, proof.Targets)
 		if err != nil {
 			t.Fatal("Modify failed", err)

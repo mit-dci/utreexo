@@ -230,7 +230,7 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 
 	ud.TxoTTLs = make([]int32, numTTLs)
 	for i, _ := range ud.TxoTTLs { // write all ttls
-		err = binary.Read(r, binary.BigEndian, ud.TxoTTLs[i])
+		err = binary.Read(r, binary.BigEndian, &ud.TxoTTLs[i])
 		if err != nil {
 			fmt.Printf("ud deser LeafTTLs[%d] err %s\n", i, err.Error())
 			return
