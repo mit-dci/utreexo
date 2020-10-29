@@ -1,7 +1,6 @@
 package bridgenode
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -195,36 +194,6 @@ func serveBlocksWorker(
 		if err != nil {
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 			break
-		}
-
-		// TODO this is just for testing -- we don't have to deserialize
-		// the whole thing then re-serialize to send it
-		// Also currently skipping the size prefix to run deserialize
-		// ... just like bitcoin blocks
-
-		var buf bytes.Buffer
-		var ub util.UBlock
-		buf.Write(blkbytes)
-		buf.Write(udb)
-
-		// fmt.Printf("buf len %d\n", buf.Len())
-		buflen := buf.Len()
-		// should be able to read the whole thing from the buffer
-		err = ub.Deserialize(&buf)
-		if err != nil {
-			fmt.Printf("h %d ub.Deserialize %s\n", curHeight, err.Error())
-			break
-		}
-		if buflen != ub.SerializeSize() {
-			fmt.Printf("h %d buflen %d but sersize %d\n",
-				curHeight, buflen, ub.SerializeSize())
-			for i, stxo := range ub.UtreexoData.Stxos {
-				fmt.Printf("%d %s\n", i, stxo.ToString())
-			}
-			for i, ttl := range ub.UtreexoData.TxoTTLs {
-				fmt.Printf("%d %d\n", i, ttl)
-			}
-			fmt.Printf(ub.UtreexoData.AccProof.ToString())
 		}
 
 		// send
