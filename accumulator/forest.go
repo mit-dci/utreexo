@@ -170,7 +170,9 @@ func (f *Forest) removev4(dels []uint64) error {
 		}
 	}
 	var hashDirt []uint64
+	// fmt.Printf("call rem2 nl %d rem %v\n", f.numLeaves, dels)
 	swapRows := remTrans2(dels, f.numLeaves, f.rows)
+	// fmt.Printf("got swaps %v\n", swapRows)
 	// loop taken from pollard rem2.  maybe pollard and forest can both
 	// satisfy the same interface..?  maybe?  that could work...
 	// TODO try that ^^^^^^

@@ -58,6 +58,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 			// crash if there's a bad proof or signature, OK for testing
 			panic(err)
 		}
+
 		c.HeightChan <- c.CurrentHeight
 
 		c.ScanBlock(blocknproof.Block)
@@ -173,10 +174,6 @@ func (c *Csn) putBlockInPollard(
 		}
 	}
 
-	// sort before ingestion; verify up above unsorts...
-	// ub.UtreexoData.AccProof.SortTargets()
-	// TODO sorting is now internal to accumulator...
-
 	// Fills in the empty(nil) nieces for verification && deletion
 	err := c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
 	if err != nil {
@@ -198,11 +195,10 @@ func (c *Csn) putBlockInPollard(
 	// for i, leaf := range blockAdds {
 	// fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
 	// }
-	// fmt.Printf("h %d adds %d targets %d\n",
-	// ub.UtreexoData.Height, len(blockAdds), len(ub.UtreexoData.AccProof.Targets))
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
+
 	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
 	if err != nil {
 

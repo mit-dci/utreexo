@@ -159,8 +159,8 @@ func BuildProofs(
 		proofChan <- ud
 
 		// ud.AccProof.SortTargets()
-		// fmt.Printf("h %d adds %d targets %d\n",
-		// 	height, len(blockAdds), len(ud.AccProof.Targets))
+		// fmt.Printf("h %d nl %d adds %d targets %d %v\n",
+		// height, nl, len(blockAdds), len(ud.AccProof.Targets), ud.AccProof.Targets)
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
@@ -170,13 +170,13 @@ func BuildProofs(
 		}
 		// fmt.Printf(ud.AccProof.ToString())
 
+		// if height == 400 {
+		// stop = true
+		// }
+
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
 		}
-
-		// if ud.Height == 385 {
-		// stop = true
-		// }
 
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
