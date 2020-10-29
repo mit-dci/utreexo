@@ -314,7 +314,8 @@ func (bp *BatchProof) Reconstruct(
 	proofPositions = mergeSortedSlices(targets, proofPositions)
 
 	if len(proofPositions) != len(bp.Proof) {
-		return nil, fmt.Errorf("invalid BatchProof, not enough proof hashes")
+		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d",
+			len(proofPositions), len(bp.Proof))
 	}
 
 	for i, pos := range proofPositions {
