@@ -117,18 +117,12 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		leftRoot := p.roots[len(p.roots)-1] // grab
 		p.roots = p.roots[:len(p.roots)-1]  // pop
 
-		if h == 0 && remember {
-			// make sure that siblings are always remembered in pairs.
-			leftRoot.niece[0] = leftRoot
-		}
-
 		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
 		nHash := parentHash(leftRoot.data, n.data)                 // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
 		p.hashesEver++
 
 		n.prune()
-
 	}
 
 	// the new roots are all the 1 bits above where we got to, and nothing below where
@@ -183,6 +177,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swaprows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
+			var collapse bool
 			// check if doing dirt. if not dirt, swap.
 			// (maybe a little clever here...)
 			if len(swaprows[h]) == 0 ||
@@ -206,15 +201,16 @@ func (p *Pollard) rem2(dels []uint64) error {
 				if err != nil {
 					return err
 				}
+				collapse = swaprows[h][0].collapse
 				swaprows[h] = swaprows[h][1:]
 			}
-			if hn == nil {
+			if hn == nil ||
+				hn.position == prevHash ||
+				collapse {
+				// TODO: there are probably more conditions in which a hn could be skipped.
 				continue
 			}
-			if hn.position == prevHash { // we just did this
-				// fmt.Printf("just did %d\n", prevHash)
-				continue // TODO this doesn't cover everything
-			}
+
 			hnslice = append(hnslice, hn)
 			prevHash = hn.position
 			if len(nextHashDirt) == 0 ||
@@ -233,12 +229,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// TODO when is hn nil?  is this OK?
 				// it'd be better to avoid this and not create hns that aren't
 				// supposed to exist.
-				fmt.Printf("hn %d nil or incomputable\n", hn.position)
+				// fmt.Printf("hn %d nil or incomputable\n", hn.position)
 				continue
 			}
 			// fmt.Printf("giving hasher %d %x %x\n",
 			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			hn.dest.data = hn.sib.auntOp()
+			hn.sib.prune()
 		}
 		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
@@ -347,28 +344,35 @@ func (p *Pollard) readPos(pos uint64) (
 		err = ErrorStrings[ErrorNotEnoughTrees]
 		return
 	}
+
 	n, nsib = p.roots[tree], p.roots[tree]
 
-	for h := branchLen - 1; h != 255; h-- { // go through branch
+	if branchLen == 0 {
+		return
+	}
+
+	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
 		// grab the sibling of lr
 		lrSib := lr ^ 1
-		if h == 0 { // if at bottom, done
-			n, nsib = n.niece[lrSib], n.niece[lr]
-			return
-		}
 
 		n, nsib = n.niece[lr], n.niece[lrSib]
 		if n == nil {
 			return nil, nil, nil, err
 		}
 	}
+
+	lr := uint8(bits) & 1
+	// grab the sibling of lr
+	lrSib := lr ^ 1
+
+	n, nsib = n.niece[lrSib], n.niece[lr]
 	return // only happens when returning a root
 }
 
-// grabPos is like descendToPos but simpler.  Returns the thing you asked for,
-// as well as its sibling. And a hashable node for the position ABOVE pos.
-// And an error if it can't get it.
+// grabPos returns the thing you asked for, as well as its sibling
+// and a hashable node for the position ABOVE pos
+// Returns an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
@@ -381,16 +385,15 @@ func (p *Pollard) grabPos(
 	n, nsib = p.roots[tree], p.roots[tree]
 
 	hn = &hashableNode{dest: n, sib: nsib}
-	for h := branchLen - 1; h != 255; h-- { // go through branch
+
+	if branchLen == 0 {
+		return
+	}
+
+	for h := branchLen - 1; h != 0; h-- { // go through branch
 		lr := uint8(bits>>h) & 1
 		// grab the sibling of lr
 		lrSib := lr ^ 1
-		if h == 0 { // if at bottom, done
-			hn.dest = nsib // this is kind of confusing eh?
-			hn.sib = n     // but yeah, switch siblingness
-			n, nsib = n.niece[lrSib], n.niece[lr]
-			return
-		}
 
 		// if a sib doesn't exist, need to create it and hook it in
 		if n.niece[lrSib] == nil {
@@ -405,65 +408,21 @@ func (p *Pollard) grabPos(
 			return
 		}
 	}
+
+	lr := uint8(bits) & 1
+	// grab the sibling of lr
+	lrSib := lr ^ 1
+
+	hn.dest = nsib // this is kind of confusing eh?
+	hn.sib = n     // but yeah, switch siblingness
+	n, nsib = n.niece[lrSib], n.niece[lr]
 	return // only happens when returning a root
-}
-
-// DescendToPos returns the path to the target node, as well as the sibling
-// path.  Returns paths in bottom-to-top order (backwards)
-// sibs[0] is the node you actually asked for
-func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
-	// interate to descend.  It's like the leafnum, xored with ...1111110
-	// so flip every bit except the last one.
-	// example: I want leaf 12.  That's 1100.  xor to get 0010.
-	// descent 0, 0, 1, 0 (left, left, right, left) to get to 12 from 30.
-	// need to figure out offsets for smaller trees.
-
-	if !inForest(pos, p.numLeaves, p.rows()) {
-		//	if pos >= (p.numLeaves*2)-1 {
-		return nil, nil,
-			fmt.Errorf("OOB: descend to %d but only %d leaves", pos, p.numLeaves)
-	}
-
-	// first find which tree we're in
-	tNum, branchLen, bits := detectOffset(pos, p.numLeaves)
-	//	fmt.Printf("DO pos %d root %d bits %d branlen %d\n", pos, tNum, bits, branchLen)
-	n := p.roots[tNum]
-	if branchLen > 64 {
-		return nil, nil, fmt.Errorf("dtp root %d is nil", tNum)
-	}
-
-	proofs := make([]*polNode, branchLen+1)
-	sibs := make([]*polNode, branchLen+1)
-	// at the top of the branch, the proof and sib are the same
-	proofs[branchLen], sibs[branchLen] = n, n
-	for r := branchLen - 1; r < 64; r-- {
-		lr := (bits >> r) & 1
-
-		sib := n.niece[lr^1]
-		n = n.niece[lr]
-
-		if n == nil && r != 0 {
-			return nil, nil, fmt.Errorf(
-				"descend pos %d nil niece at row %d", pos, r)
-		}
-
-		// if n != nil {
-		// 	fmt.Printf("target %d h %d d %04x\n", pos, h, n.data[:4])
-		// }
-
-		proofs[r], sibs[r] = n, sib
-
-	}
-	//	fmt.Printf("\n")
-	return proofs, sibs, nil
 }
 
 // toFull takes a pollard and converts to a forest.
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
-//func (p *Pollard) toFull() (*Forest, error) {
 func (p *Pollard) toFull() (*Forest, error) {
-
 	ff := NewForest(nil, false, "", 0)
 	ff.rows = p.rows()
 	ff.numLeaves = p.numLeaves
@@ -473,18 +432,19 @@ func (p *Pollard) toFull() (*Forest, error) {
 		return ff, nil
 	}
 
+	// very naive loop looping outside the edge of the tree
 	for i := uint64(0); i < (2<<ff.rows)-1; i++ {
-		_, sib, err := p.descendToPos(i)
-		if err != nil {
-			//	fmt.Printf("can't get pos %d: %s\n", i, err.Error())
+		// check if the leaf is within the tree
+		if !inForest(i, ff.numLeaves, ff.rows) {
 			continue
-			//			return nil, err
 		}
-		if sib[0] != nil {
-			ff.data.write(i, sib[0].data)
-			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
+		n, _, _, err := p.readPos(i)
+		if err != nil {
+			return nil, err
 		}
-
+		if n != nil {
+			ff.data.write(i, n.data)
+		}
 	}
 
 	return ff, nil

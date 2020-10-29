@@ -191,3 +191,79 @@ func fixedPollard(leaves int32) error {
 
 	return nil
 }
+
+func TestCache(t *testing.T) {
+	// simulate blocks with simchain
+	chain := NewSimChain(7)
+	chain.lookahead = 8
+
+	f := NewForest(nil, false, "", 0)
+	var p Pollard
+
+	// this leaf map holds all the leaves at the current height and is used to check if the pollard
+	// is caching leaf proofs correctly
+	leaves := make(map[Hash]Leaf)
+
+	for i := 0; i < 16; i++ {
+		adds, _, delHashes := chain.NextBlock(8)
+		proof, err := f.ProveBatch(delHashes)
+		if err != nil {
+			t.Fatal("ProveBatch failed", err)
+		}
+
+		proof.SortTargets()
+
+		_, err = f.Modify(adds, proof.Targets)
+		if err != nil {
+			t.Fatal("Modify failed", err)
+		}
+
+		err = p.IngestBatchProof(proof)
+		if err != nil {
+			t.Fatal("IngestBatchProof failed", err)
+		}
+
+		err = p.Modify(adds, proof.Targets)
+		if err != nil {
+			t.Fatal("Modify failed", err)
+		}
+
+		// remove deleted leaves from the leaf map
+		for _, del := range delHashes {
+			delete(leaves, del)
+		}
+		// add new leaves to the leaf map
+		for _, leaf := range adds {
+			fmt.Println("add", leaf)
+			leaves[leaf.Hash] = leaf
+		}
+
+		for hash, l := range leaves {
+			leafProof, err := f.ProveBatch([]Hash{hash})
+			if err != nil {
+				t.Fatal("Prove failed", err)
+			}
+			pos := leafProof.Targets[0]
+
+			fmt.Println(pos, l)
+			_, nsib, _, err := p.readPos(pos)
+
+			if pos == p.numLeaves-1 {
+				// roots are always cached
+				continue
+			}
+
+			siblingDoesNotExists := nsib == nil || nsib.data == empty || err != nil
+			if l.Remember && siblingDoesNotExists {
+				// the proof for l is not cached even though it should have been because it
+				// was added with remember=true.
+				t.Fatal("proof for leaf at", pos, "does not exist but it was added with remember=true")
+			} else if !l.Remember && !siblingDoesNotExists {
+				// the proof for l was cached even though it should not have been because it
+				// was added with remember = false.
+				fmt.Println(p.ToString())
+				t.Fatal("proof for leaf at", pos, "does exist but it was added with remember=false")
+			}
+		}
+	}
+}

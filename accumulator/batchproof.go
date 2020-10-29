@@ -306,6 +306,7 @@ func (bp *BatchProof) Reconstruct(
 	if len(bp.Targets) == 0 {
 		return proofTree, nil
 	}
+
 	// copy bp.targets and send copy
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)

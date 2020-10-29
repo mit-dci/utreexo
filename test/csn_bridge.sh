@@ -3,9 +3,9 @@
 # Assumes that `the following binaries exist:
 # 	`bitcoind`, `bitcoin-cli`
 #
-# Receives the path to the genproofs and ibdsim command.
+# Receives the path to the server and client command.
 # Example:
-#   ./csn_bridge.sh "./cmd genproofs" "./cmd ibdsim"
+#   ./csn_bridge.sh "./utreexoserver" "./utreexoclient"
 set -Eeuo pipefail
 
 GENPROOFS="$1"
@@ -151,7 +151,10 @@ run_utreexo() {
 
 	# run ibdsim
 	log "running idbsim..."
-	eval "$IBDSIM -host 127.0.0.1 > $TEST_DATA/ibdsim.log 2>&1"
+	# test resuming with the -quitafter option
+	eval "$IBDSIM -host 127.0.0.1 -quitafter=100 > $TEST_DATA/ibdsim.log 2>&1"
+	eval "$IBDSIM -host 127.0.0.1 -quitafter=100 >> $TEST_DATA/ibdsim.log 2>&1"
+	eval "$IBDSIM -host 127.0.0.1 -quitafter=10 >> $TEST_DATA/ibdsim.log 2>&1"	
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
 

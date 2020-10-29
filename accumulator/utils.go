@@ -146,6 +146,7 @@ func detectRow(position uint64, forestRows uint8) uint8 {
 	for h = 0; position&marker != 0; h++ {
 		marker >>= 1
 	}
+
 	return h
 }
 
@@ -153,6 +154,8 @@ func detectRow(position uint64, forestRows uint8) uint8 {
 // returns: which subtree a node is in, the L/R bitfield to descend to the node,
 // and the height from node to its tree top (which is the bitfield length).
 // we return the opposite of bits, because we always invert em...
+// NOTE there is a overflow that happens with position if given a leaf not in the tree
+// use inForest first before calling detectOffset or you may have an infinite loop
 func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// TODO replace ?
 	// similarities to detectSubTreeRows() with more features
@@ -172,17 +175,17 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// trees; once we have, the loop is over.
 
 	// The predicate breaks down into 3 main terms:
-	// A: pos << nh
+	// A: pos << nr
 	// B: mask
-	// C: 1<<th & numleaves (treeSize)
+	// C: 1<<tr & numleaves (treeSize)
 	// The predicate is then if (A&B >= C)
 	// A is position up-shifted by the row of the node we're targeting.
 	// B is the "mask" we use in other functions; a bunch of 0s at the MSB side
 	// and then a bunch of 1s on the LSB side, such that we can use bitwise AND
-	// to discard high bits.  Together, A&B is shifting position up by nh bits,
+	// to discard high bits. Together, A&B is shifting position up by nr bits,
 	// and then discarding (zeroing out) the high bits.  This is the same as in
-	// childMany.  C checks for whether a tree exists at the current tree
-	// rows.  If there is no tree at th, C is 0.  If there is a tree, it will
+	// childMany. C checks for whether a tree exists at the current tree
+	// rows. If there is no tree at th, C is 0. If there is a tree, it will
 	// return a power of 2: the base size of that tree.
 	// The C term actually is used 3 times here, which is ugly; it's redefined
 	// right on the next line.
@@ -198,6 +201,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 			biggerTrees++
 		}
 	}
+
 	return biggerTrees, tr - nr, ^position
 }
 
