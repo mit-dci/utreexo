@@ -46,7 +46,7 @@ it grabs all that before trying to look for TTL data.
 // build the bridge node / proofs
 func BuildProofs(
 	param chaincfg.Params, dataDir string,
-	forestInRam, forestCached bool, sig chan bool) error {
+	forestInRam, forestCached, cowForest bool, maxCachedCount int, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -66,18 +66,29 @@ func BuildProofs(
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(param, dataDir, forestInRam, forestCached, offsetFinished)
+		initBridgeNodeState(
+			param,
+			dataDir,
+			forestInRam,
+			forestCached,
+			cowForest,
+			maxCachedCount,
+			offsetFinished,
+		)
+
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
 		return err
 	}
-	// for testing only
-	// knownTipHeight = 32500
 
 	ttlpath := "utree/" + param.Name + "ttldb"
+
 	// Open leveldb
-	o := opt.Options{CompactionTableSizeMultiplier: 8}
+	o := opt.Options{
+		CompactionTableSizeMultiplier: 8,
+		Compression:                   opt.NoCompression,
+	}
 	lvdb, err := leveldb.OpenFile(ttlpath, &o)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
@@ -114,7 +125,6 @@ func BuildProofs(
 	var stop bool // bool for stopping the main loop
 
 	for ; height != knownTipHeight && !stop; height++ {
-
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
@@ -187,7 +197,7 @@ func BuildProofs(
 	fileWait.Wait()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, height, forestInRam)
+	err = saveBridgeNodeData(forest, height, forestInRam, cowForest)
 	if err != nil {
 		panic(err)
 	}

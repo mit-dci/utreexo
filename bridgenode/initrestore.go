@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -14,7 +15,8 @@ import (
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
 func initBridgeNodeState(
-	p chaincfg.Params, dataDir string, forestInRam, forestCached bool,
+	p chaincfg.Params, dataDir string,
+	forestInRam, forestCached, cowForest bool, maxCachedCount int,
 	offsetFinished chan bool) (forest *accumulator.Forest,
 	height int32, knownTipHeight int32, err error) {
 
@@ -44,27 +46,57 @@ func initBridgeNodeState(
 		fmt.Printf("tip height %d\n", knownTipHeight)
 	}
 
-	// Check if the forestdata is present
-	if util.HasAccess(util.ForestFilePath) {
-		fmt.Println("Has access to forestdata, resuming")
-		forest, err = restoreForest(
-			util.ForestFilePath, util.MiscForestFilePath, forestInRam, forestCached)
-		if err != nil {
-			err = fmt.Errorf("restoreForest error: %s", err.Error())
-			return
-		}
-		height, err = restoreHeight()
-		if err != nil {
-			err = fmt.Errorf("restoreHeight error: %s", err.Error())
-			return
+	if cowForest {
+		if util.HasAccess(util.CowForestCurFilePath) {
+			fmt.Println("Has access to cowforest, resuming")
+			forest, err = restoreForest(
+				"", util.MiscForestFilePath, forestInRam,
+				forestCached, cowForest, maxCachedCount)
+			if err != nil {
+				err = fmt.Errorf("restoreForest error: %s", err.Error())
+				return
+			}
+			height, err = restoreHeight()
+			if err != nil {
+				err = fmt.Errorf("restoreHeight error: %s", err.Error())
+				return
+			}
+		} else {
+			fmt.Println("Creating new cowforest")
+			forest, err = createForest(
+				false, false, cowForest, maxCachedCount)
+			height = 1 // note that blocks start at 1, block 0 doesn't go into set
+			if err != nil {
+				err = fmt.Errorf("createForest error: %s", err.Error())
+				return
+			}
 		}
 	} else {
-		fmt.Println("Creating new forestdata")
-		forest, err = createForest(forestInRam, forestCached)
-		height = 1 // note that blocks start at 1, block 0 doesn't go into set
-		if err != nil {
-			err = fmt.Errorf("createForest error: %s", err.Error())
-			return
+		// Check if the forestdata is present
+		if util.HasAccess(util.ForestFilePath) {
+			fmt.Println("Has access to forestdata, resuming")
+			forest, err = restoreForest(
+				util.ForestFilePath, util.MiscForestFilePath, forestInRam,
+				forestCached, false, 0)
+			if err != nil {
+				err = fmt.Errorf("restoreForest error: %s", err.Error())
+				return
+			}
+			height, err = restoreHeight()
+			if err != nil {
+				err = fmt.Errorf("restoreHeight error: %s", err.Error())
+				return
+			}
+		} else {
+			fmt.Println("Creating new forestdata")
+			// TODO Add a path for CowForest here
+			forest, err = createForest(
+				forestInRam, forestCached, false, 0)
+			height = 1 // note that blocks start at 1, block 0 doesn't go into set
+			if err != nil {
+				err = fmt.Errorf("createForest error: %s", err.Error())
+				return
+			}
 		}
 	}
 
@@ -75,16 +107,25 @@ func initBridgeNodeState(
 // user restarts, they'll be able to resume.
 // Saves height, forest fields, and pOffset
 func saveBridgeNodeData(
-	forest *accumulator.Forest, height int32, inRam bool) error {
+	forest *accumulator.Forest, height int32, inRam, cow bool) error {
 
 	if inRam {
+		fmt.Println("INRAM")
 		forestFile, err := os.OpenFile(
 			util.ForestFilePath,
 			os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			return err
 		}
-		err = forest.WriteForestToDisk(forestFile)
+		err = forest.WriteForestToDisk(forestFile, inRam, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	if cow {
+		fmt.Println("COW")
+		err := forest.WriteForestToDisk(nil, false, cow)
 		if err != nil {
 			return err
 		}
@@ -142,9 +183,17 @@ func createOffsetData(
 }
 
 // createForest initializes forest
-func createForest(inRam, cached bool) (forest *accumulator.Forest, err error) {
+func createForest(inRam, cached bool, cowForest bool, maxCacheCount int) (
+	forest *accumulator.Forest, err error) {
+
 	if inRam {
-		forest = accumulator.NewForest(nil, false)
+		forest = accumulator.NewForest(nil, false, "", maxCacheCount)
+		return
+	}
+
+	if cowForest {
+		path := filepath.Join(util.ForestDirPath + "/cow/")
+		forest = accumulator.NewForest(nil, false, path, maxCacheCount)
 		return
 	}
 
@@ -156,7 +205,7 @@ func createForest(inRam, cached bool) (forest *accumulator.Forest, err error) {
 	}
 
 	// Restores all the forest data
-	forest = accumulator.NewForest(forestFile, cached)
+	forest = accumulator.NewForest(forestFile, cached, "", maxCacheCount)
 
 	return
 }
@@ -164,21 +213,37 @@ func createForest(inRam, cached bool) (forest *accumulator.Forest, err error) {
 // restoreForest restores forest fields based off the existing forestdata
 // on disk.
 func restoreForest(
-	forestFilename, miscFilename string,
-	inRam, cached bool) (forest *accumulator.Forest, err error) {
+	forestFilename, miscFilename string, inRam, cached, cow bool, maxCacheCount int) (
+	forest *accumulator.Forest, err error) {
 
-	// Where the forestfile exists
-	forestFile, err := os.OpenFile(forestFilename, os.O_RDWR, 0400)
-	if err != nil {
-		return
-	}
-	// Where the misc forest data exists
-	miscForestFile, err := os.OpenFile(miscFilename, os.O_RDONLY, 0400)
-	if err != nil {
-		return
-	}
+	if cow {
+		var miscForestFile *os.File
+		// Where the misc forest data exists
+		miscForestFile, err = os.OpenFile(miscFilename, os.O_RDONLY, 0400)
+		if err != nil {
+			return nil, err
+		}
+		cowPath := filepath.Join(util.ForestDirPath + "/cow/")
+		forest, err = accumulator.RestoreForest(
+			miscForestFile, nil, false, false, cowPath, maxCacheCount)
+	} else {
 
-	forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam, cached)
+		var forestFile *os.File
+		var miscForestFile *os.File
+		// Where the forestfile exists
+		forestFile, err = os.OpenFile(forestFilename, os.O_RDWR, 0400)
+		if err != nil {
+			return
+		}
+		// Where the misc forest data exists
+		miscForestFile, err = os.OpenFile(miscFilename, os.O_RDONLY, 0400)
+		if err != nil {
+			return
+		}
+
+		forest, err = accumulator.RestoreForest(
+			miscForestFile, forestFile, inRam, cached, "", 0)
+	}
 	return
 }
 

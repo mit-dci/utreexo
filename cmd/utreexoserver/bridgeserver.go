@@ -43,6 +43,10 @@ var dataDirCmd = optionCmd.String("datadir", "",
 	`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 var forestInRam = optionCmd.Bool("inram", false,
 	`keep forest in ram instead of disk.  Faster but needs lots of ram`)
+var cowForest = optionCmd.Bool("cow", false,
+	`keep the forest as a copy-on-write state`)
+var cowmaxcache = optionCmd.Int("cowmaxcache", 500,
+	`how many treetables to cache`)
 var forestCache = optionCmd.Bool("cache", false,
 	`use ram-cached forest.  Speed between on disk and fully in-ram`)
 var serve = optionCmd.Bool("serve", false,
@@ -121,8 +125,8 @@ func main() {
 	// building proofs
 
 	if !*serve {
-		fmt.Printf("datadir is %s\n", dataDir)
-		err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
+		err := bridge.BuildProofs(param, dataDir,
+			*forestInRam, *forestCache, *cowForest, *cowmaxcache, sig)
 		if err != nil {
 			fmt.Printf("Buildproofs error: %s\n", err.Error())
 			panic("proof build halting")
