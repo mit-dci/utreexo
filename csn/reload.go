@@ -15,8 +15,7 @@ import (
 func restorePollard() (height int32, p accumulator.Pollard,
 	utxos map[wire.OutPoint]util.LeafData, err error) {
 	// Restore Pollard
-	pollardFile, err := os.OpenFile(
-		util.PollardFilePath, os.O_RDWR, 0600)
+	pollardFile, err := os.OpenFile(PollardFilePath, os.O_RDWR, 0600)
 	if err != nil {
 		return
 	}
@@ -58,8 +57,7 @@ func restorePollard() (height int32, p accumulator.Pollard,
 // user restarts, they'll be able to resume.
 // Saves height for ibdsim and pollard itself
 func saveIBDsimData(csn *Csn) error {
-	polFile, err := os.OpenFile(
-		util.PollardFilePath, os.O_WRONLY, 0600)
+	polFile, err := os.OpenFile(PollardFilePath, os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}

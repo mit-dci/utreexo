@@ -4,9 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
@@ -14,10 +12,7 @@ import (
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
-func initBridgeNodeState(
-	p chaincfg.Params, dataDir string,
-	forestInRam, forestCached, cowForest bool, maxCachedCount int,
-	offsetFinished chan bool) (forest *accumulator.Forest,
+func initBridgeNodeState(cfg Config, offsetFinished chan bool) (forest *accumulator.Forest,
 	height int32, knownTipHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
@@ -28,9 +23,8 @@ func initBridgeNodeState(
 	// If either is incomplete or not complete, they're both removed and made
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
-	if util.HasAccess(util.OffsetFilePath) {
-		knownTipHeight, err = restoreLastIndexOffsetHeight(
-			offsetFinished)
+	if util.HasAccess(cfg.utreeDir.offsetDir.offsetFile) {
+		knownTipHeight, err = restoreLastIndexOffsetHeight(cfg.utreeDir.offsetDir, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s", err.Error())
 			return
@@ -38,7 +32,7 @@ func initBridgeNodeState(
 	} else {
 		fmt.Println("Offsetfile not present or half present. " +
 			"Indexing offset for blocks blk*.dat files...")
-		knownTipHeight, err = createOffsetData(p, dataDir, offsetFinished)
+		knownTipHeight, err = createOffsetData(cfg, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("createOffsetData error: %s", err.Error())
 			return
@@ -46,25 +40,22 @@ func initBridgeNodeState(
 		fmt.Printf("tip height %d\n", knownTipHeight)
 	}
 
-	if cowForest {
-		if util.HasAccess(util.CowForestCurFilePath) {
+	if cfg.cowForest {
+		if util.HasAccess(cfg.utreeDir.forestDir.cowForestCurFile) {
 			fmt.Println("Has access to cowforest, resuming")
-			forest, err = restoreForest(
-				"", util.MiscForestFilePath, forestInRam,
-				forestCached, cowForest, maxCachedCount)
+			forest, err = restoreForest(cfg)
 			if err != nil {
 				err = fmt.Errorf("restoreForest error: %s", err.Error())
 				return
 			}
-			height, err = restoreHeight()
+			height, err = restoreHeight(cfg)
 			if err != nil {
 				err = fmt.Errorf("restoreHeight error: %s", err.Error())
 				return
 			}
 		} else {
 			fmt.Println("Creating new cowforest")
-			forest, err = createForest(
-				false, false, cowForest, maxCachedCount)
+			forest, err = createForest(cfg)
 			height = 1 // note that blocks start at 1, block 0 doesn't go into set
 			if err != nil {
 				err = fmt.Errorf("createForest error: %s", err.Error())
@@ -73,16 +64,14 @@ func initBridgeNodeState(
 		}
 	} else {
 		// Check if the forestdata is present
-		if util.HasAccess(util.ForestFilePath) {
+		if util.HasAccess(cfg.utreeDir.forestDir.forestFile) {
 			fmt.Println("Has access to forestdata, resuming")
-			forest, err = restoreForest(
-				util.ForestFilePath, util.MiscForestFilePath, forestInRam,
-				forestCached, false, 0)
+			forest, err = restoreForest(cfg)
 			if err != nil {
 				err = fmt.Errorf("restoreForest error: %s", err.Error())
 				return
 			}
-			height, err = restoreHeight()
+			height, err = restoreHeight(cfg)
 			if err != nil {
 				err = fmt.Errorf("restoreHeight error: %s", err.Error())
 				return
@@ -90,8 +79,7 @@ func initBridgeNodeState(
 		} else {
 			fmt.Println("Creating new forestdata")
 			// TODO Add a path for CowForest here
-			forest, err = createForest(
-				forestInRam, forestCached, false, 0)
+			forest, err = createForest(cfg)
 			height = 1 // note that blocks start at 1, block 0 doesn't go into set
 			if err != nil {
 				err = fmt.Errorf("createForest error: %s", err.Error())
@@ -107,32 +95,30 @@ func initBridgeNodeState(
 // user restarts, they'll be able to resume.
 // Saves height, forest fields, and pOffset
 func saveBridgeNodeData(
-	forest *accumulator.Forest, height int32, inRam, cow bool) error {
+	forest *accumulator.Forest, height int32, cfg Config) error {
 
-	if inRam {
-		fmt.Println("INRAM")
+	if cfg.inRam {
 		forestFile, err := os.OpenFile(
-			util.ForestFilePath,
+			cfg.utreeDir.forestDir.forestFile,
 			os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			return err
 		}
-		err = forest.WriteForestToDisk(forestFile, inRam, false)
+		err = forest.WriteForestToDisk(forestFile, cfg.inRam, false)
 		if err != nil {
 			return err
 		}
 	}
 
-	if cow {
-		fmt.Println("COW")
-		err := forest.WriteForestToDisk(nil, false, cow)
+	if cfg.cowForest {
+		err := forest.WriteForestToDisk(nil, false, cfg.cowForest)
 		if err != nil {
 			return err
 		}
 	}
 
 	heightFile, err := os.OpenFile(
-		util.ForestLastSyncedBlockHeightFilePath,
+		cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile,
 		os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -144,7 +130,7 @@ func saveBridgeNodeData(
 
 	// write other misc forest data
 	miscForestFile, err := os.OpenFile(
-		util.MiscForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
+		cfg.utreeDir.forestDir.miscForestFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
@@ -159,20 +145,20 @@ func saveBridgeNodeData(
 // createOffsetData restores the offsetfile needed to index the
 // blocks in the raw blk*.dat and raw rev*.dat files.
 func createOffsetData(
-	p chaincfg.Params, dataDir string, offsetFinished chan bool) (
+	cfg Config, offsetFinished chan bool) (
 	lastIndexOffsetHeight int32, err error) {
 
 	// Set the Block Header hash
 	// buildOffsetFile matches the header hash to organize
 	// for blk*.dat files
-	hash, err := util.GenHashForNet(p)
+	hash, err := util.GenHashForNet(cfg.params)
 	if err != nil {
 		return 0, err
 	}
 
 	// TODO allow the user to pass a custom offsetfile path and
 	// custom lastOffsetHeight path instead of just ""
-	lastIndexOffsetHeight, err = buildOffsetFile(dataDir, *hash, "", "")
+	lastIndexOffsetHeight, err = buildOffsetFile(cfg, *hash, "", "")
 	if err != nil {
 		return 0, err
 	}
@@ -183,77 +169,74 @@ func createOffsetData(
 }
 
 // createForest initializes forest
-func createForest(inRam, cached bool, cowForest bool, maxCacheCount int) (
+func createForest(cfg Config) (
 	forest *accumulator.Forest, err error) {
 
-	if inRam {
-		forest = accumulator.NewForest(nil, false, "", maxCacheCount)
+	if cfg.inRam {
+		forest = accumulator.NewForest(nil, false, "", cfg.cowMaxCache)
 		return
 	}
 
-	if cowForest {
-		path := filepath.Join(util.ForestDirPath + "/cow/")
-		forest = accumulator.NewForest(nil, false, path, maxCacheCount)
+	if cfg.cowForest {
+		forest = accumulator.NewForest(nil, false, cfg.utreeDir.forestDir.cowForestDir, cfg.cowMaxCache)
 		return
 	}
 
 	// Where the forestfile exists
 	forestFile, err := os.OpenFile(
-		util.ForestFilePath, os.O_CREATE|os.O_RDWR, 0600)
+		cfg.utreeDir.forestDir.forestFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return
 	}
 
 	// Restores all the forest data
-	forest = accumulator.NewForest(forestFile, cached, "", maxCacheCount)
+	forest = accumulator.NewForest(forestFile, cfg.forestCache, "", cfg.cowMaxCache)
 
 	return
 }
 
 // restoreForest restores forest fields based off the existing forestdata
 // on disk.
-func restoreForest(
-	forestFilename, miscFilename string, inRam, cached, cow bool, maxCacheCount int) (
+func restoreForest(cfg Config) (
 	forest *accumulator.Forest, err error) {
 
-	if cow {
+	if cfg.cowForest {
 		var miscForestFile *os.File
 		// Where the misc forest data exists
-		miscForestFile, err = os.OpenFile(miscFilename, os.O_RDONLY, 0400)
+		miscForestFile, err = os.OpenFile(cfg.utreeDir.forestDir.miscForestFile, os.O_RDONLY, 0400)
 		if err != nil {
 			return nil, err
 		}
-		cowPath := filepath.Join(util.ForestDirPath + "/cow/")
 		forest, err = accumulator.RestoreForest(
-			miscForestFile, nil, false, false, cowPath, maxCacheCount)
+			miscForestFile, nil, false, false, cfg.utreeDir.forestDir.cowForestDir, cfg.cowMaxCache)
 	} else {
 
 		var forestFile *os.File
 		var miscForestFile *os.File
 		// Where the forestfile exists
-		forestFile, err = os.OpenFile(forestFilename, os.O_RDWR, 0400)
+		forestFile, err = os.OpenFile(cfg.utreeDir.forestDir.forestFile, os.O_RDWR, 0400)
 		if err != nil {
 			return
 		}
 		// Where the misc forest data exists
-		miscForestFile, err = os.OpenFile(miscFilename, os.O_RDONLY, 0400)
+		miscForestFile, err = os.OpenFile(cfg.utreeDir.forestDir.miscForestFile, os.O_RDONLY, 0400)
 		if err != nil {
 			return
 		}
 
 		forest, err = accumulator.RestoreForest(
-			miscForestFile, forestFile, inRam, cached, "", 0)
+			miscForestFile, forestFile, cfg.inRam, cfg.forestCache, "", 0)
 	}
 	return
 }
 
-// restoreHeight restores height from util.ForestLastSyncedBlockHeightFilePath
-func restoreHeight() (height int32, err error) {
+// restoreHeight restores height from util.ForestLastSyncedBlockHeightFileName
+func restoreHeight(cfg Config) (height int32, err error) {
 	// if there is a heightfile, get the height from that
 	// heightFile saves the last block that was written to ttldb
-	if util.HasAccess(util.ForestLastSyncedBlockHeightFilePath) {
+	if util.HasAccess(cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile) {
 		heightFile, err := os.OpenFile(
-			util.ForestLastSyncedBlockHeightFilePath,
+			cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile,
 			os.O_RDONLY, 0400)
 		if err != nil {
 			return 0, err
@@ -265,17 +248,17 @@ func restoreHeight() (height int32, err error) {
 	} else {
 		return 0, fmt.Errorf(
 			"can't read height at %s (must build before serving)\n",
-			util.ForestLastSyncedBlockHeightFilePath)
+			cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile)
 	}
 	return
 }
 
 // restoreLastIndexOffsetHeight restores the lastIndexOffsetHeight
-func restoreLastIndexOffsetHeight(offsetFinished chan bool) (
+func restoreLastIndexOffsetHeight(offsetDir offsetDir, offsetFinished chan bool) (
 	lastIndexOffsetHeight int32, err error) {
 
 	f, err := os.OpenFile(
-		util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_RDWR, 0600)
+		offsetDir.lastIndexOffsetHeightFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return 0, err
 	}

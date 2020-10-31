@@ -20,7 +20,7 @@ import (
 // Fairly quick process with one blk*.dat file taking a few seconds.
 //
 // Returns the last block height that it processed.
-func buildOffsetFile(dataDir string, tip util.Hash,
+func buildOffsetFile(cfg Config, tip util.Hash,
 	cOffsetFile, cLastOffsetHeightFile string) (int32, error) {
 
 	// Map to store Block Header Hashes for sorting purposes
@@ -33,8 +33,7 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 	// If not, then use the custom one given
 	if cOffsetFile == "" {
 		var err error
-		offsetFile, err = os.OpenFile(util.OffsetFilePath,
-			os.O_CREATE|os.O_WRONLY, 0600)
+		offsetFile, err = os.OpenFile(cfg.utreeDir.offsetDir.offsetFile, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
@@ -47,7 +46,7 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 		}
 	}
 
-	lvdb, err := OpenIndexFile(dataDir)
+	lvdb, err := OpenIndexFile(cfg.blockDir)
 	if err != nil {
 		return 0, err
 	}
@@ -65,7 +64,7 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 	defer offsetFile.Close()
 	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
-		filePath := filepath.Join(dataDir, fileName)
+		filePath := filepath.Join(cfg.blockDir, fileName)
 		fmt.Printf("Building offsetfile... %s\n", fileName)
 
 		_, err := os.Stat(filePath)
@@ -91,8 +90,7 @@ func buildOffsetFile(dataDir string, tip util.Hash,
 		var err error
 		// write the last height of the offsetfile
 		// needed info for the main genproofs processes
-		LastIndexOffsetHeightFile, err := os.OpenFile(
-			util.LastIndexOffsetHeightFilePath, os.O_CREATE|os.O_WRONLY, 0600)
+		LastIndexOffsetHeightFile, err := os.OpenFile(cfg.utreeDir.offsetDir.lastIndexOffsetHeightFile, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
