@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	dbutil "github.com/syndtr/goleveldb/leveldb/util"
@@ -50,21 +49,13 @@ type RawHeaderData struct {
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
-	blockChan chan BlockAndRev, dataDir, cOffsetFile string,
+	blockChan chan BlockAndRev, cfg *Config,
 	maxHeight, curHeight int32) {
 
-	var offsetFilePath string
-
-	// If empty string is given, just use the default path
-	// If not, then use the custom one given
-	if cOffsetFile == "" {
-		offsetFilePath = util.OffsetFilePath
-	} else {
-		offsetFilePath = cOffsetFile
-	}
+	var offsetFilePath = cfg.utreeDir.offsetDir.offsetFile
 
 	for curHeight < maxHeight {
-		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFilePath, dataDir)
+		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFilePath, cfg.blockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
