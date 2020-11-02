@@ -3,8 +3,11 @@ package bridgenode
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
@@ -58,7 +61,9 @@ var (
 )
 
 // utreexo home directory
-var defaultHomeDir = btcutil.AppDataDir("utreexo", false)
+var (
+	defaultHomeDir = btcutil.AppDataDir("utreexo", false)
+)
 
 type forestDir struct {
 	base                            string
@@ -141,6 +146,8 @@ type Config struct {
 	// what params do we use? Different params depend on
 	// which bitcoin network are we on (mainnet, testnet3, regnet)
 	params chaincfg.Params
+
+	listeners []string
 
 	// the block path from bitcoind's datadir we'll be directly reading from
 	blockDir string
@@ -266,7 +273,97 @@ func Parse(args []string) (*Config, error) {
 		con.serve = true
 	}
 
+	if len(con.listeners) == 0 {
+		con.listeners = []string{
+			net.JoinHostPort("", con.params.DefaultPort),
+		}
+	}
+
+	fmt.Println(con.listeners)
+	os.Exit(0)
+
 	return &con, nil
+}
+
+func initListener(addrs []string) ([]net.Listener, error) {
+	netAddrs, err := parseListeners(addrs)
+	if err != nil {
+		panic(err)
+	}
+	listeners := make([]net.Listener, 0, len(netAddrs))
+	for _, addr := range netAddrs {
+		listener, err := net.Listen(addr.Network(), addr.String())
+		if err != nil {
+			//srvrLog.Warnf("Can't listen on %s: %v", addr, err)
+			continue
+		}
+		listeners = append(listeners, listener)
+	}
+
+	return listeners, nil
+}
+
+// simpleAddr implements the net.Addr interface with two struct fields
+type simpleAddr struct {
+	net, addr string
+}
+
+// String returns the address.
+//
+// This is part of the net.Addr interface.
+func (a simpleAddr) String() string {
+	return a.addr
+}
+
+// Network returns the network.
+//
+// This is part of the net.Addr interface.
+func (a simpleAddr) Network() string {
+	return a.net
+}
+
+// parseListeners determines whether each listen address is IPv4 and IPv6 and
+// returns a slice of appropriate net.Addrs to listen on with TCP. It also
+// properly detects addresses which apply to "all interfaces" and adds the
+// address as both IPv4 and IPv6.
+func parseListeners(addrs []string) ([]net.Addr, error) {
+	netAddrs := make([]net.Addr, 0, len(addrs)*2)
+	for _, addr := range addrs {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			// Shouldn't happen due to already being normalized.
+			return nil, err
+		}
+
+		// Empty host or host of * on plan9 is both IPv4 and IPv6.
+		if host == "" || (host == "*" && runtime.GOOS == "plan9") {
+			netAddrs = append(netAddrs, simpleAddr{net: "tcp4", addr: addr})
+			netAddrs = append(netAddrs, simpleAddr{net: "tcp6", addr: addr})
+			continue
+		}
+
+		// Strip IPv6 zone id if present since net.ParseIP does not
+		// handle it.
+		zoneIndex := strings.LastIndex(host, "%")
+		if zoneIndex > 0 {
+			host = host[:zoneIndex]
+		}
+
+		// Parse the IP.
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return nil, fmt.Errorf("'%s' is not a valid IP address", host)
+		}
+
+		// To4 returns nil when the IP is not an IPv4 address, so use
+		// this determine the address type.
+		if ip.To4() == nil {
+			netAddrs = append(netAddrs, simpleAddr{net: "tcp6", addr: addr})
+		} else {
+			netAddrs = append(netAddrs, simpleAddr{net: "tcp4", addr: addr})
+		}
+	}
+	return netAddrs, nil
 }
 
 func getPath() {

@@ -42,7 +42,7 @@ type node struct {
 }
 
 // Leaf contains a hash and a hint about whether it should be saved to
-// memory or not during ibdsim.
+// memory or not during accumulator sync.
 type Leaf struct {
 	Hash
 	Remember bool // this leaf will be deleted soon, remember it

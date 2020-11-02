@@ -9,10 +9,21 @@ import (
 	"runtime/trace"
 	"time"
 
+	"github.com/btcsuite/btcd/connmgr"
+	"github.com/btcsuite/btcd/peer"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
+
+// A bridgenode server state
+type server struct {
+	// connManager inits new connections with peers
+	connManager connmgr.ConnManager
+
+	// an instance of a utreexo peer
+	peer *peer.Peer
+}
 
 func Start(cfg Config, sig chan bool) error {
 	if cfg.CpuProf {
@@ -56,6 +67,20 @@ func Start(cfg Config, sig chan bool) error {
 		fmt.Printf("ArchiveServer error: %s\n", err.Error())
 		panic("server halting")
 	}
+
+	//listeners, err := initListener(cfg.listeners)
+	//if err != nil {
+	//	return err
+	//}
+	//cmgr, err := connmgr.New(&connmgr.Config{
+	//	Listeners: listeners,
+	//	//OnAccept:       s.inboundPeerConnected,
+	//	//RetryDuration:  connectionRetryInterval,
+	//	//TargetOutbound: uint32(targetOutbound),
+	//	//Dial:           btcdDial,
+	//	//OnConnection:   s.outboundPeerConnected,
+	//	//GetNewAddress:  newAddressFunc,
+	//})
 
 	return nil
 }
