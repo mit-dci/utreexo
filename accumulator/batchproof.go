@@ -251,10 +251,13 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 
 		// get the hash of the parent from the cache or compute it
 		parentPos := parent(target.Pos, rows)
-		isParentCached, hash := cached(parentPos)
-		if !isParentCached {
-			hash = parentHash(left.Val, right.Val)
+		isParentCached, cachedHash := cached(parentPos)
+		hash := parentHash(left.Val, right.Val)
+		if isParentCached && hash != cachedHash {
+			// The hash did not match the cached hash
+			return false, nil, nil
 		}
+
 		trees = append(trees, [3]node{{Val: hash, Pos: parentPos}, left, right})
 
 		row := detectRow(parentPos, rows)

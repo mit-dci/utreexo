@@ -33,6 +33,33 @@ func TestPollardFixed(t *testing.T) {
 	}
 }
 
+func TestPollardSimpleIngest(t *testing.T) {
+	f := NewForest(nil, false, "", 0)
+	adds := make([]Leaf, 15)
+	for i := 0; i < len(adds); i++ {
+		adds[i].Hash[0] = uint8(i + 1)
+	}
+
+	f.Modify(adds, []uint64{})
+	fmt.Println(f.ToString())
+
+	hashes := make([]Hash, len(adds))
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = adds[i].Hash
+	}
+
+	bp, _ := f.ProveBatch(hashes)
+
+	var p Pollard
+	p.Modify(adds, nil)
+	// Modify the proof so that the verification should fail.
+	bp.Proof[0][0] = 0xFF
+	err := p.IngestBatchProof(bp)
+	if err == nil {
+		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
+	}
+}
+
 func pollardRandomRemember(blocks int32) error {
 
 	// ffile, err := os.Create("/dev/shm/forfile")
