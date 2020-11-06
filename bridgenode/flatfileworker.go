@@ -229,6 +229,7 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	ff.currentOffset += int64(ud.SerializeSize()) + 8
 	ff.currentHeight++
 
+	ff.fileWait.Done()
 	// fmt.Printf("flatFileBlockWorker h %d wrote %d bytes to offset %d\n",
 	// ff.currentHeight, ud.SerializeSize()+8, ff.currentOffset)
 	return nil
