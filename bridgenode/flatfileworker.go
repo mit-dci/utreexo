@@ -158,6 +158,10 @@ func (ff *flatFileState) ffInit() error {
 			ff.offsets[ff.currentHeight] = ff.currentOffset
 			ff.currentHeight++
 		}
+
+		// set currentOffset to the end of the proof file
+		ff.currentOffset, _ = ff.proofFile.Seek(0, 2)
+
 	} else { // first time startup
 		// there is no block 0 so leave that empty
 		fmt.Printf("setting h=1\n")

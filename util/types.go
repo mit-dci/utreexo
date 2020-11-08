@@ -219,7 +219,7 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 	}
 	// fmt.Printf("read height %d\n", ud.Height)
 
-	var numTTLs int32
+	var numTTLs uint32
 	err = binary.Read(r, binary.BigEndian, &numTTLs)
 	if err != nil { // ^ 4B num ttls
 		fmt.Printf("ud deser numTTLs err %s\n", err.Error())
