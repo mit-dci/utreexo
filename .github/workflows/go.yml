@@ -10,8 +10,8 @@ jobs:
     - name: setup env
       shell: bash
       run: |
-        echo "::set-env name=GOPATH::${{ github.workspace }}/go"
-        echo "::add-path::${{ github.workspace }}/go/bin"
+        echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
+        echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
 
     - name: Install Go
       if: success()
