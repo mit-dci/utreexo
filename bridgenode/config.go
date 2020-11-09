@@ -42,8 +42,12 @@ var (
 		`Set a forest type to use (cow, ram, disk, cache). Usage: "-forest=cow"`)
 	cowMaxCache = argCmd.Int("cowmaxcache", 500,
 		`how many treetables to cache with copy-on-write forest`)
+	quitAtCmd = argCmd.Int("quitat", -1,
+		`quit generating proofs after the given block height. (meant for testing)`)
 	serve = argCmd.Bool("serve", false,
 		`immediately start server without building or checking proof data`)
+	noServeCmd = argCmd.Bool("noserve", false,
+		`don't serve proofs after finishing generating them`)
 	traceCmd = argCmd.String("trace", "",
 		`Enable trace. Usage: 'trace='path/to/file'`)
 	cpuProfCmd = argCmd.String("cpuprof", "",
@@ -163,11 +167,17 @@ type Config struct {
 	// type of the forest we're using
 	forestType forestType
 
+	// quitAfter syncing to this block height
+	quitAt int
+
 	// how much cache to allow for cowforest
 	cowMaxCache int
 
 	// just immidiately start serving what you have on disk
 	serve bool
+
+	// don't serve after generating proofs
+	noServe bool
 
 	// enable tracing
 	TraceProf string
