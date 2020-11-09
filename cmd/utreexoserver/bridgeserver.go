@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	// parse the config
 	cfg, err := bridge.Parse(os.Args[1:])
 	if err != nil {

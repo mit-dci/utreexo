@@ -50,11 +50,13 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 	}
 
-	// serve when finished
-	err := ArchiveServer(cfg, sig)
-	if err != nil {
-		fmt.Printf("ArchiveServer error: %s\n", err.Error())
-		panic("server halting")
+	if !cfg.noServe {
+		// serve when finished
+		err := ArchiveServer(cfg, sig)
+		if err != nil {
+			fmt.Printf("ArchiveServer error: %s\n", err.Error())
+			panic("server halting")
+		}
 	}
 
 	return nil

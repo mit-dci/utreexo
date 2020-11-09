@@ -107,6 +107,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	var stop bool // bool for stopping the main loop
 
 	for ; height != knownTipHeight && !stop; height++ {
+		if cfg.quitAt != -1 && int(height) == cfg.quitAt {
+			fmt.Println("quitAfter value reached. Quitting...")
+			break
+		}
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
