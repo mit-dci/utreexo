@@ -68,7 +68,6 @@ jobs:
         cd $GOPATH/src/github.com/${{ github.repository }}
         go test -v ./accumulator
 
-
     - name: Run integration tests
       shell: bash
       run: |
