@@ -133,7 +133,7 @@ func BuildProofs(
 		// start waitgroups, beyond this point we have to finish all the
 		// disk writes for this iteration of the loop
 		dbwg.Add(1)     // DbWorker calls Done()
-		fileWait.Add(1) // flatFileWorker calls Done() (when done writing ttls)
+		fileWait.Add(2) // flatFileWorker calls Done() when done writing ttls and proof.
 
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
