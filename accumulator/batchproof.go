@@ -159,6 +159,12 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	rows := treeRows(numLeaves)
 	proofPositions, computablePositions :=
 		ProofPositions(targets, numLeaves, rows)
+
+	// The proof should have as many hashes as there are proof positions.
+	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
+		return false, nil, nil
+	}
+
 	// targetNodes holds nodes that are known, on the bottom row those
 	// are the targets, on the upper rows it holds computed nodes.
 	// rootCandidates holds the roots that where computed, and have to be
