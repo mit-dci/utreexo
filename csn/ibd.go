@@ -184,7 +184,7 @@ func (c *Csn) putBlockInPollard(
 	remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
 	for i, ttl := range ub.UtreexoData.TxoTTLs {
 		// ttl-ub.Height is the number of blocks until the block is spend.
-		remember[i] = ttl-ub.UtreexoData.Height < c.pollard.Lookahead
+		remember[i] = ttl < c.pollard.Lookahead
 	}
 
 	// get hashes to add into the accumulator
