@@ -5,14 +5,58 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime/pprof"
+	"runtime/trace"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/util"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-func ArchiveServer(param chaincfg.Params, dataDir string, sig chan bool) error {
+func Start(cfg *Config, sig chan bool) error {
+	if cfg.CpuProf != "" {
+		f, err := os.Create(cfg.CpuProf)
+		if err != nil {
+			return err
+		}
+		pprof.StartCPUProfile(f)
+	}
+	if cfg.MemProf != "" {
+		f, err := os.Create(cfg.MemProf)
+		if err != nil {
+			return err
+		}
+		pprof.WriteHeapProfile(f)
+	}
+	if cfg.TraceProf != "" {
+		f, err := os.Create(cfg.TraceProf)
+		if err != nil {
+			return err
+		}
+		trace.Start(f)
+	}
 
+	// If serve option wasn't given
+	if !cfg.serve {
+		err := BuildProofs(cfg, sig)
+		if err != nil {
+			return errBuildProofs(err)
+		}
+	}
+
+	if !cfg.noServe {
+		// serve when finished
+		err := ArchiveServer(cfg, sig)
+		if err != nil {
+			return errArchiveServer(err)
+		}
+	}
+
+	return nil
+}
+
+func ArchiveServer(cfg *Config, sig chan bool) error {
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
 
@@ -22,25 +66,37 @@ func ArchiveServer(param chaincfg.Params, dataDir string, sig chan bool) error {
 	// Handle user interruptions
 	go stopServer(sig, haltRequest, haltAccept)
 
-	_, err := os.Stat(dataDir)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("%s not found, can't serve blocks\n", dataDir)
+	if !util.HasAccess(cfg.blockDir) {
+		return errNoDataDir(cfg.blockDir)
 	}
 
+	// TODO ****** server shouldn't need levelDB access, fix this
+	// Open leveldb
+	o := opt.Options{
+		CompactionTableSizeMultiplier: 8,
+		Compression:                   opt.NoCompression,
+	}
+	lvdb, err := leveldb.OpenFile(cfg.utreeDir.ttldb, &o)
+	if err != nil {
+		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
+		return err
+	}
+	defer lvdb.Close()
+	// **********************************
+
 	// Init forest and variables. Resumes if the data directory exists
-	maxHeight, err := restoreHeight()
+	maxHeight, err := restoreHeight(cfg)
 	if err != nil {
 		return err
 	}
 
-	blockServer(maxHeight, dataDir, haltRequest, haltAccept)
-
+	blockServer(maxHeight, cfg, haltRequest, haltAccept)
 	return nil
 }
 
 // stopServer listens for the signal from the OS and initiates an exit sequence
 func stopServer(sig, haltRequest, haltAccept chan bool) {
-
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	<-sig
 	haltRequest <- true
@@ -63,7 +119,7 @@ func stopServer(sig, haltRequest, haltAccept chan bool) {
 // blockServer listens on a TCP port for incoming connections, then gives
 // ublocks blocks over that connection
 func blockServer(
-	endHeight int32, dataDir string, haltRequest, haltAccept chan bool) {
+	endHeight int32, cfg *Config, haltRequest, haltAccept chan bool) {
 
 	// before doing anything... this breaks
 	/*
@@ -111,7 +167,7 @@ func blockServer(
 			close(cons)
 			return
 		case con := <-cons:
-			go serveBlocksWorker(con, endHeight, dataDir)
+			go serveBlocksWorker(cfg.utreeDir, con, endHeight, cfg.blockDir)
 		}
 	}
 }
@@ -139,7 +195,7 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 
 // serveBlocksWorker gets height requests from client and sends out the ublock
 // for that height
-func serveBlocksWorker(
+func serveBlocksWorker(utreeDir utreeDir,
 	c net.Conn, endHeight int32, blockDir string) {
 	defer c.Close()
 	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
@@ -183,14 +239,14 @@ func serveBlocksWorker(
 			break
 		}
 
-		udb, err := util.GetUDataBytesFromFile(curHeight)
+		udb, err := GetUDataBytesFromFile(utreeDir.proofDir, curHeight)
 		if err != nil {
 			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			break
 		}
 
 		blkbytes, err := GetBlockBytesFromFile(
-			curHeight, util.OffsetFilePath, blockDir)
+			curHeight, utreeDir.offsetDir.offsetFile, blockDir)
 		if err != nil {
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 			break
@@ -211,4 +267,95 @@ func serveBlocksWorker(
 		fmt.Print(err.Error())
 	}
 	fmt.Printf("hung up on %s\n", c.RemoteAddr().String())
+}
+
+// GetUDataBytesFromFile reads the proof data from proof.dat and proofoffset.dat
+// and gives the proof & utxo data back.
+// Don't ask for block 0, there is no proof for that.
+// But there is an offset for block 0, which is 0, so it collides with block 1
+func GetUDataBytesFromFile(proofDir proofDir, height int32) (b []byte, err error) {
+	if height == 0 {
+		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		return
+	}
+
+	var offset int64
+	var size uint32
+	var readMagic [4]byte
+	realMagic := [4]byte{0xaa, 0xff, 0xaa, 0xff}
+	offsetFile, err := os.OpenFile(proofDir.pOffsetFile, os.O_RDONLY, 0600)
+	if err != nil {
+		return
+	}
+
+	proofFile, err := os.OpenFile(proofDir.pFile, os.O_RDONLY, 0600)
+	if err != nil {
+		return
+	}
+
+	// offset file consists of 8 bytes per block
+	// tipnum * 8 gives us the correct position for that block
+	// Note it's currently a int64, can go down to int32 for split files
+	_, err = offsetFile.Seek(int64(8*height), 0)
+	if err != nil {
+		err = fmt.Errorf("offsetFile.Seek %s", err.Error())
+		return
+	}
+
+	// read the offset of the block we want from the offset file
+	err = binary.Read(offsetFile, binary.BigEndian, &offset)
+	if err != nil {
+		err = fmt.Errorf("binary.Read h %d offset %d %s", height, offset, err.Error())
+		return
+	}
+
+	// seek to that offset
+	_, err = proofFile.Seek(offset, 0)
+	if err != nil {
+		err = fmt.Errorf("proofFile.Seek %s", err.Error())
+		return
+	}
+
+	// first read 4-byte magic aaffaaff
+	n, err := proofFile.Read(readMagic[:])
+	if err != nil {
+		return nil, err
+	}
+	if n != 4 {
+		return nil, fmt.Errorf("only read %d bytes from proof file", n)
+	}
+	if readMagic != realMagic {
+		return nil, fmt.Errorf("expect magic %x but read %x h %d offset %d",
+			realMagic, readMagic, height, offset)
+	}
+
+	// fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
+
+	err = binary.Read(proofFile, binary.BigEndian, &size)
+	if err != nil {
+		return
+	}
+
+	if size > 1<<24 {
+		return nil, fmt.Errorf(
+			"size at offest %d says %d which is too big", offset, size)
+	}
+	// fmt.Printf("GetUDataBytesFromFile read size %d ", size)
+	b = make([]byte, size)
+
+	_, err = proofFile.Read(b)
+	if err != nil {
+		err = fmt.Errorf("proofFile.Read(ubytes) %s", err.Error())
+		return
+	}
+
+	err = offsetFile.Close()
+	if err != nil {
+		return
+	}
+	err = proofFile.Close()
+	if err != nil {
+		return
+	}
+	return
 }

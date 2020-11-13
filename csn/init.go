@@ -110,7 +110,7 @@ func initCSNState() (
 	p accumulator.Pollard, height int32, utxos map[wire.OutPoint]util.LeafData, err error) {
 
 	// bool to check if the pollarddata is present
-	pollardInitialized := util.HasAccess(util.PollardFilePath)
+	pollardInitialized := util.HasAccess(PollardFilePath)
 
 	if pollardInitialized {
 		fmt.Println("Has access to forestdata, resuming")
@@ -124,8 +124,7 @@ func initCSNState() (
 		height = 1
 		utxos = make(map[wire.OutPoint]util.LeafData)
 		// Create file needed for pollard
-		_, err = os.OpenFile(
-			util.PollardFilePath, os.O_CREATE, 0600)
+		_, err = os.OpenFile(PollardFilePath, os.O_CREATE, 0600)
 		if err != nil {
 			return
 		}

@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/mit-dci/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -44,9 +43,7 @@ it grabs all that before trying to look for TTL data.
 */
 
 // build the bridge node / proofs
-func BuildProofs(
-	param chaincfg.Params, dataDir string,
-	forestInRam, forestCached, cowForest bool, maxCachedCount int, sig chan bool) error {
+func BuildProofs(cfg *Config, sig chan bool) error {
 
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
@@ -59,40 +56,26 @@ func BuildProofs(
 	haltAccept := make(chan bool, 1)
 
 	// Handle user interruptions
-	go stopBuildProofs(sig, offsetFinished, haltRequest, haltAccept)
-
-	// Creates all the directories needed for bridgenode
-	util.MakePaths()
+	go stopBuildProofs(cfg, sig, offsetFinished, haltRequest, haltAccept)
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(
-			param,
-			dataDir,
-			forestInRam,
-			forestCached,
-			cowForest,
-			maxCachedCount,
-			offsetFinished,
-		)
-
+		initBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
 		return err
 	}
-
-	ttlpath := "utree/" + param.Name + "ttldb"
 
 	// Open leveldb
 	o := opt.Options{
 		CompactionTableSizeMultiplier: 8,
 		Compression:                   opt.NoCompression,
 	}
-	lvdb, err := leveldb.OpenFile(ttlpath, &o)
+	lvdb, err := leveldb.OpenFile(cfg.utreeDir.ttldb, &o)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
 		return err
 	}
 	defer lvdb.Close()
@@ -113,18 +96,26 @@ func BuildProofs(
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
-	go BlockAndRevReader(blockAndRevReadQueue, dataDir, "",
-		knownTipHeight, height)
+	go BlockAndRevReader(blockAndRevReadQueue, cfg, knownTipHeight, height)
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, cfg.utreeDir, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
 	var stop bool // bool for stopping the main loop
 
 	for ; height != knownTipHeight && !stop; height++ {
+		if cfg.quitAt != -1 && int(height) == cfg.quitAt {
+			fmt.Println("quitAfter value reached. Quitting...")
+
+			// TODO this is ugly, have an actually quitter. Need to refactor
+			// a bunch of things..
+			trace.Stop()
+			pprof.StopCPUProfile()
+			break
+		}
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
@@ -158,21 +149,12 @@ func BuildProofs(
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
-		// ud.AccProof.SortTargets()
-		// fmt.Printf("h %d nl %d adds %d targets %d %v\n",
-		// height, nl, len(blockAdds), len(ud.AccProof.Targets), ud.AccProof.Targets)
-
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
 		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
-		// fmt.Printf(ud.AccProof.ToString())
-
-		// if height == 400 {
-		// stop = true
-		// }
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
@@ -196,7 +178,7 @@ func BuildProofs(
 	fileWait.Wait()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, height, forestInRam, cowForest)
+	err = saveBridgeNodeData(forest, height, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -210,7 +192,7 @@ func BuildProofs(
 
 // stopBuildProofs listens for the signal from the OS and initiates an exit sequence
 func stopBuildProofs(
-	sig, offsetfinished, haltRequest, haltAccept chan bool) {
+	cfg *Config, sig, offsetfinished, haltRequest, haltAccept chan bool) {
 
 	// Listen for SIGINT, SIGQUIT, SIGTERM
 	// Also listen for an unrequested haltAccept which means upstream is finshed
@@ -244,7 +226,7 @@ func stopBuildProofs(
 	default:
 		fmt.Println("offsetfile incomplete, removing...")
 		// May not work sometimes.
-		err := os.RemoveAll(util.OffsetDirPath)
+		err := os.RemoveAll(cfg.utreeDir.offsetDir.base)
 		if err != nil {
 			fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
 		}

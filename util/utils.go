@@ -105,97 +105,6 @@ func UblockNetworkReader(
 	}
 }
 
-// GetUDataBytesFromFile reads the proof data from proof.dat and proofoffset.dat
-// and gives the proof & utxo data back.
-// Don't ask for block 0, there is no proof for that.
-// But there is an offset for block 0, which is 0, so it collides with block 1
-func GetUDataBytesFromFile(height int32) (b []byte, err error) {
-	if height == 0 {
-		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
-		return
-	}
-
-	var offset int64
-	var size uint32
-	var readMagic [4]byte
-	realMagic := [4]byte{0xaa, 0xff, 0xaa, 0xff}
-	offsetFile, err := os.OpenFile(POffsetFilePath, os.O_RDONLY, 0600)
-	if err != nil {
-		return
-	}
-
-	proofFile, err := os.OpenFile(PFilePath, os.O_RDONLY, 0600)
-	if err != nil {
-		return
-	}
-
-	// offset file consists of 8 bytes per block
-	// tipnum * 8 gives us the correct position for that block
-	// Note it's currently a int64, can go down to int32 for split files
-	_, err = offsetFile.Seek(int64(8*height), 0)
-	if err != nil {
-		err = fmt.Errorf("offsetFile.Seek %s", err.Error())
-		return
-	}
-
-	// read the offset of the block we want from the offset file
-	err = binary.Read(offsetFile, binary.BigEndian, &offset)
-	if err != nil {
-		err = fmt.Errorf("binary.Read h %d offset %d %s", height, offset, err.Error())
-		return
-	}
-
-	// seek to that offset
-	_, err = proofFile.Seek(offset, 0)
-	if err != nil {
-		err = fmt.Errorf("proofFile.Seek %s", err.Error())
-		return
-	}
-
-	// first read 4-byte magic aaffaaff
-	n, err := proofFile.Read(readMagic[:])
-	if err != nil {
-		return nil, err
-	}
-	if n != 4 {
-		return nil, fmt.Errorf("only read %d bytes from proof file", n)
-	}
-	if readMagic != realMagic {
-		return nil, fmt.Errorf("expect magic %x but read %x h %d offset %d",
-			realMagic, readMagic, height, offset)
-	}
-
-	// fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
-
-	err = binary.Read(proofFile, binary.BigEndian, &size)
-	if err != nil {
-		return
-	}
-
-	if size > 1<<24 {
-		return nil, fmt.Errorf(
-			"size at offest %d says %d which is too big", offset, size)
-	}
-	// fmt.Printf("GetUDataBytesFromFile read size %d ", size)
-	b = make([]byte, size)
-
-	_, err = proofFile.Read(b)
-	if err != nil {
-		err = fmt.Errorf("proofFile.Read(ubytes) %s", err.Error())
-		return
-	}
-
-	err = offsetFile.Close()
-	if err != nil {
-		return
-	}
-	err = proofFile.Close()
-	if err != nil {
-		return
-	}
-	return
-}
-
 // turns an outpoint into a 36 byte... mixed endian thing.
 // (the 32 bytes txid is "reversed" and the 4 byte index is in order (big)
 func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
@@ -380,11 +289,8 @@ func CheckMagicByte(bytesgiven []byte) bool {
 // Does NOT tell us if the file exists or not.
 // File might exist but may not be available to us
 func HasAccess(fileName string) bool {
-	stat, err := os.Stat(fileName)
+	_, err := os.Stat(fileName)
 	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	if stat.Size() == 0 {
 		return false
 	}
 	return true

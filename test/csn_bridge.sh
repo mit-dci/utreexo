@@ -70,15 +70,15 @@ failure() {
 	# stop bitcoin core if its running but ignore if this fails.
 	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
 	# print genproofs and ibdsim logs
-	tail $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log 2> /dev/null || true
-	
+	#tail $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log 2> /dev/null || true
+
 	kill 0 > /dev/null 2>&1
 }
 
 success() {
 	# stop bitcoin core if its running but ignore if this fails.
 	bitcoin-cli -conf=$BITCOIN_CONF stop > /dev/null 2>&1 || true
-	
+
 	log "SUCCESS: everything seems to be working. test data(logs, regtest files, ...) can be found here: $TEST_DATA"
 }
 
@@ -126,7 +126,7 @@ create_blocks() {
 run_utreexo() {
 	# run genproofs
 	log "running genproofs..."
-	eval "$GENPROOFS -datadir=$BITCOIN_DATA/regtest/blocks -net=regtest > $TEST_DATA/genproofs.log 2>&1 &"
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=. > $TEST_DATA/genproofs.log 2>&1 &"
 	genproofs_id=$!
 
 	log "waiting for genproofs to start the blocks server..."
@@ -137,7 +137,7 @@ run_utreexo() {
 			log "timeout reached while waiting for genproofs to start the blocks server! failing..."
 			false
 		fi
-		
+
 		if jobs %% > /dev/null 2>&1; then
 			nc -z localhost 8338 && break
 		else
@@ -154,12 +154,33 @@ run_utreexo() {
 	# test resuming with the -quitafter option
 	eval "$IBDSIM -host 127.0.0.1 -quitafter=100 > $TEST_DATA/ibdsim.log 2>&1"
 	eval "$IBDSIM -host 127.0.0.1 -quitafter=100 >> $TEST_DATA/ibdsim.log 2>&1"
-	eval "$IBDSIM -host 127.0.0.1 -quitafter=10 >> $TEST_DATA/ibdsim.log 2>&1"	
+	eval "$IBDSIM -host 127.0.0.1 -quitafter=10 >> $TEST_DATA/ibdsim.log 2>&1"
 	kill -SIGQUIT $genproofs_id > /dev/null 2>&1
 	wait $genproofs_id
 
-	log "utreexo output:"
-	tail -n +1 $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log
+	#log "utreexo output:"
+	#tail -n +1 $TEST_DATA/genproofs.log $TEST_DATA/ibdsim.log
+}
+
+compare_proofs() {
+	log "comparing proofs..."
+
+	NOSTOP_DIR=$(mktemp -d)
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=$NOSTOP_DIR -quitat=200 -noserve > /dev/null"
+
+	STOP_DIR=$(mktemp -d)
+	# make genproofs stop and start
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=$STOP_DIR -quitat=50  -noserve> /dev/null"
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=$STOP_DIR -quitat=100 -noserve> /dev/null"
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=$STOP_DIR -quitat=150 -noserve> /dev/null"
+	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=$STOP_DIR -quitat=200 -noserve> /dev/null"
+
+	if cmp -s $NOSTOP_DIR/regtest/proofdata/proof.dat $STOP_DIR/regtest/proofdata/proof.dat; then
+		log "proofs match up"
+	else
+		log "Proof mismatch"
+		false
+	fi
 }
 
 check_binaries
@@ -199,4 +220,6 @@ sleep 1
 # run utreexo
 run_utreexo
 
+# compare proofs with bridge node
+compare_proofs
 success
