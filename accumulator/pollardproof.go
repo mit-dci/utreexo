@@ -9,7 +9,7 @@ import (
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesReverse()
-	ok, trees, roots := verifyBatchProof(bp, rootHashes, p.numLeaves,
+	ok, trees, roots := p.verifyBatchProof(bp,
 		// pass a closure that checks the pollard for cached nodes.
 		// returns true and the hash value of the node if it exists.
 		// returns false if the node does not exist or the hash value is empty.

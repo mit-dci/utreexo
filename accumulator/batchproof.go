@@ -142,7 +142,7 @@ func (bp *BatchProof) ToString() string {
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
-func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
+func (p *Pollard) verifyBatchProof(bp BatchProof,
 	// cached should be a function that fetches nodes from the pollard and
 	// indicates whether they exist or not, this is only useful for the pollard
 	// and nil should be passed for the forest.
@@ -150,7 +150,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
-
+	roots := p.rootHashesReverse()
 	// copy targets to leave them in original order
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
@@ -160,9 +160,9 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		cached = func(_ uint64) (bool, Hash) { return false, empty }
 	}
 
-	rows := treeRows(numLeaves)
+	rows := treeRows(p.numLeaves)
 	proofPositions, computablePositions :=
-		ProofPositions(targets, numLeaves, rows)
+		ProofPositions(targets, p.numLeaves, rows)
 
 	// The proof should have as many hashes as there are proof positions.
 	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
@@ -190,7 +190,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		// check if the target is the row 0 root.
 		// this is the case if its the last leaf (pos==numLeaves-1)
 		// AND the tree has a root at row 0 (numLeaves&1==1)
-		if targets[0] == numLeaves-1 && numLeaves&1 == 1 {
+		if targets[0] == p.numLeaves-1 && p.numLeaves&1 == 1 {
 			// target is the row 0 root, append it to the root candidates.
 			rootCandidates = append(rootCandidates,
 				node{Val: roots[0], Pos: targets[0]})
@@ -272,7 +272,8 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 			miniTree{parent: node{Val: hash, Pos: parentPos}, l: left, r: right})
 
 		row := detectRow(parentPos, rows)
-		if numLeaves&(1<<row) > 0 && parentPos == rootPosition(numLeaves, row, rows) {
+		if p.numLeaves&(1<<row) > 0 && parentPos ==
+			rootPosition(p.numLeaves, row, rows) {
 			// the parent is a root -> store as candidate, to check against
 			// actual roots later.
 			rootCandidates = append(rootCandidates, node{Val: hash, Pos: parentPos})
