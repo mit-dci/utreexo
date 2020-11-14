@@ -142,23 +142,16 @@ func (bp *BatchProof) ToString() string {
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
-func (p *Pollard) verifyBatchProof(bp BatchProof,
-	// cached should be a function that fetches nodes from the pollard and
-	// indicates whether they exist or not, this is only useful for the pollard
-	// and nil should be passed for the forest.
-	cached func(pos uint64) (bool, Hash)) (bool, []miniTree, []node) {
+func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
+
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
-	roots := p.rootHashesReverse()
+	rootHashes := p.rootHashesReverse()
 	// copy targets to leave them in original order
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
 	sortUint64s(targets)
-
-	if cached == nil {
-		cached = func(_ uint64) (bool, Hash) { return false, empty }
-	}
 
 	rows := treeRows(p.numLeaves)
 	proofPositions, computablePositions :=
@@ -174,7 +167,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof,
 	// rootCandidates holds the roots that where computed, and have to be
 	// compared to the actual roots at the end.
 	targetNodes := make([]node, 0, len(targets)*int(rows))
-	rootCandidates := make([]node, 0, len(roots))
+	rootCandidates := make([]node, 0, len(rootHashes))
 	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
 	// tuple[0] is the parent, tuple[1] is the left child and tuple[2]
 	// is the right child.
@@ -193,7 +186,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof,
 		if targets[0] == p.numLeaves-1 && p.numLeaves&1 == 1 {
 			// target is the row 0 root, append it to the root candidates.
 			rootCandidates = append(rootCandidates,
-				node{Val: roots[0], Pos: targets[0]})
+				node{Val: rootHashes[0], Pos: targets[0]})
 			bp.Proof = bp.Proof[1:]
 			break
 		}
@@ -261,9 +254,12 @@ func (p *Pollard) verifyBatchProof(bp BatchProof,
 
 		// get the hash of the parent from the cache or compute it
 		parentPos := parent(target.Pos, rows)
-		isParentCached, cachedHash := cached(parentPos)
 		hash := parentHash(left.Val, right.Val)
-		if isParentCached && hash != cachedHash {
+
+		populatedNode, _, _, err := p.readPos(parentPos)
+		if err != nil ||
+			(populatedNode != nil && populatedNode.data != empty &&
+				hash != populatedNode.data) {
 			// The hash did not match the cached hash
 			return false, nil, nil
 		}
@@ -291,7 +287,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof,
 	// holds a subset of the roots
 	// we count the roots that match in order.
 	rootMatches := 0
-	for _, root := range roots {
+	for _, root := range rootHashes {
 		if len(rootCandidates) > rootMatches &&
 			root == rootCandidates[rootMatches].Val {
 			rootMatches++
