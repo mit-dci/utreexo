@@ -7,7 +7,7 @@ import (
 )
 
 func TestPollardRand(t *testing.T) {
-	for z := 0; z < 30; z++ {
+	for z := 0; z < 10; z++ {
 		// z := 11221
 		// z := 55
 		rand.Seed(int64(z))
@@ -78,8 +78,8 @@ func pollardRandomRemember(blocks int32) error {
 	for b := int32(0); b < blocks; b++ {
 		adds, _, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
 
-		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
-			sn.blockHeight, len(delHashes), len(adds), p.Stats())
+		// fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
+		// sn.blockHeight, len(delHashes), len(adds), p.Stats())
 
 		// get proof for these deletions (with respect to prev block)
 		bp, err := f.ProveBatch(delHashes)
@@ -91,7 +91,7 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("del %v\n", bp.Targets)
+		// fmt.Printf("del %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
@@ -124,9 +124,9 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 
-		fmt.Printf("pol postadd %s", p.ToString())
+		// fmt.Printf("pol postadd %s", p.ToString())
 
-		fmt.Printf("frs postadd %s", f.ToString())
+		// fmt.Printf("frs postadd %s", f.ToString())
 
 		// check all leaves match
 		if !p.equalToForestIfThere(f) {
@@ -141,15 +141,15 @@ func pollardRandomRemember(blocks int32) error {
 			return fmt.Errorf("block %d full %d tops, pol %d tops",
 				sn.blockHeight, len(fullTops), len(polTops))
 		}
-		fmt.Printf("top matching: ")
+		// fmt.Printf("top matching: ")
 		for i, ft := range fullTops {
-			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
+			// fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
 			if ft != polTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
 					sn.blockHeight, i, ft[:4], polTops[i][:4])
 			}
 		}
-		fmt.Printf("\n")
+		// fmt.Printf("\n")
 	}
 
 	return nil
@@ -187,7 +187,7 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("forest  post del %s", f.ToString())
+	// fmt.Printf("forest  post del %s", f.ToString())
 
 	var p Pollard
 
@@ -196,7 +196,7 @@ func fixedPollard(leaves int32) error {
 		return err
 	}
 
-	fmt.Printf("pollard post add %s", p.ToString())
+	// fmt.Printf("pollard post add %s", p.ToString())
 
 	err = p.rem2(dels)
 	if err != nil {
@@ -207,9 +207,9 @@ func fixedPollard(leaves int32) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("forest  post del %s", f.ToString())
+	// fmt.Printf("forest  post del %s", f.ToString())
 
-	fmt.Printf("pollard post del %s", p.ToString())
+	// fmt.Printf("pollard post del %s", p.ToString())
 
 	if !p.equalToForest(f) {
 		return fmt.Errorf("p != f (leaves)")

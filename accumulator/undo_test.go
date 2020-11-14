@@ -18,7 +18,7 @@ func TestUndoFixed(t *testing.T) {
 
 func TestUndoRandom(t *testing.T) {
 
-	for z := int64(0); z < 100; z++ {
+	for z := int64(0); z < 5; z++ {
 		// z := int64(11)
 		rand.Seed(z)
 		err := undoOnceRandom(20)
