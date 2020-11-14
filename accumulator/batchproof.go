@@ -10,7 +10,8 @@ import (
 type BatchProof struct {
 	Targets []uint64
 	Proof   []Hash
-	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
+	// list of leaf locations to delete, along with a bunch of hashes that
+	// give the proof.
 	// the position of the hashes is implied / computable from the leaf positions
 }
 
@@ -168,11 +169,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 	// compared to the actual roots at the end.
 	targetNodes := make([]node, 0, len(targets)*int(rows))
 	rootCandidates := make([]node, 0, len(rootHashes))
-	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
-	// tuple[0] is the parent, tuple[1] is the left child and tuple[2]
-	// is the right child.
-	// trees holds the entire proof tree of the batchproof in this way,
-	// sorted by the tuple[0].
+	// trees holds the entire proof tree of the batchproof, sorted by parents.
 	trees := make([]miniTree, 0, len(computablePositions))
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't

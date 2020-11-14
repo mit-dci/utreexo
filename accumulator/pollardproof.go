@@ -31,8 +31,8 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	return nil
 }
 
-// populate takes a root and populates it with the nodes of the paritial proof tree that was computed
-// in `verifyBatchProof`.
+// populate takes a root and populates it with the nodes of the paritial proof
+// tree that was computed in `verifyBatchProof`.
 func (p *Pollard) populate(
 	root *polNode, pos uint64, trees []miniTree, polNodes []polNode) int {
 	// a stack to traverse the pollard
@@ -86,7 +86,8 @@ func (p *Pollard) populate(
 		}
 
 		stack = append(stack,
-			stackElem{trees[:i], left, leftChild}, stackElem{trees[:i], right, rightChild})
+			stackElem{trees[:i], left, leftChild},
+			stackElem{trees[:i], right, rightChild})
 	}
 	return nodesAllocated
 }
