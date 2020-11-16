@@ -62,8 +62,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	forest, height, knownTipHeight, err :=
 		initBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
-		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
+		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
+			"not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
 		return err
 	}
 
@@ -74,8 +74,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	}
 	lvdb, err := leveldb.OpenFile(cfg.utreeDir.ttldb, &o)
 	if err != nil {
-		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
+		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
+			"not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
 		return err
 	}
 	defer lvdb.Close()

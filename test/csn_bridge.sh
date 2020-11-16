@@ -10,7 +10,14 @@ set -Eeuo pipefail
 
 GENPROOFS="$1"
 IBDSIM="$2"
-TEST_DATA=$(mktemp -d)
+
+if [ $# -lt 3 ]; then
+    TEST_DATA=$(mktemp -d)
+else
+    TEST_DATA="$3"
+fi
+
+CURRENT_PROOFS="$TEST_DATA/currentproofs/"
 BITCOIN_DATA=$TEST_DATA/.bitcoin
 BITCOIN_CONF=$BITCOIN_DATA/bitcoin.conf
 # number of blocks with dummy transactions in them
@@ -165,7 +172,7 @@ run_utreexo() {
 compare_proofs() {
 	log "comparing proofs..."
 
-	NOSTOP_DIR=$(mktemp -d)
+	NOSTOP_DIR=$CURRENT_PROOFS
 	eval "$GENPROOFS -datadir=$BITCOIN_DATA/ -net=regtest -bridgedir=$NOSTOP_DIR -quitat=200 -noserve > /dev/null"
 
 	STOP_DIR=$(mktemp -d)
