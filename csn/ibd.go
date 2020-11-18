@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
+	uwire "github.com/mit-dci/utreexo/wire"
 )
 
 // run IBD from block proof data
@@ -30,11 +32,11 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	ublockQueue := make(chan util.UBlock, 10)
+	ublockQueue := make(chan uwire.UBlock, 10)
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go util.UblockNetworkReader(
+	go uwire.UblockNetworkReader(
 		ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
 
 	var plustime time.Duration
@@ -124,7 +126,7 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 				newOut := wire.OutPoint{Hash: tx.TxHash(), Index: uint32(i)}
 				c.RegisterOutPoint(newOut)
 				c.utxoStore[newOut] =
-					util.LeafData{Outpoint: newOut, Amt: out.Value}
+					btcacc.LeafData{TxHash: btcacc.Hash(newOut.Hash), Index: newOut.Index, Amt: out.Value}
 				c.totalScore += out.Value
 				fmt.Printf("got utxo %s with %d satoshis! Now have %d in %d utxos\n",
 					newOut.String(), out.Value, c.totalScore, len(c.utxoStore))
@@ -139,22 +141,20 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as Leaf type.
 func (c *Csn) putBlockInPollard(
-	ub util.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
+	ub uwire.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
 
 	plusstart := time.Now()
 
 	inskip, outskip := util.DedupeBlock(&ub.Block)
-	if !ub.ProofsProveBlock(inskip) {
+	nl, h := c.pollard.ReconstructStats()
+
+	err := ub.ProofSanity(inskip, nl, h)
+	if err != nil {
 		return fmt.Errorf(
-			"uData missing utxo data for block %d", ub.UtreexoData.Height)
+			"uData missing utxo data for block %d err: %e", ub.UtreexoData.Height, err)
 	}
 
 	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
-
-	// derive leafHashes from leafData
-	if !ub.UtreexoData.Verify(c.pollard.ReconstructStats()) {
-		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.UtreexoData.Height)
-	}
 
 	// **************************************
 	// check transactions and signatures here
@@ -174,7 +174,7 @@ func (c *Csn) putBlockInPollard(
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
+	err = c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
 		return err
@@ -187,7 +187,7 @@ func (c *Csn) putBlockInPollard(
 	}
 
 	// get hashes to add into the accumulator
-	blockAdds := util.BlockToAddLeaves(
+	blockAdds := uwire.BlockToAddLeaves(
 		ub.Block, remember, outskip, ub.UtreexoData.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 

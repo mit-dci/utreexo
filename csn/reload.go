@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/btcacc"
 )
 
 // restorePollard restores the pollard from disk to memory.
 // If starting anew, it just returns a empty pollard.
 func restorePollard() (height int32, p accumulator.Pollard,
-	utxos map[wire.OutPoint]util.LeafData, err error) {
+	utxos map[wire.OutPoint]btcacc.LeafData, err error) {
 	// Restore Pollard
 	pollardFile, err := os.OpenFile(PollardFilePath, os.O_RDWR, 0600)
 	if err != nil {
@@ -27,16 +28,20 @@ func restorePollard() (height int32, p accumulator.Pollard,
 		return
 	}
 
-	utxos = make(map[wire.OutPoint]util.LeafData)
+	utxos = make(map[wire.OutPoint]btcacc.LeafData)
 	for ; numUtxos > 0; numUtxos-- {
-		var utxo util.LeafData
+		var utxo btcacc.LeafData
 
 		err = utxo.Deserialize(pollardFile)
 		if err != nil {
 			return
 		}
 
-		utxos[utxo.Outpoint] = utxo
+		op := wire.OutPoint{
+			Hash:  chainhash.Hash(utxo.TxHash),
+			Index: utxo.Index,
+		}
+		utxos[op] = utxo
 	}
 
 	err = binary.Read(pollardFile, binary.BigEndian, &height)

@@ -6,7 +6,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/btcacc"
 )
 
 /*
@@ -51,7 +51,7 @@ type Csn struct {
 	Params          chaincfg.Params
 
 	remoteHost string
-	utxoStore  map[wire.OutPoint]util.LeafData
+	utxoStore  map[wire.OutPoint]btcacc.LeafData
 	totalScore int64
 }
 

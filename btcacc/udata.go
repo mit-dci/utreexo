@@ -1,43 +1,13 @@
-package util
+package btcacc
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 )
-
-type Hash [32]byte
-
-// HashFromString hashes the given string with sha256
-func HashFromString(s string) Hash {
-	return sha256.Sum256([]byte(s))
-}
-
-type ProofAndHeight struct {
-	Proof  []byte
-	Height int32
-}
-
-// UBlock is a regular block, with Udata stuck on
-type UBlock struct {
-	UtreexoData UData
-	Block       wire.MsgBlock
-}
-
-/*
-Ublock serialization
-(changed with flatttl branch)
-
-A "Ublock" is a regular bitcoin block, along with Utreexo-specific data.
-The udata comes first, and the height and leafTTLs come first.
-
-*/
 
 type UData struct {
 	Height   int32
@@ -46,91 +16,45 @@ type UData struct {
 	TxoTTLs  []int32
 }
 
-// LeafData is all the data that goes into a leaf in the utreexo accumulator
-type LeafData struct {
-	BlockHash [32]byte
-	Outpoint  wire.OutPoint
-	Height    int32
-	Coinbase  bool
-	Amt       int64
-	PkScript  []byte
-}
-
-// ToString turns a LeafData into a string
-func (l *LeafData) ToString() (s string) {
-	s = l.Outpoint.String()
-	// s += fmt.Sprintf(" bh %x ", l.BlockHash)
-	s += fmt.Sprintf(" h %d ", l.Height)
-	s += fmt.Sprintf("cb %v ", l.Coinbase)
-	s += fmt.Sprintf("amt %d ", l.Amt)
-	s += fmt.Sprintf("pks %x ", l.PkScript)
-	s += fmt.Sprintf("%x ", l.LeafHash())
-	s += fmt.Sprintf("size %d", l.SerializeSize())
-	return
-}
-
-// Serialize puts LeafData onto a writer
-func (l *LeafData) Serialize(w io.Writer) (err error) {
-	hcb := l.Height << 1
-	if l.Coinbase {
-		hcb |= 1
+// Verify checks the consistency of uData: that the utxos are proven in the
+// batchproof
+func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
+	// this is really ugly and basically copies the whole thing to avoid
+	// destroying it while verifying...
+	mp, err := ud.AccProof.Reconstruct(nl, h)
+	if err != nil {
+		fmt.Printf("Reconstruct failed %s\n", err.Error())
+		return false
 	}
 
-	_, err = w.Write(l.BlockHash[:])
-	_, err = w.Write(l.Outpoint.Hash[:])
-	err = binary.Write(w, binary.BigEndian, l.Outpoint.Index)
-	err = binary.Write(w, binary.BigEndian, hcb)
-	err = binary.Write(w, binary.BigEndian, l.Amt)
-	if len(l.PkScript) > 10000 {
-		err = fmt.Errorf("pksize too long")
-		return
+	// make sure the udata is consistent, with the same number of leafDatas
+	// as targets in the accumulator batch proof
+	if len(ud.AccProof.Targets) != len(ud.Stxos) {
+		fmt.Printf("Verify failed: %d targets but %d leafdatas\n",
+			len(ud.AccProof.Targets), len(ud.Stxos))
 	}
-	err = binary.Write(w, binary.BigEndian, uint16(len(l.PkScript)))
-	_, err = w.Write(l.PkScript)
-	return
-}
 
-// SerializeSize says how big a leafdata is
-func (l *LeafData) SerializeSize() int {
-	// 32B blockhash, 36B outpoint, 4B h/coinbase, 8B amt, 2B pkslen, pks
-	// so 82B + pks
-	return 82 + len(l.PkScript)
-}
-
-func (l *LeafData) Deserialize(r io.Reader) (err error) {
-	_, err = io.ReadFull(r, l.BlockHash[:])
-	_, err = io.ReadFull(r, l.Outpoint.Hash[:])
-	err = binary.Read(r, binary.BigEndian, &l.Outpoint.Index)
-	err = binary.Read(r, binary.BigEndian, &l.Height)
-	err = binary.Read(r, binary.BigEndian, &l.Amt)
-
-	var pkSize uint16
-	err = binary.Read(r, binary.BigEndian, &pkSize)
-	if pkSize > 10000 {
-		err = fmt.Errorf("bh %x op %s pksize %d byte too long",
-			l.BlockHash, l.Outpoint.String(), pkSize)
-		return
+	for i, pos := range ud.AccProof.Targets {
+		hashInProof, exists := mp[pos]
+		if !exists {
+			fmt.Printf("Verify failed: Target %d not in map\n", pos)
+			return false
+		}
+		// check if leafdata hashes to the hash in the proof at the target
+		if ud.Stxos[i].LeafHash() != hashInProof {
+			fmt.Printf("Verify failed: txhash %x index %d pos %d leafdata %x in proof %x\n",
+				ud.Stxos[i].TxHash, ud.Stxos[i].Index, pos,
+				ud.Stxos[i].LeafHash(), hashInProof)
+			sib, exists := mp[pos^1]
+			if exists {
+				fmt.Printf("sib exists, %x\n", sib)
+			}
+			return false
+		}
 	}
-	l.PkScript = make([]byte, pkSize)
-	_, err = io.ReadFull(r, l.PkScript)
-	if l.Height&1 == 1 {
-		l.Coinbase = true
-	}
-	l.Height >>= 1
-	return
-}
-
-// compact serialization for LeafData:
-// don't need to send BlockHash; figure it out from height
-// don't need to send outpoint, it's already in the msgBlock
-// can use tags for PkScript
-// so it's just height, coinbaseness, amt, pkscript tag
-
-// LeafHash turns a LeafData into a LeafHash
-func (l *LeafData) LeafHash() [32]byte {
-	var buf bytes.Buffer
-	l.Serialize(&buf)
-	return sha512.Sum512_256(buf.Bytes())
+	// return to presorted target list
+	// ud.AccProof.Targets = presort
+	return true
 }
 
 // on disk
@@ -264,34 +188,6 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 	return
 }
 
-// Deserialize a UBlock.  It's just a block then udata.
-func (ub *UBlock) Deserialize(r io.Reader) (err error) {
-	err = ub.Block.Deserialize(r)
-	if err != nil {
-		return err
-	}
-	// fmt.Printf("deser'd block %s %d bytes\n",
-	// ub.Block.Header.BlockHash().String(), ub.Block.SerializeSize())
-	err = ub.UtreexoData.Deserialize(r)
-	return
-}
-
-// We don't actually call serialize since from the server side we don't
-// serialize, we just glom stuff together from the disk and send it over.
-func (ub *UBlock) Serialize(w io.Writer) (err error) {
-	err = ub.Block.Serialize(w)
-	if err != nil {
-		return
-	}
-	err = ub.UtreexoData.Serialize(w)
-	return
-}
-
-// SerializeSize: how big is it, in bytes.
-func (ub *UBlock) SerializeSize() int {
-	return ub.Block.SerializeSize() + ub.UtreexoData.SerializeSize()
-}
-
 // TODO use compact leafDatas in the block proofs -- probably 50%+ space savings
 // Also should be default / the only serialization.  Whenever you've got the
 // block proof, you've also got the block, so should always be OK to omit the
@@ -304,5 +200,39 @@ func UDataFromCompactBytes(b []byte) (UData, error) {
 }
 
 func (ud *UData) ToCompactBytes() (b []byte) {
+	return
+}
+
+// GenUData creates a block proof, calling forest.ProveBatch with the leaf indexes
+// to get a batched inclusion proof from the accumulator. It then adds on the leaf data,
+// to create a block proof which both proves inclusion and gives all utxo data
+// needed for transaction verification.
+func GenUData(delLeaves []LeafData, forest *accumulator.Forest, height int32) (
+	ud UData, err error) {
+
+	ud.Height = height
+	ud.Stxos = delLeaves
+	// make slice of hashes from leafdata
+	delHashes := make([]accumulator.Hash, len(ud.Stxos))
+	for i, _ := range ud.Stxos {
+		delHashes[i] = ud.Stxos[i].LeafHash()
+	}
+	// generate block proof. Errors if the tx cannot be proven
+	// Should never error out with genproofs as it takes
+	// blk*.dat files which have already been vetted by Bitcoin Core
+	ud.AccProof, err = forest.ProveBatch(delHashes)
+	if err != nil {
+		err = fmt.Errorf("genUData failed at block %d %s %s",
+			height, forest.Stats(), err.Error())
+		return
+	}
+
+	if len(ud.AccProof.Targets) != len(delLeaves) {
+		err = fmt.Errorf("genUData %d targets but %d leafData",
+			len(ud.AccProof.Targets), len(delLeaves))
+		return
+	}
+
+	// fmt.Printf(ud.AccProof.ToString())
 	return
 }

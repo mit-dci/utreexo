@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -44,7 +45,6 @@ it grabs all that before trying to look for TTL data.
 
 // build the bridge node / proofs
 func BuildProofs(cfg *Config, sig chan bool) error {
-
 	// Channel to alert the tell the main loop it's ok to exit
 	haltRequest := make(chan bool, 1)
 
@@ -87,7 +87,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
 	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
-	proofChan := make(chan util.UData, 10)         // from proof processing to proof writer
+	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
 	// Start 16 workers. Just an arbitrary number
 	//	for j := 0; j < 16; j++ {
 	// I think we can only have one dbworker now, since it needs to all happen in order?
@@ -140,7 +140,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
-		ud, err := genUData(delLeaves, forest, bnr.Height)
+		ud, err := btcacc.GenUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}

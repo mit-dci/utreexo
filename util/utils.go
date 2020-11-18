@@ -2,18 +2,17 @@ package util
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"math"
-	"net"
 	"os"
 	"sort"
-	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/accumulator"
 )
+
+type Hash [32]byte
 
 // Hash is just [32]byte
 var mainNetGenHash = Hash{
@@ -53,54 +52,9 @@ func GenHashForNet(p chaincfg.Params) (*Hash, error) {
 	return nil, fmt.Errorf("net not supported")
 }
 
-// UblockNetworkReader gets Ublocks from the remote host and puts em in the
-// channel.  It'll try to fill the channel buffer.
-func UblockNetworkReader(
-	blockChan chan UBlock, remoteServer string,
-	curHeight, lookahead int32) {
-
-	d := net.Dialer{Timeout: 2 * time.Second}
-	con, err := d.Dial("tcp", remoteServer)
-	if err != nil {
-		panic(err)
-	}
-	defer con.Close()
-	defer close(blockChan)
-
-	var ub UBlock
-	// var ublen uint32
-	// request range from curHeight to latest block
-	err = binary.Write(con, binary.BigEndian, curHeight)
-	if err != nil {
-		e := fmt.Errorf("UblockNetworkReader: write error to connection %s %s\n",
-			con.RemoteAddr().String(), err.Error())
-		panic(e)
-	}
-	err = binary.Write(con, binary.BigEndian, int32(math.MaxInt32))
-	if err != nil {
-		e := fmt.Errorf("UblockNetworkReader: write error to connection %s %s\n",
-			con.RemoteAddr().String(), err.Error())
-		panic(e)
-	}
-
-	// TODO goroutines for only the Deserialize part might be nice.
-	// Need to sort the blocks though if you're doing that
-	for ; ; curHeight++ {
-
-		err = ub.Deserialize(con)
-		if err != nil {
-			fmt.Printf("Deserialize error from connection %s %s\n",
-				con.RemoteAddr().String(), err.Error())
-			// panic("UblockNetworkReader")
-			return
-		}
-
-		// fmt.Printf("got ublock h %d, total size %d %d block %d udata\n",
-		// 	ub.UtreexoData.Height, ub.SerializeSize(),
-		// 	ub.Block.SerializeSize(), ub.UtreexoData.SerializeSize())
-
-		blockChan <- ub
-	}
+// HashFromString hashes the given string with sha256
+func HashFromString(s string) Hash {
+	return sha256.Sum256([]byte(s))
 }
 
 // turns an outpoint into a 36 byte... mixed endian thing.
@@ -108,55 +62,6 @@ func UblockNetworkReader(
 func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
 	copy(b[0:32], op.Hash[:])
 	binary.BigEndian.PutUint32(b[32:36], op.Index)
-	return
-}
-
-// BlockToAdds turns all the new utxos in a msgblock into leafTxos
-// uses remember slice up to number of txos, but doesn't check that it's the
-// right length.  Similar with skiplist, doesn't check it.
-func BlockToAddLeaves(blk wire.MsgBlock,
-	remember []bool, skiplist []uint32,
-	height int32) (leaves []accumulator.Leaf) {
-
-	var txonum uint32
-	// bh := bl.Blockhash
-	for coinbaseif0, tx := range blk.Transactions {
-		// cache txid aka txhash
-		txid := tx.TxHash()
-		for i, out := range tx.TxOut {
-			// Skip all the OP_RETURNs
-			if IsUnspendable(out) {
-				txonum++
-				continue
-			}
-			// Skip txos on the skip list
-			if len(skiplist) > 0 && skiplist[0] == txonum {
-				skiplist = skiplist[1:]
-				txonum++
-				continue
-			}
-
-			var l LeafData
-			// TODO put blockhash back in -- leaving empty for now!
-			// l.BlockHash = bh
-			l.Outpoint.Hash = txid
-			l.Outpoint.Index = uint32(i)
-			l.Height = height
-			if coinbaseif0 == 0 {
-				l.Coinbase = true
-			}
-			l.Amt = out.Value
-			l.PkScript = out.PkScript
-			uleaf := accumulator.Leaf{Hash: l.LeafHash()}
-			if uint32(len(remember)) > txonum {
-				uleaf.Remember = remember[txonum]
-			}
-			leaves = append(leaves, uleaf)
-			// fmt.Printf("add %s\n", l.ToString())
-			// fmt.Printf("add %s -> %x\n", l.Outpoint.String(), l.LeafHash())
-			txonum++
-		}
-	}
 	return
 }
 
