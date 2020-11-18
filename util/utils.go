@@ -72,17 +72,15 @@ func UblockNetworkReader(
 	// request range from curHeight to latest block
 	err = binary.Write(con, binary.BigEndian, curHeight)
 	if err != nil {
-		fmt.Printf("write error to connection %s %s\n",
+		e := fmt.Errorf("UblockNetworkReader: write error to connection %s %s\n",
 			con.RemoteAddr().String(), err.Error())
-		panic("UblockNetworkReader")
-		return
+		panic(e)
 	}
 	err = binary.Write(con, binary.BigEndian, int32(math.MaxInt32))
 	if err != nil {
-		fmt.Printf("write error to connection %s %s\n",
+		e := fmt.Errorf("UblockNetworkReader: write error to connection %s %s\n",
 			con.RemoteAddr().String(), err.Error())
-		panic("UblockNetworkReader")
-		return
+		panic(e)
 	}
 
 	// TODO goroutines for only the Deserialize part might be nice.
@@ -165,7 +163,7 @@ func BlockToAddLeaves(blk wire.MsgBlock,
 // blockToDelOPs gives all the UTXOs in a block that need proofs in order to be
 // deleted.  All txinputs except for the coinbase input and utxos created
 // within the same block (on the skiplist)
-func blockToDelOPs(
+func BlockToDelOPs(
 	blk *wire.MsgBlock, skiplist []uint32) (delOPs []wire.OutPoint) {
 
 	var blockInIdx uint32

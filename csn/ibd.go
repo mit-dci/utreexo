@@ -11,7 +11,6 @@ import (
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
 func (c *Csn) IBDThread(sig chan bool, quitafter int) {
-
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
 	haltRequest := make(chan bool, 1)

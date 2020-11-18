@@ -5,57 +5,70 @@ import (
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
-	"strings"
 	"time"
 
 	"github.com/adiabat/bech32"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
 )
 
 // RunIBD calls everything to run IBD
-func RunIBD(
-	p *chaincfg.Params, host, watchAddr string, check bool,
-	lookahead int, sig chan bool, quitafter int) error {
+func RunIBD(cfg *Config, sig chan bool) error {
+	// Profiling
+	if cfg.CpuProf != "" {
+		f, err := os.Create(*cpuProfCmd)
+		if err != nil {
+			return err
+		}
+		pprof.StartCPUProfile(f)
+	}
+	if cfg.MemProf != "" {
+		f, err := os.Create(*memProfCmd)
+		if err != nil {
+			return err
+		}
+		pprof.WriteHeapProfile(f)
+	}
+	if cfg.TraceProf != "" {
+		f, err := os.Create(*traceCmd)
+		if err != nil {
+			return err
+		}
+		trace.Start(f)
+	}
 
 	// check on disk for pre-existing state and load it
-	pol, h, utxos, err := initCSNState()
+	pol, height, utxos, err := initCSNState()
 	if err != nil {
 		return err
 	}
-	pol.Lookahead = int32(lookahead)
+
+	pol.Lookahead = int32(cfg.lookAhead)
+
 	// make a new CSN struct and load the pollard into it
-	c := new(Csn)
-	c.pollard = pol
-	c.CheckSignatures = check
-	c.utxoStore = utxos
-
-	if host == "" {
-		host = "127.0.0.1:8338"
+	c := Csn{
+		pollard:         pol,
+		CheckSignatures: cfg.checkSig,
+		utxoStore:       utxos,
 	}
 
-	if !strings.ContainsRune(host, ':') {
-		host += ":8338"
-	}
-
-	txChan, heightChan, err := c.Start(h, host, "compactstate", "", p, sig, quitafter)
+	txChan, heightChan, err := c.Start(cfg, height, "compactstate", "", sig)
 	if err != nil {
 		return err
 	}
 
 	var pkh [20]byte
-	if watchAddr != "" {
-		fmt.Printf("decode len %d %s\n", len(watchAddr), watchAddr)
-		adrBytes, err := bech32.SegWitAddressDecode(watchAddr)
+	if cfg.watchAddr != "" {
+		fmt.Printf("decode len %d %s\n", len(cfg.watchAddr), *watchAddr)
+		adrBytes, err := bech32.SegWitAddressDecode(cfg.watchAddr)
 		if err != nil {
 			return err
 		}
 		if len(adrBytes) != 22 {
 			return fmt.Errorf("need a bech32 p2wpkh address, %s has %d bytes",
-				watchAddr, len(adrBytes))
+				*watchAddr, len(adrBytes))
 		}
 
 		copy(pkh[:], adrBytes[2:])
@@ -66,8 +79,6 @@ func RunIBD(
 		select {
 		case tx := <-txChan:
 			fmt.Printf("wallet got tx %s\n", tx.TxHash().String())
-			// for n, out := range tx.TxOut {
-			// }
 		case height := <-heightChan:
 			if height%1000 == 0 {
 				fmt.Printf("got to height %d\n", height)
@@ -78,10 +89,8 @@ func RunIBD(
 
 // Start starts up a compact state node, and returns channels for txs and
 // block heights.
-func (c *Csn) Start(height int32,
-	host, path, proxyURL string,
-	params *chaincfg.Params,
-	haltSig chan bool, quitafter int) (chan wire.MsgTx, chan int32, error) {
+func (c *Csn) Start(cfg *Config, height int32, path, proxyURL string, haltSig chan bool) (
+	chan wire.MsgTx, chan int32, error) {
 
 	// initialize maps
 	c.WatchAdrs = make(map[[20]byte]bool)
@@ -96,10 +105,11 @@ func (c *Csn) Start(height int32,
 	c.HeightChan = make(chan int32, 10)
 
 	c.CurrentHeight = height
-	c.Params = *params
-	c.remoteHost = host
+	c.Params = cfg.params
+	c.remoteHost = cfg.remoteHost
+
 	// start client & connect
-	go c.IBDThread(haltSig, quitafter)
+	go c.IBDThread(haltSig, cfg.quitafter)
 
 	return c.TxChan, c.HeightChan, nil
 }

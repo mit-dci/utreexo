@@ -15,7 +15,7 @@ import (
 // all the inputs in the block?
 func (ub *UBlock) ProofsProveBlock(inputSkipList []uint32) bool {
 	// get the outpoints that need proof
-	proveOPs := blockToDelOPs(&ub.Block, inputSkipList)
+	proveOPs := BlockToDelOPs(&ub.Block, inputSkipList)
 
 	// ensure that all outpoints are provided in the extradata
 	if len(proveOPs) != len(ub.UtreexoData.Stxos) {
