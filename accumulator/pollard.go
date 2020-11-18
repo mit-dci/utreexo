@@ -228,22 +228,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 		hashDirt = nextHashDirt
 		nextHashDirt = []uint64{}
 		// do all the hashes at once at the end
-		for _, hn := range hnslice {
-			// skip hashes we can't compute
-			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
-				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
-				// TODO when is hn nil?  is this OK?
-				// it'd be better to avoid this and not create hns that aren't
-				// supposed to exist.
-				// fmt.Printf("hn %d nil or incomputable\n", hn.position)
-				continue
-			}
-			// fmt.Printf("giving hasher %d %x %x\n",
-			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
-			hn.dest.data = hn.sib.auntOp()
-			hn.sib.prune()
-		}
-		// fmt.Printf("done with row %d %s\n", h, p.toString())
+		p.hashRow(hnslice)
 	}
 
 	// fmt.Printf("preroot %s", p.toString())
@@ -271,6 +256,37 @@ func (p *Pollard) rem2(dels []uint64) error {
 	reversePolNodeSlice(nextRoots)
 	p.roots = nextRoots
 	return nil
+}
+
+func (p *Pollard) hashRow(dirt []*hashableNode) {
+	work := make([]*hashWork, 0, len(dirt))
+	nonNilDirt := make([]int, 0, len(dirt))
+
+	for i, hn := range dirt {
+		if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
+			hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
+			// TODO when is hn nil?  is this OK?
+			// it'd be better to avoid this and not create hns that aren't
+			// supposed to exist.
+			// fmt.Printf("hn %d nil or incomputable\n", hn.position)
+			continue
+		}
+
+		nonNilDirt = append(nonNilDirt, i)
+		work = append(work, &hashWork{
+			left:   hn.sib.niece[0].data,
+			right:  hn.sib.niece[1].data,
+			parent: empty,
+		})
+
+		hn.sib.prune()
+	}
+
+	hashRow(work)
+
+	for i, dirtIndex := range nonNilDirt {
+		dirt[dirtIndex].dest.data = work[i].parent
+	}
 }
 
 func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {

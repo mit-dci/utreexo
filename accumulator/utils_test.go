@@ -5,6 +5,22 @@ import (
 	"testing"
 )
 
+func BenchmarkRowHasherSequential(b *testing.B) {
+	work := make([]*hashWork, b.N)
+	for i := 0; i < len(work); i++ {
+		work[i] = &hashWork{left: Hash{0x1}, right: Hash{0x1}}
+	}
+	hashWorker(work, nil)
+}
+
+func BenchmarkRowHasherParallel(b *testing.B) {
+	work := make([]*hashWork, b.N)
+	for i := 0; i < len(work); i++ {
+		work[i] = &hashWork{left: Hash{0x1}, right: Hash{0x1}}
+	}
+	hashRow(work)
+}
+
 func TestTreeRows(t *testing.T) {
 	// Test all the powers of 2
 	for i := uint8(1); i <= 63; i++ {

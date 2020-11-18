@@ -4,7 +4,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -135,6 +137,14 @@ func NewForest(forestFile *os.File, cached bool,
 
 	f.data.resize((2 << f.rows) - 1)
 	f.positionMap = make(map[MiniHash]uint64)
+
+	hashWorkWg = &sync.WaitGroup{}
+	hashWorkChan = make(chan []*hashWork)
+	hashWorkers := runtime.NumCPU()
+	for i := 0; i < hashWorkers; i++ {
+		go hashWorker()
+	}
+
 	return f
 }
 
@@ -181,15 +191,30 @@ func (f *Forest) removev4(dels []uint64) error {
 		for _, swap := range swapRows[r] {
 			f.swapNodes(swap, r)
 		}
+
 		// do all the hashes at once at the end
-		err := f.hashRow(hashDirt)
-		if err != nil {
-			return err
-		}
+		f.hashRow(hashDirt)
 	}
 	f.numLeaves = nextNumLeaves
 
 	return nil
+}
+
+func (f *Forest) hashRow(dirt []uint64) {
+	work := make([]*hashWork, 0, len(dirt))
+	for _, pos := range dirt {
+		work = append(work, &hashWork{
+			left:   f.data.read(child(pos, f.rows)),
+			right:  f.data.read(child(pos, f.rows) | 1),
+			parent: empty,
+		})
+	}
+
+	hashRow(work)
+
+	for i, w := range work {
+		f.data.write(dirt[i], w.parent)
+	}
 }
 
 func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8) (nextHashDirt []uint64) {
