@@ -12,7 +12,7 @@ import (
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
-func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumulator.Forest,
+func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumulator.Forest,
 	height int32, knownTipHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
@@ -23,8 +23,8 @@ func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 	// If either is incomplete or not complete, they're both removed and made
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
-	if util.HasAccess(cfg.utreeDir.offsetDir.offsetFile) {
-		knownTipHeight, err = restoreLastIndexOffsetHeight(cfg.utreeDir.offsetDir, offsetFinished)
+	if util.HasAccess(cfg.UtreeDir.OffsetDir.OffsetFile) {
+		knownTipHeight, err = restoreLastIndexOffsetHeight(cfg.UtreeDir.OffsetDir, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s", err.Error())
 			return
@@ -75,7 +75,7 @@ func saveBridgeNodeData(
 	switch cfg.forestType {
 	case ramForest:
 		forestFile, err := os.OpenFile(
-			cfg.utreeDir.forestDir.forestFile,
+			cfg.UtreeDir.ForestDir.forestFile,
 			os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			return err
@@ -93,7 +93,7 @@ func saveBridgeNodeData(
 	}
 
 	heightFile, err := os.OpenFile(
-		cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile,
+		cfg.UtreeDir.ForestDir.forestLastSyncedBlockHeightFile,
 		os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func saveBridgeNodeData(
 
 	// write other misc forest data
 	miscForestFile, err := os.OpenFile(
-		cfg.utreeDir.forestDir.miscForestFile, os.O_CREATE|os.O_RDWR, 0600)
+		cfg.UtreeDir.ForestDir.miscForestFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func createForest(cfg *Config) (
 		forest = accumulator.NewForest(nil, false, "", 0)
 		return
 	case cowForest:
-		forest = accumulator.NewForest(nil, false, cfg.utreeDir.forestDir.cowForestDir, cfg.cowMaxCache)
+		forest = accumulator.NewForest(nil, false, cfg.UtreeDir.ForestDir.cowForestDir, cfg.cowMaxCache)
 		return
 	default:
 		var cache bool
@@ -162,7 +162,7 @@ func createForest(cfg *Config) (
 
 		// Where the forestfile exists
 		forestFile, err := os.OpenFile(
-			cfg.utreeDir.forestDir.forestFile, os.O_CREATE|os.O_RDWR, 0600)
+			cfg.UtreeDir.ForestDir.forestFile, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			return nil, err
 		}
@@ -183,12 +183,12 @@ func restoreForest(cfg *Config) (
 	case cowForest:
 		var miscForestFile *os.File
 		// Where the misc forest data exists
-		miscForestFile, err = os.OpenFile(cfg.utreeDir.forestDir.miscForestFile, os.O_RDONLY, 0400)
+		miscForestFile, err = os.OpenFile(cfg.UtreeDir.ForestDir.miscForestFile, os.O_RDONLY, 0400)
 		if err != nil {
 			return nil, err
 		}
 		forest, err = accumulator.RestoreForest(
-			miscForestFile, nil, false, false, cfg.utreeDir.forestDir.cowForestDir, cfg.cowMaxCache)
+			miscForestFile, nil, false, false, cfg.UtreeDir.ForestDir.cowForestDir, cfg.cowMaxCache)
 
 	default:
 		var (
@@ -205,12 +205,12 @@ func restoreForest(cfg *Config) (
 		var forestFile *os.File
 		var miscForestFile *os.File
 		// Where the forestfile exists
-		forestFile, err = os.OpenFile(cfg.utreeDir.forestDir.forestFile, os.O_RDWR, 0400)
+		forestFile, err = os.OpenFile(cfg.UtreeDir.ForestDir.forestFile, os.O_RDWR, 0400)
 		if err != nil {
 			return
 		}
 		// Where the misc forest data exists
-		miscForestFile, err = os.OpenFile(cfg.utreeDir.forestDir.miscForestFile, os.O_RDONLY, 0400)
+		miscForestFile, err = os.OpenFile(cfg.UtreeDir.ForestDir.miscForestFile, os.O_RDONLY, 0400)
 		if err != nil {
 			return
 		}
@@ -227,9 +227,9 @@ func restoreForest(cfg *Config) (
 func restoreHeight(cfg *Config) (height int32, err error) {
 	// if there is a heightfile, get the height from that
 	// heightFile saves the last block that was written to ttldb
-	if util.HasAccess(cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile) {
+	if util.HasAccess(cfg.UtreeDir.ForestDir.forestLastSyncedBlockHeightFile) {
 		heightFile, err := os.OpenFile(
-			cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile,
+			cfg.UtreeDir.ForestDir.forestLastSyncedBlockHeightFile,
 			os.O_RDONLY, 0400)
 		if err != nil {
 			return 0, err
@@ -241,7 +241,7 @@ func restoreHeight(cfg *Config) (height int32, err error) {
 	} else {
 		return 0, fmt.Errorf(
 			"can't read height at %s (must build before serving)\n",
-			cfg.utreeDir.forestDir.forestLastSyncedBlockHeightFile)
+			cfg.UtreeDir.ForestDir.forestLastSyncedBlockHeightFile)
 	}
 	return
 }
@@ -274,9 +274,9 @@ func restoreLastIndexOffsetHeight(offsetDir offsetDir, offsetFinished chan bool)
 func checkForestExists(cfg *Config) bool {
 	switch cfg.forestType {
 	case cowForest:
-		return util.HasAccess(cfg.utreeDir.forestDir.cowForestCurFile)
+		return util.HasAccess(cfg.UtreeDir.ForestDir.cowForestCurFile)
 	default:
-		return util.HasAccess(cfg.utreeDir.forestDir.forestFile)
+		return util.HasAccess(cfg.UtreeDir.ForestDir.forestFile)
 
 	}
 }

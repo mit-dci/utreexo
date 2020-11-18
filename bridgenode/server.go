@@ -66,8 +66,8 @@ func ArchiveServer(cfg *Config, sig chan bool) error {
 	// Handle user interruptions
 	go stopServer(sig, haltRequest, haltAccept)
 
-	if !util.HasAccess(cfg.blockDir) {
-		return errNoDataDir(cfg.blockDir)
+	if !util.HasAccess(cfg.BlockDir) {
+		return errNoDataDir(cfg.BlockDir)
 	}
 
 	// TODO ****** server shouldn't need levelDB access, fix this
@@ -76,10 +76,10 @@ func ArchiveServer(cfg *Config, sig chan bool) error {
 		CompactionTableSizeMultiplier: 8,
 		Compression:                   opt.NoCompression,
 	}
-	lvdb, err := leveldb.OpenFile(cfg.utreeDir.ttldb, &o)
+	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
+		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
 		return err
 	}
 	defer lvdb.Close()
@@ -167,7 +167,7 @@ func blockServer(
 			close(cons)
 			return
 		case con := <-cons:
-			go serveBlocksWorker(cfg.utreeDir, con, endHeight, cfg.blockDir)
+			go serveBlocksWorker(cfg.UtreeDir, con, endHeight, cfg.BlockDir)
 		}
 	}
 }
@@ -195,7 +195,7 @@ func acceptConnections(listener *net.TCPListener, cons chan net.Conn) {
 
 // serveBlocksWorker gets height requests from client and sends out the ublock
 // for that height
-func serveBlocksWorker(utreeDir utreeDir,
+func serveBlocksWorker(UtreeDir utreeDir,
 	c net.Conn, endHeight int32, blockDir string) {
 	defer c.Close()
 	fmt.Printf("start serving %s\n", c.RemoteAddr().String())
@@ -230,7 +230,6 @@ func serveBlocksWorker(utreeDir utreeDir,
 	}
 
 	for curHeight := fromHeight; ; curHeight += direction {
-		// fmt.Printf("client %s, curHeight %d\t", c.RemoteAddr().String(), curHeight)
 		if direction == 1 && curHeight > toHeight {
 			// forwards request of height above toHeight
 			break
@@ -239,14 +238,14 @@ func serveBlocksWorker(utreeDir utreeDir,
 			break
 		}
 
-		udb, err := GetUDataBytesFromFile(utreeDir.proofDir, curHeight)
+		udb, err := GetUDataBytesFromFile(UtreeDir.ProofDir, curHeight)
 		if err != nil {
 			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			break
 		}
 
 		blkbytes, err := GetBlockBytesFromFile(
-			curHeight, utreeDir.offsetDir.offsetFile, blockDir)
+			curHeight, UtreeDir.OffsetDir.OffsetFile, blockDir)
 		if err != nil {
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 			break
@@ -258,9 +257,6 @@ func serveBlocksWorker(utreeDir utreeDir,
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			break
 		}
-		// fmt.Printf("sent %d bytes: %d block, %d udata\n",
-		// n, len(blkbytes), len(udb))
-		// fmt.Printf("udata hex: %x\n", udb)
 	}
 	err = c.Close()
 	if err != nil {

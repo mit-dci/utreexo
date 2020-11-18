@@ -77,16 +77,16 @@ type proofDir struct {
 
 type offsetDir struct {
 	base                      string
-	offsetFile                string
+	OffsetFile                string
 	lastIndexOffsetHeightFile string
 }
 
 // All your utreexo bridgenode file paths in a nice and convinent struct
 type utreeDir struct {
-	offsetDir offsetDir
-	proofDir  proofDir
-	forestDir forestDir
-	ttldb     string
+	OffsetDir offsetDir
+	ProofDir  proofDir
+	ForestDir forestDir
+	Ttldb     string
 }
 
 // init an utreeDir with a selected basepath. Has all the names for the forest
@@ -94,7 +94,7 @@ func initUtreeDir(basePath string) utreeDir {
 	offBase := filepath.Join(basePath, "offsetdata")
 	off := offsetDir{
 		base:                      offBase,
-		offsetFile:                filepath.Join(offBase, "offsetfile.dat"),
+		OffsetFile:                filepath.Join(offBase, "offsetfile.dat"),
 		lastIndexOffsetHeightFile: filepath.Join(offBase, "lastindexoffsetheightfile.dat"),
 	}
 
@@ -120,19 +120,19 @@ func initUtreeDir(basePath string) utreeDir {
 	ttldb := filepath.Join(basePath, "ttldb")
 
 	return utreeDir{
-		offsetDir: off,
-		proofDir:  proof,
-		forestDir: forest,
-		ttldb:     ttldb,
+		OffsetDir: off,
+		ProofDir:  proof,
+		ForestDir: forest,
+		Ttldb:     ttldb,
 	}
 }
 
 // MakePaths makes the necessary paths for all files in a given network
 func makePaths(dir utreeDir) {
-	os.MkdirAll(dir.offsetDir.base, os.ModePerm)
-	os.MkdirAll(dir.proofDir.base, os.ModePerm)
-	os.MkdirAll(dir.forestDir.base, os.ModePerm)
-	os.MkdirAll(dir.forestDir.cowForestDir, os.ModePerm)
+	os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
+	os.MkdirAll(dir.ProofDir.base, os.ModePerm)
+	os.MkdirAll(dir.ForestDir.base, os.ModePerm)
+	os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
 }
 
 type forestType int
@@ -159,10 +159,10 @@ type Config struct {
 	params chaincfg.Params
 
 	// the block path from bitcoind's datadir we'll be directly reading from
-	blockDir string
+	BlockDir string
 
 	// where will the bridgenode data be saved to?
-	utreeDir utreeDir
+	UtreeDir utreeDir
 
 	// type of the forest we're using
 	forestType forestType
@@ -216,27 +216,27 @@ func Parse(args []string) (*Config, error) {
 	// set network
 	if *netCmd == "testnet" {
 		cfg.params = chaincfg.TestNet3Params
-		cfg.blockDir = filepath.Join(
+		cfg.BlockDir = filepath.Join(
 			filepath.Join(dataDir, chaincfg.TestNet3Params.Name),
 			"blocks")
 		base := filepath.Join(bridgeDir, chaincfg.TestNet3Params.Name)
-		cfg.utreeDir = initUtreeDir(base)
+		cfg.UtreeDir = initUtreeDir(base)
 	} else if *netCmd == "regtest" {
 		cfg.params = chaincfg.RegressionNetParams
-		cfg.blockDir = filepath.Join(
+		cfg.BlockDir = filepath.Join(
 			filepath.Join(dataDir, chaincfg.RegressionNetParams.Name),
 			"blocks")
 		base := filepath.Join(bridgeDir, chaincfg.RegressionNetParams.Name)
-		cfg.utreeDir = initUtreeDir(base)
+		cfg.UtreeDir = initUtreeDir(base)
 	} else if *netCmd == "mainnet" {
 		cfg.params = chaincfg.MainNetParams
-		cfg.blockDir = filepath.Join(dataDir, "blocks")
-		cfg.utreeDir = initUtreeDir(bridgeDir)
+		cfg.BlockDir = filepath.Join(dataDir, "blocks")
+		cfg.UtreeDir = initUtreeDir(bridgeDir)
 	} else {
 		return nil, errInvalidNetwork(*netCmd)
 	}
 
-	makePaths(cfg.utreeDir)
+	makePaths(cfg.UtreeDir)
 
 	// set profiling
 	cfg.CpuProf = *cpuProfCmd

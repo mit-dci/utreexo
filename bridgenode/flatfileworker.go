@@ -66,13 +66,13 @@ func flatFileWorker(
 	var err error
 
 	ff.offsetFile, err = os.OpenFile(
-		utreeDir.proofDir.pOffsetFile, os.O_CREATE|os.O_RDWR, 0600)
+		utreeDir.ProofDir.pOffsetFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
 
 	ff.proofFile, err = os.OpenFile(
-		utreeDir.proofDir.pFile, os.O_CREATE|os.O_WRONLY, 0600)
+		utreeDir.ProofDir.pFile, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
