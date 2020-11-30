@@ -63,7 +63,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		initBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
 		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
-			"not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
+			"not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
 		return err
 	}
 
@@ -72,10 +72,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		CompactionTableSizeMultiplier: 8,
 		Compression:                   opt.NoCompression,
 	}
-	lvdb, err := leveldb.OpenFile(cfg.utreeDir.ttldb, &o)
+	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
 	if err != nil {
 		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
-			"not in %s, specify alternate path with -datadir\n.", cfg.blockDir)
+			"not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
 		return err
 	}
 	defer lvdb.Close()
@@ -100,7 +100,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, cfg.utreeDir, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, cfg.UtreeDir, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -226,7 +226,7 @@ func stopBuildProofs(
 	default:
 		fmt.Println("offsetfile incomplete, removing...")
 		// May not work sometimes.
-		err := os.RemoveAll(cfg.utreeDir.offsetDir.base)
+		err := os.RemoveAll(cfg.UtreeDir.OffsetDir.base)
 		if err != nil {
 			fmt.Println("ERR. offsetdata/ directory not removed. Please manually remove it.")
 		}

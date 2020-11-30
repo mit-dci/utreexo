@@ -33,7 +33,7 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 	// If not, then use the custom one given
 	if cOffsetFile == "" {
 		var err error
-		offsetFile, err = os.OpenFile(cfg.utreeDir.offsetDir.offsetFile, os.O_CREATE|os.O_WRONLY, 0600)
+		offsetFile, err = os.OpenFile(cfg.UtreeDir.OffsetDir.OffsetFile, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
@@ -46,7 +46,7 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 		}
 	}
 
-	lvdb, err := OpenIndexFile(cfg.blockDir)
+	lvdb, err := OpenIndexFile(cfg.BlockDir)
 	if err != nil {
 		return 0, err
 	}
@@ -64,7 +64,7 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 	defer offsetFile.Close()
 	for fileNum := 0; ; fileNum++ {
 		fileName := fmt.Sprintf("blk%05d.dat", fileNum)
-		filePath := filepath.Join(cfg.blockDir, fileName)
+		filePath := filepath.Join(cfg.BlockDir, fileName)
 		fmt.Printf("Building offsetfile... %s\n", fileName)
 
 		_, err := os.Stat(filePath)
@@ -90,7 +90,7 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 		var err error
 		// write the last height of the offsetfile
 		// needed info for the main genproofs processes
-		LastIndexOffsetHeightFile, err := os.OpenFile(cfg.utreeDir.offsetDir.lastIndexOffsetHeightFile, os.O_CREATE|os.O_WRONLY, 0600)
+		LastIndexOffsetHeightFile, err := os.OpenFile(cfg.UtreeDir.OffsetDir.lastIndexOffsetHeightFile, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
