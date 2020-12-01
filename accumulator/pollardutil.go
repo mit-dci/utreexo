@@ -6,30 +6,6 @@ import (
 	"io"
 )
 
-// Pollard is the sparse representation of the utreexo forest, using
-// binary tree pointers instead of a hash map.
-
-// I generally avoid recursion as much as I can, using regular for loops and
-// ranges instead.  That might start looking pretty contrived here, but
-// I'm still going to try it.
-
-// Pollard :
-type Pollard struct {
-	numLeaves uint64 // number of leaves in the pollard forest
-
-	roots []*polNode // slice of the tree roots, which are polNodes.
-	// roots are in big to small order
-	// BUT THEY'RE WEIRD!  The left / right children are actual children,
-	// not nieces as they are in every lower level.
-
-	hashesEver, rememberEver, overWire uint64
-
-	Lookahead int32 // remember leafs below this TTL
-	//	Minleaves uint64 // remember everything below this leaf count
-
-	positionMap map[MiniHash]uint64
-}
-
 // PolNode is a node in the pollard forest
 type polNode struct {
 	data  Hash

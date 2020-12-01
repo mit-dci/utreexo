@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/mit-dci/utreexo/btcacc"
+	uwire "github.com/mit-dci/utreexo/wire"
 
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/util"
@@ -104,7 +106,7 @@ type txoStart struct {
 
 // blockToAddDel turns a block into add leaves and del leaves
 func blockToAddDel(bnr BlockAndRev, inskip, outskip []uint32) (
-	blockAdds []accumulator.Leaf, delLeaves []util.LeafData, err error) {
+	blockAdds []accumulator.Leaf, delLeaves []btcacc.LeafData, err error) {
 
 	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
 	delLeaves, err = blockNRevToDelLeaves(bnr, inskip)
@@ -113,7 +115,7 @@ func blockToAddDel(bnr BlockAndRev, inskip, outskip []uint32) (
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = util.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
+	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
 
 	return
 }
@@ -121,7 +123,7 @@ func blockToAddDel(bnr BlockAndRev, inskip, outskip []uint32) (
 // blockNRevToDelLeaves turns a block's inputs into delLeaves to be removed from the
 // accumulator
 func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
-	delLeaves []util.LeafData, err error) {
+	delLeaves []btcacc.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
@@ -155,9 +157,11 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 			}
 
 			// build leaf
-			var l util.LeafData
+			var l btcacc.LeafData
 
-			l.Outpoint = txin.PreviousOutPoint
+			l.TxHash = btcacc.Hash(txin.PreviousOutPoint.Hash)
+			l.Index = txin.PreviousOutPoint.Index
+
 			l.Height = bnr.Rev.Txs[txinblock].TxIn[i].Height
 			l.Coinbase = bnr.Rev.Txs[txinblock].TxIn[i].Coinbase
 			// TODO get blockhash from headers here -- empty for now
@@ -168,42 +172,6 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 			blockInIdx++
 		}
 	}
-	return
-}
-
-// genUData creates a block proof, calling forest.ProveBatch with the leaf indexes
-// to get a batched inclusion proof from the accumulator. It then adds on the leaf data,
-// to create a block proof which both proves inclusion and gives all utxo data
-// needed for transaction verification.
-func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
-	ud util.UData, err error) {
-
-	ud.Height = height
-	ud.Stxos = delLeaves
-	// make slice of hashes from leafdata
-	delHashes := make([]accumulator.Hash, len(ud.Stxos))
-	for i, _ := range ud.Stxos {
-		delHashes[i] = ud.Stxos[i].LeafHash()
-		// fmt.Printf("del %s -> %x\n",
-		// ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
-	}
-	// generate block proof. Errors if the tx cannot be proven
-	// Should never error out with genproofs as it takes
-	// blk*.dat files which have already been vetted by Bitcoin Core
-	ud.AccProof, err = f.ProveBatch(delHashes)
-	if err != nil {
-		err = fmt.Errorf("genUData failed at block %d %s %s",
-			height, f.Stats(), err.Error())
-		return
-	}
-
-	if len(ud.AccProof.Targets) != len(delLeaves) {
-		err = fmt.Errorf("genUData %d targets but %d leafData",
-			len(ud.AccProof.Targets), len(delLeaves))
-		return
-	}
-
-	// fmt.Printf(ud.AccProof.ToString())
 	return
 }
 

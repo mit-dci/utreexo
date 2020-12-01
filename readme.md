@@ -9,7 +9,10 @@ Currently under active development.  If you're interested and have questions, ch
 Logs for freenode are [here](http://gnusha.org/utreexo/)
 
 ---
-## Walkthrough
+## Importing Utreexo
+The raw accumulator functions are in package accumulator. This is a general accumulator and is not bitcoin speicifc. For Bitcoin specific accumulator, look to the csn and bridgenode packages.
+
+## Walkthrough for testing out Utreexo nodes
 
 Here's how to get utreexo running to test out what it can do.  This currently is testing/research level code and should not be expected to be stable or secure.  But it also should work, and if it doesn't please report bugs!
 
@@ -25,7 +28,7 @@ $ go build
 ```
 
 #### Run
-Running the client can take a couple of hours (There are still lots of performance optimisations to be done to speed things up). 
+Running the client can take a couple of hours (There are still lots of performance optimisations to be done to speed things up).
 The client downloads blocks with inclusion proofs from the server and validates them.
 ```
 $ ./utreexoclient
@@ -82,10 +85,10 @@ After the server has generated the proofs, it will start a local server to serve
 <ol>
 <li>
 To run Utreexo, download the Bitcoin core here (includes both testnet and main chain): <a href="https://bitcoin.org/en/download ">https://bitcoin.org/en/download </a> Open the respective application; the testnet application should appear as a green bitcoin and the main bitcoin core application should appear as an orange bitcoin.
-From here, synchronize with the blockchain; this takes around 2-5 hours on the testnet and up to a day using Bitcoin core. 
+From here, synchronize with the blockchain; this takes around 2-5 hours on the testnet and up to a day using Bitcoin core.
 </li>
 <li>
-Install Go in your pc and get it working on your compiler/IDE. The guide below will refer to installing Go on VSCode. 
+Install Go in your pc and get it working on your compiler/IDE. The guide below will refer to installing Go on VSCode.
 </li>
 <li>
 
@@ -99,13 +102,13 @@ go build bridgeserver.go
 bridgeserver -datadir=C:\Users\$USER\AppData\Roaming\Bitcoin\testnet3\blocks\
 ```
  **If this fails, the command run was interupted or failed. To relaunch, delete the folders in the Utreexo\utreexoserver\utree folder: forestdata, offsetdata, pollarddata, proofdata, testnet-ttlbd**
- 
+
 </li>
 <li>
 
- For a debugging session, in launch.json in VSCode, create a configuration as follows. The 
-      ```"-datadir"```    argument should point to the folder where Bitcoin was downloaded in step 1. 
- 
+ For a debugging session, in launch.json in VSCode, create a configuration as follows. The
+      ```"-datadir"```    argument should point to the folder where Bitcoin was downloaded in step 1.
+
 ```
 {
     "version": "0.2.0",
@@ -126,7 +129,7 @@ bridgeserver -datadir=C:\Users\$USER\AppData\Roaming\Bitcoin\testnet3\blocks\
 
 <li>
 
-Finally run Utreexo client from  **command line** using the following. Make sure that the server has finished running before running this command. 
+Finally run Utreexo client from  **command line** using the following. Make sure that the server has finished running before running this command.
 
 ```
 go build csnclient.go

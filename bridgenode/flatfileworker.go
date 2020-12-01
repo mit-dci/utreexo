@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/btcacc"
 )
 
 /*
@@ -57,7 +57,7 @@ type flatFileState struct {
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
 func flatFileWorker(
-	proofChan chan util.UData,
+	proofChan chan btcacc.UData,
 	ttlResultChan chan ttlResultBlock,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
@@ -178,7 +178,7 @@ func (ff *flatFileState) ffInit() error {
 	return nil
 }
 
-func (ff *flatFileState) writeProofBlock(ud util.UData) error {
+func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	// note that we know the offset for block 2 once we're done writing block 1,
 	// but we don't write the block 2 offset until we get block 2
 
