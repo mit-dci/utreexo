@@ -12,7 +12,7 @@ import (
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
-func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumulator.Forest,
+func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumulator.Forest,
 	height int32, knownTipHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
@@ -24,6 +24,7 @@ func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
 	if util.HasAccess(cfg.UtreeDir.OffsetDir.OffsetFile) {
+		fmt.Println("HIHIH")
 		knownTipHeight, err = restoreLastIndexOffsetHeight(cfg.UtreeDir.OffsetDir, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s", err.Error())
@@ -41,6 +42,7 @@ func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 	}
 
 	if checkForestExists(cfg) {
+		fmt.Println("HIHIH111")
 		fmt.Println("Has access to forest, resuming")
 		forest, err = restoreForest(cfg)
 		if err != nil {
@@ -53,6 +55,7 @@ func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 			return
 		}
 	} else {
+		fmt.Println("HIHIH222")
 		fmt.Println("Creating new forest")
 		// TODO Add a path for CowForest here
 		forest, err = createForest(cfg)
@@ -63,6 +66,7 @@ func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 		}
 	}
 
+	fmt.Println("RETUNR INIT")
 	return
 }
 

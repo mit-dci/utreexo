@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/mempool"
 	"github.com/btcsuite/btcd/netsync"
 	"github.com/btcsuite/btcd/peer"
@@ -240,7 +239,7 @@ type rpcSyncMgr struct {
 }
 
 // Ensure rpcSyncMgr implements the rpcserverSyncManager interface.
-var _ rpcserverSyncManager = (*rpcSyncMgr)(nil)
+//var _ rpcserverSyncManager = (*rpcSyncMgr)(nil)
 
 // IsCurrent returns whether or not the sync manager believes the chain is
 // current as compared to the rest of the network.
@@ -283,6 +282,6 @@ func (b *rpcSyncMgr) SyncPeerID() int32 {
 //
 // This function is safe for concurrent access and is part of the
 // rpcserverSyncManager interface implementation.
-func (b *rpcSyncMgr) LocateHeaders(locators []*chainhash.Hash, hashStop *chainhash.Hash) []wire.BlockHeader {
-	return b.server.chain.LocateHeaders(locators, hashStop)
-}
+//func (b *rpcSyncMgr) LocateHeaders(locators []*chainhash.Hash, hashStop *chainhash.Hash) []wire.BlockHeader {
+//	return b.server.chain.LocateHeaders(locators, hashStop)
+//}

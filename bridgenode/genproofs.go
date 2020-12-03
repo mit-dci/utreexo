@@ -60,7 +60,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	// Init forest and variables. Resumes if the data directory exists
 	forest, height, knownTipHeight, err :=
-		initBridgeNodeState(cfg, offsetFinished)
+		InitBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
 		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
 			"not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)

@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-./btcdserver --utreexo --norpc --datadir=. --nodnsseed --bitcoinddir=~/.bitcoin
+./btcdserver --utreexo --norpc --datadir=. --nodnsseed --bitcoinddir=~/.bitcoin -d=debug

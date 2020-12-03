@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
@@ -33,6 +34,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/bloom"
 	"github.com/mit-dci/utreexo/bridgenode"
+	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -209,7 +211,7 @@ type server struct {
 	//hashCache   *txscript.HashCache
 	//rpcServer   *rpcServer
 	//syncManager *netsync.SyncManager
-	chain *blockchain.BlockChain
+	//chain *blockchain.BlockChain
 	//txMemPool            *mempool.TxPool
 	//cpuMiner             *cpuminer.CPUMiner
 	modifyRebroadcastInv chan interface{}
@@ -297,8 +299,27 @@ func newServerPeer(s *server, isPersistent bool) *serverPeer {
 // newestBlock returns the current best block hash and height using the format
 // required by the configuration for the peer package.
 func (sp *serverPeer) newestBlock() (*chainhash.Hash, int32, error) {
-	best := sp.server.chain.BestSnapshot()
-	return &best.Hash, best.Height, nil
+	fmt.Println("NEWESTBLOCK")
+	offsetFinished := make(chan bool, 1)
+	_, bestHeight, _, err := bridgenode.InitBridgeNodeState(sp.server.utreexoParams, offsetFinished)
+	if err != nil {
+		fmt.Println("NEWESTBLOCK ERROR")
+		return nil, 0, err
+	}
+	fmt.Println("NEWESTBLOCK 1")
+	offsetfilePath := sp.server.utreexoParams.UtreeDir.OffsetDir.OffsetFile
+	block, _, err := bridgenode.GetRawBlocksFromDisk(bestHeight, 1, offsetfilePath, sp.server.utreexoParams.BlockDir)
+	if err != nil {
+		fmt.Println("NEWESTBLOCK ERROR")
+		return nil, 0, err
+	}
+	fmt.Println("NEWESTBLOCK 2")
+	bestHash := block[0].Header.BlockHash()
+	//best := sp.server.chain.BestSnapshot()
+	//return &best.Hash, best.Height, nil
+	fmt.Println("NEWESTBLOCK RETURN")
+	fmt.Println("BESTHEIGHT:", bestHeight)
+	return &bestHash, bestHeight, nil
 }
 
 // addKnownAddresses adds the given addresses to the set of known addresses to
@@ -448,25 +469,25 @@ func (sp *serverPeer) OnVersion(_ *peer.Peer, msg *wire.MsgVersion) *wire.MsgRej
 		return wire.NewMsgReject(msg.Command(), wire.RejectNonstandard, reason)
 	}
 
-	if !cfg.SimNet && !isInbound {
-		// After soft-fork activation, only make outbound
-		// connection to peers if they flag that they're segwit
-		// enabled.
-		chain := sp.server.chain
-		segwitActive, err := chain.IsDeploymentActive(chaincfg.DeploymentSegwit)
-		if err != nil {
-			peerLog.Errorf("Unable to query for segwit soft-fork state: %v",
-				err)
-			return nil
-		}
+	//if !cfg.SimNet && !isInbound {
+	//	// After soft-fork activation, only make outbound
+	//	// connection to peers if they flag that they're segwit
+	//	// enabled.
+	//	chain := sp.server.chain
+	//	segwitActive, err := chain.IsDeploymentActive(chaincfg.DeploymentSegwit)
+	//	if err != nil {
+	//		peerLog.Errorf("Unable to query for segwit soft-fork state: %v",
+	//			err)
+	//		return nil
+	//	}
 
-		if segwitActive && !sp.IsWitnessEnabled() {
-			peerLog.Infof("Disconnecting non-segwit peer %v, isn't segwit "+
-				"enabled and we need more segwit enabled peers", sp)
-			sp.Disconnect()
-			return nil
-		}
-	}
+	//	if segwitActive && !sp.IsWitnessEnabled() {
+	//		peerLog.Infof("Disconnecting non-segwit peer %v, isn't segwit "+
+	//			"enabled and we need more segwit enabled peers", sp)
+	//		sp.Disconnect()
+	//		return nil
+	//	}
+	//}
 
 	// Add the remote peer time as a sample for creating an offset against
 	// the local clock to keep the network time in sync.
@@ -619,6 +640,7 @@ func (sp *serverPeer) OnUBlock(_ *peer.Peer, msg *wire.MsgUBlock, buf []byte) {
 // accordingly.  We pass the message down to blockmanager which will call
 // QueueMessage with any appropriate responses.
 func (sp *serverPeer) OnInv(_ *peer.Peer, msg *wire.MsgInv) {
+	fmt.Println("ONINV RECEIVED")
 	return
 	//if !cfg.BlocksOnly {
 	//	if len(msg.InvList) > 0 {
@@ -662,6 +684,7 @@ func (sp *serverPeer) OnHeaders(_ *peer.Peer, msg *wire.MsgHeaders) {
 // handleGetData is invoked when a peer receives a getdata bitcoin message and
 // is used to deliver block and transaction information.
 func (sp *serverPeer) OnGetData(_ *peer.Peer, msg *wire.MsgGetData) {
+	fmt.Println("ON GET DATA")
 	numAdded := 0
 	notFound := wire.NewMsgNotFound()
 
@@ -811,10 +834,16 @@ func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
 	// TODO EDIT THIS
 	//chain := sp.server.chain
 	//headers := chain.LocateHeaders(msg.BlockLocatorHashes, &msg.HashStop)
+	fmt.Println(msg.HashStop)
 
 	startHeight, err := bridgenode.FetchBlockHeightFromBufDB([32]byte(*msg.BlockLocatorHashes[0]), sp.server.blockIndex)
 	if err != nil {
 		fmt.Println(err)
+	}
+	if startHeight == 0 {
+		startHeight = 1
+	} else {
+		startHeight += 1
 	}
 
 	stopHeight, err := bridgenode.FetchBlockHeightFromBufDB([32]byte(msg.HashStop), sp.server.blockIndex)
@@ -822,10 +851,17 @@ func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
 		fmt.Println(err)
 	}
 
+	fmt.Println("START", startHeight)
 	amt := stopHeight - startHeight
 	if amt < 0 {
 		fmt.Println("Requested block amount negative")
 		return
+	}
+	if amt == 0 {
+		amt++
+	}
+	if amt > wire.MaxBlockHeadersPerMsg {
+		amt = wire.MaxBlockHeadersPerMsg
 	}
 
 	offsetfilePath := sp.server.utreexoParams.UtreeDir.OffsetDir.OffsetFile
@@ -835,10 +871,27 @@ func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
 		fmt.Println(err)
 	}
 
+	if len(blocks) == 0 {
+		panic("0")
+	}
+	if len(blocks) != int(amt) {
+		fmt.Println(len(blocks))
+		fmt.Println(amt)
+		panic("HSDFLHSDF")
+	}
 	// Send found headers to the requesting peer.
 	blockHeaders := make([]*wire.BlockHeader, len(blocks))
-	for i, block := range blocks {
-		blockHeaders[i] = &block.Header
+
+	for i := range blocks {
+		//fmt.Println("j", j)
+		//fmt.Println("i", i)
+		//fmt.Println("h", &block.Header)
+		blockHeaders[i] = &blocks[i].Header
+		//if blockHeaders[j] == blockHeaders[j] {
+		//	panic("wrong0")
+		//}
+		//fmt.Println(blockHeaders[i].BlockHash())
+		//fmt.Println("ha", &blockHeaders[i])
 	}
 	sp.QueueMessage(&wire.MsgHeaders{Headers: blockHeaders}, nil)
 }
@@ -1598,64 +1651,139 @@ func (s *server) pushBlockMsg(sp *serverPeer, hash *chainhash.Hash, doneChan cha
 // error is returned if the block hash is not known.
 func (s *server) pushMerkleBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 	doneChan chan<- struct{}, waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
+	return nil
+	//
+	//	// Do not send a response if the peer doesn't have a filter loaded.
+	//	if !sp.filter.IsLoaded() {
+	//		if doneChan != nil {
+	//			doneChan <- struct{}{}
+	//		}
+	//		return nil
+	//	}
+	//
+	//	// Fetch the raw block bytes from the database.
+	//	blk, err := sp.server.chain.BlockByHash(hash)
+	//	if err != nil {
+	//		peerLog.Tracef("Unable to fetch requested block hash %v: %v",
+	//			hash, err)
+	//
+	//		if doneChan != nil {
+	//			doneChan <- struct{}{}
+	//		}
+	//		return err
+	//	}
+	//
+	//	// Generate a merkle block by filtering the requested block according
+	//	// to the filter for the peer.
+	//	merkle, matchedTxIndices := bloom.NewMerkleBlock(blk, sp.filter)
+	//
+	//	// Once we have fetched data wait for any previous operation to finish.
+	//	if waitChan != nil {
+	//		<-waitChan
+	//	}
+	//
+	//	// Send the merkleblock.  Only send the done channel with this message
+	//	// if no transactions will be sent afterwards.
+	//	var dc chan<- struct{}
+	//	if len(matchedTxIndices) == 0 {
+	//		dc = doneChan
+	//	}
+	//	sp.QueueMessage(merkle, dc)
+	//
+	//	// Finally, send any matched transactions.
+	//	blkTransactions := blk.MsgBlock().Transactions
+	//	for i, txIndex := range matchedTxIndices {
+	//		// Only send the done channel on the final transaction.
+	//		var dc chan<- struct{}
+	//		if i == len(matchedTxIndices)-1 {
+	//			dc = doneChan
+	//		}
+	//		if txIndex < uint32(len(blkTransactions)) {
+	//			sp.QueueMessageWithEncoding(blkTransactions[txIndex], dc,
+	//				encoding)
+	//		}
+	//	}
+	//
+	//	return nil
+}
 
-	// Do not send a response if the peer doesn't have a filter loaded.
-	if !sp.filter.IsLoaded() {
-		if doneChan != nil {
-			doneChan <- struct{}{}
-		}
-		return nil
-	}
+func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
+	doneChan chan<- struct{}, waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
 
 	// Fetch the raw block bytes from the database.
-	blk, err := sp.server.chain.BlockByHash(hash)
+	height, err := bridgenode.FetchBlockHeightFromBufDB([32]byte(*hash), sp.server.blockIndex)
 	if err != nil {
-		peerLog.Tracef("Unable to fetch requested block hash %v: %v",
-			hash, err)
-
 		if doneChan != nil {
 			doneChan <- struct{}{}
 		}
 		return err
 	}
 
-	// Generate a merkle block by filtering the requested block according
-	// to the filter for the peer.
-	merkle, matchedTxIndices := bloom.NewMerkleBlock(blk, sp.filter)
+	offsetfilePath := s.utreexoParams.UtreeDir.OffsetDir.OffsetFile
+	fmt.Println(sp.server.utreexoParams.BlockDir)
+	block, _, err := bridgenode.GetRawBlocksFromDisk(height, 1,
+		offsetfilePath, sp.server.utreexoParams.BlockDir)
+	if err != nil {
+		if doneChan != nil {
+			doneChan <- struct{}{}
+		}
+		return err
+	}
 
 	// Once we have fetched data wait for any previous operation to finish.
 	if waitChan != nil {
 		<-waitChan
 	}
 
-	// Send the merkleblock.  Only send the done channel with this message
-	// if no transactions will be sent afterwards.
+	udBytes, err := bridgenode.GetUDataBytesFromFile(s.utreexoParams.UtreeDir.ProofDir, height)
+	if err != nil {
+		return err
+	}
+	//fmt.Println(block[0])
+	ud := btcacc.UData{}
+	ud.Deserialize(bytes.NewReader(udBytes))
+	ublock := wire.MsgUBlock{
+		MsgBlock:    block[0],
+		UtreexoData: ud,
+	}
+
+	// We only send the channel for this message if we aren't sending
+	// an inv straight after.
 	var dc chan<- struct{}
-	if len(matchedTxIndices) == 0 {
+	continueHash := sp.continueHash
+	sendInv := continueHash != nil && continueHash.IsEqual(hash)
+	if !sendInv {
 		dc = doneChan
 	}
-	sp.QueueMessage(merkle, dc)
+	sp.QueueMessageWithEncoding(&ublock, dc, encoding)
 
-	// Finally, send any matched transactions.
-	blkTransactions := blk.MsgBlock().Transactions
-	for i, txIndex := range matchedTxIndices {
-		// Only send the done channel on the final transaction.
-		var dc chan<- struct{}
-		if i == len(matchedTxIndices)-1 {
-			dc = doneChan
+	// When the peer requests the final block that was advertised in
+	// response to a getblocks message which requested more blocks than
+	// would fit into a single message, send it a new inventory message
+	// to trigger it to issue another getblocks message for the next
+	// batch of inventory.
+	if sendInv {
+		offsetFinished := make(chan bool, 1)
+		_, bestHeight, _, err := bridgenode.InitBridgeNodeState(sp.server.utreexoParams, offsetFinished)
+		if err != nil {
+			return err
 		}
-		if txIndex < uint32(len(blkTransactions)) {
-			sp.QueueMessageWithEncoding(blkTransactions[txIndex], dc,
-				encoding)
+		fmt.Println("NEWESTBLOCK 1")
+		offsetfilePath := s.utreexoParams.UtreeDir.OffsetDir.OffsetFile
+		block, _, err := bridgenode.GetRawBlocksFromDisk(bestHeight, 1, offsetfilePath, s.utreexoParams.BlockDir)
+		if err != nil {
+			fmt.Println("NEWESTBLOCK ERROR")
+			return err
 		}
+		fmt.Println("NEWESTBLOCK 2")
+		bestHash := block[0].Header.BlockHash()
+		//best := s.chain.BestSnapshot()
+		invMsg := wire.NewMsgInvSizeHint(1)
+		iv := wire.NewInvVect(wire.InvTypeUBlock, &bestHash)
+		invMsg.AddInvVect(iv)
+		sp.QueueMessage(invMsg, doneChan)
+		sp.continueHash = nil
 	}
-
-	return nil
-}
-
-func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
-	doneChan chan<- struct{}, waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
-
 	return nil
 }
 
@@ -2183,6 +2311,7 @@ func (s *server) outboundPeerConnected(c *connmgr.ConnReq, conn net.Conn) {
 // peerDoneHandler handles peer disconnects by notifiying the server that it's
 // done along with other performing other desirable cleanup.
 func (s *server) peerDoneHandler(sp *serverPeer) {
+	fmt.Println("DONE")
 	sp.WaitForDisconnect()
 	s.donePeers <- sp
 
@@ -3041,6 +3170,16 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	//}
 
 	s.blockIndex = bridgenode.BufferDBHeight(db)
+
+	net := "-net=" + s.chainParams.Name
+	args := []string{
+		net,
+	}
+
+	s.utreexoParams, err = bridgenode.Parse(args)
+	if err != nil {
+		return nil, err
+	}
 
 	return &s, nil
 }

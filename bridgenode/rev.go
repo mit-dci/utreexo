@@ -206,18 +206,13 @@ func FetchBlockHeightFromDB(header [32]byte, db *leveldb.DB) (int32, error) {
 	return cbIdx.Height, nil
 }
 
-// FetchBlockHeight returns a height given a block header
+// FetchBlockHeightFromBufDB returns a height given a block header
 // returns error if block header was not found
 func FetchBlockHeightFromBufDB(header [32]byte, db map[[32]byte]int32) (int32, error) {
-	//var dbtx [33]byte
-
-	//copy(dbtx[:0], []byte{0x62})
-	//copy(dbtx[1:], header[:])
-
 	record, ok := db[header]
 	if !ok {
 		err := fmt.Errorf("Requested block header record not found")
-		return -1, err
+		return 0, err
 
 	}
 

@@ -230,7 +230,6 @@ func serveBlocksWorker(UtreeDir utreeDir,
 	}
 
 	for curHeight := fromHeight; ; curHeight += direction {
-		// fmt.Printf("client %s, curHeight %d\t", c.RemoteAddr().String(), curHeight)
 		if direction == 1 && curHeight > toHeight {
 			// forwards request of height above toHeight
 			break
@@ -258,9 +257,6 @@ func serveBlocksWorker(UtreeDir utreeDir,
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			break
 		}
-		// fmt.Printf("sent %d bytes: %d block, %d udata\n",
-		// n, len(blkbytes), len(udb))
-		// fmt.Printf("udata hex: %x\n", udb)
 	}
 	err = c.Close()
 	if err != nil {
