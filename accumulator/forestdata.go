@@ -197,6 +197,7 @@ func (m *manifest) commit(basePath string) error {
 
 	// Create new manifest on disk
 	fNewManifest, err := os.OpenFile(fPath, os.O_CREATE|os.O_RDWR, 0666)
+	defer fNewManifest.Close()
 	if err != nil {
 		return err
 	}
@@ -279,6 +280,7 @@ func (m *manifest) commit(basePath string) error {
 	// Overwrite the current manifest number in CURRENT
 	curFileName := filepath.Join(basePath, "CURRENT")
 	fCurrent, err := os.OpenFile(curFileName, os.O_CREATE|os.O_WRONLY, 0666)
+	defer fCurrent.Close()
 	if err != nil {
 		return err
 	}
@@ -307,6 +309,7 @@ func (m *manifest) load(path string) error {
 	curFileName := filepath.Join(path, "CURRENT")
 
 	curFile, err := os.OpenFile(curFileName, os.O_RDONLY, 0666)
+	defer curFile.Close()
 	if err != nil {
 		return err
 	}
@@ -331,6 +334,7 @@ func (m *manifest) load(path string) error {
 	}
 
 	maniFile, err := os.Open(maniFilePath)
+	defer maniFile.Close()
 	if err != nil {
 		return err
 	}
@@ -977,6 +981,7 @@ func (cow *cowForest) load(fileNum uint64) error {
 		fmt.Println("FILE LOADED: ", fName)
 	}
 	f, err := os.Open(fName)
+	defer f.Close()
 	if err != nil {
 		// If the error returned is of no files existing, then the manifest
 		// is corrupt
@@ -1083,6 +1088,8 @@ func (cow *cowForest) commit() error {
 		if err != nil {
 			return err
 		}
+
+		f.Close()
 	}
 
 	err := cow.manifest.commit(cow.meta.fBasePath)
