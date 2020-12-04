@@ -29,6 +29,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/connmgr"
 	"github.com/btcsuite/btcd/mempool"
+	"github.com/btcsuite/btcd/netsync"
 	"github.com/btcsuite/btcd/peer"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -210,8 +211,8 @@ type server struct {
 	//sigCache    *txscript.SigCache
 	//hashCache   *txscript.HashCache
 	//rpcServer   *rpcServer
-	//syncManager *netsync.SyncManager
-	//chain *blockchain.BlockChain
+	syncManager *netsync.SyncManager
+	chain       *blockchain.BlockChain
 	//txMemPool            *mempool.TxPool
 	//cpuMiner             *cpuminer.CPUMiner
 	modifyRebroadcastInv chan interface{}
@@ -640,7 +641,6 @@ func (sp *serverPeer) OnUBlock(_ *peer.Peer, msg *wire.MsgUBlock, buf []byte) {
 // accordingly.  We pass the message down to blockmanager which will call
 // QueueMessage with any appropriate responses.
 func (sp *serverPeer) OnInv(_ *peer.Peer, msg *wire.MsgInv) {
-	fmt.Println("ONINV RECEIVED")
 	return
 	//if !cfg.BlocksOnly {
 	//	if len(msg.InvList) > 0 {
@@ -707,6 +707,8 @@ func (sp *serverPeer) OnGetData(_ *peer.Peer, msg *wire.MsgGetData) {
 	var waitChan chan struct{}
 	doneChan := make(chan struct{}, 1)
 
+	// TODO even if a peer disconnected, this keeps going.
+	// InvLists are not tiny so it does add up
 	for i, iv := range msg.InvList {
 		var c chan struct{}
 		// If this will be the last message we send.
@@ -731,7 +733,6 @@ func (sp *serverPeer) OnGetData(_ *peer.Peer, msg *wire.MsgGetData) {
 		case wire.InvTypeFilteredBlock:
 			err = sp.server.pushMerkleBlockMsg(sp, &iv.Hash, c, waitChan, wire.BaseEncoding)
 		case wire.InvTypeUBlock:
-			fmt.Println("UBLOCK INV")
 			err = sp.server.pushUBlockMsg(sp, &iv.Hash, c, waitChan, wire.BaseEncoding)
 		default:
 			peerLog.Warnf("Unknown type in inventory request %d",
@@ -1583,6 +1584,7 @@ func (s *server) pushTxMsg(sp *serverPeer, hash *chainhash.Hash, doneChan chan<-
 // connected peer.  An error is returned if the block hash is not known.
 func (s *server) pushBlockMsg(sp *serverPeer, hash *chainhash.Hash, doneChan chan<- struct{},
 	waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
+	return nil
 
 	// Fetch the raw block bytes from the database.
 	//var blockBytes []byte
@@ -1642,7 +1644,6 @@ func (s *server) pushBlockMsg(sp *serverPeer, hash *chainhash.Hash, doneChan cha
 	//	sp.QueueMessage(invMsg, doneChan)
 	//	sp.continueHash = nil
 	//}
-	return nil
 }
 
 // pushMerkleBlockMsg sends a merkleblock message for the provided block hash to
@@ -1720,7 +1721,7 @@ func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 	}
 
 	offsetfilePath := s.utreexoParams.UtreeDir.OffsetDir.OffsetFile
-	fmt.Println(sp.server.utreexoParams.BlockDir)
+	//fmt.Println(sp.server.utreexoParams.BlockDir)
 	block, _, err := bridgenode.GetRawBlocksFromDisk(height, 1,
 		offsetfilePath, sp.server.utreexoParams.BlockDir)
 	if err != nil {
@@ -1728,11 +1729,6 @@ func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 			doneChan <- struct{}{}
 		}
 		return err
-	}
-
-	// Once we have fetched data wait for any previous operation to finish.
-	if waitChan != nil {
-		<-waitChan
 	}
 
 	udBytes, err := bridgenode.GetUDataBytesFromFile(s.utreexoParams.UtreeDir.ProofDir, height)
@@ -1745,6 +1741,11 @@ func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 	ublock := wire.MsgUBlock{
 		MsgBlock:    block[0],
 		UtreexoData: ud,
+	}
+
+	// Once we have fetched data wait for any previous operation to finish.
+	if waitChan != nil {
+		<-waitChan
 	}
 
 	// We only send the channel for this message if we aren't sending
@@ -1925,6 +1926,7 @@ func (s *server) handleAddPeerMsg(state *peerState, sp *serverPeer) bool {
 // handleDonePeerMsg deals with peers that have signalled they are done.  It is
 // invoked from the peerHandler goroutine.
 func (s *server) handleDonePeerMsg(state *peerState, sp *serverPeer) {
+	fmt.Println("HANDLE DONE PEER MSG")
 	var list map[int32]*serverPeer
 	if sp.persistent {
 		list = state.persistentPeers
@@ -2168,6 +2170,7 @@ func (s *server) handleQuery(state *peerState, querymsg interface{}) {
 		}
 		msg.reply <- peers
 	case disconnectNodeMsg:
+		fmt.Println("DISCONNECT NODE")
 		// Check inbound peers. We pass a nil callback since we don't
 		// require any additional actions on disconnect for inbound peers.
 		found := disconnectPeer(state.inboundPeers, msg.cmp, nil)
@@ -2276,6 +2279,7 @@ func newPeerConfig(sp *serverPeer) *peer.Config {
 // instance, associates it with the connection, and starts a goroutine to wait
 // for disconnection.
 func (s *server) inboundPeerConnected(conn net.Conn) {
+	fmt.Println("IN")
 	sp := newServerPeer(s, false)
 	sp.isWhitelisted = isWhitelisted(conn.RemoteAddr())
 	sp.Peer = peer.NewInboundPeer(newPeerConfig(sp))
@@ -2311,13 +2315,17 @@ func (s *server) outboundPeerConnected(c *connmgr.ConnReq, conn net.Conn) {
 // peerDoneHandler handles peer disconnects by notifiying the server that it's
 // done along with other performing other desirable cleanup.
 func (s *server) peerDoneHandler(sp *serverPeer) {
-	fmt.Println("DONE")
 	sp.WaitForDisconnect()
 	s.donePeers <- sp
 
 	// Only tell sync manager we are gone if we ever told it we existed.
 	if sp.VerAckReceived() {
+		sp.Disconnect()
+		//s.ConnManager.Disconnect(sp)
+		//close(sp.quit)
 		//s.syncManager.DonePeer(sp.Peer)
+
+		//sm.msgChan <- &donePeerMsg{peer: peer}
 
 		// Evict any remaining orphans that were sent by the peer.
 		//numEvicted := s.txMemPool.RemoveOrphansByTag(mempool.Tag(sp.ID()))
@@ -2937,10 +2945,10 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	//	DB:          s.db,
 	//	Interrupt:   interrupt,
 	//	ChainParams: s.chainParams,
-	//	Checkpoints: checkpoints,
-	//	TimeSource:  s.timeSource,
+	//	//Checkpoints: checkpoints,
+	//	TimeSource: s.timeSource,
 	//	//SigCache:         s.sigCache,
-	//	IndexManager: indexManager,
+	//	//IndexManager: indexManager,
 	//	//HashCache:        s.hashCache,
 	//	Utreexo:          cfg.Utreexo,
 	//	UtreexoCSN:       cfg.UtreexoCSN,
@@ -3008,9 +3016,9 @@ func newServer(listenAddrs, agentBlacklist, agentWhitelist []string,
 	//s.txMemPool = mempool.New(&txC)
 
 	//s.syncManager, err = netsync.New(&netsync.Config{
-	//	PeerNotifier:       &s,
-	//	Chain:              s.chain,
-	//	TxMemPool:          s.txMemPool,
+	//	PeerNotifier: &s,
+	//	Chain:        s.chain,
+	//	//TxMemPool:          s.txMemPool,
 	//	ChainParams:        s.chainParams,
 	//	DisableCheckpoints: cfg.DisableCheckpoints,
 	//	MaxPeers:           cfg.MaxPeers,
