@@ -192,9 +192,3 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	f.TimeInProve += donetime.Sub(starttime)
 	return bp, nil
 }
-
-// VerifyBatchProof :
-func (f *Forest) VerifyBatchProof(bp BatchProof) bool {
-	ok, _, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, nil)
-	return ok
-}

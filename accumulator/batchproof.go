@@ -10,8 +10,13 @@ import (
 type BatchProof struct {
 	Targets []uint64
 	Proof   []Hash
-	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
+	// list of leaf locations to delete, along with a bunch of hashes that
+	// give the proof.
 	// the position of the hashes is implied / computable from the leaf positions
+}
+
+type miniTree struct {
+	l, r, parent node // left, right, parent
 }
 
 /*
@@ -138,27 +143,20 @@ func (bp *BatchProof) ToString() string {
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
-func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
-	// cached should be a function that fetches nodes from the pollard and
-	// indicates whether they exist or not, this is only useful for the pollard
-	// and nil should be passed for the forest.
-	cached func(pos uint64) (bool, Hash)) (bool, [][3]node, []node) {
+func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
+
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
-
+	rootHashes := p.rootHashesReverse()
 	// copy targets to leave them in original order
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
 	sortUint64s(targets)
 
-	if cached == nil {
-		cached = func(_ uint64) (bool, Hash) { return false, empty }
-	}
-
-	rows := treeRows(numLeaves)
+	rows := treeRows(p.numLeaves)
 	proofPositions, computablePositions :=
-		ProofPositions(targets, numLeaves, rows)
+		ProofPositions(targets, p.numLeaves, rows)
 
 	// The proof should have as many hashes as there are proof positions.
 	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
@@ -170,13 +168,9 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// rootCandidates holds the roots that where computed, and have to be
 	// compared to the actual roots at the end.
 	targetNodes := make([]node, 0, len(targets)*int(rows))
-	rootCandidates := make([]node, 0, len(roots))
-	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
-	// tuple[0] is the parent, tuple[1] is the left child and tuple[2]
-	// is the right child.
-	// trees holds the entire proof tree of the batchproof in this way,
-	// sorted by the tuple[0].
-	trees := make([][3]node, 0, len(computablePositions))
+	rootCandidates := make([]node, 0, len(rootHashes))
+	// trees holds the entire proof tree of the batchproof, sorted by parents.
+	trees := make([]miniTree, 0, len(computablePositions))
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
@@ -186,10 +180,10 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		// check if the target is the row 0 root.
 		// this is the case if its the last leaf (pos==numLeaves-1)
 		// AND the tree has a root at row 0 (numLeaves&1==1)
-		if targets[0] == numLeaves-1 && numLeaves&1 == 1 {
+		if targets[0] == p.numLeaves-1 && p.numLeaves&1 == 1 {
 			// target is the row 0 root, append it to the root candidates.
 			rootCandidates = append(rootCandidates,
-				node{Val: roots[0], Pos: targets[0]})
+				node{Val: rootHashes[0], Pos: targets[0]})
 			bp.Proof = bp.Proof[1:]
 			break
 		}
@@ -257,17 +251,22 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 
 		// get the hash of the parent from the cache or compute it
 		parentPos := parent(target.Pos, rows)
-		isParentCached, cachedHash := cached(parentPos)
 		hash := parentHash(left.Val, right.Val)
-		if isParentCached && hash != cachedHash {
+
+		populatedNode, _, _, err := p.readPos(parentPos)
+		if err != nil ||
+			(populatedNode != nil && populatedNode.data != empty &&
+				hash != populatedNode.data) {
 			// The hash did not match the cached hash
 			return false, nil, nil
 		}
 
-		trees = append(trees, [3]node{{Val: hash, Pos: parentPos}, left, right})
+		trees = append(trees,
+			miniTree{parent: node{Val: hash, Pos: parentPos}, l: left, r: right})
 
 		row := detectRow(parentPos, rows)
-		if numLeaves&(1<<row) > 0 && parentPos == rootPosition(numLeaves, row, rows) {
+		if p.numLeaves&(1<<row) > 0 && parentPos ==
+			rootPosition(p.numLeaves, row, rows) {
 			// the parent is a root -> store as candidate, to check against
 			// actual roots later.
 			rootCandidates = append(rootCandidates, node{Val: hash, Pos: parentPos})
@@ -285,7 +284,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// holds a subset of the roots
 	// we count the roots that match in order.
 	rootMatches := 0
-	for _, root := range roots {
+	for _, root := range rootHashes {
 		if len(rootCandidates) > rootMatches &&
 			root == rootCandidates[rootMatches].Val {
 			rootMatches++

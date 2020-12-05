@@ -9,21 +9,7 @@ import (
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesReverse()
-	ok, trees, roots := verifyBatchProof(bp, rootHashes, p.numLeaves,
-		// pass a closure that checks the pollard for cached nodes.
-		// returns true and the hash value of the node if it exists.
-		// returns false if the node does not exist or the hash value is empty.
-		func(pos uint64) (bool, Hash) {
-			n, _, _, err := p.readPos(pos)
-			if err != nil {
-				return false, empty
-			}
-			if n != nil && n.data != empty {
-				return true, n.data
-			}
-
-			return false, empty
-		})
+	ok, trees, roots := p.verifyBatchProof(bp)
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
 	}
@@ -36,19 +22,22 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 			i++
 		}
 		// populate the pollard
-		nodesAllocated += p.populate(p.roots[len(p.roots)-i-1], root.Pos,
-			trees, polNodes[nodesAllocated:])
+		nodesAllocated += p.populate(
+			p.roots[len(p.roots)-i-1],
+			root.Pos, trees, polNodes[nodesAllocated:])
+
 	}
 
 	return nil
 }
 
-// populate takes a root and populates it with the nodes of the paritial proof tree that was computed
-// in `verifyBatchProof`.
-func (p *Pollard) populate(root *polNode, pos uint64, trees [][3]node, polNodes []polNode) int {
+// populate takes a root and populates it with the nodes of the paritial proof
+// tree that was computed in `verifyBatchProof`.
+func (p *Pollard) populate(
+	root *polNode, pos uint64, trees []miniTree, polNodes []polNode) int {
 	// a stack to traverse the pollard
 	type stackElem struct {
-		trees [][3]node
+		trees []miniTree
 		node  *polNode
 		pos   uint64
 	}
@@ -71,7 +60,7 @@ func (p *Pollard) populate(root *polNode, pos uint64, trees [][3]node, polNodes 
 		i := len(elem.trees) - 1
 	find_nodes:
 		for ; i >= 0; i-- {
-			switch elem.trees[i][0].Pos {
+			switch elem.trees[i].parent.Pos {
 			case elem.pos:
 				fallthrough
 			case rightChild:
@@ -80,7 +69,7 @@ func (p *Pollard) populate(root *polNode, pos uint64, trees [][3]node, polNodes 
 					nodesAllocated++
 				}
 				right = elem.node.niece[0]
-				right.data = elem.trees[i][1].Val
+				right.data = elem.trees[i].l.Val
 				fallthrough
 			case leftChild:
 				if elem.node.niece[1] == nil {
@@ -88,7 +77,7 @@ func (p *Pollard) populate(root *polNode, pos uint64, trees [][3]node, polNodes 
 					nodesAllocated++
 				}
 				left = elem.node.niece[1]
-				left.data = elem.trees[i][2].Val
+				left.data = elem.trees[i].r.Val
 				break find_nodes
 			}
 		}
@@ -97,7 +86,8 @@ func (p *Pollard) populate(root *polNode, pos uint64, trees [][3]node, polNodes 
 		}
 
 		stack = append(stack,
-			stackElem{trees[:i], left, leftChild}, stackElem{trees[:i], right, rightChild})
+			stackElem{trees[:i], left, leftChild},
+			stackElem{trees[:i], right, rightChild})
 	}
 	return nodesAllocated
 }

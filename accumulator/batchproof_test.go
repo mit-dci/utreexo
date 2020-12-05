@@ -1,51 +1,9 @@
 package accumulator
 
-import (
-	"fmt"
-	"testing"
-)
+// forests don't accept or verify proofs since they have everything.
+// TODO rewrite these tests using pollard instead of forest
 
-// TestIncompleteBatchProof tests that a incomplete (missing some hashes) batchproof does not pass verification.
-func TestIncompleteBatchProof(t *testing.T) {
-	// Create forest in memory
-	f := NewForest(nil, false, "", 0)
-
-	// last index to be deleted. Same as blockDels
-	lastIdx := uint64(7)
-
-	// Generate adds
-	adds := make([]Leaf, 8)
-	adds[0].Hash = Hash{1}
-	adds[1].Hash = Hash{2}
-	adds[2].Hash = Hash{3}
-	adds[3].Hash = Hash{4}
-	adds[4].Hash = Hash{5}
-	adds[5].Hash = Hash{6}
-	adds[6].Hash = Hash{7}
-	adds[7].Hash = Hash{8}
-
-	// Modify with the additions to simulate txos being added
-	_, err := f.Modify(adds, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// create blockProof based on the last add in the slice
-	blockProof, err := f.ProveBatch(
-		[]Hash{adds[lastIdx].Hash})
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	blockProof.Proof = blockProof.Proof[:len(blockProof.Proof)-1]
-	shouldBeFalse := f.VerifyBatchProof(blockProof)
-	if shouldBeFalse != false {
-		t.Fail()
-		t.Logf("Incomplete proof passes verification")
-	}
-}
-
+/*
 // TestVerifyBlockProof tests that the computedTop is compared to the top in the
 // Utreexo forest.
 func TestVerifyBatchProof(t *testing.T) {
@@ -147,3 +105,4 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 				proofIndex))
 	}
 }
+*/
