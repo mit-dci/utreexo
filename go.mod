@@ -16,9 +16,3 @@ require (
 	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 )
-
-replace github.com/btcsuite/btcd => /home/calvin/bitcoin-projects/go/utreexo/go/src/github.com/btcsuite/btcd
-
-replace github.com/btcsuite/btcutil => /home/calvin/bitcoin-projects/go/utreexo/go/src/github.com/btcsuite/btcutil
-
-replace github.com/mit-dci/utreexo => /home/calvin/bitcoin-projects/go/utreexo/go/src/github.com/mit-dci/utreexo
