@@ -24,7 +24,6 @@ func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
 	if util.HasAccess(cfg.UtreeDir.OffsetDir.OffsetFile) {
-		fmt.Println("HIHIH")
 		knownTipHeight, err = restoreLastIndexOffsetHeight(cfg.UtreeDir.OffsetDir, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s", err.Error())
@@ -42,7 +41,6 @@ func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 	}
 
 	if checkForestExists(cfg) {
-		fmt.Println("HIHIH111")
 		fmt.Println("Has access to forest, resuming")
 		forest, err = restoreForest(cfg)
 		if err != nil {
@@ -55,7 +53,6 @@ func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 			return
 		}
 	} else {
-		fmt.Println("HIHIH222")
 		fmt.Println("Creating new forest")
 		// TODO Add a path for CowForest here
 		forest, err = createForest(cfg)
@@ -66,7 +63,6 @@ func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 		}
 	}
 
-	fmt.Println("RETUNR INIT")
 	return
 }
 

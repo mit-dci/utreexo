@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/adiabat/bech32 v0.0.0-20170505011816-6289d404861d
-	github.com/btcsuite/btcd v0.21.0-beta
+	github.com/btcsuite/btcd v0.21.0-beta.0.20201124191514-610bb55ae85c
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd
@@ -17,7 +17,6 @@ require (
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 )
 
-//replace github.com/btcsuite/btcd => github.com/rjected/btcd v0.0.0-20201125090829-1e009a7ae42e
 replace github.com/btcsuite/btcd => /home/calvin/bitcoin-projects/go/utreexo/go/src/github.com/btcsuite/btcd
 
 replace github.com/btcsuite/btcutil => /home/calvin/bitcoin-projects/go/utreexo/go/src/github.com/btcsuite/btcutil

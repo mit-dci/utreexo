@@ -300,26 +300,17 @@ func newServerPeer(s *server, isPersistent bool) *serverPeer {
 // newestBlock returns the current best block hash and height using the format
 // required by the configuration for the peer package.
 func (sp *serverPeer) newestBlock() (*chainhash.Hash, int32, error) {
-	fmt.Println("NEWESTBLOCK")
 	offsetFinished := make(chan bool, 1)
 	_, bestHeight, _, err := bridgenode.InitBridgeNodeState(sp.server.utreexoParams, offsetFinished)
 	if err != nil {
-		fmt.Println("NEWESTBLOCK ERROR")
 		return nil, 0, err
 	}
-	fmt.Println("NEWESTBLOCK 1")
 	offsetfilePath := sp.server.utreexoParams.UtreeDir.OffsetDir.OffsetFile
 	block, _, err := bridgenode.GetRawBlocksFromDisk(bestHeight, 1, offsetfilePath, sp.server.utreexoParams.BlockDir)
 	if err != nil {
-		fmt.Println("NEWESTBLOCK ERROR")
 		return nil, 0, err
 	}
-	fmt.Println("NEWESTBLOCK 2")
 	bestHash := block[0].Header.BlockHash()
-	//best := sp.server.chain.BestSnapshot()
-	//return &best.Hash, best.Height, nil
-	fmt.Println("NEWESTBLOCK RETURN")
-	fmt.Println("BESTHEIGHT:", bestHeight)
 	return &bestHash, bestHeight, nil
 }
 
@@ -457,7 +448,6 @@ func (sp *serverPeer) OnVersion(_ *peer.Peer, msg *wire.MsgVersion) *wire.MsgRej
 	wantServices := wire.SFNodeNetwork
 
 	if sp.server.services&wire.SFNodeUtreexo == wire.SFNodeUtreexo {
-		fmt.Println("WANT UTREEXO")
 		wantServices = wire.SFNodeUtreexo
 	}
 	if !isInbound && !hasServices(msg.Services, wantServices) {
@@ -512,6 +502,7 @@ func (sp *serverPeer) OnVerAck(_ *peer.Peer, _ *wire.MsgVerAck) {
 // pool up to the maximum inventory allowed per message.  When the peer has a
 // bloom filter loaded, the contents are filtered accordingly.
 func (sp *serverPeer) OnMemPool(_ *peer.Peer, msg *wire.MsgMemPool) {
+	fmt.Println("ONMEMPOOL")
 	return
 	// Only allow mempool requests if the server has bloom filtering
 	// enabled.
@@ -562,6 +553,9 @@ func (sp *serverPeer) OnMemPool(_ *peer.Peer, msg *wire.MsgMemPool) {
 // handler this does not serialize all transactions through a single thread
 // transactions don't rely on the previous one in a linear fashion like blocks.
 func (sp *serverPeer) OnTx(_ *peer.Peer, msg *wire.MsgTx) {
+	notFound := wire.NewMsgNotFound()
+	fmt.Println("ONTX, SENDDING NOT FOUND")
+	sp.QueueMessage(notFound, nil)
 	return
 	//if cfg.BlocksOnly {
 	//peerLog.Tracef("Ignoring tx %v from %v - blocksonly enabled",
@@ -587,6 +581,7 @@ func (sp *serverPeer) OnTx(_ *peer.Peer, msg *wire.MsgTx) {
 // OnBlock is invoked when a peer receives a block bitcoin message.  It
 // blocks until the bitcoin block has been fully processed.
 func (sp *serverPeer) OnBlock(_ *peer.Peer, msg *wire.MsgBlock, buf []byte) {
+	fmt.Println("ONBLOCK")
 	return
 	// Convert the raw MsgBlock to a btcutil.Block which provides some
 	// convenience methods and things such as hash caching.
@@ -612,6 +607,7 @@ func (sp *serverPeer) OnBlock(_ *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 }
 
 func (sp *serverPeer) OnUBlock(_ *peer.Peer, msg *wire.MsgUBlock, buf []byte) {
+	fmt.Println("ONUBLOCK")
 	return
 	// Convert the raw MsgBlock to a btcutil.Block which provides some
 	// convenience methods and things such as hash caching.
@@ -641,6 +637,7 @@ func (sp *serverPeer) OnUBlock(_ *peer.Peer, msg *wire.MsgUBlock, buf []byte) {
 // accordingly.  We pass the message down to blockmanager which will call
 // QueueMessage with any appropriate responses.
 func (sp *serverPeer) OnInv(_ *peer.Peer, msg *wire.MsgInv) {
+	fmt.Println("ONINV")
 	return
 	//if !cfg.BlocksOnly {
 	//	if len(msg.InvList) > 0 {
@@ -677,6 +674,7 @@ func (sp *serverPeer) OnInv(_ *peer.Peer, msg *wire.MsgInv) {
 // OnHeaders is invoked when a peer receives a headers bitcoin
 // message.  The message is passed down to the sync manager.
 func (sp *serverPeer) OnHeaders(_ *peer.Peer, msg *wire.MsgHeaders) {
+	fmt.Println("ONHEADERS")
 	return
 	//sp.server.syncManager.QueueHeaders(msg, sp.Peer)
 }
@@ -684,7 +682,6 @@ func (sp *serverPeer) OnHeaders(_ *peer.Peer, msg *wire.MsgHeaders) {
 // handleGetData is invoked when a peer receives a getdata bitcoin message and
 // is used to deliver block and transaction information.
 func (sp *serverPeer) OnGetData(_ *peer.Peer, msg *wire.MsgGetData) {
-	fmt.Println("ON GET DATA")
 	numAdded := 0
 	notFound := wire.NewMsgNotFound()
 
@@ -771,6 +768,7 @@ func (sp *serverPeer) OnGetData(_ *peer.Peer, msg *wire.MsgGetData) {
 // OnGetBlocks is invoked when a peer receives a getblocks bitcoin
 // message.
 func (sp *serverPeer) OnGetBlocks(_ *peer.Peer, msg *wire.MsgGetBlocks) {
+	fmt.Println("GET BLOCKS")
 	return
 	// Find the most recent known block in the best chain based on the block
 	// locator and fetch all of the block hashes after it until either
@@ -809,14 +807,13 @@ func (sp *serverPeer) OnGetBlocks(_ *peer.Peer, msg *wire.MsgGetBlocks) {
 }
 
 func (sp *serverPeer) OnGetUBlocks(_ *peer.Peer, msg *wire.MsgGetUBlocks) {
-	fmt.Println("WANTS UBlocks")
+	fmt.Println("GET UBLOCKS")
 	return
 }
 
 // OnGetHeaders is invoked when a peer receives a getheaders bitcoin
 // message.
 func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
-	fmt.Println("WANTS HEADERS")
 	// Ignore getheaders requests if not in sync.
 	//if !sp.server.syncManager.IsCurrent() {
 	//	return
@@ -835,7 +832,6 @@ func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
 	// TODO EDIT THIS
 	//chain := sp.server.chain
 	//headers := chain.LocateHeaders(msg.BlockLocatorHashes, &msg.HashStop)
-	fmt.Println(msg.HashStop)
 
 	startHeight, err := bridgenode.FetchBlockHeightFromBufDB([32]byte(*msg.BlockLocatorHashes[0]), sp.server.blockIndex)
 	if err != nil {
@@ -852,7 +848,6 @@ func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
 		fmt.Println(err)
 	}
 
-	fmt.Println("START", startHeight)
 	amt := stopHeight - startHeight
 	if amt < 0 {
 		fmt.Println("Requested block amount negative")
@@ -884,21 +879,17 @@ func (sp *serverPeer) OnGetHeaders(_ *peer.Peer, msg *wire.MsgGetHeaders) {
 	blockHeaders := make([]*wire.BlockHeader, len(blocks))
 
 	for i := range blocks {
-		//fmt.Println("j", j)
-		//fmt.Println("i", i)
-		//fmt.Println("h", &block.Header)
 		blockHeaders[i] = &blocks[i].Header
 		//if blockHeaders[j] == blockHeaders[j] {
 		//	panic("wrong0")
 		//}
-		//fmt.Println(blockHeaders[i].BlockHash())
-		//fmt.Println("ha", &blockHeaders[i])
 	}
 	sp.QueueMessage(&wire.MsgHeaders{Headers: blockHeaders}, nil)
 }
 
 // OnGetCFilters is invoked when a peer receives a getcfilters bitcoin message.
 func (sp *serverPeer) OnGetCFilters(_ *peer.Peer, msg *wire.MsgGetCFilters) {
+	fmt.Println("ONGETCFILTERS")
 	return
 	// Ignore getcfilters requests if not in sync.
 	//if !sp.server.syncManager.IsCurrent() {
@@ -956,6 +947,7 @@ func (sp *serverPeer) OnGetCFilters(_ *peer.Peer, msg *wire.MsgGetCFilters) {
 
 // OnGetCFHeaders is invoked when a peer receives a getcfheader bitcoin message.
 func (sp *serverPeer) OnGetCFHeaders(_ *peer.Peer, msg *wire.MsgGetCFHeaders) {
+	fmt.Println("ONGETCFHEADERS")
 	return
 	// Ignore getcfilterheader requests if not in sync.
 	//if !sp.server.syncManager.IsCurrent() {
@@ -1074,6 +1066,7 @@ func (sp *serverPeer) OnGetCFHeaders(_ *peer.Peer, msg *wire.MsgGetCFHeaders) {
 
 // OnGetCFCheckpt is invoked when a peer receives a getcfcheckpt bitcoin message.
 func (sp *serverPeer) OnGetCFCheckpt(_ *peer.Peer, msg *wire.MsgGetCFCheckpt) {
+	fmt.Println("ONGETCFCHECKPT")
 	return
 	// Ignore getcfcheckpt requests if not in sync.
 	//if !sp.server.syncManager.IsCurrent() {
@@ -1264,6 +1257,7 @@ func (sp *serverPeer) enforceNodeBloomFlag(cmd string) bool {
 // lower than provided value are inventoried to them.  The peer will be
 // disconnected if an invalid fee filter value is provided.
 func (sp *serverPeer) OnFeeFilter(_ *peer.Peer, msg *wire.MsgFeeFilter) {
+	fmt.Println("ONFEEFILTER")
 	// Check that the passed minimum fee is a valid amount.
 	if msg.MinFee < 0 || msg.MinFee > btcutil.MaxSatoshi {
 		peerLog.Debugf("Peer %v sent an invalid feefilter '%v' -- "+
@@ -1280,6 +1274,7 @@ func (sp *serverPeer) OnFeeFilter(_ *peer.Peer, msg *wire.MsgFeeFilter) {
 // filter.  The peer will be disconnected if a filter is not loaded when this
 // message is received or the server is not configured to allow bloom filters.
 func (sp *serverPeer) OnFilterAdd(_ *peer.Peer, msg *wire.MsgFilterAdd) {
+	fmt.Println("ONFILTERADD")
 	// Disconnect and/or ban depending on the node bloom services flag and
 	// negotiated protocol version.
 	if !sp.enforceNodeBloomFlag(msg.Command()) {
@@ -1301,6 +1296,7 @@ func (sp *serverPeer) OnFilterAdd(_ *peer.Peer, msg *wire.MsgFilterAdd) {
 // The peer will be disconnected if a filter is not loaded when this message is
 // received  or the server is not configured to allow bloom filters.
 func (sp *serverPeer) OnFilterClear(_ *peer.Peer, msg *wire.MsgFilterClear) {
+	fmt.Println("ONFILTERCLEAR")
 	// Disconnect and/or ban depending on the node bloom services flag and
 	// negotiated protocol version.
 	if !sp.enforceNodeBloomFlag(msg.Command()) {
@@ -1323,6 +1319,7 @@ func (sp *serverPeer) OnFilterClear(_ *peer.Peer, msg *wire.MsgFilterClear) {
 // The peer will be disconnected if the server is not configured to allow bloom
 // filters.
 func (sp *serverPeer) OnFilterLoad(_ *peer.Peer, msg *wire.MsgFilterLoad) {
+	fmt.Println("ONFILTERLOAD")
 	// Disconnect and/or ban depending on the node bloom services flag and
 	// negotiated protocol version.
 	if !sp.enforceNodeBloomFlag(msg.Command()) {
@@ -1373,6 +1370,7 @@ func (sp *serverPeer) OnGetAddr(_ *peer.Peer, msg *wire.MsgGetAddr) {
 // OnAddr is invoked when a peer receives an addr bitcoin message and is
 // used to notify the server about advertised addresses.
 func (sp *serverPeer) OnAddr(_ *peer.Peer, msg *wire.MsgAddr) {
+	fmt.Println("ONADDR")
 	// Ignore addresses when running on the simulation test network.  This
 	// helps prevent the network from becoming another public test network
 	// since it will not be able to learn about other peers that have not
@@ -1434,6 +1432,7 @@ func (sp *serverPeer) OnWrite(_ *peer.Peer, bytesWritten int, msg wire.Message, 
 
 // OnNotFound is invoked when a peer sends a notfound message.
 func (sp *serverPeer) OnNotFound(p *peer.Peer, msg *wire.MsgNotFound) {
+	fmt.Println("ONNOTFOUND")
 	//if !sp.Connected() {
 	//	return
 	//}
@@ -1555,6 +1554,7 @@ func (s *server) TransactionConfirmed(tx *btcutil.Tx) {
 // connected peer.  An error is returned if the transaction hash is not known.
 func (s *server) pushTxMsg(sp *serverPeer, hash *chainhash.Hash, doneChan chan<- struct{},
 	waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
+	fmt.Println("PUSHTXMSG")
 
 	// Attempt to fetch the requested transaction from the pool.  A
 	// call could be made to check for existence first, but simply trying
@@ -1584,6 +1584,7 @@ func (s *server) pushTxMsg(sp *serverPeer, hash *chainhash.Hash, doneChan chan<-
 // connected peer.  An error is returned if the block hash is not known.
 func (s *server) pushBlockMsg(sp *serverPeer, hash *chainhash.Hash, doneChan chan<- struct{},
 	waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
+	fmt.Println("PUSHBLOCKMSG")
 	return nil
 
 	// Fetch the raw block bytes from the database.
@@ -1652,6 +1653,7 @@ func (s *server) pushBlockMsg(sp *serverPeer, hash *chainhash.Hash, doneChan cha
 // error is returned if the block hash is not known.
 func (s *server) pushMerkleBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 	doneChan chan<- struct{}, waitChan <-chan struct{}, encoding wire.MessageEncoding) error {
+	fmt.Println("PUSHMERKLEBLOCKMSG")
 	return nil
 	//
 	//	// Do not send a response if the peer doesn't have a filter loaded.
@@ -1721,7 +1723,6 @@ func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 	}
 
 	offsetfilePath := s.utreexoParams.UtreeDir.OffsetDir.OffsetFile
-	//fmt.Println(sp.server.utreexoParams.BlockDir)
 	block, _, err := bridgenode.GetRawBlocksFromDisk(height, 1,
 		offsetfilePath, sp.server.utreexoParams.BlockDir)
 	if err != nil {
@@ -1735,7 +1736,7 @@ func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 	if err != nil {
 		return err
 	}
-	//fmt.Println(block[0])
+
 	ud := btcacc.UData{}
 	ud.Deserialize(bytes.NewReader(udBytes))
 	ublock := wire.MsgUBlock{
@@ -1769,14 +1770,11 @@ func (s *server) pushUBlockMsg(sp *serverPeer, hash *chainhash.Hash,
 		if err != nil {
 			return err
 		}
-		fmt.Println("NEWESTBLOCK 1")
 		offsetfilePath := s.utreexoParams.UtreeDir.OffsetDir.OffsetFile
 		block, _, err := bridgenode.GetRawBlocksFromDisk(bestHeight, 1, offsetfilePath, s.utreexoParams.BlockDir)
 		if err != nil {
-			fmt.Println("NEWESTBLOCK ERROR")
 			return err
 		}
-		fmt.Println("NEWESTBLOCK 2")
 		bestHash := block[0].Header.BlockHash()
 		//best := s.chain.BestSnapshot()
 		invMsg := wire.NewMsgInvSizeHint(1)
@@ -1926,7 +1924,6 @@ func (s *server) handleAddPeerMsg(state *peerState, sp *serverPeer) bool {
 // handleDonePeerMsg deals with peers that have signalled they are done.  It is
 // invoked from the peerHandler goroutine.
 func (s *server) handleDonePeerMsg(state *peerState, sp *serverPeer) {
-	fmt.Println("HANDLE DONE PEER MSG")
 	var list map[int32]*serverPeer
 	if sp.persistent {
 		list = state.persistentPeers
@@ -2170,7 +2167,6 @@ func (s *server) handleQuery(state *peerState, querymsg interface{}) {
 		}
 		msg.reply <- peers
 	case disconnectNodeMsg:
-		fmt.Println("DISCONNECT NODE")
 		// Check inbound peers. We pass a nil callback since we don't
 		// require any additional actions on disconnect for inbound peers.
 		found := disconnectPeer(state.inboundPeers, msg.cmp, nil)
@@ -2279,7 +2275,6 @@ func newPeerConfig(sp *serverPeer) *peer.Config {
 // instance, associates it with the connection, and starts a goroutine to wait
 // for disconnection.
 func (s *server) inboundPeerConnected(conn net.Conn) {
-	fmt.Println("IN")
 	sp := newServerPeer(s, false)
 	sp.isWhitelisted = isWhitelisted(conn.RemoteAddr())
 	sp.Peer = peer.NewInboundPeer(newPeerConfig(sp))

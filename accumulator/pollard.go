@@ -49,7 +49,6 @@ func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
 	if err != nil {
 		return err
 	}
-	// fmt.Printf("pol pre add %s", p.toString())
 
 	err = p.add(adds)
 	if err != nil {
