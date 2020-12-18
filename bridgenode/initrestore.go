@@ -12,7 +12,8 @@ import (
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
 // If a chain state is not present, chain is initialized to the genesis
 // returns forest, height, lastIndexOffsetHeight, pOffset and error
-func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumulator.Forest,
+func initBridgeNodeState(
+	cfg *Config, offsetFinished chan bool) (forest *accumulator.Forest,
 	height int32, knownTipHeight int32, err error) {
 
 	// Default behavior is that the user should delete all offsetdata
@@ -24,7 +25,9 @@ func initBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 	// anew
 	// Check if the offsetfiles for both rev*.dat and blk*.dat are present
 	if util.HasAccess(cfg.utreeDir.offsetDir.offsetFile) {
-		knownTipHeight, err = restoreLastIndexOffsetHeight(cfg.utreeDir.offsetDir, offsetFinished)
+		fmt.Printf("has access to %s\n", cfg.utreeDir.offsetDir.offsetFile)
+		knownTipHeight, err =
+			restoreLastIndexOffsetHeight(cfg.utreeDir.offsetDir, offsetFinished)
 		if err != nil {
 			err = fmt.Errorf("restoreLastIndexOffsetHeight error: %s", err.Error())
 			return

@@ -196,12 +196,11 @@ func Parse(args []string) (*Config, error) {
 	cfg := Config{}
 
 	var dataDir string
-
 	// set dataDir
 	if *dataDirCmd == "" { // No custom datadir given by the user
 		dataDir = btcutil.AppDataDir("bitcoin", true)
 	} else {
-		dataDir = *dataDirCmd // set dataDir to the one set by the user
+		cfg.blockDir = *dataDirCmd // use user sepcified as the full blockdir
 	}
 
 	var bridgeDir string
@@ -216,26 +215,31 @@ func Parse(args []string) (*Config, error) {
 	// set network
 	if *netCmd == "testnet" {
 		cfg.params = chaincfg.TestNet3Params
-		cfg.blockDir = filepath.Join(
-			filepath.Join(dataDir, chaincfg.TestNet3Params.Name),
-			"blocks")
+		if *dataDirCmd == "" {
+			cfg.blockDir = filepath.Join(
+				filepath.Join(dataDir, chaincfg.TestNet3Params.Name),
+				"blocks")
+		}
 		base := filepath.Join(bridgeDir, chaincfg.TestNet3Params.Name)
 		cfg.utreeDir = initUtreeDir(base)
 	} else if *netCmd == "regtest" {
 		cfg.params = chaincfg.RegressionNetParams
-		cfg.blockDir = filepath.Join(
-			filepath.Join(dataDir, chaincfg.RegressionNetParams.Name),
-			"blocks")
+		if *dataDirCmd == "" {
+			cfg.blockDir = filepath.Join(
+				filepath.Join(dataDir, chaincfg.RegressionNetParams.Name),
+				"blocks")
+		}
 		base := filepath.Join(bridgeDir, chaincfg.RegressionNetParams.Name)
 		cfg.utreeDir = initUtreeDir(base)
 	} else if *netCmd == "mainnet" {
 		cfg.params = chaincfg.MainNetParams
-		cfg.blockDir = filepath.Join(dataDir, "blocks")
+		if *dataDirCmd == "" {
+			cfg.blockDir = filepath.Join(dataDir, "blocks")
+		}
 		cfg.utreeDir = initUtreeDir(bridgeDir)
 	} else {
 		return nil, errInvalidNetwork(*netCmd)
 	}
-
 	makePaths(cfg.utreeDir)
 
 	// set profiling
