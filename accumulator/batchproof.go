@@ -174,6 +174,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
+	// bp.Proofs is now on from ProofPositions()
 	proofHashes := make([]Hash, 0, len(proofPositions))
 	var targetsMatched uint64
 	for len(targets) > 0 {

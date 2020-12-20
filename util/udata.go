@@ -13,13 +13,13 @@ import (
 
 // ProofsProveBlock checks the consistency of a UBlock.  Does the proof prove
 // all the inputs in the block?
-func (ub *UBlock) ProofsProveBlock(inputSkipList []uint32) bool {
+func (ub *UBlock) LeafDataOutpointsMatchBlock(inputSkipList []uint32) bool {
 	// get the outpoints that need proof
 	proveOPs := blockToDelOPs(&ub.Block, inputSkipList)
 
 	// ensure that all outpoints are provided in the extradata
 	if len(proveOPs) != len(ub.UtreexoData.Stxos) {
-		fmt.Printf("height %d %d outpoints need proofs but only %d proven\n",
+		fmt.Printf("height %d need proofs for %d outpoints but only %d proven\n",
 			ub.UtreexoData.Height, len(proveOPs), len(ub.UtreexoData.Stxos))
 		return false
 	}

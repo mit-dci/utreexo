@@ -62,19 +62,6 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	return pr, nil
 }
 
-// ProveMany :
-func (f *Forest) ProveMany(hs []Hash) ([]Proof, error) {
-	var err error
-	proofs := make([]Proof, len(hs))
-	for i, h := range hs {
-		proofs[i], err = f.Prove(h)
-		if err != nil {
-			return proofs, err
-		}
-	}
-	return proofs, err
-}
-
 // Verify checks an inclusion proof.
 // returns false on any errors
 func (f *Forest) Verify(p Proof) bool {
@@ -151,7 +138,6 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	bp.Targets = make([]uint64, len(hs))
 
 	for i, wanted := range hs {
-
 		pos, ok := f.positionMap[wanted.Mini()]
 		if !ok {
 			fmt.Print(f.ToString())
@@ -169,18 +155,17 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 		}
 		bp.Targets[i] = pos
 	}
-	// targets need to be sorted because the proof hashes are sorted
-	// NOTE that this is a big deal -- we lose in-block positional information
-	// because of this sorting.  Does that hurt locality or performance?  My
-	// guess is no, but that's untested.
+
+	// Don't include targets in proof, we don't need them.
+
 	sortedTargets := make([]uint64, len(bp.Targets))
 	copy(sortedTargets, bp.Targets)
 	sortUint64s(sortedTargets)
 
 	proofPositions, _ := ProofPositions(sortedTargets, f.numLeaves, f.rows)
-	targetsAndProof := mergeSortedSlices(proofPositions, sortedTargets)
-	bp.Proof = make([]Hash, len(targetsAndProof))
-	for i, proofPos := range targetsAndProof {
+	// proofPositions = mergeSortedSlices(proofPositions, sortedTargets)
+	bp.Proof = make([]Hash, len(proofPositions))
+	for i, proofPos := range proofPositions {
 		bp.Proof[i] = f.data.read(proofPos)
 	}
 

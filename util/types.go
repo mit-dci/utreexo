@@ -41,8 +41,8 @@ The udata comes first, and the height and leafTTLs come first.
 
 type UData struct {
 	Height   int32
-	AccProof accumulator.BatchProof
 	Stxos    []LeafData
+	AccProof accumulator.BatchProof
 	TxoTTLs  []int32
 }
 

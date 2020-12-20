@@ -162,8 +162,8 @@ func BlockToAddLeaves(blk wire.MsgBlock,
 	return
 }
 
-// blockToDelOPs gives all the UTXOs in a block that need proofs in order to be
-// deleted.  All txinputs except for the coinbase input and utxos created
+// blockToDelOPs returns all the outpoints in a block that need proofs in order
+// to be deleted.  All txinputs except for the coinbase input and utxos created
 // within the same block (on the skiplist)
 func blockToDelOPs(
 	blk *wire.MsgBlock, skiplist []uint32) (delOPs []wire.OutPoint) {
@@ -174,7 +174,6 @@ func blockToDelOPs(
 			blockInIdx++ // coinbase tx always has 1 input
 			continue
 		}
-
 		// loop through inputs
 		for _, txin := range tx.TxIn {
 			// check if on skiplist.  If so, don't make leaf
@@ -184,7 +183,6 @@ func blockToDelOPs(
 				blockInIdx++
 				continue
 			}
-
 			delOPs = append(delOPs, txin.PreviousOutPoint)
 			blockInIdx++
 		}
