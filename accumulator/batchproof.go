@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -56,6 +57,37 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 		}
 	}
 	return
+}
+
+// SerializeBytes serializes and returns the batchproof as raw bytes
+// the serialization is the same as Serialize() method
+func (bp *BatchProof) SerializeBytes() ([]byte, error) {
+	size := bp.SerializeSize()
+
+	b := make([]byte, size)
+	buf := bytes.NewBuffer(b)
+
+	// first write the number of targets (4 byte uint32)
+	err := binary.Write(buf, binary.BigEndian, uint32(len(bp.Targets)))
+	if err != nil {
+		return nil, err
+	}
+
+	// write out number of hashes in the proof
+	err = binary.Write(buf, binary.BigEndian, uint32(len(bp.Proof)))
+	if err != nil {
+		return nil, err
+	}
+
+	// then the rest is just hashes
+	for _, h := range bp.Proof {
+		_, err = buf.Write(h[:])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 // TODO: could make this more efficient by not encoding as much empty stuff
@@ -114,6 +146,64 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 		}
 	}
 	return
+}
+
+// DeserializeBPFromBytes, given serialized bytes, returns a pointer to the
+// deserialized batchproof. The deserialization is the same as Deserialize() method
+// on BatchProof
+func DeserializeBPFromBytes(serialized []byte) (*BatchProof, error) {
+	var numTargets, numHashes uint32
+
+	reader := bytes.NewReader(serialized)
+
+	err := binary.Read(reader, binary.BigEndian, &numTargets)
+	if err != nil {
+		return nil, err
+	}
+
+	if numTargets > 1<<16 {
+		err = fmt.Errorf("%d targets - too many\n", numTargets)
+		return nil, err
+	}
+
+	// read number of hashes
+	err = binary.Read(reader, binary.BigEndian, &numHashes)
+	if err != nil {
+		str := fmt.Errorf("bp deser err %s\n", err.Error())
+		return nil, str
+	}
+
+	if numHashes > 1<<16 {
+		err = fmt.Errorf("%d hashes - too many\n", numHashes)
+		return nil, err
+	}
+
+	bp := BatchProof{}
+
+	bp.Targets = make([]uint64, numTargets)
+	for i, _ := range bp.Targets {
+		err = binary.Read(reader, binary.BigEndian, &bp.Targets[i])
+		if err != nil {
+			str := fmt.Errorf("bp deser err %s\n", err.Error())
+			return nil, str
+		}
+	}
+
+	bp.Proof = make([]Hash, numHashes)
+
+	for i, _ := range bp.Proof {
+		_, err = io.ReadFull(reader, bp.Proof[i][:])
+		if err != nil {
+			if err == io.EOF && i == len(bp.Proof) {
+				err = nil // EOF at the end is not an error...
+			} else {
+				str := fmt.Errorf("bp deser err %s\n", err.Error())
+				return nil, str
+			}
+		}
+	}
+
+	return &bp, nil
 }
 
 // ToString for debugging, shows the blockproof
