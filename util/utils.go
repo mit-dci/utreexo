@@ -294,8 +294,8 @@ func HasAccess(fileName string) bool {
 	return true
 }
 
-//IsUnspendable determines whether a tx is spendable or not.
-//returns true if spendable, false if unspendable.
+// IsUnspendable determines whether a txout is spendable or not.
+// returns true if spendable, false if unspendable.
 func IsUnspendable(o *wire.TxOut) bool {
 	switch {
 	case len(o.PkScript) > 10000: //len 0 is OK, spendable
@@ -305,4 +305,11 @@ func IsUnspendable(o *wire.TxOut) bool {
 	default:
 		return false
 	}
+}
+
+// Returns true for p2pkh outputs by checking the opcode bytes
+func IsP2PKH(pks []byte) bool {
+	return len(pks) == 25 &&
+		pks[0] == 0x76 && pks[1] == 0xa9 && pks[2] == 0x14 &&
+		pks[23] == 0x88 && pks[24] == 0xac
 }
