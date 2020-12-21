@@ -10,6 +10,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/btcsuite/btcutil"
+
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
@@ -312,4 +314,32 @@ func IsP2PKH(pks []byte) bool {
 	return len(pks) == 25 &&
 		pks[0] == 0x76 && pks[1] == 0xa9 && pks[2] == 0x14 &&
 		pks[23] == 0x88 && pks[24] == 0xac
+}
+
+// given a P2PKH scriptSig, output the original scriptPubKey
+func RecoverPkScriptP2PKH(scriptSig []byte) ([]byte, error) {
+	if len(scriptSig) == 0 {
+		return nil, fmt.Errorf("RecoverPkScriptP2PKH give empty scriptSig")
+	}
+	siglen := scriptSig[0]
+	if len(scriptSig)+1 < int(siglen) {
+		return nil, fmt.Errorf("RecoverPkScriptP2PKH can't pop signature")
+	}
+	scriptSig = scriptSig[siglen+1:]
+	pklen := scriptSig[0]
+	if len(scriptSig)+1 < int(pklen) {
+		return nil, fmt.Errorf("RecoverPkScriptP2PKH can't pop pubkey")
+	}
+	pkh := btcutil.Hash160(scriptSig[1 : 1+pklen])
+	return p2pkhify(pkh), nil
+}
+
+// turns a pubkey hash into a normal bitcoin p2pkh spend script.
+// no checks on the input.  if it's not 20 bytes, will return a script
+// that won't work.
+func p2pkhify(pkh []byte) (script []byte) {
+	script = []byte{0x76, 0xa9, 0x14}
+	script = append(script, pkh...)
+	script = append(script, []byte{0x88, 0xac}...)
+	return
 }

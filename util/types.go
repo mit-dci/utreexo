@@ -195,6 +195,7 @@ func (l *LeafData) DeserializeCompact(r io.Reader) (flag byte, err error) {
 		return
 	}
 	if flag == LeafFlagP2PKH {
+		// if it's P2PKH the flag alone is enough; no PKH data is given
 		return
 	}
 
@@ -525,6 +526,7 @@ func (ub *UBlock) SerializeCompactSize() int {
 // rebuilt from the block data.  Note that this leaves the blockhash
 // empty in the leaf data, so that needs to be filled in by lookup up
 // the headers (block height is provided)
+// The 2 things to rebuild here are outpoint and pkscript
 func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
 	err = ub.Block.Deserialize(r)
 	if err != nil {
@@ -540,6 +542,8 @@ func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
 			len(flags), len(ub.UtreexoData.Stxos))
 		return
 	}
+	// make sure the number of targets in the proof side matches the
+	// number of inputs in the block
 	proofsRemaining := len(flags)
 	for i, tx := range ub.Block.Transactions {
 		if i == 0 {
@@ -547,9 +551,37 @@ func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
 		}
 		proofsRemaining -= len(tx.TxIn)
 	}
+	// if it doesn't match, fail
 	if proofsRemaining != 0 {
 		err = fmt.Errorf("%d txos proven but %d inputs in block",
 			len(flags), len(flags)-proofsRemaining)
+		return
+	}
+	// we know the leaf data & inputs match up, at least in number, so
+	// rebuild the leaf data.  It could be wrong but we'll find out later
+	// if the hashes / proofs don't match.
+	txinInBlock := 0
+	for i, tx := range ub.Block.Transactions {
+		if i == 0 {
+			continue // skip coinbase
+		}
+		for _, in := range tx.TxIn {
+			// rebuild leaf data from this txin data (OP and PkScript)
+			// copy outpoint from block into leaf
+			ub.UtreexoData.Stxos[txinInBlock].Outpoint = in.PreviousOutPoint
+			// rebuild pkscript based on flag
+
+			// so far only P2PKH are omitted / recovered
+			if flags[txinInBlock] == LeafFlagP2PKH {
+				// get pubkey from sigscript
+				ub.UtreexoData.Stxos[txinInBlock].PkScript, err =
+					RecoverPkScriptP2PKH(in.SignatureScript)
+				if err != nil {
+					return
+				}
+			}
+			txinInBlock++
+		}
 	}
 
 	return
