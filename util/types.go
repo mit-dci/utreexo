@@ -582,38 +582,40 @@ func (ub *UBlockWithSkiplists) DeserializeCompact(r io.Reader) (err error) {
 	// we know the leaf data & inputs match up, at least in number, so
 	// rebuild the leaf data.  It could be wrong but we'll find out later
 	// if the hashes / proofs don't match.
-	txinInBlock := 0
+	inputInBlock := 0
 	skippos := 0
 	skiplen := len(ub.Inskip)
+	fmt.Printf("%d h %d txs %d targets inskip %v\n",
+		ub.UtreexoData.Height, len(ub.Block.Transactions),
+		len(ub.UtreexoData.Stxos), ub.Inskip)
 	for i, tx := range ub.Block.Transactions {
 		if i == 0 {
-			txinInBlock++ // coinbase always has 1 input
-			continue      // skip coinbase
+			continue // skip coinbase, not counted in Stxos
 		}
 		// loop through inputs
 		for _, in := range tx.TxIn {
 			// skip if on skiplist
-			if skippos < skiplen && ub.Inskip[skippos] == uint32(txinInBlock) {
+			if skippos < skiplen && ub.Inskip[skippos] == uint32(inputInBlock) {
 				skippos++
-				txinInBlock++
+				inputInBlock++
 				continue
 			}
 
 			// rebuild leaf data from this txin data (OP and PkScript)
 			// copy outpoint from block into leaf
-			ub.UtreexoData.Stxos[txinInBlock].Outpoint = in.PreviousOutPoint
+			ub.UtreexoData.Stxos[inputInBlock].Outpoint = in.PreviousOutPoint
 			// rebuild pkscript based on flag
 
 			// so far only P2PKH are omitted / recovered
-			if flags[txinInBlock] == LeafFlagP2PKH {
+			if flags[inputInBlock] == LeafFlagP2PKH {
 				// get pubkey from sigscript
-				ub.UtreexoData.Stxos[txinInBlock].PkScript, err =
+				ub.UtreexoData.Stxos[inputInBlock].PkScript, err =
 					RecoverPkScriptP2PKH(in.SignatureScript)
 				if err != nil {
 					return
 				}
 			}
-			txinInBlock++
+			inputInBlock++
 		}
 	}
 
