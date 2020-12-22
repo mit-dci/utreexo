@@ -58,7 +58,7 @@ func GenHashForNet(p chaincfg.Params) (*Hash, error) {
 // UblockNetworkReader gets Ublocks from the remote host and puts em in the
 // channel.  It'll try to fill the channel buffer.
 func UblockNetworkReader(
-	blockChan chan UBlock, remoteServer string,
+	blockChan chan UBlockWithSkiplists, remoteServer string,
 	curHeight, lookahead int32) {
 
 	d := net.Dialer{Timeout: 2 * time.Second}
@@ -69,7 +69,7 @@ func UblockNetworkReader(
 	defer con.Close()
 	defer close(blockChan)
 
-	var ub UBlock
+	var ub UBlockWithSkiplists
 	// var ublen uint32
 	// request range from curHeight to latest block
 	err = binary.Write(con, binary.BigEndian, curHeight)
@@ -91,7 +91,7 @@ func UblockNetworkReader(
 	// Need to sort the blocks though if you're doing that
 	for ; ; curHeight++ {
 
-		err = ub.Deserialize(con)
+		err = ub.DeserializeCompact(con)
 		if err != nil {
 			fmt.Printf("Deserialize error from connection %s %s\n",
 				con.RemoteAddr().String(), err.Error())
@@ -198,7 +198,6 @@ func blockToDelOPs(
 // So the coinbase tx in & output numbers affect the skip lists even though
 // the coinbase ins/outs can never be deduped.  it's simpler that way.
 func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
-
 	var i uint32
 	// wire.Outpoints are comparable with == which is nice.
 	inmap := make(map[wire.OutPoint]uint32)
@@ -220,7 +219,7 @@ func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
 	// start over, go through outputs finding skips
 	for cbif0, tx := range blk.Transactions {
 		if cbif0 == 0 { // coinbase tx can't be deduped
-			i += uint32(len(tx.TxOut)) // coinbase can have multiple inputs
+			i += uint32(len(tx.TxOut)) // coinbase can have multiple outputs
 			continue
 		}
 		txid := tx.TxHash()
@@ -245,6 +244,11 @@ func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
 
 // it'd be cool if you just had .sort() methods on slices of builtin types...
 func sortUint32s(s []uint32) {
+	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
+}
+
+// it'd be cool if you just had .sort() methods on slices of builtin types...
+func sortUint16s(s []uint16) {
 	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
 }
 
@@ -319,7 +323,7 @@ func IsP2PKH(pks []byte) bool {
 // given a P2PKH scriptSig, output the original scriptPubKey
 func RecoverPkScriptP2PKH(scriptSig []byte) ([]byte, error) {
 	if len(scriptSig) == 0 {
-		return nil, fmt.Errorf("RecoverPkScriptP2PKH give empty scriptSig")
+		return nil, fmt.Errorf("RecoverPkScriptP2PKH given empty scriptSig")
 	}
 	siglen := scriptSig[0]
 	if len(scriptSig)+1 < int(siglen) {

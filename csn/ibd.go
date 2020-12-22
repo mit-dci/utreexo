@@ -31,12 +31,12 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	ublockQueue := make(chan util.UBlock, 10)
+	ublockSkipQueue := make(chan util.UBlockWithSkiplists, 10)
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
 	go util.UblockNetworkReader(
-		ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
+		ublockSkipQueue, c.remoteHost, c.CurrentHeight, lookahead)
 
 	var plustime time.Duration
 	starttime := time.Now()
@@ -46,14 +46,15 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 	var blockCount int
 	for ; !stop; c.CurrentHeight++ {
 
-		blocknproof, open := <-ublockQueue
+		blocknproof, open := <-ublockSkipQueue
 		if !open {
 			fmt.Printf("ublockQueue channel closed ")
 			sig <- true
 			break
 		}
 
-		err := c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime)
+		err := c.putBlockInPollard(
+			blocknproof, &totalTXOAdded, &totalDels, plustime)
 		if err != nil {
 			// crash if there's a bad proof or signature, OK for testing
 			panic(err)
@@ -139,16 +140,15 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 // Here we write proofs for all the txs.
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as Leaf type.
-func (c *Csn) putBlockInPollard(
-	ub util.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
+func (c *Csn) putBlockInPollard(ub util.UBlockWithSkiplists,
+	totalTXOAdded, totalDels *int, plustime time.Duration) error {
 
 	plusstart := time.Now()
-
-	inskip, outskip := util.DedupeBlock(&ub.Block)
-	if !ub.ProofsProveBlock(inskip) {
-		return fmt.Errorf(
-			"uData missing utxo data for block %d", ub.UtreexoData.Height)
-	}
+	// no need to prove match with compact
+	// if !ub.ProofsProveBlock(inskip) {
+	// return fmt.Errorf(
+	// "uData missing utxo data for block %d", ub.UtreexoData.Height)
+	// }
 
 	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
 
@@ -168,7 +168,7 @@ func (c *Csn) putBlockInPollard(
 	// PoW, but the signatures are...
 
 	if c.CheckSignatures {
-		if !ub.CheckBlock(outskip, &c.Params) {
+		if !ub.CheckBlock(ub.Outskip, &c.Params) {
 			return fmt.Errorf("height %d hash %s block invalid",
 				ub.UtreexoData.Height, ub.Block.BlockHash().String())
 		}
@@ -189,7 +189,7 @@ func (c *Csn) putBlockInPollard(
 
 	// get hashes to add into the accumulator
 	blockAdds := util.BlockToAddLeaves(
-		ub.Block, remember, outskip, ub.UtreexoData.Height)
+		ub.Block, remember, ub.Outskip, ub.UtreexoData.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// for i, leaf := range blockAdds {

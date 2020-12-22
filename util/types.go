@@ -30,12 +30,28 @@ type UBlock struct {
 	Block       wire.MsgBlock
 }
 
+// Compact deserialization gives you the dedupe skiplists for "free" so
+// may as well include them here
+type UBlockWithSkiplists struct {
+	UBlock
+	Inskip, Outskip []uint32 // really could be 16bit as no block has 65K txos
+}
+
 /*
 Ublock serialization
 (changed with flatttl branch)
 
 A "Ublock" is a regular bitcoin block, along with Utreexo-specific data.
 The udata comes first, and the height and leafTTLs come first.
+
+Height: the height of the block in the blockchain
+[]LeafData: UTXOs spent in this block
+BatchProof: the inclustion proof for all the LeafData
+TxoTTLs: for each new output created at this height, how long the utxo lasts
+
+Note that utxos that are created & destroyed in the same block are not included
+as LeafData and not proven in the BatchProof; from utreexo's perspective they
+don't exist.
 
 */
 
@@ -527,11 +543,17 @@ func (ub *UBlock) SerializeCompactSize() int {
 // empty in the leaf data, so that needs to be filled in by lookup up
 // the headers (block height is provided)
 // The 2 things to rebuild here are outpoint and pkscript
-func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
+// Also we need a skiplist here as 0-duration UTXOs don't get proofs, so
+// they show up in the ub.Block but not in ub.UtreexoData.
+// Return the skiplist so you don't have to calculate it twice.
+func (ub *UBlockWithSkiplists) DeserializeCompact(r io.Reader) (err error) {
 	err = ub.Block.Deserialize(r)
 	if err != nil {
 		return err
 	}
+	// get the skiplists from the block & save them in the ubwsls
+	ub.Inskip, ub.Outskip = DedupeBlock(&ub.Block)
+
 	// fmt.Printf("deser'd block %s %d bytes\n",
 	// ub.Block.Header.BlockHash().String(), ub.Block.SerializeSize())
 	flags, err := ub.UtreexoData.DeserializeCompact(r)
@@ -540,7 +562,6 @@ func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
 	if len(flags) != len(ub.UtreexoData.Stxos) {
 		err = fmt.Errorf("%d flags but %d leaf data",
 			len(flags), len(ub.UtreexoData.Stxos))
-		return
 	}
 	// make sure the number of targets in the proof side matches the
 	// number of inputs in the block
@@ -555,17 +576,29 @@ func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
 	if proofsRemaining != 0 {
 		err = fmt.Errorf("%d txos proven but %d inputs in block",
 			len(flags), len(flags)-proofsRemaining)
-		return
 	}
+
+	// blockToDelOPs()
 	// we know the leaf data & inputs match up, at least in number, so
 	// rebuild the leaf data.  It could be wrong but we'll find out later
 	// if the hashes / proofs don't match.
 	txinInBlock := 0
+	skippos := 0
+	skiplen := len(ub.Inskip)
 	for i, tx := range ub.Block.Transactions {
 		if i == 0 {
-			continue // skip coinbase
+			txinInBlock++ // coinbase always has 1 input
+			continue      // skip coinbase
 		}
+		// loop through inputs
 		for _, in := range tx.TxIn {
+			// skip if on skiplist
+			if skippos < skiplen && ub.Inskip[skippos] == uint32(txinInBlock) {
+				skippos++
+				txinInBlock++
+				continue
+			}
+
 			// rebuild leaf data from this txin data (OP and PkScript)
 			// copy outpoint from block into leaf
 			ub.UtreexoData.Stxos[txinInBlock].Outpoint = in.PreviousOutPoint
@@ -584,5 +617,5 @@ func (ub *UBlock) DeserializeCompact(r io.Reader) (err error) {
 		}
 	}
 
-	return
+	return nil
 }

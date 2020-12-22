@@ -208,13 +208,14 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	}
 
 	// prefix with size
-	err = binary.Write(ff.proofFile, binary.BigEndian, uint32(ud.SerializeSize()))
+	err = binary.Write(
+		ff.proofFile, binary.BigEndian, uint32(ud.SerializeCompactSize()))
 	if err != nil {
 		return err
 	}
 
 	// then write the whole proof
-	err = ud.Serialize(ff.proofFile)
+	err = ud.SerializeCompact(ff.proofFile)
 	if err != nil {
 		return err
 	}
@@ -224,14 +225,14 @@ func (ff *flatFileState) writeProofBlock(ud util.UData) error {
 	if err != nil {
 		return err
 	}
-	if off != ff.currentOffset+int64(ud.SerializeSize())+8 {
+	if off != ff.currentOffset+int64(ud.SerializeCompactSize())+8 {
 		return fmt.Errorf("h %d offset %x calculated length %d but observed %d",
 			ff.currentHeight, ff.currentOffset,
-			int64(ud.SerializeSize())+8, off-ff.currentOffset)
+			int64(ud.SerializeCompactSize())+8, off-ff.currentOffset)
 	}
 
 	// 4B magic & 4B size comes first
-	ff.currentOffset += int64(ud.SerializeSize()) + 8
+	ff.currentOffset += int64(ud.SerializeCompactSize()) + 8
 	ff.currentHeight++
 
 	ff.fileWait.Done()
