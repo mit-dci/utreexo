@@ -356,11 +356,11 @@ func (ud *UData) SerializeCompactSize() int {
 
 	// TODO this is slow, can remove double checking once it works reliably
 	for _, l := range ud.Stxos {
-		ldsize += l.SerializeSize()
+		ldsize += l.SerializeCompactSize()
 		b.Reset()
-		l.Serialize(&b)
+		l.SerializeCompact(&b)
 		if b.Len() != l.SerializeCompactSize() {
-			fmt.Printf(" b.Len() %d, l.SerializeSize() %d\n",
+			fmt.Printf(" b.Len() %d, l.SerializeCompactSize() %d\n",
 				b.Len(), l.SerializeCompactSize())
 		}
 	}
