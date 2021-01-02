@@ -162,7 +162,7 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	copy(sortedTargets, bp.Targets)
 	sortUint64s(sortedTargets)
 
-	proofPositions, _ := ProofPositions(sortedTargets, f.numLeaves, f.rows)
+	proofPositions := ProofPositions(sortedTargets, f.numLeaves, f.rows)
 	// proofPositions = mergeSortedSlices(proofPositions, sortedTargets)
 	bp.Proof = make([]Hash, len(proofPositions))
 	for i, proofPos := range proofPositions {

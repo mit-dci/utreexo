@@ -155,9 +155,8 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 	sortUint64s(targets)
 
 	rows := treeRows(p.numLeaves)
-	proofPositions, computablePositions :=
-		ProofPositions(targets, p.numLeaves, rows)
-
+	proofPositions := ProofPositions(targets, p.numLeaves, rows)
+	numComputable := len(targets)
 	// The proof should have as many hashes as there are proof positions.
 	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
 		return false, nil, nil
@@ -170,7 +169,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 	targetNodes := make([]node, 0, len(targets)*int(rows))
 	rootCandidates := make([]node, 0, len(rootHashes))
 	// trees holds the entire proof tree of the batchproof, sorted by parents.
-	trees := make([]miniTree, 0, len(computablePositions))
+	trees := make([]miniTree, 0, numComputable)
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
@@ -320,12 +319,12 @@ func (bp *BatchProof) Reconstruct(
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
 	sortUint64s(targets)
-	proofPositions, _ := ProofPositions(targets, numleaves, forestRows)
+	proofPositions := ProofPositions(targets, numleaves, forestRows)
 	proofPositions = mergeSortedSlices(targets, proofPositions)
 
 	if len(proofPositions) != len(bp.Proof) {
-		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d",
-			len(proofPositions), len(bp.Proof))
+		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d targ:%v pp:%v",
+			len(proofPositions), len(bp.Proof), bp.Targets, proofPositions)
 	}
 
 	for i, pos := range proofPositions {

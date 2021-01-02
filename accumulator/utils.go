@@ -9,16 +9,14 @@ import (
 // verbose is a global const to get lots of printfs for debugging
 var verbose = false
 
-// ProofPositions returns the positions that are needed to prove that the targets exist.
+// ProofPositions returns the positions that are needed to prove that the targets
+// exist.
 func ProofPositions(
-	targets []uint64, numLeaves uint64, forestRows uint8) ([]uint64, []uint64) {
+	targets []uint64, numLeaves uint64, forestRows uint8) []uint64 {
 	// the proofPositions needed without caching.
 	proofPositions := make([]uint64, 0, len(targets)*int(forestRows))
-	// the positions that are computed/not included in the proof.
-	// (also includes the targets)
-	computedPositions := make([]uint64, 0, len(targets)*int(forestRows))
+	// pre-allocate up to a worst-case targets*height
 	for row := uint8(0); row < forestRows; row++ {
-		computedPositions = append(computedPositions, targets...)
 		if numLeaves&(1<<row) > 0 && len(targets) > 0 &&
 			targets[len(targets)-1] == rootPosition(numLeaves, row, forestRows) {
 			// remove roots from targets
@@ -91,7 +89,7 @@ func ProofPositions(
 		targets = nextTargets
 	}
 
-	return proofPositions, computedPositions
+	return proofPositions
 }
 
 // takes a slice of dels, removes the twins (in place) and returns a slice
