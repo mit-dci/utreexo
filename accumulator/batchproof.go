@@ -143,10 +143,10 @@ func (bp *BatchProof) ToString() string {
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
-func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
+func (p *Pollard) verifyBatchProof(bp BatchProof) ([]miniTree, []node, error) {
 
 	if len(bp.Targets) == 0 {
-		return true, nil, nil
+		return nil, nil, nil
 	}
 	rootHashes := p.rootHashesReverse()
 	// copy targets to leave them in original order
@@ -158,8 +158,11 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 	proofPositions := ProofPositions(targets, p.numLeaves, rows)
 	numComputable := len(targets)
 	// The proof should have as many hashes as there are proof positions.
-	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
-		return false, nil, nil
+	if len(proofPositions) != len(bp.Proof) {
+		// fmt.Printf(")
+		return nil, nil,
+			fmt.Errorf("verifyBatchProof %d proofPositions but %d proof hashes",
+				len(proofPositions), len(bp.Proof))
 	}
 
 	// targetNodes holds nodes that are known, on the bottom row those
@@ -207,7 +210,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 		// hashes or less than 2 targets left the proof is invalid because
 		// there is a target without matching proof.
 		if len(bp.Proof) < 2 || len(targets) < 2 {
-			return false, nil, nil
+			return nil, nil, fmt.Errorf("verifyBatchProof ran out of proof hashes")
 		}
 
 		targetNodes = append(targetNodes,
@@ -235,7 +238,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 			// target should have its sibling in targetNodes
 			if len(targetNodes) == 1 {
 				// sibling not found
-				return false, nil, nil
+				return nil, nil, fmt.Errorf("%v sibling not found", targetNodes)
 			}
 
 			proof = targetNodes[1]
@@ -258,7 +261,8 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 			(populatedNode != nil && populatedNode.data != empty &&
 				hash != populatedNode.data) {
 			// The hash did not match the cached hash
-			return false, nil, nil
+			return nil, nil, fmt.Errorf("verifyBatchProof %d have %x calc'd %x",
+				parentPos, populatedNode.data, hash)
 		}
 
 		trees = append(trees,
@@ -277,7 +281,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 
 	if len(rootCandidates) == 0 {
 		// no roots to verify
-		return false, nil, nil
+		return nil, nil, fmt.Errorf("verifyBatchProof no roots")
 	}
 
 	// `roots` is ordered, therefore to verify that `rootCandidates`
@@ -293,10 +297,10 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) (bool, []miniTree, []node) {
 	if len(rootCandidates) != rootMatches {
 		// the proof is invalid because some root candidates were not
 		// included in `roots`.
-		return false, nil, nil
+		return nil, nil, fmt.Errorf("verifyBatchProof missing roots")
 	}
 
-	return true, trees, rootCandidates
+	return trees, rootCandidates, nil
 }
 
 // Reconstruct takes a number of leaves and rows, and turns a block proof back

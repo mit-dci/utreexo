@@ -152,10 +152,12 @@ func (c *Csn) putBlockInPollard(ub util.UBlockWithSkiplists,
 
 	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
 
-	// derive leafHashes from leafData
-	if !ub.UtreexoData.Verify(c.pollard.ReconstructStats()) {
-		return fmt.Errorf("height %d LeafData / Proof mismatch", ub.UtreexoData.Height)
-	}
+	// we can no longer verify the proof on its own for self-consistency
+	// can only check the accproof in relation to the current pollard
+
+	// if !ub.UtreexoData.Verify(c.pollard.ReconstructStats()) {
+	// return fmt.Errorf("height %d LeafData / Proof mismatch", ub.UtreexoData.Height)
+	// }
 
 	// **************************************
 	// check transactions and signatures here

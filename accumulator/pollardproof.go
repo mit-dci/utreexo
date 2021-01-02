@@ -1,17 +1,13 @@
 package accumulator
 
-import (
-	"fmt"
-)
-
 // IngestBatchProof populates the Pollard with all needed data to delete the
 // targets in the block proof
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesReverse()
-	ok, trees, roots := p.verifyBatchProof(bp)
-	if !ok {
-		return fmt.Errorf("block proof mismatch")
+	trees, roots, err := p.verifyBatchProof(bp)
+	if err != nil {
+		return err
 	}
 	// preallocating polNodes helps with garbage collection
 	polNodes := make([]polNode, len(trees)*3)
