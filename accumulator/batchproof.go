@@ -302,38 +302,3 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) ([]miniTree, []node, error) {
 
 	return trees, rootCandidates, nil
 }
-
-// Reconstruct takes a number of leaves and rows, and turns a block proof back
-// into a partial proof tree. Should leave bp intact
-func (bp *BatchProof) Reconstruct(
-	numleaves uint64, forestRows uint8) (map[uint64]Hash, error) {
-
-	if verbose {
-		fmt.Printf("reconstruct blockproof %d tgts %d hashes nl %d fr %d\n",
-			len(bp.Targets), len(bp.Proof), numleaves, forestRows)
-	}
-	proofTree := make(map[uint64]Hash)
-
-	// If there is nothing to reconstruct, return empty map
-	if len(bp.Targets) == 0 {
-		return proofTree, nil
-	}
-
-	// copy bp.targets and send copy
-	targets := make([]uint64, len(bp.Targets))
-	copy(targets, bp.Targets)
-	sortUint64s(targets)
-	proofPositions := ProofPositions(targets, numleaves, forestRows)
-	proofPositions = mergeSortedSlices(targets, proofPositions)
-
-	if len(proofPositions) != len(bp.Proof) {
-		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d targ:%v pp:%v",
-			len(proofPositions), len(bp.Proof), bp.Targets, proofPositions)
-	}
-
-	for i, pos := range proofPositions {
-		proofTree[pos] = bp.Proof[i]
-	}
-
-	return proofTree, nil
-}
