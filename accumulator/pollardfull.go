@@ -5,6 +5,9 @@ import (
 )
 
 // read is just like forestData read but for pollard
+// can't return an error...
+// TODO should merge this with grabPos, as they're the same thing & this just
+// calls grabPos
 func (p *Pollard) read(pos uint64) Hash {
 	n, _, _, err := p.grabPos(pos)
 	if err != nil {

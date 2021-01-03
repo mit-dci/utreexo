@@ -343,40 +343,6 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	return bhn, nil
 }
 
-func (p *Pollard) readPos(pos uint64) (
-	n, nsib *polNode, hn *hashableNode, err error) {
-	// Grab the tree that the position is at
-	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
-	if tree >= uint8(len(p.roots)) {
-		err = ErrorStrings[ErrorNotEnoughTrees]
-		return
-	}
-
-	n, nsib = p.roots[tree], p.roots[tree]
-
-	if branchLen == 0 {
-		return
-	}
-
-	for h := branchLen - 1; h != 0; h-- { // go through branch
-		lr := uint8(bits>>h) & 1
-		// grab the sibling of lr
-		lrSib := lr ^ 1
-
-		n, nsib = n.niece[lr], n.niece[lrSib]
-		if n == nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	lr := uint8(bits) & 1
-	// grab the sibling of lr
-	lrSib := lr ^ 1
-
-	n, nsib = n.niece[lrSib], n.niece[lr]
-	return // only happens when returning a root
-}
-
 // grabPos returns the thing you asked for, as well as its sibling
 // and a hashable node for the position ABOVE pos
 // Returns an error if it can't get it.
@@ -445,7 +411,7 @@ func (p *Pollard) toFull() (*Forest, error) {
 		if !inForest(i, ff.numLeaves, ff.rows) {
 			continue
 		}
-		n, _, _, err := p.readPos(i)
+		n, _, _, err := p.grabPos(i)
 		if err != nil {
 			return nil, err
 		}
