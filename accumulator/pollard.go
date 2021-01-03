@@ -392,6 +392,22 @@ func (p *Pollard) grabPos(
 	return // only happens when returning a root
 }
 
+// read is just like forestData read but for pollard
+// can't return an error...
+// TODO should merge this with grabPos, as they're the same thing & this just
+// calls grabPos
+func (p *Pollard) read(pos uint64) Hash {
+	n, _, _, err := p.grabPos(pos)
+	if err != nil {
+		fmt.Printf("read err %s pos %d\n", err.Error(), pos)
+		return empty
+	}
+	if n == nil {
+		return empty
+	}
+	return n.data
+}
+
 // toFull takes a pollard and converts to a forest.
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
