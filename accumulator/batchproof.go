@@ -135,15 +135,41 @@ func (bp *BatchProof) ToString() string {
 	return s
 }
 
-// TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
-// roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
+// TODO :
+/*
+several changes needed & maybe easier to do them incrementally but at this
+point it's more of a rewrite.
+The batchProof no longer contains target hashes; those are obtained separately
+from the leaf data.  This makes sense as the verifying node will have to
+know the preimages anyway to do tx/sig checks, so they can also compute the
+hashes themselves instead of receiving them.
+
+prior to this change: verifyBatchProof() verifies up to the roots,
+and then returned all the new stuff it received / computed, so that it
+could be populated into the pollard (to allow for subsequent deletion)
+
+the new way it works: verifyBatchProof() and IngestBatchProof() will be
+merged, since really right now IngestBatchProof() is basically just a wrapper
+for verifyBatchProof().  It will get a batchProof as well as a slice of
+target hashes (the things being proven).  It will hash up to known branches,
+then not return anything as it's populating as it goes.  If the ingestion fails,
+we need to undo everything added.  It's also ok to trim everything down to
+just the roots in that case for now; can add the backtrack later
+(it doesn't seem too hard if you just keep track of every new populated position,
+then wipe them on an invalid proof.  Though... if you want to be really
+efficient / DDoS resistant, only wipe the invalid parts and leave the partially
+checked stuff that works.
+
+
+*/
 
 // verifyBatchProof verifies a batchproof by checking against the set of known
 // correct roots.
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
-func (p *Pollard) verifyBatchProof(bp BatchProof) ([]miniTree, []node, error) {
+func (p *Pollard) verifyBatchProof(
+	bp BatchProof, targs []Hash) ([]miniTree, []node, error) {
 	if len(bp.Targets) == 0 {
 		return nil, nil, nil
 	}
@@ -177,7 +203,7 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) ([]miniTree, []node, error) {
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
-	// TODO it doesn't now!
+	// TODO targets are now given in a separate argument
 	// bp.Proofs is now on from ProofPositions()
 	proofHashes := make([]Hash, 0, len(proofPositions))
 	var targetsMatched uint64
@@ -209,12 +235,14 @@ func (p *Pollard) verifyBatchProof(bp BatchProof) ([]miniTree, []node, error) {
 		}
 
 		// the sibling is not included in the proof positions, therefore
-		// it has to be included in targets. if there are less than 2 proof
+		// it must also be a target. if there are fewer than 2 proof
 		// hashes or less than 2 targets left the proof is invalid because
 		// there is a target without matching proof.
 		if len(bp.Proof) < 2 || len(targets) < 2 {
 			return nil, nil, fmt.Errorf("verifyBatchProof ran out of proof hashes")
 		}
+
+		// if we got this far there are 2 targets that are siblings; pop em both
 
 		targetNodes = append(targetNodes,
 			node{Pos: targets[0], Val: bp.Proof[0]},

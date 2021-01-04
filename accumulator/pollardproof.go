@@ -2,10 +2,10 @@ package accumulator
 
 // IngestBatchProof populates the Pollard with all needed data to delete the
 // targets in the block proof
-func (p *Pollard) IngestBatchProof(bp BatchProof) error {
+func (p *Pollard) IngestBatchProof(bp BatchProof, targetHashes []Hash) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesReverse()
-	trees, roots, err := p.verifyBatchProof(bp)
+	trees, roots, err := p.verifyBatchProof(bp, targetHashes)
 	if err != nil {
 		return err
 	}

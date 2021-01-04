@@ -150,6 +150,10 @@ func (c *Csn) putBlockInPollard(ub util.UBlockWithSkiplists,
 	// "uData missing utxo data for block %d", ub.UtreexoData.Height)
 	// }
 
+	// generate the target leaf hashes from the leaf data
+	// these are the hashes the server is telling us exist in the accumulator
+	// and we give these to IngestBatchProof()
+
 	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
 
 	// we can no longer verify the proof on its own for self-consistency
@@ -177,7 +181,8 @@ func (c *Csn) putBlockInPollard(ub util.UBlockWithSkiplists,
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err := c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
+	err := c.pollard.IngestBatchProof(
+		ub.UtreexoData.AccProof, ub.UtreexoData.TargetLeafHashes())
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
 		return err

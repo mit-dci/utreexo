@@ -28,6 +28,15 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 	return v
 }
 
+// returns all the target leafhashes
+func (ud *UData) TargetLeafHashes() []Hash {
+	leafHashes := make([]Hash, len(ud.Stxos))
+	for i, _ := range ud.Stxos {
+		leafHashes[i] = ud.Stxos[i].LeafHash()
+	}
+	return leafHashes
+}
+
 /*
 blockchain.NewUtxoEntry() looks like this:
 // NewUtxoEntry returns a new UtxoEntry built from the arguments.
