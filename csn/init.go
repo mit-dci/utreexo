@@ -43,7 +43,7 @@ func RunIBD(cfg *Config, sig chan bool) error {
 	// check on disk for pre-existing state and load it
 	pol, height, utxos, err := initCSNState()
 	if err != nil {
-		return err
+		return fmt.Errorf("initCSNState error: %s", err.Error())
 	}
 
 	pol.Lookahead = int32(cfg.lookAhead)
@@ -57,7 +57,7 @@ func RunIBD(cfg *Config, sig chan bool) error {
 
 	txChan, heightChan, err := c.Start(cfg, height, "compactstate", "", sig)
 	if err != nil {
-		return err
+		return fmt.Errorf("CSN start error: %s", err.Error())
 	}
 
 	var pkh [20]byte
@@ -65,7 +65,7 @@ func RunIBD(cfg *Config, sig chan bool) error {
 		fmt.Printf("decode len %d %s\n", len(cfg.watchAddr), *watchAddr)
 		adrBytes, err := bech32.SegWitAddressDecode(cfg.watchAddr)
 		if err != nil {
-			return err
+			return fmt.Errorf("SegWitAddressDecode error: %s", err.Error())
 		}
 		if len(adrBytes) != 22 {
 			return fmt.Errorf("need a bech32 p2wpkh address, %s has %d bytes",
@@ -127,6 +127,7 @@ func initCSNState() (
 		fmt.Println("Has access to forestdata, resuming")
 		height, p, utxos, err = restorePollard()
 		if err != nil {
+			err = fmt.Errorf("restorePollard error: %s", err.Error())
 			return
 		}
 	} else {
@@ -137,6 +138,8 @@ func initCSNState() (
 		// Create file needed for pollard
 		_, err = os.OpenFile(PollardFilePath, os.O_CREATE, 0600)
 		if err != nil {
+			err = fmt.Errorf("Open pollard file %s error: %s",
+				PollardFilePath, err.Error())
 			return
 		}
 	}
