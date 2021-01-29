@@ -37,10 +37,13 @@ func TestPollardSimpleIngest(t *testing.T) {
 	f := NewForest(nil, false, "", 0)
 	adds := make([]Leaf, 15)
 	for i := 0; i < len(adds); i++ {
-		adds[i].Hash[0] = uint8(i + 1)
+		adds[i].Hash = HashFromString(fmt.Sprintf("%d", i))
 	}
 
-	f.Modify(adds, []uint64{})
+	_, err := f.Modify(adds, []uint64{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	fmt.Println(f.ToString())
 
 	hashes := make([]Hash, len(adds))
@@ -52,9 +55,17 @@ func TestPollardSimpleIngest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	fmt.Printf("prove %d leaves (total %d)\n", len(hashes), len(bp.Proof))
+	if len(bp.Proof) == 0 {
+		t.Fatal("no hashes in proof")
+	}
 
 	var p Pollard
-	p.Modify(adds, nil)
+
+	err = p.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// Modify the proof so that the verification should fail.
 	bp.Proof[0] = empty
 
