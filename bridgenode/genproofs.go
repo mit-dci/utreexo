@@ -144,6 +144,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if err != nil {
 			return err
 		}
+
 		// We don't know the TTL values, but know how many spots to allocate
 		ud.TxoTTLs = make([]int32, len(blockAdds))
 		// send proof udata to channel to be written to disk
@@ -157,8 +158,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 
 		if bnr.Height%100 == 0 || bnr.Height < 150 {
-			fmt.Printf("On block %d, forest: %s\n",
-				bnr.Height+1, forest.ToString())
+			fmt.Printf("finished block %d (%d), forest: %s\n",
+				bnr.Height, height, forest.ToString())
 		}
 
 		// Check if stopSig is no longer false

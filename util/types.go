@@ -585,9 +585,9 @@ func (ub *UBlockWithSkiplists) DeserializeCompact(r io.Reader) (err error) {
 	inputInBlock := 0
 	skippos := 0
 	skiplen := len(ub.Inskip)
-	fmt.Printf("%d h %d txs %d targets inskip %v\n",
-		ub.UtreexoData.Height, len(ub.Block.Transactions),
-		len(ub.UtreexoData.Stxos), ub.Inskip)
+	// fmt.Printf("%d h %d txs %d targets inskip %v\n",
+	// ub.UtreexoData.Height, len(ub.Block.Transactions),
+	// len(ub.UtreexoData.Stxos), ub.Inskip)
 	for i, tx := range ub.Block.Transactions {
 		if i == 0 {
 			continue // skip coinbase, not counted in Stxos

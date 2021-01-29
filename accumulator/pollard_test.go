@@ -48,13 +48,17 @@ func TestPollardSimpleIngest(t *testing.T) {
 		hashes[i] = adds[i].Hash
 	}
 
-	bp, _ := f.ProveBatch(hashes)
+	bp, err := f.ProveBatch(hashes)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 
 	var p Pollard
 	p.Modify(adds, nil)
 	// Modify the proof so that the verification should fail.
-	bp.Proof[0][0] = 0xFF
-	err := p.IngestBatchProof(bp)
+	bp.Proof[0] = empty
+
+	err = p.IngestBatchProof(bp, hashes)
 	if err == nil {
 		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
 	}
@@ -87,7 +91,7 @@ func pollardRandomRemember(blocks int32) error {
 			return err
 		}
 		// verify proofs on rad node
-		err = p.IngestBatchProof(bp)
+		err = p.IngestBatchProof(bp, delHashes)
 		if err != nil {
 			return err
 		}
@@ -241,7 +245,7 @@ func TestCache(t *testing.T) {
 			t.Fatal("Modify failed", err)
 		}
 
-		err = p.IngestBatchProof(proof)
+		err = p.IngestBatchProof(proof, delHashes)
 		if err != nil {
 			t.Fatal("IngestBatchProof failed", err)
 		}
@@ -269,7 +273,7 @@ func TestCache(t *testing.T) {
 			pos := leafProof.Targets[0]
 
 			fmt.Println(pos, l)
-			_, nsib, _, err := p.readPos(pos)
+			_, nsib, _, err := p.grabPos(pos)
 
 			if pos == p.numLeaves-1 {
 				// roots are always cached
@@ -278,14 +282,16 @@ func TestCache(t *testing.T) {
 
 			siblingDoesNotExists := nsib == nil || nsib.data == empty || err != nil
 			if l.Remember && siblingDoesNotExists {
-				// the proof for l is not cached even though it should have been because it
-				// was added with remember=true.
-				t.Fatal("proof for leaf at", pos, "does not exist but it was added with remember=true")
+				// the proof for l is not cached even though it should have been
+				// because it was added with remember=true.
+				t.Fatal("proof for leaf at", pos,
+					"does not exist but it was added with remember=true")
 			} else if !l.Remember && !siblingDoesNotExists {
-				// the proof for l was cached even though it should not have been because it
-				// was added with remember = false.
+				// the proof for l was cached even though it should not have
+				// been because it was added with remember = false.
 				fmt.Println(p.ToString())
-				t.Fatal("proof for leaf at", pos, "does exist but it was added with remember=false")
+				t.Fatal("proof for leaf at", pos,
+					"does exist but it was added with remember=false")
 			}
 		}
 	}

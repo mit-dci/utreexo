@@ -69,10 +69,6 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 				plustime.Seconds(), time.Since(starttime).Seconds())
 		}
-		if c.CurrentHeight < 150 {
-			fmt.Printf("on block %d, pollard: %s\n",
-				c.CurrentHeight, c.pollard.ToString())
-		}
 
 		// quit after `quitafter` blocks if the -quitafter option is set
 		blockCount++
