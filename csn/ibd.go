@@ -69,6 +69,10 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 				plustime.Seconds(), time.Since(starttime).Seconds())
 		}
+		if c.CurrentHeight < 150 {
+			fmt.Printf("on block %d, pollard: %s\n",
+				c.CurrentHeight, c.pollard.ToString())
+		}
 
 		// quit after `quitafter` blocks if the -quitafter option is set
 		blockCount++
@@ -208,7 +212,6 @@ func (c *Csn) putBlockInPollard(ub util.UBlockWithSkiplists,
 
 	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
 	if err != nil {
-
 		return fmt.Errorf("csn h %d modify %s", c.CurrentHeight, err.Error())
 	}
 

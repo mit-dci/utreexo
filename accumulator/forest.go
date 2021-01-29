@@ -747,9 +747,13 @@ func (f *Forest) Stats() string {
 func (f *Forest) ToString() string {
 
 	fh := f.rows
-	// tree rows should be 6 or less
-	if fh > 6 {
-		return "forest too big to print "
+	// tree rows should be 3 or less to print, otherwise gives stats / roots
+	if fh > 3 {
+		s := fmt.Sprintf("%d leaves, roots: ", f.numLeaves)
+		for _, r := range f.getRoots() {
+			s += r.PrefixString() + " "
+		}
+		return s
 	}
 
 	output := make([]string, (fh*2)+1)

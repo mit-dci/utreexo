@@ -15,6 +15,11 @@ func (h Hash) Prefix() []byte {
 	return h[:4]
 }
 
+// Prefix string for printing
+func (h Hash) PrefixString() string {
+	return fmt.Sprintf("%x", h[:4])
+}
+
 // Mini :
 func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])

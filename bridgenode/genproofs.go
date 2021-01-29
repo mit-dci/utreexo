@@ -156,8 +156,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 
-		if bnr.Height%100 == 0 {
-			fmt.Println("On block :", bnr.Height+1)
+		if bnr.Height%100 == 0 || bnr.Height < 150 {
+			fmt.Printf("On block %d, forest: %s\n",
+				bnr.Height+1, forest.ToString())
 		}
 
 		// Check if stopSig is no longer false

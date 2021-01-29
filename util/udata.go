@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/mit-dci/utreexo/accumulator"
+
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -29,8 +31,8 @@ func (ud *UData) ToUtxoView() *blockchain.UtxoViewpoint {
 }
 
 // returns all the target leafhashes
-func (ud *UData) TargetLeafHashes() []Hash {
-	leafHashes := make([]Hash, len(ud.Stxos))
+func (ud *UData) TargetLeafHashes() []accumulator.Hash {
+	leafHashes := make([]accumulator.Hash, len(ud.Stxos))
 	for i, _ := range ud.Stxos {
 		leafHashes[i] = ud.Stxos[i].LeafHash()
 	}
