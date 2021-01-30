@@ -32,6 +32,13 @@ func (p *Pollard) ingestAndCheck(bp BatchProof, targs []Hash) error {
 	if len(targs) == 0 {
 		return nil
 	}
+	// if bp targs and targs have different length, this will crash.
+	// they shouldn't though, make sure there are previous checks for that
+
+	maxpp := len(bp.Proof)
+	pp := 0 // proof pointer; where we are in the pointer slice
+	// instead of popping like bp.proofs = bp.proofs[1:]
+
 	fmt.Printf("got proof %s\n", bp.ToString())
 
 	// the main thing ingestAndCheck does is write hashes to the pollard.
@@ -45,11 +52,51 @@ func (p *Pollard) ingestAndCheck(bp BatchProof, targs []Hash) error {
 	// first range through targets, populating / matching, and placing proof
 	// hashes if the targets are not twins
 
-	for i, targpos := range bp.Targets {
+	for i := 0; i < len(bp.Targets); i++ {
+		targpos := bp.Targets[i]
 
+		n, nsib, _, err := p.grabPos(targpos, true)
+		if err != nil {
+			return err
+		}
+		err = matchPop(n, targs[i])
+		if err != nil {
+			return err
+		}
+
+		// see if current target is a twin target
+		if i+1 < len(targs) && bp.Targets[i]|1 == bp.Targets[i+1] {
+			err = matchPop(nsib, targs[i+1])
+			if err != nil {
+				return err
+			}
+			i++ // dealt with an extra target
+		} else { // non-twin, needs proof
+			if pp == maxpp {
+				return fmt.Errorf("need more proofs")
+			}
+			err = matchPop(nsib, bp.Proof[pp])
+			if err != nil {
+				return err
+			}
+			pp++
+		}
 	}
 
 	return nil
+}
+
+// quick function to populate, or match/fail
+func matchPop(n *polNode, h Hash) error {
+	if n.data == empty {
+		n.data = h
+		return nil
+	}
+	if n.data == h {
+		return nil
+	}
+
+	return fmt.Errorf("Proof doesn't match; expect %x, got %x", n.data, h)
 }
 
 // populate takes a root and populates it with the nodes of the paritial proof

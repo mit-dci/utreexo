@@ -71,6 +71,7 @@ func TestPollardSimpleIngest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+
 	err = p2.Modify(adds, nil)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -301,7 +302,7 @@ func TestCache(t *testing.T) {
 			pos := leafProof.Targets[0]
 
 			fmt.Println(pos, l)
-			_, nsib, _, err := p.grabPos(pos)
+			_, nsib, _, err := p.grabPos(pos, false)
 
 			if pos == p.numLeaves-1 {
 				// roots are always cached
