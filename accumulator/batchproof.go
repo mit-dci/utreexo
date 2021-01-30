@@ -212,19 +212,12 @@ func (p *Pollard) verifyBatchProof(
 		// a row-0 root should never be given, as it can only be a target and
 		// targets aren't sent
 
-		/*if targets[0] == p.numLeaves-1 && p.numLeaves&1 == 1 {
-			// target is the row 0 root, append it to the root candidates.
-			rootCandidates = append(rootCandidates,
-				node{Val: rootHashes[0], Pos: targets[0]})
-			bp.Proof = bp.Proof[1:]
-			break
-		}*/
-
 		// `targets` might contain a target and its sibling or just the target, if
 		// only the target is present the sibling will be in `proofPositions`.
+
 		if uint64(len(proofPositions)) > targetsMatched &&
 			targets[0]^1 == proofPositions[targetsMatched] {
-			// the sibling of the target is included in the proof positions.
+			// target's sibling is in proof positions.
 			lr := targets[0] & 1
 			targetNodes = append(targetNodes, node{Pos: targets[0], Val: bp.Proof[lr]})
 			proofHashes = append(proofHashes, bp.Proof[lr^1])
@@ -234,7 +227,7 @@ func (p *Pollard) verifyBatchProof(
 			continue
 		}
 
-		// the sibling is not included in the proof positions, therefore
+		// the sibling is not included in proof positions, therefore
 		// it must also be a target. if there are fewer than 2 proof
 		// hashes or less than 2 targets left the proof is invalid because
 		// there is a target without matching proof.
@@ -243,7 +236,6 @@ func (p *Pollard) verifyBatchProof(
 		}
 
 		// if we got this far there are 2 targets that are siblings; pop em both
-
 		targetNodes = append(targetNodes,
 			node{Pos: targets[0], Val: bp.Proof[0]},
 			node{Pos: targets[1], Val: bp.Proof[1]})
@@ -288,9 +280,11 @@ func (p *Pollard) verifyBatchProof(
 		hash := parentHash(left.Val, right.Val)
 
 		populatedNode, _, _, err := p.grabPos(parentPos)
-		if err != nil ||
-			(populatedNode != nil && populatedNode.data != empty &&
-				hash != populatedNode.data) {
+		if err != nil {
+			return nil, nil, fmt.Errorf("verify grabPos error %s", err.Error())
+		}
+		if populatedNode != nil && populatedNode.data != empty &&
+			hash != populatedNode.data {
 			// The hash did not match the cached hash
 			return nil, nil, fmt.Errorf("verifyBatchProof pos %d have %x calc'd %x",
 				parentPos, populatedNode.data, hash)

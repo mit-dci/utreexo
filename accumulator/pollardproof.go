@@ -1,26 +1,51 @@
 package accumulator
 
+import (
+	"bytes"
+	"fmt"
+)
+
 // IngestBatchProof populates the Pollard with all needed data to delete the
 // targets in the block proof
 func (p *Pollard) IngestBatchProof(bp BatchProof, targetHashes []Hash) error {
-	// verify the batch proof.
-	rootHashes := p.rootHashesReverse()
-	trees, roots, err := p.verifyBatchProof(bp, targetHashes)
+
+	// first, save the rootHashes.  If ingestAndCheck fails, the pollard
+	// will be messed up / invalid, and we can wipe everything and restore
+	// to the roots before we ingested.  (not idea but works for now)
+	// TODO: cleaner failure mode for ingesting a bad proof
+
+	var buf bytes.Buffer
+	p.WritePollard(&buf)
+
+	err := p.ingestAndCheck(bp, targetHashes)
 	if err != nil {
-		return err
+		fmt.Printf("ingest proof failure: %s restoring pollard\n", err.Error())
+		p.RestorePollard(&buf)
+		return fmt.Errorf("Invalid proof, pollard wiped down to roots")
 	}
-	// preallocating polNodes helps with garbage collection
-	polNodes := make([]polNode, len(trees)*3)
-	i := 0
-	nodesAllocated := 0
-	for _, root := range roots {
-		for root.Val != rootHashes[i] {
-			i++
-		}
-		// populate the pollard
-		nodesAllocated += p.populate(
-			p.roots[len(p.roots)-i-1],
-			root.Pos, trees, polNodes[nodesAllocated:])
+	return nil
+}
+
+// ingestAndCheck puts the targets and proofs from the BatchProof into the
+// pollard, and computes parents as needed up to already populated nodes.
+func (p *Pollard) ingestAndCheck(bp BatchProof, targs []Hash) error {
+	if len(targs) == 0 {
+		return nil
+	}
+	fmt.Printf("got proof %s\n", bp.ToString())
+
+	// the main thing ingestAndCheck does is write hashes to the pollard.
+	// the hashes can come from 2 places: arguments or hashing.
+	// for arguments, proofs and targets are treated pretty much the same;
+	// read em off the slice and write em in.
+	// any time you're writing somthing that's already there, check to make
+	// sure it matches.  if it doesn't, return an error.
+	// if it does, you don't need to hash any parents above that.
+
+	// first range through targets, populating / matching, and placing proof
+	// hashes if the targets are not twins
+
+	for i, targpos := range bp.Targets {
 
 	}
 

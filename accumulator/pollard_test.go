@@ -35,7 +35,7 @@ func TestPollardFixed(t *testing.T) {
 
 func TestPollardSimpleIngest(t *testing.T) {
 	f := NewForest(nil, false, "", 0)
-	adds := make([]Leaf, 15)
+	adds := make([]Leaf, 8)
 	for i := 0; i < len(adds); i++ {
 		adds[i].Hash = HashFromString(fmt.Sprintf("%d", i))
 	}
@@ -51,28 +51,45 @@ func TestPollardSimpleIngest(t *testing.T) {
 		hashes[i] = adds[i].Hash
 	}
 
-	bp, err := f.ProveBatch(hashes)
+	targets := hashes[1:3]
+
+	bp, err := f.ProveBatch(targets)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	fmt.Printf("prove %d leaves (total %d)\n", len(hashes), len(bp.Proof))
+
+	fmt.Printf("%d targets, proof is %d hashes\n", len(targets), len(bp.Proof))
 	if len(bp.Proof) == 0 {
 		t.Fatal("no hashes in proof")
 	}
 
-	var p Pollard
+	fmt.Println(f.ToString())
+
+	var p, p2 Pollard
 
 	err = p.Modify(adds, nil)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	// Modify the proof so that the verification should fail.
-	bp.Proof[0] = empty
-
-	err = p.IngestBatchProof(bp, hashes)
-	if err == nil {
-		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
+	err = p2.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err.Error())
 	}
+
+	fmt.Println(p.ToString())
+
+	err = p.IngestBatchProof(bp, targets)
+	if err != nil {
+		t.Fatalf("BatchProof should work, but got error: %s", err.Error())
+	}
+	// Modify the proof so that the verification should fail.
+	copy(bp.Proof[0][:16], empty[:16])
+
+	err = p2.IngestBatchProof(bp, targets)
+	if err == nil {
+		t.Fatal("BatchProof still valid after modification.")
+	}
+	fmt.Printf("Expected an error, got one: %s\n", err.Error())
 }
 
 func pollardRandomRemember(blocks int32) error {
