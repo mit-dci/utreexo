@@ -279,7 +279,7 @@ func (p *Pollard) verifyBatchProof(
 		parentPos := parent(target.Pos, rows)
 		hash := parentHash(left.Val, right.Val)
 
-		populatedNode, _, _, err := p.grabPos(parentPos, false)
+		populatedNode, _, _, err := p.grabPos(parentPos)
 		if err != nil {
 			return nil, nil, fmt.Errorf("verify grabPos error %s", err.Error())
 		}

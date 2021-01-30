@@ -250,7 +250,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 	nextRootPositions, _ := getRootsReverse(nextNumLeaves, ph)
 	nextRoots := make([]*polNode, len(nextRootPositions))
 	for i, _ := range nextRoots {
-		nt, ntsib, _, err := p.grabPos(nextRootPositions[i], false)
+		nt, ntsib, _, err := p.grabPos(nextRootPositions[i])
 		if err != nil {
 			return err
 		}
@@ -277,7 +277,7 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 		// fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
-	_, _, hn, err := p.grabPos(pos, false)
+	_, _, hn, err := p.grabPos(pos)
 	if err != nil {
 		return nil, err
 	}
@@ -313,11 +313,11 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	// TODO could be improved by getting the highest common ancestor
 	// and then splitting instead of doing 2 full descents
 
-	a, asib, _, err := p.grabPos(s.from, false)
+	a, asib, _, err := p.grabPos(s.from)
 	if err != nil {
 		return nil, err
 	}
-	b, bsib, bhn, err := p.grabPos(s.to, false)
+	b, bsib, bhn, err := p.grabPos(s.to)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +346,7 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 // and a hashable node for the position ABOVE pos
 // Returns an error if it can't get it.
 // NOTE errors are not exhaustive; could return garbage without an error
-func (p *Pollard) grabPos(pos uint64, build bool) (
+func (p *Pollard) grabPos(pos uint64) (
 	n, nsib *polNode, hn *hashableNode, err error) {
 	// Grab the tree that the position is at
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
@@ -373,19 +373,11 @@ func (p *Pollard) grabPos(pos uint64, build bool) (
 		}
 		n, nsib = n.niece[lr], n.niece[lrSib]
 		if n == nil {
-			if !build {
-				// if a node doesn't exist, crash
-				// no niece in this case
-				// TODO error message could be better
-				err = ErrorStrings[ErrorNoPollardNode]
-				return
-			}
-			// build is set, so make a new empty node here
-			n = &polNode{}
-			// also build empty siblings when build is set
-			if nsib == nil {
-				nsib = &polNode{}
-			}
+			// if a node doesn't exist, crash
+			// no niece in this case
+			// TODO error message could be better
+			err = ErrorStrings[ErrorNoPollardNode]
+			return
 		}
 	}
 
@@ -404,7 +396,7 @@ func (p *Pollard) grabPos(pos uint64, build bool) (
 // TODO should merge this with grabPos, as they're the same thing & this just
 // calls grabPos
 func (p *Pollard) read(pos uint64) Hash {
-	n, _, _, err := p.grabPos(pos, false)
+	n, _, _, err := p.grabPos(pos)
 	if err != nil {
 		fmt.Printf("read err %s pos %d\n", err.Error(), pos)
 		return empty
@@ -434,7 +426,7 @@ func (p *Pollard) toFull() (*Forest, error) {
 		if !inForest(i, ff.numLeaves, ff.rows) {
 			continue
 		}
-		n, _, _, err := p.grabPos(i, false)
+		n, _, _, err := p.grabPos(i)
 		if err != nil {
 			return nil, err
 		}
@@ -462,7 +454,7 @@ func (p *Pollard) equalToForest(f *Forest) bool {
 	}
 
 	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
-		n, _, _, err := p.grabPos(leafpos, false)
+		n, _, _, err := p.grabPos(leafpos)
 		if err != nil {
 			return false
 		}
@@ -484,7 +476,7 @@ func (p *Pollard) equalToForestIfThere(f *Forest) bool {
 	}
 
 	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
-		n, _, _, err := p.grabPos(leafpos, false)
+		n, _, _, err := p.grabPos(leafpos)
 		if err != nil || n == nil {
 			continue // ignore grabPos errors / nils
 		}

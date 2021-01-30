@@ -55,7 +55,7 @@ func (p *Pollard) ingestAndCheck(bp BatchProof, targs []Hash) error {
 	for i := 0; i < len(bp.Targets); i++ {
 		targpos := bp.Targets[i]
 
-		n, nsib, _, err := p.grabPos(targpos, true)
+		n, nsib, _, err := p.grabPos(targpos)
 		if err != nil {
 			return err
 		}
@@ -86,16 +86,35 @@ func (p *Pollard) ingestAndCheck(bp BatchProof, targs []Hash) error {
 	return nil
 }
 
+// proofNodes is like ProofPositions but gets node pointers instead of positions,
+// and doesn't go above populated nodes
+func (p *Pollard) proofNodes(targetPositins []uint64) ([][]*polNode, error) {
+	// descend, like grabpos does, building a 2d slice of polnodes that you can
+	// then run matchPop on, ideally just by running throught linearly...
+	// I think it'll all match up and work ok, then  ingestAndCheck  can look
+	// something like this:
+
+	var activeNodes [][]*polNode
+	for _, row := range activeNodes {
+		for _, n := range row {
+			matchPop(n, empty)
+			// do stuff, call parent match with row+1
+		}
+	}
+
+	return nil, nil
+}
+
 // quick function to populate, or match/fail
 func matchPop(n *polNode, h Hash) error {
-	if n.data == empty {
+	if n.data == empty { // node was empty; populate
 		n.data = h
 		return nil
 	}
-	if n.data == h {
+	if n.data == h { // node was full & matches; OK
 		return nil
 	}
-
+	// didn't match
 	return fmt.Errorf("Proof doesn't match; expect %x, got %x", n.data, h)
 }
 
