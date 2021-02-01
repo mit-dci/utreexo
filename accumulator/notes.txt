@@ -1,4 +1,53 @@
-things to try:
+hash to known
+
+Not quite there, but the basic design:
+
+You start with a pollard, and a proof / target list.
+What's important in the pollard is what's there and what's not.
+
+Example:
+start with a tree like this:
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+You have 12, 10, 6. (a proof for 7)
+You get targets: 0, 1, 2
+You get proof: 3, 13
+
+You start at the root and start building a slice of nodes, top to bottom and left to right.
+
+... really you get a list of targets, which means if you go through each target you go top to bottom each time, but... there's probably a way to only make one pass top to bottom. 
+There might be a fun bit shifty way to do this; given a list of leaves, give a list of parents.  (deduped)  There might be something in the code for this already?  If not, maybe make it.
+
+ok starting at the root and going down, build a list of node-pairs, and also a list of bools, which mean "target / target parent".  I'll put a * for those
+
+[12* 13]
+[8* 9*]
+[0* 1*] [2* 3]
+
+I think the bool list can be a separate bitmap, in this case 10111110.  (or 10; 11; 1110 for rows)
+ Then go bottom to top.
+Bottom row: * means match/pop with target, no * means match/pop with proof.
+Upper rows: * means hash then match/pop, no * means match/pop with proof.
+
+In this case, populate target 0, then 1, then 2, and poplate 3 with the first proof.
+
+Then move up.  8 gets hashed from 0, 1.  We have the pointers to 0, 1 since nodes always come in pairs so a node's sibling will always be next to them in this list.
+9 gets hashed from 2, 3.  These hashes are populated, since there's nothing in 8 or 9 yet.
+
+12 gets hashed from 8, 9, and it's not populated, it's matched.  13 comes from the proof.
+
+Since 12 matched and was the only * of this row, we're done.  We only need to keep going when there are * nodes that got populated.  If all * nodes matched, we can finish without further hashing.  (But maybe still populate the rest of the row with proofs.)
+
+I'm not 100% sure this always works but feels like it does.
+
+--------
 
 Make moving / swapping nodes happen by changing the pointers of their parents, not by copying values
 .. that might help with some of this?  Then if you tag a node as dirty, you don't care where it ends up; you have a pointer
