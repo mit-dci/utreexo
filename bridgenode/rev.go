@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	dbutil "github.com/syndtr/goleveldb/leveldb/util"
@@ -54,8 +55,14 @@ func BlockAndRevReader(
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
 
+	offsetFile, err := os.Open(offsetFilePath)
+	if err != nil {
+		panic(err)
+	}
+	defer offsetFile.Close() // file always closes
+
 	for curHeight < maxHeight {
-		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFilePath, cfg.BlockDir)
+		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFile, cfg.BlockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
@@ -65,7 +72,7 @@ func BlockAndRevReader(
 		for i := 0; i < len(blocks); i++ {
 			bnr := BlockAndRev{
 				Height: curHeight,
-				Blk:    blocks[i],
+				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
 			blockChan <- bnr
@@ -77,7 +84,7 @@ func BlockAndRevReader(
 // GetRawBlocksFromDisk retrives multiple consecutive blocks starting at height `startAt`.
 // `count` is a upper limit for the number of blocks read.
 // Only blocks that are contained in the same blk file are returned.
-func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
+func GetRawBlocksFromDisk(startAt int32, count int32, offsetFile *os.File,
 	blockDir string) (blocks []wire.MsgBlock, revs []RevBlock, err error) {
 	if startAt == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
@@ -88,12 +95,6 @@ func GetRawBlocksFromDisk(startAt int32, count int32, offsetFileName string,
 	if count <= 0 {
 		return
 	}
-
-	offsetFile, err := os.Open(offsetFileName)
-	if err != nil {
-		return
-	}
-	defer offsetFile.Close() // file always closes
 
 	// offset file consists of 12 bytes per block
 	// tipnum * 12 gives us the correct position for that block
@@ -291,7 +292,7 @@ func GetBlockBytesFromFile(
 type BlockAndRev struct {
 	Height int32
 	Rev    RevBlock
-	Blk    wire.MsgBlock
+	Blk    *btcutil.Block
 }
 
 /*

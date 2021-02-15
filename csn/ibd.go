@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/btcacc"
-	"github.com/mit-dci/utreexo/util"
 	uwire "github.com/mit-dci/utreexo/wire"
 )
 
@@ -100,11 +100,11 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 
 // ScanBlock looks through a block using the CSN's maps and sends matches
 // into the tx channel.
-func (c *Csn) ScanBlock(b wire.MsgBlock) {
+func (c *Csn) ScanBlock(b *btcutil.Block) {
 	var curAdr [20]byte
-	for _, tx := range b.Transactions {
+	for _, tx := range b.Transactions() {
 		// first check utxo loss
-		for _, in := range tx.TxIn {
+		for _, in := range tx.MsgTx().TxIn {
 			lostTxo, exists := c.utxoStore[in.PreviousOutPoint]
 			if !exists {
 				continue
@@ -112,25 +112,25 @@ func (c *Csn) ScanBlock(b wire.MsgBlock) {
 			delete(c.utxoStore, in.PreviousOutPoint)
 			c.totalScore -= lostTxo.Amt
 			fmt.Printf("tx %s lost %d satoshis :( But still have %d in %d utxos\n",
-				tx.TxHash().String(), lostTxo.Amt, c.totalScore, len(c.utxoStore))
-			c.TxChan <- *tx
+				tx.Hash().String(), lostTxo.Amt, c.totalScore, len(c.utxoStore))
+			c.TxChan <- *tx.MsgTx()
 		}
 
 		// now check utxo gain
-		for i, out := range tx.TxOut {
+		for i, out := range tx.MsgTx().TxOut {
 			if len(out.PkScript) != 22 {
 				continue
 			}
 			copy(curAdr[:], out.PkScript[2:])
 			if c.WatchAdrs[curAdr] {
-				newOut := wire.OutPoint{Hash: tx.TxHash(), Index: uint32(i)}
+				newOut := wire.OutPoint{Hash: *tx.Hash(), Index: uint32(i)}
 				c.RegisterOutPoint(newOut)
 				c.utxoStore[newOut] =
 					btcacc.LeafData{TxHash: btcacc.Hash(newOut.Hash), Index: newOut.Index, Amt: out.Value}
 				c.totalScore += out.Value
 				fmt.Printf("got utxo %s with %d satoshis! Now have %d in %d utxos\n",
 					newOut.String(), out.Value, c.totalScore, len(c.utxoStore))
-				c.TxChan <- *tx
+				c.TxChan <- *tx.MsgTx()
 				// break
 			}
 		}
@@ -145,10 +145,11 @@ func (c *Csn) putBlockInPollard(
 
 	plusstart := time.Now()
 
-	inskip, outskip := util.DedupeBlock(&ub.Block)
 	nl, h := c.pollard.ReconstructStats()
 
-	err := ub.ProofSanity(inskip, nl, h)
+	_, outskip := ub.Block.DedupeBlock()
+
+	err := ub.ProofSanity(nl, h)
 	if err != nil {
 		return fmt.Errorf(
 			"uData missing utxo data for block %d err: %e", ub.UtreexoData.Height, err)
@@ -169,7 +170,7 @@ func (c *Csn) putBlockInPollard(
 	if c.CheckSignatures {
 		if !ub.CheckBlock(outskip, &c.Params) {
 			return fmt.Errorf("height %d hash %s block invalid",
-				ub.UtreexoData.Height, ub.Block.BlockHash().String())
+				ub.UtreexoData.Height, ub.Block.Hash().String())
 		}
 	}
 

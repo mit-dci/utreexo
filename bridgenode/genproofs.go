@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/mit-dci/utreexo/btcacc"
-	"github.com/mit-dci/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -72,6 +71,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		CompactionTableSizeMultiplier: 8,
 		Compression:                   opt.NoCompression,
 	}
+
+	// init ttldb
 	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
 	if err != nil {
 		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
@@ -88,11 +89,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
 	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
+
 	// Start 16 workers. Just an arbitrary number
-	//	for j := 0; j < 16; j++ {
 	// I think we can only have one dbworker now, since it needs to all happen in order?
 	go DbWorker(dbWriteChan, ttlResultChan, lvdb, &dbwg)
-	//	}
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
@@ -119,8 +119,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
-		inskip, outskip := util.DedupeBlock(&bnr.Blk)
-
 		// start waitgroups, beyond this point we have to finish all the
 		// disk writes for this iteration of the loop
 		dbwg.Add(1)     // DbWorker calls Done()
@@ -129,11 +127,11 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
 		// also wants the skiplist to omit 0-ttl txos
-		dbWriteChan <- ParseBlockForDB(bnr, inskip, outskip)
+		dbWriteChan <- ParseBlockForDB(bnr)
 
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
-		blockAdds, delLeaves, err := blockToAddDel(bnr, inskip, outskip)
+		blockAdds, delLeaves, err := blockToAddDel(bnr)
 		if err != nil {
 			return err
 		}
@@ -209,7 +207,7 @@ func stopBuildProofs(
 	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
-		time.Sleep(60 * time.Second)
+		time.Sleep(1000 * time.Second)
 		fmt.Println("Program timed out. Force quitting. Data likely corrupted")
 		os.Exit(1)
 	}()

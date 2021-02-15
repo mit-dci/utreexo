@@ -28,7 +28,14 @@ github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpO
 github.com/jessevdk/go-flags v0.0.0-20141203071132-1679536dcc89/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jrick/logrotate v1.0.0/go.mod h1:LNinyqDIJnpAur+b8yyulnQw/wDuN1+BYKlTRt3OuAQ=
+github.com/kcalvinalvin/btcd v0.20.1-beta.0.20210202084407-63bae2d12e01 h1:hEqegh2K4FVya38YIgRxdJq2MlKX4ZdTCFhoOFTuD9k=
+github.com/kcalvinalvin/btcd v0.20.1-beta.0.20210202084407-63bae2d12e01/go.mod h1:Sv4JPQ3/M+teHz9Bo5jBpkNcP0x6r7rdihlNL/7tTAs=
 github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23/go.mod h1:J+Gs4SYgM6CZQHDETBtE9HaSEkGmuNXF86RwHhHUvq4=
+github.com/mit-dci/utcd v0.21.0-beta.0.20210201215500-359f1ee1429a h1:RzhKLugFs87PMOHxrQUcvkqyuqerpd7bWaUKdxwKMLI=
+github.com/mit-dci/utcd v0.21.0-beta.0.20210201215500-359f1ee1429a/go.mod h1:t4zbDmIvP+nfkgR383HSMks64wA8cloaI7o3THoptXY=
+github.com/mit-dci/utcutil v1.0.3-0.20210201144513-fb3ce8742498 h1:luTD6pTVYv5BMGuf+GkOCedIYZo9jMaA5USZULZCCvM=
+github.com/mit-dci/utcutil v1.0.3-0.20210201144513-fb3ce8742498/go.mod h1:ST9y+SCOD6G6J48CwoMwtmQ+ATLrDuwS7rfZWNrsEPg=
+github.com/mit-dci/utreexo v0.0.0-20210113220559-fe368b8feff3/go.mod h1:Fkwf5QjCAkJxTCWWARKviyBWIX4v2NRcFsd0f0eZZjs=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.4.1/go.mod h1:C1qb7wdrVGGVU+Z6iS04AVkA3Q65CEZX59MT0QO5uiA=

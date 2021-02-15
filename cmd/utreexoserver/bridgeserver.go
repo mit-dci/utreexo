@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"runtime/pprof"
 	"runtime/trace"
 	"syscall"
@@ -12,6 +13,11 @@ import (
 )
 
 func main() {
+	// The allocations from loading blocks from disk can cause
+	// bursts of big memory allocations. This helps avoid that
+	// by collecting garbage early.
+	debug.SetGCPercent(20)
+
 	// parse the config
 	cfg, err := bridge.Parse(os.Args[1:])
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 )
 
 type Hash [32]byte
@@ -69,21 +70,24 @@ func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
 // deleted.  All txinputs except for the coinbase input and utxos created
 // within the same block (on the skiplist)
 func BlockToDelOPs(
-	blk *wire.MsgBlock, skiplist []uint32) (delOPs []wire.OutPoint) {
+	blk *btcutil.Block) (delOPs []wire.OutPoint) {
+
+	transactions := blk.Transactions()
+	inskip, _ := blk.DedupeBlock()
 
 	var blockInIdx uint32
-	for txinblock, tx := range blk.Transactions {
+	for txinblock, tx := range transactions {
 		if txinblock == 0 {
 			blockInIdx++ // coinbase tx always has 1 input
 			continue
 		}
 
 		// loop through inputs
-		for _, txin := range tx.TxIn {
+		for _, txin := range tx.MsgTx().TxIn {
 			// check if on skiplist.  If so, don't make leaf
-			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
+			if len(inskip) > 0 && inskip[0] == blockInIdx {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
-				skiplist = skiplist[1:]
+				inskip = inskip[1:]
 				blockInIdx++
 				continue
 			}
