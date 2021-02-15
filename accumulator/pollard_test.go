@@ -61,17 +61,9 @@ func TestPollardSimpleIngest(t *testing.T) {
 }
 
 func pollardRandomRemember(blocks int32) error {
-
-	// ffile, err := os.Create("/dev/shm/forfile")
-	// if err != nil {
-	// return err
-	// }
-
 	f := NewForest(nil, false, "", 0)
 
 	var p Pollard
-
-	// p.Minleaves = 0
 
 	sn := NewSimChain(0x07)
 	sn.lookahead = 400
@@ -91,7 +83,7 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("del %v\n", bp.Targets)
+		fmt.Printf("deletions: %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
@@ -134,7 +126,7 @@ func pollardRandomRemember(blocks int32) error {
 		}
 
 		fullTops := f.getRoots()
-		polTops := p.rootHashesReverse()
+		polTops := p.rootHashesForward()
 
 		// check that tops match
 		if len(fullTops) != len(polTops) {
@@ -142,11 +134,13 @@ func pollardRandomRemember(blocks int32) error {
 				sn.blockHeight, len(fullTops), len(polTops))
 		}
 		fmt.Printf("top matching: ")
-		for i, ft := range fullTops {
-			fmt.Printf("f %04x p %04x ", ft[:4], polTops[i][:4])
-			if ft != polTops[i] {
+		for i, pt := range polTops {
+			fmt.Printf("p %04x f %04x ", pt[:4],
+				fullTops[i][:4])
+			if pt != fullTops[i] {
 				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
-					sn.blockHeight, i, ft[:4], polTops[i][:4])
+					sn.blockHeight, i, pt[:4],
+					fullTops[i][:4])
 			}
 		}
 		fmt.Printf("\n")

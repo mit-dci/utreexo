@@ -79,8 +79,8 @@ func pollardFullRandomRemember(blocks int32) error {
 
 		fmt.Printf("fulpol postadd %s", fp.ToString())
 
-		fullTops := fp.rootHashesReverse()
-		polTops := p.rootHashesReverse()
+		fullTops := fp.rootHashesForward()
+		polTops := p.rootHashesForward()
 
 		// check that tops match
 		if len(fullTops) != len(polTops) {

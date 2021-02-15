@@ -318,23 +318,21 @@ func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 	return shifted & mask
 }
 
-// getroots gives you the positions of the tree roots, given a number of leaves.
-// LOWEST first (right to left) (blarg change this)
-func getRootsReverse(leaves uint64, forestRows uint8) (roots []uint64, rows []uint8) {
+// getRootsForwards gives you the positions of the tree roots, given a number of leaves.
+func getRootsForwards(leaves uint64, forestRows uint8) (roots []uint64, rows []uint8) {
 	position := uint64(0)
 
-	// go left to right.  But append in reverse so that the roots are low to high
-	// run though all bit positions.  if there's a 1, build a tree atop
-	// the current position, and move to the right.
 	for row := forestRows; position < leaves; row-- {
 		if (1<<row)&leaves != 0 {
 			// build a tree here
 			root := parentMany(position, row, forestRows)
-			roots = append([]uint64{root}, roots...)
-			rows = append([]uint8{row}, rows...)
+
+			roots = append(roots, root)
+			rows = append(rows, row)
 			position += 1 << row
 		}
 	}
+
 	return
 }
 

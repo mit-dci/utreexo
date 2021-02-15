@@ -8,7 +8,7 @@ import (
 // targets in the block proof
 func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	// verify the batch proof.
-	rootHashes := p.rootHashesReverse()
+	rootHashes := p.rootHashesForward()
 	ok, trees, roots := verifyBatchProof(bp, rootHashes, p.numLeaves,
 		// pass a closure that checks the pollard for cached nodes.
 		// returns true and the hash value of the node if it exists.
@@ -27,17 +27,24 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 	if !ok {
 		return fmt.Errorf("block proof mismatch")
 	}
+
 	// preallocating polNodes helps with garbage collection
 	polNodes := make([]polNode, len(trees)*3)
-	i := 0
+
+	// rootIdx and rootIdxBackwards is needed because p.populate()
+	// expects the roots in a reverse order. Thus the need for two
+	// indexes. TODO fix this to have only one index
+	rootIdx := len(rootHashes) - 1
+	rootIdxBackwards := 0
 	nodesAllocated := 0
 	for _, root := range roots {
-		for root.Val != rootHashes[i] {
-			i++
+		for root.Val != rootHashes[rootIdx] {
+			rootIdx--
+			rootIdxBackwards++
 		}
 		// populate the pollard
-		nodesAllocated += p.populate(p.roots[len(p.roots)-i-1], root.Pos,
-			trees, polNodes[nodesAllocated:])
+		nodesAllocated += p.populate(p.roots[(len(p.roots)-rootIdxBackwards)-1],
+			root.Pos, trees, polNodes[nodesAllocated:])
 	}
 
 	return nil

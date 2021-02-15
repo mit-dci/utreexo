@@ -269,12 +269,12 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
-	// fmt.Printf("preroot %s", p.toString())
 	// set new roots
-	nextRootPositions, _ := getRootsReverse(nextNumLeaves, ph)
+	nextRootPositions, _ := getRootsForwards(nextNumLeaves, ph)
 	nextRoots := make([]*polNode, len(nextRootPositions))
 	for i, _ := range nextRoots {
-		nt, ntsib, _, err := p.grabPos(nextRootPositions[i])
+		rootPos := len(nextRootPositions) - (i + 1)
+		nt, ntsib, _, err := p.grabPos(nextRootPositions[rootPos])
 		if err != nil {
 			return err
 		}
@@ -312,13 +312,7 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 // swapNodes swaps the nodes at positions a and b.
 // returns a hashable node with b, bsib, and bpar
 func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
-
-	// if !inForest(s.from, p.numLeaves, p.rows()) ||
-	// !inForest(s.to, p.numLeaves, p.rows()) {
-	// return nil, fmt.Errorf("swapNodes %d %d out of bounds nl %d",
-	// s.from, s.to, p.numLeaves)
-	// }
-
+	// First operate on the position map for the fullPollard types
 	if p.positionMap != nil {
 		a := childMany(s.from, row, p.rows())
 		b := childMany(s.to, row, p.rows())
@@ -352,8 +346,6 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 		return nil, fmt.Errorf("swapNodes %d %d node not found", s.from, s.to)
 	}
 
-	// fmt.Printf("swapNodes swapping a %d %x with b %d %x\n",
-	// r.from, a.data[:4], r.to, b.data[:4])
 	bhn.position = parent(s.to, p.rows())
 	// do the actual swap here
 	err = polSwap(a, asib, b, bsib)

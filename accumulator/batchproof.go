@@ -279,7 +279,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		if targets[0] == numLeaves-1 && numLeaves&1 == 1 {
 			// target is the row 0 root, append it to the root candidates.
 			rootCandidates = append(rootCandidates,
-				node{Val: roots[0], Pos: targets[0]})
+				node{Val: roots[len(roots)-1], Pos: targets[0]})
 			bp.Proof = bp.Proof[1:]
 			break
 		}
@@ -375,9 +375,9 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// holds a subset of the roots
 	// we count the roots that match in order.
 	rootMatches := 0
-	for _, root := range roots {
+	for i, _ := range roots {
 		if len(rootCandidates) > rootMatches &&
-			root == rootCandidates[rootMatches].Val {
+			roots[len(roots)-(i+1)] == rootCandidates[rootMatches].Val {
 			rootMatches++
 		}
 	}
@@ -416,6 +416,7 @@ func (bp *BatchProof) Reconstruct(
 	if len(proofPositions) != len(bp.Proof) {
 		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d",
 			len(proofPositions), len(bp.Proof))
+
 	}
 
 	for i, pos := range proofPositions {
