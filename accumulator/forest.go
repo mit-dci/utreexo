@@ -279,8 +279,11 @@ func (f *Forest) reHash(dirt []uint64) error {
 	if f.rows == 0 || len(dirt) == 0 { // nothing to hash
 		return nil
 	}
+	positionList := NewPositionList()
+	defer positionList.Free()
 
-	rootPositions, rootRows := getRootsForwards(f.numLeaves, f.rows)
+	rootRows := getRootsForwards(f.numLeaves, f.rows, &positionList.list)
+
 	dirty2d := make([][]uint64, f.rows)
 	r := uint8(0)
 	dirtyRemaining := 0
@@ -330,13 +333,13 @@ func (f *Forest) reHash(dirt []uint64) error {
 			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
 				continue
 			}
-			if len(rootPositions) == 0 {
+			if len(positionList.list) == 0 {
 				return fmt.Errorf(
 					"currentRow %v no roots remaining, this shouldn't happen",
 					currentRow)
 			}
 			// also skip if this is a root
-			if pos == rootPositions[len(rootPositions)-1] {
+			if pos == positionList.list[len(positionList.list)-1] {
 				continue
 			}
 
@@ -356,7 +359,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 			nextRow = append(nextRow, parpos)
 		}
 		if rootRows[len(rootRows)-1] == r {
-			rootPositions = rootPositions[:len(rootRows)-1]
+			positionList.list = positionList.list[:len(rootRows)-1]
 			rootRows = rootRows[:len(rootRows)-1]
 		}
 		currentRow = nextRow
@@ -383,21 +386,28 @@ func (f *Forest) Add(adds []Leaf) {
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) {
+	// allocate the positionList first
+	positionList := NewPositionList()
+	defer positionList.Free()
+
 	for _, add := range adds {
+		// reset positionList
+		positionList.list = positionList.list[:0]
+
 		f.positionMap[add.Mini()] = f.numLeaves
-		rootPositions, _ := getRootsForwards(f.numLeaves, f.rows)
+		getRootsForwards(f.numLeaves, f.rows, &positionList.list)
 		pos := f.numLeaves
 		n := add.Hash
 		f.data.write(pos, n)
+		add.Hash = empty
 
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
-			rootPos := len(rootPositions) - int(h+1)
+			rootPos := len(positionList.list) - int(h+1)
 			// grab, pop, swap, hash, new
-			root := f.data.read(rootPositions[rootPos]) // grab
-			n = parentHash(root, n)                     // hash
-			pos = parent(pos, f.rows)                   // rise
-			f.data.write(pos, n)                        // write
-
+			root := f.data.read(positionList.list[rootPos]) // grab
+			n = parentHash(root, n)                         // hash
+			pos = parent(pos, f.rows)                       // rise
+			f.data.write(pos, n)                            // write
 		}
 		f.numLeaves++
 	}
@@ -527,11 +537,15 @@ func (f *Forest) sanity() error {
 		return fmt.Errorf("forest has %d leaves but insufficient rows %d",
 			f.numLeaves, f.rows)
 	}
-	rootPositions, _ := getRootsForwards(f.numLeaves, f.rows)
-	for _, t := range rootPositions {
+
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	getRootsForwards(f.numLeaves, f.rows, &positionList.list)
+	for _, t := range positionList.list {
 		if f.data.read(t) == empty {
 			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
-				f.numLeaves, len(rootPositions), t)
+				f.numLeaves, len(positionList.list), t)
 		}
 	}
 
@@ -713,11 +727,14 @@ func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 
 // getRoots returns all the roots of the trees
 func (f *Forest) getRoots() []Hash {
-	rootPositions, _ := getRootsForwards(f.numLeaves, f.rows)
-	roots := make([]Hash, len(rootPositions))
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	getRootsForwards(f.numLeaves, f.rows, &positionList.list)
+	roots := make([]Hash, len(positionList.list))
 
 	for i, _ := range roots {
-		roots[i] = f.data.read(rootPositions[i])
+		roots[i] = f.data.read(positionList.list[i])
 	}
 
 	return roots

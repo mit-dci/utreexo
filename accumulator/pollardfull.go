@@ -85,8 +85,10 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	// guess is no, but that's untested.
 	sortUint64s(bp.Targets)
 
-	proofPositions, _ := ProofPositions(bp.Targets, p.numLeaves, p.rows())
-	targetsAndProof := mergeSortedSlices(proofPositions, bp.Targets)
+	positionList := NewPositionList()
+	defer positionList.Free()
+	ProofPositions(bp.Targets, p.numLeaves, p.rows(), &positionList.list)
+	targetsAndProof := mergeSortedSlices(positionList.list, bp.Targets)
 	bp.Proof = make([]Hash, len(targetsAndProof))
 	for i, proofPos := range targetsAndProof {
 		bp.Proof[i] = p.read(proofPos)

@@ -269,17 +269,21 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
+	// fmt.Printf("preroot %s", p.toString())
+	positionList := NewPositionList()
+	defer positionList.Free()
+
 	// set new roots
-	nextRootPositions, _ := getRootsForwards(nextNumLeaves, ph)
-	nextRoots := make([]*polNode, len(nextRootPositions))
+	getRootsForwards(nextNumLeaves, ph, &positionList.list)
+	nextRoots := make([]*polNode, len(positionList.list))
 	for i, _ := range nextRoots {
-		rootPos := len(nextRootPositions) - (i + 1)
-		nt, ntsib, _, err := p.grabPos(nextRootPositions[rootPos])
+		rootPos := len(positionList.list) - (i + 1)
+		nt, ntsib, _, err := p.grabPos(positionList.list[rootPos])
 		if err != nil {
 			return err
 		}
 		if nt == nil {
-			return fmt.Errorf("want root %d at %d but nil", i, nextRootPositions[i])
+			return fmt.Errorf("want root %d at %d but nil", i, positionList.list[i])
 		}
 		if ntsib == nil {
 			// when turning a node into a root, it's "nieces" are really children,

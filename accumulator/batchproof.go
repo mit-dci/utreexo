@@ -30,10 +30,6 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	if err != nil {
 		return err
 	}
-	// if there are no targets, finish early & don't write proofs
-	// if len(bp.Targets) == 0 {
-	// return
-	// }
 	// write out number of hashes in the proof
 	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Proof)))
 	if err != nil {
@@ -43,7 +39,7 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	// write out each target
 	for _, t := range bp.Targets {
 		// there's no need for these to be 64 bit for the next few decades...
-		err = binary.Write(w, binary.BigEndian, t)
+		err = binary.Write(w, binary.BigEndian, uint64(t))
 		if err != nil {
 			return
 		}
@@ -247,11 +243,14 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	}
 
 	rows := treeRows(numLeaves)
-	proofPositions, computablePositions :=
-		ProofPositions(targets, numLeaves, rows)
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	computablePositions :=
+		ProofPositions(targets, numLeaves, rows, &positionList.list)
 
 	// The proof should have as many hashes as there are proof positions.
-	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
+	if len(positionList.list)+len(bp.Targets) != len(bp.Proof) {
 		return false, nil, nil
 	}
 
@@ -266,11 +265,11 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// is the right child.
 	// trees holds the entire proof tree of the batchproof in this way,
 	// sorted by the tuple[0].
-	trees := make([][3]node, 0, len(computablePositions))
+	trees := make([][3]node, 0, computablePositions)
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
-	proofHashes := make([]Hash, 0, len(proofPositions))
+	proofHashes := make([]Hash, 0, len(positionList.list))
 	var targetsMatched uint64
 	for len(targets) > 0 {
 		// check if the target is the row 0 root.
@@ -286,8 +285,8 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 
 		// `targets` might contain a target and its sibling or just the target, if
 		// only the target is present the sibling will be in `proofPositions`.
-		if uint64(len(proofPositions)) > targetsMatched &&
-			targets[0]^1 == proofPositions[targetsMatched] {
+		if uint64(len(positionList.list)) > targetsMatched &&
+			targets[0]^1 == positionList.list[targetsMatched] {
 			// the sibling of the target is included in the proof positions.
 			lr := targets[0] & 1
 			targetNodes = append(targetNodes, node{Pos: targets[0], Val: bp.Proof[lr]})
@@ -321,10 +320,10 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	for len(targetNodes) > 0 {
 		var target, proof node
 		target = targetNodes[0]
-		if len(proofPositions) > 0 && target.Pos^1 == proofPositions[0] {
+		if len(positionList.list) > 0 && target.Pos^1 == positionList.list[0] {
 			// target has a sibling in the proof positions, fetch proof
-			proof = node{Pos: proofPositions[0], Val: bp.Proof[0]}
-			proofPositions = proofPositions[1:]
+			proof = node{Pos: positionList.list[0], Val: bp.Proof[0]}
+			positionList.list = positionList.list[1:]
 			bp.Proof = bp.Proof[1:]
 			targetNodes = targetNodes[1:]
 		} else {
@@ -410,16 +409,19 @@ func (bp *BatchProof) Reconstruct(
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
 	sortUint64s(targets)
-	proofPositions, _ := ProofPositions(targets, numleaves, forestRows)
-	proofPositions = mergeSortedSlices(targets, proofPositions)
 
-	if len(proofPositions) != len(bp.Proof) {
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	ProofPositions(targets, numleaves, forestRows, &positionList.list)
+	positionList.list = mergeSortedSlices(targets, positionList.list)
+
+	if len(positionList.list) != len(bp.Proof) {
 		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d",
-			len(proofPositions), len(bp.Proof))
-
+			len(positionList.list), len(bp.Proof))
 	}
 
-	for i, pos := range proofPositions {
+	for i, pos := range positionList.list {
 		proofTree[pos] = bp.Proof[i]
 	}
 
