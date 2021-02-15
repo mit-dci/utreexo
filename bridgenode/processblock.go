@@ -105,9 +105,10 @@ type txoStart struct {
 }
 
 // blockToAddDel turns a block into add leaves and del leaves
-func blockToAddDel(bnr BlockAndRev, inskip, outskip []uint32) (
+func blockToAddDel(bnr BlockAndRev) (
 	blockAdds []accumulator.Leaf, delLeaves []btcacc.LeafData, err error) {
 
+	inskip, outskip := bnr.Blk.DedupeBlock()
 	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
 	delLeaves, err = blockNRevToDelLeaves(bnr, inskip)
 	if err != nil {
@@ -126,28 +127,28 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 	delLeaves []btcacc.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
-	if len(bnr.Blk.Transactions)-1 != len(bnr.Rev.Txs) {
+	if len(bnr.Blk.Transactions())-1 != len(bnr.Rev.Txs) {
 		err = fmt.Errorf("genDels block %d %d txs but %d rev txs",
-			bnr.Height, len(bnr.Blk.Transactions), len(bnr.Rev.Txs))
+			bnr.Height, len(bnr.Blk.Transactions()), len(bnr.Rev.Txs))
 		return
 	}
 
 	var blockInIdx uint32
-	for txinblock, tx := range bnr.Blk.Transactions {
+	for txinblock, tx := range bnr.Blk.Transactions() {
 		if txinblock == 0 {
 			blockInIdx++ // coinbase tx always has 1 input
 			continue
 		}
 		txinblock--
 		// make sure there's the same number of txins
-		if len(tx.TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
+		if len(tx.MsgTx().TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
 			err = fmt.Errorf("genDels block %d tx %d has %d inputs but %d rev entries",
 				bnr.Height, txinblock+1,
-				len(tx.TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
+				len(tx.MsgTx().TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
 			return
 		}
 		// loop through inputs
-		for i, txin := range tx.TxIn {
+		for i, txin := range tx.MsgTx().TxIn {
 			// check if on skiplist.  If so, don't make leaf
 			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
@@ -177,7 +178,7 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 
 // ParseBlockForDB gets a block and creates a ttlRawBlock to send to the DB worker
 func ParseBlockForDB(
-	bnr BlockAndRev, inskip, outskip []uint32) ttlRawBlock {
+	bnr BlockAndRev) ttlRawBlock {
 
 	var trb ttlRawBlock
 	trb.blockHeight = bnr.Height
@@ -187,14 +188,15 @@ func ParseBlockForDB(
 	// if len(inskip) != 0 || len(outskip) != 0 {
 	// fmt.Printf("h %d inskip %v outskip %v\n", bnr.Height, inskip, outskip)
 	// }
-
+	transactions := bnr.Blk.Transactions()
+	inskip, outskip := bnr.Blk.DedupeBlock()
 	// iterate through the transactions in a block
-	for txInBlock, tx := range bnr.Blk.Transactions {
-		txid := tx.TxHash()
+	for txInBlock, tx := range transactions {
+		txid := tx.Hash()
 
 		// for all the txouts, get their outpoint & index and throw that into
 		// a db batch
-		for txoInTx, txo := range tx.TxOut {
+		for txoInTx, txo := range tx.MsgTx().TxOut {
 			if len(outskip) > 0 && txoInBlock == outskip[0] {
 				// skip inputs in the txin skiplist
 				// fmt.Printf("skipping output %s:%d\n", txid.String(), txoInTx)
@@ -208,15 +210,15 @@ func ParseBlockForDB(
 			}
 
 			trb.newTxos = append(trb.newTxos,
-				util.OutpointToBytes(wire.NewOutPoint(&txid, uint32(txoInTx))))
+				util.OutpointToBytes(wire.NewOutPoint(txid, uint32(txoInTx))))
 			txoInBlock++
 		}
 
 		// for all the txins, throw that into the work as well; just a bunch of
 		// outpoints
-		for txinInTx, in := range tx.TxIn { // bit of a tounge twister
+		for txinInTx, in := range tx.MsgTx().TxIn { // bit of a tounge twister
 			if txInBlock == 0 {
-				txinInBlock += uint32(len(tx.TxIn))
+				txinInBlock += uint32(len(tx.MsgTx().TxIn))
 				break // skip coinbase input
 			}
 			if len(inskip) > 0 && txinInBlock == inskip[0] {

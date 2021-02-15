@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -107,12 +108,6 @@ func flatFileWorker(
 				panic(err)
 			}
 		case ttlRes := <-ttlResultChan:
-			// for _, ttl := range ttlRes.Created {
-			// 	fmt.Printf("%04x ", ttlRes.Height-ttl.createHeight)
-			// }
-			// fmt.Printf("got ttlres h %d with %d entries\n",
-			// 	ttlRes.Height, len(ttlRes.Created))
-
 			for ttlRes.Height > ff.currentHeight {
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
@@ -120,6 +115,7 @@ func flatFileWorker(
 					panic(err)
 				}
 			}
+
 			err = ff.writeTTLs(ttlRes)
 			if err != nil {
 				panic(err)
@@ -175,59 +171,58 @@ func (ff *flatFileState) ffInit() error {
 		// start writing at block 1
 		ff.currentHeight = 1
 	}
+
 	return nil
 }
 
 func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
-	// note that we know the offset for block 2 once we're done writing block 1,
-	// but we don't write the block 2 offset until we get block 2
-
-	// fmt.Printf("writeProofBlock gets h %d ud %d utxodatas\n",
-	// ud.Height, len(ud.Stxos))
-
 	// get the new block proof
 	// put offset in ram
-	ff.offsets = append(ff.offsets, ff.currentOffset)
-	// fmt.Printf("expand offsets to %d\n", len(ff.offsets))
 	// write to offset file so we can resume; offset file is only
 	// read on startup and always incremented so we shouldn't need to seek
-	err := binary.Write(ff.offsetFile, binary.BigEndian, ff.currentOffset)
+
+	// pre-allocated the needed buffer
+	udSize := ud.SerializeSize()
+	buf := make([]byte, udSize)
+
+	// write write the offset of the current proof to the offset file
+	buf = buf[:8]
+	ff.offsets = append(ff.offsets, ff.currentOffset)
+
+	binary.BigEndian.PutUint64(buf, uint64(ff.currentOffset))
+	_, err := ff.offsetFile.WriteAt(buf, int64(8*ud.Height))
 	if err != nil {
 		return err
 	}
 
-	// seek to next block proof location, this file is open in ttl worker
-	// and may write point may have moved
-	_, _ = ff.proofFile.Seek(ff.currentOffset, 0)
-
 	// write to proof file
-	// first write magic 4 bytes
-	_, err = ff.proofFile.Write([]byte{0xaa, 0xff, 0xaa, 0xff})
+	_, err = ff.proofFile.WriteAt([]byte{0xaa, 0xff, 0xaa, 0xff}, ff.currentOffset)
 	if err != nil {
 		return err
 	}
 
 	// prefix with size
-	err = binary.Write(ff.proofFile, binary.BigEndian, uint32(ud.SerializeSize()))
+	buf = buf[:4]
+	binary.BigEndian.PutUint32(buf, uint32(udSize))
+	// +4 to account for the 4 magic bytes
+	_, err = ff.proofFile.WriteAt(buf, ff.currentOffset+4)
 	if err != nil {
 		return err
 	}
 
-	// then write the whole proof
-	err = ud.Serialize(ff.proofFile)
+	// Serialize proof
+	buf = buf[:0]
+	bytesBuf := bytes.NewBuffer(buf)
+	err = ud.Serialize(bytesBuf)
 	if err != nil {
 		return err
 	}
 
-	// verify that offset is calculated correctly
-	off, err := ff.proofFile.Seek(0, 1)
+	// Write to the file
+	// +4 +4 to account for the 4 magic bytes and the 4 size bytes
+	_, err = ff.proofFile.WriteAt(bytesBuf.Bytes(), ff.currentOffset+4+4)
 	if err != nil {
 		return err
-	}
-	if off != ff.currentOffset+int64(ud.SerializeSize())+8 {
-		return fmt.Errorf("h %d offset %x calculated length %d but observed %d",
-			ff.currentHeight, ff.currentOffset,
-			int64(ud.SerializeSize())+8, off-ff.currentOffset)
 	}
 
 	// 4B magic & 4B size comes first
@@ -235,20 +230,16 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	ff.currentHeight++
 
 	ff.fileWait.Done()
-	// fmt.Printf("flatFileBlockWorker h %d wrote %d bytes to offset %d\n",
-	// ff.currentHeight, ud.SerializeSize()+8, ff.currentOffset)
+
 	return nil
 }
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
-	// fmt.Printf("height %d got %d ttls\n",
-	// ttlRes.Height, len(ttlRes.Created))
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.Created {
 		// seek to the location of that txo's ttl value in the proof file
 
-		// fmt.Printf("write ttl back to block %d\n", c.createHeight)
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
 

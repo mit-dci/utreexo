@@ -67,16 +67,16 @@ func UblockNetworkReader(
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
 // uses remember slice up to number of txos, but doesn't check that it's the
 // right length.  Similar with skiplist, doesn't check it.
-func BlockToAddLeaves(blk wire.MsgBlock,
+func BlockToAddLeaves(blk *btcutil.Block,
 	remember []bool, skiplist []uint32,
 	height int32) (leaves []accumulator.Leaf) {
 
 	var txonum uint32
 	// bh := bl.Blockhash
-	for coinbaseif0, tx := range blk.Transactions {
+	for coinbaseif0, tx := range blk.Transactions() {
 		// cache txid aka txhash
-		txid := tx.TxHash()
-		for i, out := range tx.TxOut {
+		txid := tx.Hash()
+		for i, out := range tx.MsgTx().TxOut {
 			// Skip all the OP_RETURNs
 			if util.IsUnspendable(out) {
 				txonum++
@@ -92,7 +92,7 @@ func BlockToAddLeaves(blk wire.MsgBlock,
 			var l btcacc.LeafData
 			// TODO put blockhash back in -- leaving empty for now!
 			// l.BlockHash = bh
-			l.TxHash = btcacc.Hash(txid)
+			l.TxHash = btcacc.Hash(*txid)
 			l.Index = uint32(i)
 			l.Height = height
 			if coinbaseif0 == 0 {
@@ -116,14 +116,14 @@ func BlockToAddLeaves(blk wire.MsgBlock,
 // UBlock is a regular block, with Udata stuck on
 type UBlock struct {
 	UtreexoData btcacc.UData
-	Block       wire.MsgBlock
+	Block       *btcutil.Block
 }
 
 // ProofSanity checks the consistency of a UBlock.  Does the proof prove
 // all the inputs in the block?
-func (ub *UBlock) ProofSanity(inputSkipList []uint32, nl uint64, h uint8) error {
+func (ub *UBlock) ProofSanity(nl uint64, h uint8) error {
 	// get the outpoints that need proof
-	proveOPs := util.BlockToDelOPs(&ub.Block, inputSkipList)
+	proveOPs := util.BlockToDelOPs(ub.Block)
 
 	// ensure that all outpoints are provided in the extradata
 	if len(proveOPs) != len(ub.UtreexoData.Stxos) {
@@ -180,8 +180,8 @@ func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 	sigCache := txscript.NewSigCache(0)
 	hashCache := txscript.NewHashCache(0)
 
-	for txnum, tx := range ub.Block.Transactions {
-		outputsInTx := uint32(len(tx.TxOut))
+	for txnum, tx := range ub.Block.Transactions() {
+		outputsInTx := uint32(len(tx.MsgTx().TxOut))
 		if txnum == 0 {
 			txonum += outputsInTx
 			continue // skip checks for coinbase TX for now.  Or maybe it'll work?
@@ -193,10 +193,11 @@ func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 		*/
 		for len(outskip) > 0 && outskip[0] < txonum+outputsInTx {
 			idx := outskip[0] - txonum
-			skipTxo := wire.NewTxOut(tx.TxOut[idx].Value, tx.TxOut[idx].PkScript)
+			skipTxo := wire.NewTxOut(tx.MsgTx().TxOut[idx].Value,
+				tx.MsgTx().TxOut[idx].PkScript)
 			skippedEntry := blockchain.NewUtxoEntry(
 				skipTxo, ub.UtreexoData.Height, false)
-			skippedOutpoint := wire.OutPoint{Hash: tx.TxHash(), Index: idx}
+			skippedOutpoint := wire.OutPoint{Hash: *tx.Hash(), Index: idx}
 			viewMap[skippedOutpoint] = skippedEntry
 			outskip = outskip[1:] // pop off from output skiplist
 		}
@@ -204,32 +205,31 @@ func (ub *UBlock) CheckBlock(outskip []uint32, p *chaincfg.Params) bool {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(len(ub.Block.Transactions) - 1) // subtract coinbase
-	for txnum, tx := range ub.Block.Transactions {
+	wg.Add(len(ub.Block.Transactions()) - 1) // subtract coinbase
+	for txnum, tx := range ub.Block.Transactions() {
 		if txnum == 0 {
 			continue // skip checks for coinbase TX for now.  Or maybe it'll work?
 		}
-		utilTx := btcutil.NewTx(tx)
 		go func(w *sync.WaitGroup, tx *btcutil.Tx) {
 			// hardcoded testnet3 for now
 			_, err := blockchain.CheckTransactionInputs(
-				utilTx, ub.UtreexoData.Height, view, p)
+				tx, ub.UtreexoData.Height, view, p)
 			if err != nil {
 				fmt.Printf("Tx %s fails CheckTransactionInputs: %s\n",
-					utilTx.Hash().String(), err.Error())
+					tx.Hash().String(), err.Error())
 				panic(err)
 			}
 
 			// no scriptflags for now
 			err = blockchain.ValidateTransactionScripts(
-				utilTx, view, 0, sigCache, hashCache)
+				tx, view, 0, sigCache, hashCache)
 			if err != nil {
 				fmt.Printf("Tx %s fails ValidateTransactionScripts: %s\n",
-					utilTx.Hash().String(), err.Error())
+					tx.Hash().String(), err.Error())
 				panic(err)
 			}
 			w.Done()
-		}(&wg, utilTx)
+		}(&wg, tx)
 	}
 	wg.Wait()
 
@@ -247,10 +247,13 @@ The udata comes first, and the height and leafTTLs come first.
 
 // Deserialize a UBlock.  It's just a block then udata.
 func (ub *UBlock) Deserialize(r io.Reader) (err error) {
-	err = ub.Block.Deserialize(r)
+	var msgBlock wire.MsgBlock
+	err = msgBlock.Deserialize(r)
 	if err != nil {
 		return err
 	}
+
+	ub.Block = btcutil.NewBlock(&msgBlock)
 	err = ub.UtreexoData.Deserialize(r)
 	return
 }
@@ -258,7 +261,7 @@ func (ub *UBlock) Deserialize(r io.Reader) (err error) {
 // We don't actually call serialize since from the server side we don't
 // serialize, we just glom stuff together from the disk and send it over.
 func (ub *UBlock) Serialize(w io.Writer) (err error) {
-	err = ub.Block.Serialize(w)
+	err = ub.Block.MsgBlock().Serialize(w)
 	if err != nil {
 		return
 	}
@@ -268,5 +271,5 @@ func (ub *UBlock) Serialize(w io.Writer) (err error) {
 
 // SerializeSize: how big is it, in bytes.
 func (ub *UBlock) SerializeSize() int {
-	return ub.Block.SerializeSize() + ub.UtreexoData.SerializeSize()
+	return ub.Block.MsgBlock().SerializeSize() + ub.UtreexoData.SerializeSize()
 }
