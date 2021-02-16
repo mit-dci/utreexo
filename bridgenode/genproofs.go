@@ -94,7 +94,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	// Start 16 workers. Just an arbitrary number
 	// I think we can only have one dbworker now, since it needs to all happen in order?
-	go DbWorker(dbWriteChan, ttlResultChan, lvdb, &dbwg)
+	go TTLWorker(dbWriteChan, ttlResultChan, &dbwg)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
@@ -129,7 +129,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
 		// also wants the skiplist to omit 0-ttl txos
-		dbWriteChan <- ParseBlockForDB(bnr)
+		dbWriteChan <- ParseBlockForTTL(bnr)
 
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs

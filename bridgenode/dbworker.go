@@ -1,15 +1,12 @@
 package bridgenode
 
 import (
-	"encoding/binary"
-	"fmt"
 	"sync"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // DbWorker writes & reads/deletes everything to the db.
 // It also generates TTLResultBlocks to send to the flat file worker
+/*
 func DbWorker(
 	dbWorkChan chan ttlRawBlock, ttlResultChan chan ttlResultBlock,
 	lvdb *leveldb.DB, wg *sync.WaitGroup) {
@@ -60,7 +57,31 @@ func DbWorker(
 		if err != nil {
 			fmt.Println(err.Error())
 		}
-
 		wg.Done()
 	}
+}
+*/
+
+// func seekTxid()
+
+// noDbWorker does the same thing as DBWorker but... without a DB.  Instead it
+// uses a sorted txid flat file.
+func TTLWorker(
+	ttlWork chan ttlRawBlock,
+	ttlResultChan chan ttlResultBlock,
+	wg *sync.WaitGroup) {
+
+	// buffers instead of files for now
+	// var txidIdx, txidStream bytes.Buffer
+	for {
+		// rawBlock := <-ttlWork
+		// build the txidStream for this block
+
+	}
+}
+
+// takes in BNRs, outputs ttlWorks
+
+func BNRtoTTLWorker(bnrchan chan BlockAndRev, workChan chan ttlRawBlock) {
+
 }

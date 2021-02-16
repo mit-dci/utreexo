@@ -3,7 +3,7 @@ package bridgenode
 import (
 	"fmt"
 
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/mit-dci/utreexo/btcacc"
 	uwire "github.com/mit-dci/utreexo/wire"
 
@@ -81,10 +81,28 @@ going sequentially and has buffers
 // the data from a block about txo creation and deletion for TTL calculation
 // this will be sent to the DB
 type ttlRawBlock struct {
-	blockHeight       int32      // height of this block in the chain
-	newTxos           [][36]byte // serialized outpoint for every output
-	spentTxos         [][36]byte // serialized outpoint for every input
-	spentStartHeights []int32    // tied 1:1 to spentTxos
+	blockHeight       int32     // height of this block in the chain
+	newTxos           []miniOut // serialized outpoint for every output
+	spentTxos         []miniOut // serialized outpoint for every input
+	spentStartHeights []int32   // tied 1:1 to spentTxos
+}
+
+// miniOut are miniature outpoints.
+// 14 bytes of txid prefix, then 2 bytes of position.
+// when used as a spentTxo, n means index within tx, as index within block
+// is what we're trying to find.
+// TODO the 14 bytes can come WAY down with some logic that could handle
+// collisions.
+// when written to disk, n is index within block, not within tx.  Clarify.
+type miniOut struct {
+	txid [14]byte
+	n    uint32 // we're only saving 2 bytes though!  panic if over 65K outs
+}
+
+func makeMiniOut(txid *chainhash.Hash, txoInBlock uint32) (m miniOut) {
+	copy(m.txid[:], txid[:14])
+	m.n = txoInBlock
+	return
 }
 
 // a TTLResult is the TTL data we learn once a txo is spent & it's lifetime
@@ -176,8 +194,8 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 	return
 }
 
-// ParseBlockForDB gets a block and creates a ttlRawBlock to send to the DB worker
-func ParseBlockForDB(
+// ParseBlockForTTL gets a block and creates a ttlRawBlock to send to the DB worker
+func ParseBlockForTTL(
 	bnr BlockAndRev) ttlRawBlock {
 
 	var trb ttlRawBlock
@@ -209,8 +227,7 @@ func ParseBlockForDB(
 				continue
 			}
 
-			trb.newTxos = append(trb.newTxos,
-				util.OutpointToBytes(wire.NewOutPoint(txid, uint32(txoInTx))))
+			trb.newTxos = append(trb.newTxos, makeMiniOut(txid, uint32(txoInTx)))
 			txoInBlock++
 		}
 
@@ -230,7 +247,7 @@ func ParseBlockForDB(
 			}
 			// append outpoint to slice
 			trb.spentTxos = append(trb.spentTxos,
-				util.OutpointToBytes(&in.PreviousOutPoint))
+				makeMiniOut(&in.PreviousOutPoint.Hash, in.PreviousOutPoint.Index))
 			// append start height to slice (get from rev data)
 			trb.spentStartHeights = append(trb.spentStartHeights,
 				bnr.Rev.Txs[txInBlock-1].TxIn[txinInTx].Height)
