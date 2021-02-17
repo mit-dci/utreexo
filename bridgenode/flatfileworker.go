@@ -57,7 +57,7 @@ type flatFileState struct {
 // pFileWorker takes in blockproof and height information from the channel
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
-func flatFileWorker(
+func FlatFileWriter(
 	proofChan chan btcacc.UData,
 	ttlResultChan chan ttlResultBlock,
 	utreeDir utreeDir,

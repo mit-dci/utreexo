@@ -28,7 +28,7 @@ BlockAndRevReader reads from bitcoind flat files
   \--> genUData --------> forest.Modify()
    \               \-----> proofchan -> flatFileBlockWorker -> offsets
     \
-     \-> ParseBlockForDB -> dbWriteChan -> dbWorker -> ttlResultChan
+     \-> BNRTTLSplit -> dbWriteChan -> dbWorker -> ttlResultChan
 
 then flatFileTTLWorker needs both the offsets from the flatFileBlockWorker
 and the TTL data from the dbWorker.
@@ -83,26 +83,23 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	}
 	defer lvdb.Close()
 
-	var dbwg sync.WaitGroup
+	var proofwg sync.WaitGroup
 
-	// To send/receive blocks from blockreader()
-	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
-
-	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
-	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
-
-	// Start 16 workers. Just an arbitrary number
-	// I think we can only have one dbworker now, since it needs to all happen in order?
-	go TTLWorker(dbWriteChan, ttlResultChan, &dbwg)
+	// BlockAndRevReader will push blocks into here
+	blockAndRevProofChan := make(chan BlockAndRev, 10) // blocks for accumulator
+	blockAndRevTTLChan := make(chan BlockAndRev, 10)   // same thing, but for TTL
+	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
+	proofChan := make(chan btcacc.UData, 10)           // from proof processing to proof writer
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
-	go BlockAndRevReader(blockAndRevReadQueue, cfg, knownTipHeight, height)
+	go BlockAndRevReader(
+		blockAndRevProofChan, blockAndRevTTLChan, cfg, knownTipHeight, height)
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, cfg.UtreeDir, &fileWait)
+	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, &fileWait)
+	go BNRTTLSpliter(blockAndRevTTLChan, &proofwg)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -119,17 +116,12 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			break
 		}
 		// Receive txs from the asynchronous blk*.dat reader
-		bnr := <-blockAndRevReadQueue
+		bnr := <-blockAndRevProofChan
 
 		// start waitgroups, beyond this point we have to finish all the
 		// disk writes for this iteration of the loop
-		dbwg.Add(1)     // DbWorker calls Done()
+		proofwg.Add(1)  // DbWorker calls Done()
 		fileWait.Add(2) // flatFileWorker calls Done() when done writing ttls and proof.
-
-		// Writes the new txos to leveldb,
-		// and generates TTL for txos spent in the block
-		// also wants the skiplist to omit 0-ttl txos
-		dbWriteChan <- ParseBlockForTTL(bnr)
 
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
@@ -171,7 +163,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	// wait until dbWorker() has written to the ttldb file
 	// allows leveldb to close gracefully
-	dbwg.Wait()
+	proofwg.Wait()
 
 	fmt.Printf("blocked on fileWait\n")
 	// Wait for the file workers to finish

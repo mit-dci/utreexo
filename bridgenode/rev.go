@@ -50,7 +50,7 @@ type RawHeaderData struct {
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
-	blockChan chan BlockAndRev, cfg *Config,
+	aChan, bChan chan BlockAndRev, cfg *Config,
 	maxHeight, curHeight int32) {
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
@@ -75,7 +75,8 @@ func BlockAndRevReader(
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
-			blockChan <- bnr
+			aChan <- bnr
+			bChan <- bnr
 			curHeight++
 		}
 	}

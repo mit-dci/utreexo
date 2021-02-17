@@ -1,87 +1,70 @@
 package bridgenode
 
 import (
+	"bytes"
+	"io"
 	"sync"
 )
 
-// DbWorker writes & reads/deletes everything to the db.
-// It also generates TTLResultBlocks to send to the flat file worker
-/*
-func DbWorker(
-	dbWorkChan chan ttlRawBlock, ttlResultChan chan ttlResultBlock,
-	lvdb *leveldb.DB, wg *sync.WaitGroup) {
+// BNRTTLSplit gets a block&rev and splits the input and output sides.  it
+// sends the output side to the txid sorter, and the input side to the
+// ttl lookup worker
+func BNRTTLSpliter(bnrChan chan BlockAndRev, wg *sync.WaitGroup) {
 
-	val := make([]byte, 4)
+	var sharedBuf bytes.Buffer
+	miniTxidChan := make(chan []miniTx, 10)
+	lookupChan := make(chan ttlLookupBlock, 10)
+
+	go TxidSortWriterWorker(miniTxidChan, &sharedBuf)
+	go TTLLookupWorker(lookupChan, &sharedBuf)
 
 	for {
-		dbBlock := <-dbWorkChan
-		var batch leveldb.Batch
-		// build the batch for writing to levelDB.
-		// Just outpoints to index within block
-		for i, op := range dbBlock.newTxos {
-			binary.BigEndian.PutUint32(val, uint32(i))
-			batch.Put(op[:], val)
-		}
-		// write all the new utxos in the batch to the DB
-		err := lvdb.Write(&batch, nil)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		batch.Reset()
+		bnr := <-bnrChan
 
-		var trb ttlResultBlock
+		var lub ttlLookupBlock
+		lub.blockHeight = bnr.Height
+		transactions := bnr.Blk.Transactions()
+		miniTxSlice := make([]miniTx, len(transactions))
+		// iterate through the transactions in a block
+		for txInBlock, tx := range transactions {
+			// ignore skiplists for now?
+			// TODO use skiplists.  Saves space.
 
-		trb.Height = dbBlock.blockHeight
-		trb.Created = make([]txoStart, len(dbBlock.spentTxos))
+			// add all txids
+			miniTxSlice[txInBlock].txid = tx.Hash()
+			miniTxSlice[txInBlock].numOuts = len(tx.Txos())
 
-		// now read from the DB all the spent txos and find their
-		// position within their creation block
-		for i, op := range dbBlock.spentTxos {
-			batch.Delete(op[:]) // add this outpoint for deletion
-			idxBytes, err := lvdb.Get(op[:], nil)
-			if err != nil {
-				fmt.Printf("can't find %x in db\n", op)
-				panic(err)
-			}
-
-			// skip txos that live 0 blocks as they'll be deduped out of the
-			// proofs anyway
-			if dbBlock.spentStartHeights[i] != dbBlock.blockHeight {
-				trb.Created[i].indexWithinBlock = binary.BigEndian.Uint32(idxBytes)
-				trb.Created[i].createHeight = dbBlock.spentStartHeights[i]
+			// for all the txins, throw that into the work as well; just a bunch of
+			// outpoints
+			for inputInTx, in := range tx.MsgTx().TxIn {
+				if txInBlock == 0 {
+					// inputInBlock += uint32(len(tx.MsgTx().TxIn))
+					break // skip coinbase input
+				}
+				// append outpoint to slice
+				lub.spentTxos = append(lub.spentTxos,
+					miniIn{
+						op:     in.PreviousOutPoint,
+						height: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height})
 			}
 		}
-		// send to flat ttl writer
-		ttlResultChan <- trb
-		err = lvdb.Write(&batch, nil) // actually delete everything
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		wg.Done()
-	}
-}
-*/
-
-// func seekTxid()
-
-// noDbWorker does the same thing as DBWorker but... without a DB.  Instead it
-// uses a sorted txid flat file.
-func TTLWorker(
-	ttlWork chan ttlRawBlock,
-	ttlResultChan chan ttlResultBlock,
-	wg *sync.WaitGroup) {
-
-	// buffers instead of files for now
-	// var txidIdx, txidStream bytes.Buffer
-	for {
-		// rawBlock := <-ttlWork
-		// build the txidStream for this block
-
+		// done with block, send out split data to the two workers
+		miniTxidChan <- miniTxSlice
+		lookupChan <- lub
 	}
 }
 
-// takes in BNRs, outputs ttlWorks
+func TxidSortWriterWorker(tChan chan []miniTx, w io.Writer) {
 
-func BNRtoTTLWorker(bnrchan chan BlockAndRev, workChan chan ttlRawBlock) {
+	for {
+		miniTxSlice := <-tChan
+		sortTxids(miniTxSlice)
+
+	}
+
+	//sortTxids(miniTxSlice)
+}
+
+func TTLLookupWorker(lChan chan ttlLookupBlock, r io.Reader) {
 
 }
