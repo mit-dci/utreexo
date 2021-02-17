@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+
+	"github.com/mit-dci/utreexo/common"
 )
 
 const HashSize = 32
@@ -71,14 +73,19 @@ func (l *LeafData) Serialize(w io.Writer) (err error) {
 
 	_, err = w.Write(l.BlockHash[:])
 	_, err = w.Write(l.TxHash[:])
-	err = binary.Write(w, binary.BigEndian, l.Index)
-	err = binary.Write(w, binary.BigEndian, hcb)
-	err = binary.Write(w, binary.BigEndian, l.Amt)
+
+	freeBytes := common.NewFreeBytes()
+	defer freeBytes.Free()
+
+	err = freeBytes.PutUint32(w, binary.BigEndian, l.Index)
+	err = freeBytes.PutUint32(w, binary.BigEndian, uint32(hcb))
+	err = freeBytes.PutUint64(w, binary.BigEndian, uint64(l.Amt))
+
 	if len(l.PkScript) > 10000 {
 		err = fmt.Errorf("pksize too long")
 		return
 	}
-	err = binary.Write(w, binary.BigEndian, uint16(len(l.PkScript)))
+	err = freeBytes.PutUint16(w, binary.BigEndian, uint16(len(l.PkScript)))
 	_, err = w.Write(l.PkScript)
 	return
 }
@@ -121,7 +128,9 @@ func (l *LeafData) Deserialize(r io.Reader) (err error) {
 
 // LeafHash turns a LeafData into a LeafHash
 func (l *LeafData) LeafHash() [32]byte {
-	var buf bytes.Buffer
-	l.Serialize(&buf)
+	freeBytes := common.NewFreeBytes()
+	defer freeBytes.Free()
+	buf := bytes.NewBuffer(freeBytes.Bytes)
+	l.Serialize(buf)
 	return sha512.Sum512_256(buf.Bytes())
 }
