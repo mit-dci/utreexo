@@ -11,6 +11,7 @@ var (
 	ErrInvalidNetwork  = errors.New("Invalid/not supported net flag given")
 	ErrBuildProofs     = errors.New("BuildProofs error")
 	ErrArchiveServer   = errors.New("ArchiveServer error")
+	ErrKeyNotFound     = errors.New("Key not found")
 )
 
 func errNoDataDir(path string) error {
@@ -32,4 +33,8 @@ func errBuildProofs(s error) error {
 
 func errArchiveServer(s error) error {
 	return fmt.Errorf("%s: %s", ErrArchiveServer, s)
+}
+
+func errKeyNotFound(s error) error {
+	return fmt.Errorf("%s: %s", ErrKeyNotFound, s)
 }
