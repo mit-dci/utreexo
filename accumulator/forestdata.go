@@ -2,7 +2,6 @@ package accumulator
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -60,9 +59,6 @@ type ramForestData struct {
 // reads from specified location.  If you read beyond the bounds that's on you
 // and it'll crash
 func (r *ramForestData) read(pos uint64) (h Hash) {
-	// if r.m[pos] == empty {
-	// 	fmt.Printf("\tuseless read empty at pos %d\n", pos)
-	// }
 	pos <<= 5
 	copy(h[:], r.m[pos:pos+leafSize])
 	return
@@ -118,20 +114,23 @@ func (r *ramForestData) close() {
 // This is the same concept as forestRows, except for treeBlocks.
 // Fixed as a treeBlockRow cannot increase. You just make another treeBlock if the
 // current one isn't enough.
-const treeBlockRows = 6
+const treeBlockRows = 1
 
 // rowPerTreeBlock is the rows a treeBlock holds
-// 7 is chosen as a tree with height 6 will contain 7 rows (row 0 to row 6)
+// a tree with height 6 will contain 7 rows (row 0 to row 6)
 const rowPerTreeBlock = treeBlockRows + 1
 
 // Number for the amount of treeBlocks to go into a table
-const treeBlockPerTable = 1024
+const treeBlockPerTable = 16384
 
 // Number of leaves that a treeBlock holds
 const nodesPerTreeBlock = (2 << treeBlockRows) - 1
 
 // Number of nodes that a treeTable holds
 const nodesPerTreeTable = nodesPerTreeBlock * treeBlockPerTable
+
+// Number of bytes that a treetable takes up. 2 for metadata
+const bytesPerTable = (nodesPerTreeTable * leafSize) + 2
 
 // extension for the forest files on disk. Stands for, "Utreexo Forest
 // On Disk
@@ -149,6 +148,10 @@ type metadata struct {
 	// maxCachedTables is the maximum amount of tables to have on memory
 	// when there is more, everything is flushed
 	maxCachedTreeTables int
+
+	// the maximum newTreeTables there can be on memory. TreeTables
+	// here are moved to aged when filled
+	maxNewTreeTables int
 
 	// fBasePath is the base directory for the .ufod files
 	fBasePath string
@@ -421,13 +424,10 @@ type treeBlock struct {
 }
 
 // converts a treeBlock to byte slice
-func (tb *treeBlock) serialize() []byte {
-	var buf []byte
-
+func (tb *treeBlock) serialize(buf *[]byte) {
 	for _, leaf := range tb.leaves {
-		buf = append(buf, leaf[:]...)
+		*buf = append(*buf, leaf[:]...)
 	}
-	return buf
 }
 
 // takes a byte slice and spits out a treeBlock
@@ -587,28 +587,45 @@ type treeTable struct {
 	memTreeBlocks [treeBlockPerTable]*treeBlock
 }
 
-func (tt *treeTable) serialize() (uint16, []byte) {
-	var buf []byte
+func (tt *treeTable) serialize(buf *[]byte) {
+	tbBuf := make([]byte, 0, nodesPerTreeBlock)
 	var treeBlockCount uint16
+
+	// Append two bytes to save space for the treeBlockCount
+	*buf = append(*buf, []byte{0, 0}...)
 	for _, tb := range tt.memTreeBlocks {
 		if tb == nil {
 			break
 		}
 
-		buf = append(buf, tb.serialize()...)
+		tbBuf = tbBuf[:0]
+		tb.serialize(&tbBuf)
+		*buf = append(*buf, tbBuf...)
 
 		treeBlockCount++
 	}
 
-	return treeBlockCount, buf
+	lenBytes := make([]byte, 2)
+	binary.LittleEndian.PutUint16(lenBytes, treeBlockCount)
+
+	copy((*buf)[0:2], lenBytes)
+
+	return
 }
 
 // given a fileNum on disk, deserialize that table
-func deserializeTreeTable(treeSlice io.Reader, treeBlockCount uint16) (*treeTable, error) {
+func deserializeTreeTable(treeSlice io.Reader) (*treeTable, error) {
 	tt := new(treeTable)
 	tbBytes := make([]byte, nodesPerTreeBlock*leafSize)
 	var totallen int
 
+	lenBytes := make([]byte, 2)
+	_, err := treeSlice.Read(lenBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	treeBlockCount := binary.LittleEndian.Uint16(lenBytes)
 	for i := uint16(0); i < treeBlockCount; i++ {
 		_, err := treeSlice.Read(tbBytes)
 		if err != nil {
@@ -629,11 +646,27 @@ func newTreeTable() *treeTable {
 	return tt
 }
 
+// cachedTreeTable is an in-memory treeTable with a count to implement
+// second chance replacement cache policy.
+type cachedTreeTable struct {
+	// was this table
+	dirty bool
+
+	// the in-memory treeTable
+	*treeTable
+
+	// used to determine which cachedTreeTable to evict during a flush
+	// score is incremented by 1 when accessed and is decremented by 1
+	// when searching for a table to evict. A table negative score is
+	// evicted.
+	score int32
+}
+
 // Shorthand for copy-on-write. Unfortuntely, it doesn't go moo
 type cowForest struct {
 	// cachedTreeTables are the in-memory tables that are not yet committed to disk
 	// TODO flush these after a certain number is in memory
-	cachedTreeTables map[uint64]*treeTable
+	cachedTreeTables map[uint64]*cachedTreeTable
 
 	// all the data that isn't saved to disk
 	meta metadata
@@ -641,20 +674,34 @@ type cowForest struct {
 	// manifest contains all the necessary metadata for fetching
 	// utreexo nodes
 	manifest manifest
+
+	// variables for statistics
+	hits          int64
+	misses        int64
+	accessedTrees [][]uint64
+}
+
+// calculate the table count for the max memory to be used.
+// Rounds down.
+func getTableCount(maxMem int) int {
+	// convert to megabytes to bytes
+	maxMemBytes := maxMem * 1000000
+	return maxMemBytes / bytesPerTable
 }
 
 // initalize returns a cowForest with a maxCachedTables value set
-func initialize(path string, maxTreeTableCount int) (*cowForest, error) {
+func initialize(path string, maxTreeTableCache int) (*cowForest, error) {
 	m := metadata{
 		fBasePath:           path,
-		maxCachedTreeTables: maxTreeTableCount,
+		maxCachedTreeTables: getTableCount(maxTreeTableCache),
 	}
+	fmt.Println("table count:", getTableCount(maxTreeTableCache))
 
 	cow := cowForest{
 		meta: m,
 	}
 
-	cow.cachedTreeTables = make(map[uint64]*treeTable)
+	cow.cachedTreeTables = make(map[uint64]*cachedTreeTable)
 	cow.manifest.location = append(cow.manifest.location, []uint64{})
 
 	err := os.MkdirAll(path, os.ModePerm)
@@ -665,7 +712,7 @@ func initialize(path string, maxTreeTableCount int) (*cowForest, error) {
 }
 
 // loads an existing cowForest
-func loadCowForest(path string, maxTreeTableCount int) (*cowForest, error) {
+func loadCowForest(path string, maxTreeTableCache int) (*cowForest, error) {
 	maniToLoad := new(manifest)
 
 	err := maniToLoad.load(path)
@@ -675,17 +722,31 @@ func loadCowForest(path string, maxTreeTableCount int) (*cowForest, error) {
 
 	m := metadata{
 		fBasePath:           path,
-		maxCachedTreeTables: maxTreeTableCount,
+		maxCachedTreeTables: getTableCount(maxTreeTableCache),
 	}
+	fmt.Println("table count:", getTableCount(maxTreeTableCache))
 
 	cow := cowForest{
 		manifest: *maniToLoad,
 		meta:     m,
 	}
 
-	cow.cachedTreeTables = make(map[uint64]*treeTable)
+	cow.cachedTreeTables = make(map[uint64]*cachedTreeTable)
 
 	return &cow, nil
+}
+func (cow *cowForest) searchCache(location uint64) (*cachedTreeTable, bool) {
+	// search in the in-memory map
+	table, found := cow.cachedTreeTables[location]
+	if found {
+		cow.hits++
+		// increment score as it was accessed
+		table.score++
+	} else {
+		cow.misses++
+	}
+
+	return table, found
 }
 
 // Read takes a position and forestRows to return the Hash of that leaf
@@ -702,38 +763,31 @@ func (cow *cowForest) read(pos uint64) Hash {
 		panic(err)
 	}
 
+	// for measuring what treeblocks get accessed
+	for len(cow.accessedTrees) <= int(treeBlockRow) {
+		cow.accessedTrees = append(cow.accessedTrees, []uint64{})
+	}
+	for len(cow.accessedTrees[treeBlockRow]) <= int(treeBlockOffset) {
+		cow.accessedTrees[treeBlockRow] = append(cow.accessedTrees[treeBlockRow], 0)
+	}
+	cow.accessedTrees[treeBlockRow][treeBlockOffset]++
+
 	treeTableOffset := treeBlockOffset / treeBlockPerTable
 
 	// grab the treeTable location. This is just a number for the .ufod file
 	location := cow.manifest.location[treeBlockRow][treeTableOffset]
 
 	// check if it exists in memory
-	table, found := cow.cachedTreeTables[location]
+	table, found := cow.searchCache(location)
 
 	// Table is not in memory
 	if !found {
 		// Load the treeTable onto memory. This maps the table to the location
-		err = cow.load(location)
+		table, err = cow.load(location)
 		if err != nil {
 			// TODO better to return err
 			panic(err)
 		}
-		table = cow.cachedTreeTables[location]
-
-		// advance fileNum and set as new file
-		cow.manifest.fileNum++
-		cow.manifest.location[treeBlockRow][treeTableOffset] =
-			cow.manifest.fileNum
-
-		// set as table
-		cow.cachedTreeTables[cow.manifest.fileNum] = table
-
-		// delete old key
-		delete(cow.cachedTreeTables, location)
-
-		// add file to be cleaned up
-		cow.meta.staleFiles = append(
-			cow.meta.staleFiles, location)
 	}
 
 	tb := table.memTreeBlocks[treeBlockOffset%treeBlockPerTable]
@@ -751,6 +805,7 @@ func (cow *cowForest) read(pos uint64) Hash {
 		fmt.Printf("READ RETURN on pos: %d with hash: %x\n",
 			pos, hash)
 	}
+
 	return hash
 }
 
@@ -778,32 +833,22 @@ func (cow *cowForest) write(pos uint64, h Hash) {
 	location := cow.manifest.location[treeBlockRow][treeTableOffset]
 
 	// check if it exists in memory
-	table, found := cow.cachedTreeTables[location]
+	table, found := cow.searchCache(location)
 
 	// if not found in memory, load then update the fileNum
 	if !found {
-		err = cow.load(location)
+		// Load the treeTable onto memory. This maps the table to the location
+		table, err = cow.load(location)
 		if err != nil {
 			// TODO better to return err
 			panic(err)
 		}
-		table = cow.cachedTreeTables[location]
 
-		// advance fileNum and set as new file
-		cow.manifest.fileNum++
-		cow.manifest.location[treeBlockRow][treeTableOffset] =
-			cow.manifest.fileNum
-
-		// set as table
-		cow.cachedTreeTables[cow.manifest.fileNum] = table
-
-		// delete old key
-		delete(cow.cachedTreeTables, location)
-
-		// add file to be cleaned up
-		cow.meta.staleFiles = append(
-			cow.meta.staleFiles, location)
+		cow.updateTableNum(table,
+			treeBlockRow, treeTableOffset, location)
 	}
+	// set table as dirty so that it'll be written to disk during a commit
+	table.dirty = true
 
 	// there there is no treeBlock, then attach one
 	if table.memTreeBlocks[treeBlockOffset%treeBlockPerTable] == nil {
@@ -844,6 +889,7 @@ func (cow *cowForest) swapHash(a, b uint64) {
 	cow.write(b, aHash)
 }
 
+// swapHashRange just calls swapHash() function for the given range
 func (cow *cowForest) swapHashRange(a, b, w uint64) {
 	aHashes := make([]Hash, 0, w+1) // +1 as to include a
 	bHashes := make([]Hash, 0, w+1) // +1 as to include b
@@ -869,10 +915,13 @@ func (cow *cowForest) swapHashRange(a, b, w uint64) {
 	}
 }
 
+// Returns the size of the current cowForest
 func (cow *cowForest) size() uint64 {
 	return uint64((2 << cow.manifest.forestRows) - 1)
 }
 
+// resize adds treeTables and the neccessary metadata for the requested
+// size
 func (cow *cowForest) resize(newSize uint64) {
 	cow.manifest.forestRows = treeRows((newSize + 1) >> 1)
 
@@ -898,18 +947,20 @@ func (cow *cowForest) resize(newSize uint64) {
 		// size for the next row
 		newSize >>= treeBlockRows
 	}
-
 }
 
+// closes the cowForest for exit
 func (cow *cowForest) close() {
-	// commit the current forest
+	fmt.Printf("cow cached hits:%v, misses:%v\n",
+		cow.hits, cow.misses)
+
+	// commit current forest
 	err := cow.commit()
 	if err != nil {
 		fmt.Printf("cowForest close error:\n%s\n"+
 			"Previously saved forest not overwritten", err)
 	}
 
-	// clean up all old stale files
 	err = cow.clean()
 	if err != nil {
 		panic(err)
@@ -919,7 +970,7 @@ func (cow *cowForest) close() {
 // Adds a single new table to the given treeBlockRow in memory
 func (cow *cowForest) newTable(treeBlockRow uint8) {
 	// check if there needs to be a flush
-	if len(cow.cachedTreeTables)+1 > cow.meta.maxCachedTreeTables {
+	if cow.isFlushNeeded() {
 		cow.flush()
 	}
 
@@ -932,55 +983,44 @@ func (cow *cowForest) newTable(treeBlockRow uint8) {
 
 	newTable := newTreeTable()
 
-	cow.cachedTreeTables[cow.manifest.fileNum] = newTable
+	cow.cachedTreeTables[cow.manifest.fileNum] = &cachedTreeTable{
+		treeTable: newTable,
+		// newly created tables are dirty as they must be saved to disk
+		dirty: true,
+	}
 }
 
 // Update the cowForest num given table location. Returns the new location
-func (cow *cowForest) updateTableNum(
-	location, treeBlockOffset uint64, treeBlockRow uint8) uint64 {
-	// grab the table
-	table := cow.cachedTreeTables[location]
-	if table == nil {
-		panic("fetched table is nil")
-	}
-	tableNew := *table
-
-	treeTableOffset := treeBlockOffset / treeBlockPerTable
-
+func (cow *cowForest) updateTableNum(table *cachedTreeTable,
+	treeBlockRow uint8, treeTableOffset, location uint64) {
 	// advance fileNum and set as new file
 	cow.manifest.fileNum++
 	cow.manifest.location[treeBlockRow][treeTableOffset] =
 		cow.manifest.fileNum
 
 	// set as table
-	cow.cachedTreeTables[cow.manifest.fileNum] = &tableNew
+	cow.cachedTreeTables[cow.manifest.fileNum] = table
 
 	// delete old key
 	delete(cow.cachedTreeTables, location)
 
-	t := cow.cachedTreeTables[cow.manifest.fileNum]
-	if t == nil {
-		panic("fetched t is nil")
-	}
-
-	return cow.manifest.fileNum
+	// add file to be cleaned up
+	cow.meta.staleFiles = append(
+		cow.meta.staleFiles, location)
 }
 
 // Load will load the existing forest from the disk given a fileNumber
-func (cow *cowForest) load(fileNum uint64) error {
+func (cow *cowForest) load(fileNum uint64) (*cachedTreeTable, error) {
 	// check if there needs to be a flush
 	// +1 to include for the requested treeTable to be loaded
-	if len(cow.cachedTreeTables)+1 > cow.meta.maxCachedTreeTables {
+	if cow.isFlushNeeded() {
 		cow.flush()
 	}
 
-	stringLoc := strconv.FormatUint(fileNum, 10) // base 10 used
-	fName := filepath.Join(cow.meta.fBasePath, stringLoc+extension)
-
 	if verbose {
-		fmt.Println("FILE LOADED: ", fName)
+		fmt.Println("FILE LOADED: ", cow.getTreeTableFName(fileNum))
 	}
-	f, err := os.Open(fName)
+	f, err := os.Open(cow.getTreeTableFName(fileNum))
 	defer f.Close()
 	if err != nil {
 		// If the error returned is of no files existing, then the manifest
@@ -988,37 +1028,45 @@ func (cow *cowForest) load(fileNum uint64) error {
 		if os.IsNotExist(err) {
 			// TODO Not sure if we can recover from this? I think panic
 			// is the right call
-			panic(errorCorruptManifest())
+			str := fmt.Errorf("%s, file not found:%v\n", errorCorruptManifest(), cow.getTreeTableFName(fileNum))
+			panic(str)
 
 		}
-		return err
+		return nil, err
 	}
 	// 2 bytes for metadata
-	buf := bufio.NewReaderSize(f, (treeBlockPerTable*nodesPerTreeBlock*leafSize)+2)
+	buf := bufio.NewReaderSize(f, bytesPerTable)
 
-	lenBytes := make([]byte, 2)
-
-	_, err = buf.Read(lenBytes)
+	tt, err := deserializeTreeTable(buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	treeBlockCount := binary.LittleEndian.Uint16(lenBytes)
-	if verbose {
-		fmt.Printf("LOAD for file:%d, treeBlockCount: %d\n", fileNum, treeBlockCount)
-	}
-
-	tt, err := deserializeTreeTable(buf, treeBlockCount)
-	if err != nil {
-		return err
+	ctt := cachedTreeTable{
+		treeTable: tt,
+		score:     1,
 	}
 
 	// set map
-	cow.cachedTreeTables[fileNum] = tt
+	cow.cachedTreeTables[fileNum] = &ctt
 
-	return nil
+	return &ctt, nil
 }
 
+// Returns the treeTable name on the disk
+func (cow *cowForest) getTreeTableFName(fileNum uint64) string {
+	stringLoc := fmt.Sprintf("%09d", fileNum)
+	return filepath.Join(cow.meta.fBasePath, stringLoc) + extension
+}
+
+// Checks if a flush is needed. True if flush is needed, false
+// if flush is not needed.
+func (cow *cowForest) isFlushNeeded() bool {
+	return len(cow.cachedTreeTables) > cow.meta.maxCachedTreeTables
+}
+
+// flushes first commits the state of the cowForest, cleans up the stale
+// files, then purges cachedTreeTables
 func (cow *cowForest) flush() error {
 	// commit current forest
 	err := cow.commit()
@@ -1032,8 +1080,20 @@ func (cow *cowForest) flush() error {
 		panic(err)
 	}
 
-	// replace current map with new map
-	cow.cachedTreeTables = make(map[uint64]*treeTable)
+	tableCount := len(cow.cachedTreeTables)
+
+	// purge cachedTreeTables until we're under the limit
+	for tableCount > cow.meta.maxCachedTreeTables-(cow.meta.maxCachedTreeTables/2) {
+		for key, table := range cow.cachedTreeTables {
+			table.score--
+
+			if table.score < 0 {
+				delete(cow.cachedTreeTables, key)
+			}
+		}
+
+		tableCount = len(cow.cachedTreeTables)
+	}
 
 	// replace manifest with the new one
 	newMani := new(manifest)
@@ -1048,51 +1108,43 @@ func (cow *cowForest) flush() error {
 	return nil
 }
 
+// Saves the given treeTable to the disk with the given filepath
+func saveTreeTableToDisk(treeTable *treeTable, fName string) error {
+	buf := make([]byte, 0, bytesPerTable)
+	treeTable.serialize(&buf)
+
+	// actual writing to file
+	// calculate the file name
+	f, err := os.OpenFile(fName, os.O_CREATE|os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(buf)
+	if err != nil {
+		return err
+	}
+
+	f.Close()
+
+	return nil
+}
+
 // commit makes writes to the disk and sets the forest to point to the new
 // treeBlocks. The new forest state is commited to disk only when commit is called
 func (cow *cowForest) commit() error {
-	for fileNum, treeTable := range cow.cachedTreeTables {
-		treeBlockCount, serializedTable := treeTable.serialize()
-
-		lenBytes := make([]byte, 2)
-		binary.LittleEndian.PutUint16(lenBytes[:], treeBlockCount)
-
-		if verbose {
-			fmt.Printf("COMMIT for file:%d, treeBlockCount: %d\n",
-				fileNum, treeBlockCount)
-			fmt.Printf("Size of serializedTable: %d\n", len(serializedTable))
+	var err error
+	for fileNum, cachedTreeTable := range cow.cachedTreeTables {
+		// only write the files that are dirty
+		if cachedTreeTable.dirty {
+			err = saveTreeTableToDisk(
+				cachedTreeTable.treeTable, cow.getTreeTableFName(fileNum))
+			if err != nil {
+				return err
+			}
 		}
-		// write to that file. First buffer it
-		var bytesToWrite bytes.Buffer
-
-		_, err := bytesToWrite.Write(lenBytes)
-		if err != nil {
-			return err
-		}
-		_, err = bytesToWrite.Write(serializedTable)
-		if err != nil {
-			return err
-		}
-
-		// actual writing to file
-		// calculate the file name
-		stringLoc := strconv.FormatUint(fileNum, 10) // base 10 used
-		fPath := filepath.Join(cow.meta.fBasePath, stringLoc)
-		fName := fPath + extension
-
-		f, err := os.OpenFile(fName, os.O_CREATE|os.O_RDWR, 0666)
-		if err != nil {
-			return err
-		}
-		_, err = f.Write(bytesToWrite.Bytes())
-		if err != nil {
-			return err
-		}
-
-		f.Close()
 	}
 
-	err := cow.manifest.commit(cow.meta.fBasePath)
+	err = cow.manifest.commit(cow.meta.fBasePath)
 	if err != nil {
 		// maybe if it couldn't commit then it should panic?
 		return err
@@ -1107,16 +1159,14 @@ func (cow *cowForest) clean() error {
 		if verbose {
 			fmt.Printf("CLEANING UP file %d\n", fileNum)
 		}
-		stringLoc := strconv.FormatUint(fileNum, 10) // base 10 used
-		filePath := filepath.Join(cow.meta.fBasePath, stringLoc+extension)
-		err := os.Remove(filePath)
+		err := os.Remove(cow.getTreeTableFName(fileNum))
 		if err != nil {
 			return err
 		}
 	}
 
 	// empty staleFiles
-	cow.meta.staleFiles = []uint64{}
+	cow.meta.staleFiles = cow.meta.staleFiles[:0]
 
 	return nil
 }

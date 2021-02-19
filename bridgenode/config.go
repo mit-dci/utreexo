@@ -40,8 +40,8 @@ var (
 		`Set a custom bridgenode datadir. Usage: "-bridgedir='path/to/directory"`)
 	forestTypeCmd = argCmd.String("forest", "disk",
 		`Set a forest type to use (cow, ram, disk, cache). Usage: "-forest=cow"`)
-	cowMaxCache = argCmd.Int("cowmaxcache", 500,
-		`how many treetables to cache with copy-on-write forest`)
+	cowMaxCache = argCmd.Int("cowmaxcache", 4000,
+		`how much memory to use in MB for the copy-on-write forest`)
 	quitAtCmd = argCmd.Int("quitat", -1,
 		`quit generating proofs after the given block height. (meant for testing)`)
 	serve = argCmd.Bool("serve", false,
