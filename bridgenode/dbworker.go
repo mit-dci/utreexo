@@ -1,8 +1,10 @@
 package bridgenode
 
 import (
-	"bytes"
+	"encoding/binary"
+	"fmt"
 	"io"
+	"os"
 	"sync"
 )
 
@@ -11,12 +13,24 @@ import (
 // ttl lookup worker
 func BNRTTLSpliter(bnrChan chan BlockAndRev, wg *sync.WaitGroup) {
 
-	var sharedBuf bytes.Buffer
+	txidFile, err := os.OpenFile(
+		"/dev/shm/txidFile", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+	txidOffsetFile, err := os.OpenFile(
+		"/dev/shm/txidOffsetFile", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
 	miniTxidChan := make(chan []miniTx, 10)
 	lookupChan := make(chan ttlLookupBlock, 10)
 
-	go TxidSortWriterWorker(miniTxidChan, &sharedBuf)
-	go TTLLookupWorker(lookupChan, &sharedBuf)
+	go TxidSortWriterWorker(miniTxidChan, txidFile, txidOffsetFile)
+
+	// TTLLookupWorker needs to send the final data to the flatFileWorker
+	go TTLLookupWorker(lookupChan, txidFile, txidOffsetFile)
 
 	for {
 		bnr := <-bnrChan
@@ -54,17 +68,48 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, wg *sync.WaitGroup) {
 	}
 }
 
-func TxidSortWriterWorker(tChan chan []miniTx, w io.Writer) {
-
+func TxidSortWriterWorker(tChan chan []miniTx, mtxs, offsets io.Writer) {
+	var startOffset int64 // starting byte offset of current block
+	// sort then write.
 	for {
 		miniTxSlice := <-tChan
+		// first write the current start offset, then increment it for next time
+		err := binary.Write(offsets, binary.BigEndian, startOffset)
+		if err != nil {
+			panic(err)
+		}
+		startOffset += int64(len(miniTxSlice) * 16)
+
 		sortTxids(miniTxSlice)
-
+		for _, mt := range miniTxSlice {
+			err := mt.serialize(mtxs)
+			if err != nil {
+				fmt.Printf("miniTx write error: %s\n", err.Error())
+			}
+		}
 	}
-
-	//sortTxids(miniTxSlice)
 }
 
-func TTLLookupWorker(lChan chan ttlLookupBlock, r io.Reader) {
-
+func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker) {
+	var seekHeight int32
+	var heightOffset, nextOffset, blockLen int64
+	// do an interpolation search
+	for {
+		lub := <-lChan
+		// sort the txins by utxo height; should give better caching hopefuly
+		sortMiniIns(lub.spentTxos)
+		for _, stxo := range lub.spentTxos {
+			if stxo.height != seekHeight {
+				offsets.Seek(int64(stxo.height*8), 0) // offsets are 8bytes each
+				binary.Read(offsets, binary.BigEndian, &heightOffset)
+				// TODO: make sure this is OK.  If we always have a
+				// block after the one we're seeking this will not error.
+				binary.Read(offsets, binary.BigEndian, &nextOffset)
+				blockLen = nextOffset - heightOffset
+				seekHeight = stxo.height
+			}
+			blockLen++ // just to compile
+			// do interpolation search here
+		}
+	}
 }

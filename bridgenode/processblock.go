@@ -2,7 +2,9 @@ package bridgenode
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -64,10 +66,28 @@ type miniTx struct {
 	numOuts int
 }
 
+// miniTx serialization is 14 bytes of the txid, then 2 bytes for a uint16
+func (mt *miniTx) serialize(w io.Writer) error {
+	_, err := w.Write(mt.txid[:14])
+	if err != nil {
+		return err
+	}
+
+	err = binary.Write(w, binary.BigEndian, uint16(mt.numOuts))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func sortTxids(s []miniTx) {
 	sort.Slice(s, func(a, b int) bool {
 		return bytes.Compare(s[a].txid[:], s[b].txid[:]) < 0
 	})
+}
+
+func sortMiniIns(s []miniIn) {
+	sort.Slice(s, func(a, b int) bool { return s[a].height < s[b].height })
 }
 
 // a TTLResult is the TTL data we learn once a txo is spent & it's lifetime
