@@ -82,13 +82,11 @@ func polSwap(a, asib, b, bsib *polNode) error {
 }
 func (p *Pollard) rows() uint8 { return treeRows(p.numLeaves) }
 
-// rootHashesReverse is ugly and returns the root hashes in reverse order
-// ... which is the order full forest is using until I can refactor that code
-// to make it big to small order
-func (p *Pollard) rootHashesReverse() []Hash {
+// rootHashesForward grabs the rootHashes from left to right
+func (p *Pollard) rootHashesForward() []Hash {
 	rHashes := make([]Hash, len(p.roots))
 	for i, n := range p.roots {
-		rHashes[len(rHashes)-(1+i)] = n.data
+		rHashes[i] = n.data
 	}
 	return rHashes
 }

@@ -177,8 +177,12 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	copy(sortedTargets, bp.Targets)
 	sortUint64s(sortedTargets)
 
-	proofPositions, _ := ProofPositions(sortedTargets, f.numLeaves, f.rows)
-	targetsAndProof := mergeSortedSlices(proofPositions, sortedTargets)
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	ProofPositions(sortedTargets, f.numLeaves, f.rows, &positionList.list)
+	targetsAndProof := mergeSortedSlices(positionList.list, sortedTargets)
+
 	bp.Proof = make([]Hash, len(targetsAndProof))
 	for i, proofPos := range targetsAndProof {
 		bp.Proof[i] = f.data.read(proofPos)

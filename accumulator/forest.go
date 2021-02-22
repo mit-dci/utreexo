@@ -279,7 +279,10 @@ func (f *Forest) reHash(dirt []uint64) error {
 	if f.rows == 0 || len(dirt) == 0 { // nothing to hash
 		return nil
 	}
-	rootPositions, rootRows := getRootsReverse(f.numLeaves, f.rows)
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	rootRows := getRootsForwards(f.numLeaves, f.rows, &positionList.list)
 
 	dirty2d := make([][]uint64, f.rows)
 	r := uint8(0)
@@ -297,9 +300,6 @@ func (f *Forest) reHash(dirt []uint64) error {
 			return fmt.Errorf("position %d at row %d but forest only %d high",
 				pos, r, f.rows)
 		}
-		// if bridgeVerbose {
-		// fmt.Printf("h %d\n", h)
-		// }
 		dirty2d[r] = append(dirty2d[r], pos)
 		dirtyRemaining++
 	}
@@ -333,13 +333,13 @@ func (f *Forest) reHash(dirt []uint64) error {
 			if i+1 < len(currentRow) && currentRow[i]|1 == currentRow[i+1] {
 				continue
 			}
-			if len(rootPositions) == 0 {
+			if len(positionList.list) == 0 {
 				return fmt.Errorf(
 					"currentRow %v no roots remaining, this shouldn't happen",
 					currentRow)
 			}
 			// also skip if this is a root
-			if pos == rootPositions[0] {
+			if pos == positionList.list[len(positionList.list)-1] {
 				continue
 			}
 
@@ -358,12 +358,12 @@ func (f *Forest) reHash(dirt []uint64) error {
 			}
 			nextRow = append(nextRow, parpos)
 		}
-		if rootRows[0] == r {
-			rootPositions = rootPositions[1:]
-			rootRows = rootRows[1:]
+		if rootRows[len(rootRows)-1] == r {
+			positionList.list = positionList.list[:len(rootRows)-1]
+			rootRows = rootRows[:len(rootRows)-1]
 		}
 		currentRow = nextRow
-		nextRow = []uint64{}
+		nextRow = nextRow[:0]
 	}
 
 	return nil
@@ -386,23 +386,28 @@ func (f *Forest) Add(adds []Leaf) {
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) {
+	// allocate the positionList first
+	positionList := NewPositionList()
+	defer positionList.Free()
 
 	for _, add := range adds {
-		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
-		f.positionMap[add.Mini()] = f.numLeaves
+		// reset positionList
+		positionList.list = positionList.list[:0]
 
-		rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
+		f.positionMap[add.Mini()] = f.numLeaves
+		getRootsForwards(f.numLeaves, f.rows, &positionList.list)
 		pos := f.numLeaves
 		n := add.Hash
 		f.data.write(pos, n)
+		add.Hash = empty
+
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
+			rootPos := len(positionList.list) - int(h+1)
 			// grab, pop, swap, hash, new
-			root := f.data.read(rootPositions[h]) // grab
-			//			fmt.Printf("grabbed %x from %d\n", root[:12], roots[h])
-			n = parentHash(root, n)   // hash
-			pos = parent(pos, f.rows) // rise
-			f.data.write(pos, n)      // write
-			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
+			root := f.data.read(positionList.list[rootPos]) // grab
+			n = parentHash(root, n)                         // hash
+			pos = parent(pos, f.rows)                       // rise
+			f.data.write(pos, n)                            // write
 		}
 		f.numLeaves++
 	}
@@ -532,13 +537,18 @@ func (f *Forest) sanity() error {
 		return fmt.Errorf("forest has %d leaves but insufficient rows %d",
 			f.numLeaves, f.rows)
 	}
-	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
-	for _, t := range rootPositions {
+
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	getRootsForwards(f.numLeaves, f.rows, &positionList.list)
+	for _, t := range positionList.list {
 		if f.data.read(t) == empty {
 			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
-				f.numLeaves, len(rootPositions), t)
+				f.numLeaves, len(positionList.list), t)
 		}
 	}
+
 	if uint64(len(f.positionMap)) > f.numLeaves {
 		return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
 			len(f.positionMap), f.numLeaves)
@@ -641,9 +651,6 @@ func RestoreForest(
 	fmt.Printf("%d leaves for position map\n", f.numLeaves)
 	for i := uint64(0); i < f.numLeaves; i++ {
 		f.positionMap[f.data.read(i).Mini()] = i
-		if i%100000 == 0 && i != 0 {
-			fmt.Printf("Added %d leaves %x\n", i, f.data.read(i).Mini())
-		}
 	}
 	if f.positionMap == nil {
 		return nil, fmt.Errorf("Generated positionMap is nil")
@@ -720,26 +727,29 @@ func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 
 // getRoots returns all the roots of the trees
 func (f *Forest) getRoots() []Hash {
+	positionList := NewPositionList()
+	defer positionList.Free()
 
-	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
-	roots := make([]Hash, len(rootPositions))
+	getRootsForwards(f.numLeaves, f.rows, &positionList.list)
+	roots := make([]Hash, len(positionList.list))
 
 	for i, _ := range roots {
-		roots[i] = f.data.read(rootPositions[i])
+		roots[i] = f.data.read(positionList.list[i])
 	}
 
 	return roots
 }
 
-// Stats :
+// Stats returns the current forest statics as a string. This includes
+// number of total leaves, historic hashes, length of the position map,
+// and the size of the forest
 func (f *Forest) Stats() string {
-
 	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
 		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
-
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
 		f.TimeInProve.Seconds())
+
 	return s
 }
 
