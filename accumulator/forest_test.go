@@ -26,13 +26,11 @@ func TestDeleteReverseOrder(t *testing.T) {
 }
 
 func TestForestAddDel(t *testing.T) {
-
 	numAdds := uint32(10)
 
 	f := NewForest(nil, false, "", 0)
 
 	sc := NewSimChain(0x07)
-	sc.lookahead = 400
 
 	for b := 0; b < 1000; b++ {
 
@@ -55,7 +53,7 @@ func TestCowForestAddDelComp(t *testing.T) {
 	numAdds := uint32(1000)
 
 	tmpDir := os.TempDir()
-	cowF := NewForest(nil, false, tmpDir, 500)
+	cowF := NewForest(nil, false, tmpDir, 2500)
 	memF := NewForest(nil, false, "", 0)
 
 	sc := NewSimChain(0x07)
