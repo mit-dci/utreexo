@@ -54,6 +54,8 @@ var (
 		`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 	memProfCmd = argCmd.String("memprof", "",
 		`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
+	profServerCmd = argCmd.String("profserver", "",
+		`Enable pprof server. Usage: 'profserver='port'`)
 )
 
 // utreexo home directory
@@ -187,6 +189,9 @@ type Config struct {
 
 	// enable memory profiling
 	MemProf string
+
+	// enable profiling http server
+	ProfServer string
 }
 
 // Parse parses the command line arguments and inits the server Config
@@ -242,6 +247,7 @@ func Parse(args []string) (*Config, error) {
 	cfg.CpuProf = *cpuProfCmd
 	cfg.MemProf = *memProfCmd
 	cfg.TraceProf = *traceCmd
+	cfg.ProfServer = *profServerCmd
 
 	switch *forestTypeCmd {
 	case "disk":

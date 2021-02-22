@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
@@ -22,19 +23,21 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 		pprof.StartCPUProfile(f)
 	}
-	if cfg.MemProf != "" {
-		f, err := os.Create(cfg.MemProf)
-		if err != nil {
-			return err
-		}
-		pprof.WriteHeapProfile(f)
-	}
 	if cfg.TraceProf != "" {
 		f, err := os.Create(cfg.TraceProf)
 		if err != nil {
 			return err
 		}
 		trace.Start(f)
+	}
+	if cfg.ProfServer != "" {
+		go func() {
+			listenAddr := net.JoinHostPort("", cfg.ProfServer)
+			profileRedirect := http.RedirectHandler("/debug/pprof",
+				http.StatusSeeOther)
+			http.Handle("/", profileRedirect)
+			fmt.Printf("%v", http.ListenAndServe(listenAddr, nil))
+		}()
 	}
 
 	// If serve option wasn't given
