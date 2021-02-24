@@ -61,6 +61,11 @@ type miniIn struct {
 	height int32
 }
 
+// to int... which will turn into a float
+func (mt *miniIn) hashToUint64() uint64 {
+	return binary.BigEndian.Uint64(mt.op.Hash[:8])
+}
+
 type miniTx struct {
 	txid    *chainhash.Hash
 	numOuts int

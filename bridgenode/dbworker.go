@@ -96,7 +96,7 @@ func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker)
 	// do an interpolation search
 	for {
 		lub := <-lChan
-		// sort the txins by utxo height; should give better caching hopefuly
+		// sort the txins by utxo height; hopefully speeds up search
 		sortMiniIns(lub.spentTxos)
 		for _, stxo := range lub.spentTxos {
 			if stxo.height != seekHeight {
@@ -111,5 +111,15 @@ func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker)
 			blockLen++ // just to compile
 			// do interpolation search here
 		}
+	}
+}
+
+// interpSearch performs an interpolation search
+func interpSearch(m miniIn, blkStart, blkEnd int64, mtx io.ReadSeeker) uint16 {
+
+	var guess, lowBound, hiBound int64
+	for {
+		// guess where the txid will be
+		guess = lowBound + int64()
 	}
 }
