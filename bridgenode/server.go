@@ -272,6 +272,7 @@ func serveBlocksWorker(UtreeDir utreeDir,
 // and gives the proof & utxo data back.
 // Don't ask for block 0, there is no proof for that.
 // But there is an offset for block 0, which is 0, so it collides with block 1
+// TODO this should take an io.writer instead of returning a byte slice...
 func GetUDataBytesFromFile(proofDir proofDir, height int32) (b []byte, err error) {
 	if height == 0 {
 		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
