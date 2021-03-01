@@ -65,8 +65,8 @@ func (mt *miniIn) hashToUint64() uint64 {
 }
 
 type miniTx struct {
-	txid    *chainhash.Hash
-	numOuts int
+	txid     *chainhash.Hash
+	startsAt uint16
 }
 
 // miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
@@ -78,7 +78,7 @@ func (mt *miniTx) serialize(w io.Writer) error {
 		return err
 	}
 
-	err = binary.Write(w, binary.BigEndian, uint16(mt.numOuts))
+	err = binary.Write(w, binary.BigEndian, mt.startsAt)
 	if err != nil {
 		return err
 	}

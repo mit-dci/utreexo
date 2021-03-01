@@ -1,7 +1,6 @@
 package bridgenode
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -42,12 +41,14 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, wg *sync.WaitGroup) {
 		miniTxSlice := make([]miniTx, len(transactions))
 		// iterate through the transactions in a block
 		for txInBlock, tx := range transactions {
+			var txoInBlock uint16
 			// ignore skiplists for now?
 			// TODO use skiplists.  Saves space.
 
 			// add all txids
 			miniTxSlice[txInBlock].txid = tx.Hash()
-			miniTxSlice[txInBlock].numOuts = len(tx.Txos())
+			miniTxSlice[txInBlock].startsAt = txoInBlock
+			txoInBlock += uint16(len(tx.Txos()))
 
 			// for all the txins, throw that into the work as well; just a bunch of
 			// outpoints
@@ -94,7 +95,7 @@ func TxidSortWriterWorker(tChan chan []miniTx, mtxs, offsets io.Writer) {
 
 func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker) {
 	var seekHeight int32
-	var heightOffset, nextOffset, blockLen int64
+	var heightOffset, nextOffset int64
 
 	for {
 		lub := <-lChan
@@ -114,16 +115,45 @@ func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker)
 				// TODO: make sure this is OK.  If we always have a
 				// block after the one we're seeking this will not error.
 				binary.Read(offsets, binary.BigEndian, &nextOffset)
-				blockLen = nextOffset - heightOffset
 				seekHeight = stxo.height
 			}
 
 			resultBlock.results[i].createHeight = stxo.height
 			resultBlock.results[i].indexWithinBlock =
-				interpSearch(stxo, heightOffset, nextOffset, txidFile)
+				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
 		}
 	}
+}
+
+// actually start with a binary search, easier
+func binSearch(mi miniIn,
+	blkStart, blkEnd int64, mtx io.ReadSeeker) (txoPosInBlock uint16) {
+
+	var guessMi miniIn
+
+	top, bottom := blkEnd, blkStart
+	// start in the middle
+	guessPos := (top + bottom) / 2
+	_, _ = mtx.Seek(guessPos*16, 0)
+	mtx.Read(guessMi.hashprefix[:])
+
+	for guessMi.hashprefix != mi.hashprefix {
+		if guessMi.hashToUint64() > mi.hashToUint64() { // too high, lower top
+			top = guessPos
+		} else { // must be too low (not equal), raise bottom
+			bottom = guessPos
+		}
+		guessPos = (top + bottom) / 2   // pick a position halfway in the range
+		_, _ = mtx.Seek(guessPos*16, 0) // seek & read
+		mtx.Read(guessMi.hashprefix[:])
+	}
+	// found it, read the next 2 bytes to get starting point of tx
+	binary.Read(mtx, binary.BigEndian, &txoPosInBlock)
+	// add to the index of the outpoint to get the position of the txo among
+	// all the block's txos
+	txoPosInBlock += mi.idx
+	return
 }
 
 // interpSearch performs an interpolation search
@@ -132,15 +162,23 @@ func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker)
 // of that output.
 // blkStart and blkEnd are positions, not byte offsets; for byte offsets
 // multiply by 16
-// actually start with a binary search
-func interpSearch(mi miniIn,
-	blkStart, blkEnd int64, mtx io.ReadSeeker) uint16 {
+func interpolationSearch(mi miniIn,
+	blkStart, blkEnd int64, mtx io.ReadSeeker) (txoPosInBlock uint16) {
 
-	// TODO outpoint should be truncated earlier on
+	var guessMi miniIn
 
-	// start with binary.  will go to interp & see how it's faster
-	guessPos := blkStart + ((blkEnd - blkStart) / 2)
+	topPos, bottomPos := blkEnd, blkStart
+	topVal := uint64(0x0000ffffffffffff)
+	bottomVal := uint64(0)
+
+	// guess where it is based on ends
+	guessPos := int64(guessMi.hashToUint64()/(topVal-bottomVal)) * (topPos - bottomPos)
+	// nah that won't work.  Maybe need floats or something
+
 	_, _ = mtx.Seek(guessPos*16, 0)
-	mtx.Read()
-	bytes.Compare()
+	mtx.Read(guessMi.hashprefix[:])
+
+	for {
+	}
+	return
 }
