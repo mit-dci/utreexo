@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/btcacc"
 	uwire "github.com/mit-dci/utreexo/wire"
 
@@ -48,22 +47,21 @@ down further if needed.
 // ttlBlock is the data from a block about txo creation and deletion
 // needed for TTL calculations
 type ttlLookupBlock struct {
-	blockHeight int32    // height of this block in the chain
-	spentTxos   []miniIn // one for every input
+	destroyHeight int32    // height of this block, destroying the txos
+	spentTxos     []miniIn // one for every input
 }
 
 // miniIn are miniature outpoints, for the spent side of the block.
-// 14 bytes of txid prefix, then 2 bytes of position.
-// TODO the 14 bytes can come WAY down with some logic that could handle
-// collisions.
+// 6 bytes of txid prefix, then 2 bytes of position.
 type miniIn struct {
-	op     wire.OutPoint
-	height int32
+	hashprefix [6]byte
+	idx        uint16
+	height     int32
 }
 
 // to int... which will turn into a float
 func (mt *miniIn) hashToUint64() uint64 {
-	return binary.BigEndian.Uint64(mt.op.Hash[:8])
+	return binary.BigEndian.Uint64(mt.hashprefix[:])
 }
 
 type miniTx struct {
@@ -71,9 +69,11 @@ type miniTx struct {
 	numOuts int
 }
 
-// miniTx serialization is 14 bytes of the txid, then 2 bytes for a uint16
+// miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
+// TODO there are probably no 6 byte prefix collisions in any block.
+// But there could be someday, so deal with that...
 func (mt *miniTx) serialize(w io.Writer) error {
-	_, err := w.Write(mt.txid[:14])
+	_, err := w.Write(mt.txid[:6])
 	if err != nil {
 		return err
 	}
@@ -103,13 +103,13 @@ func sortMiniIns(s []miniIn) {
 // all the ttl result data from a block, after checking with the DB
 // to be written to the flat file
 type ttlResultBlock struct {
-	Height  int32       // height of the block that consumed all the utxos
-	Created []ttlResult // slice of txo creation info
+	destroyHeight int32       // height of the block that consumed all the utxos
+	results       []ttlResult // slice of txo creation info
 }
 
 type ttlResult struct {
 	createHeight     int32  // what block created the txo
-	indexWithinBlock uint32 // index in that block where the txo is created
+	indexWithinBlock uint16 // index in that block where the txo is created
 }
 
 // blockToAddDel turns a block into add leaves and del leaves

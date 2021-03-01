@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -36,7 +37,7 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, wg *sync.WaitGroup) {
 		bnr := <-bnrChan
 
 		var lub ttlLookupBlock
-		lub.blockHeight = bnr.Height
+		lub.destroyHeight = bnr.Height
 		transactions := bnr.Blk.Transactions()
 		miniTxSlice := make([]miniTx, len(transactions))
 		// iterate through the transactions in a block
@@ -55,11 +56,12 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, wg *sync.WaitGroup) {
 					// inputInBlock += uint32(len(tx.MsgTx().TxIn))
 					break // skip coinbase input
 				}
+				//make new miniIn
+				mI := miniIn{idx: uint16(in.PreviousOutPoint.Index),
+					height: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height}
+				copy(mI.hashprefix[:], in.PreviousOutPoint.Hash[:6])
 				// append outpoint to slice
-				lub.spentTxos = append(lub.spentTxos,
-					miniIn{
-						op:     in.PreviousOutPoint,
-						height: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height})
+				lub.spentTxos = append(lub.spentTxos, mI)
 			}
 		}
 		// done with block, send out split data to the two workers
@@ -93,13 +95,20 @@ func TxidSortWriterWorker(tChan chan []miniTx, mtxs, offsets io.Writer) {
 func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker) {
 	var seekHeight int32
 	var heightOffset, nextOffset, blockLen int64
-	// do an interpolation search
+
 	for {
 		lub := <-lChan
+
+		// build a TTL result block
+		var resultBlock ttlResultBlock
+		resultBlock.destroyHeight = lub.destroyHeight
+		resultBlock.results = make([]ttlResult, len(lub.spentTxos))
+
 		// sort the txins by utxo height; hopefully speeds up search
+
 		sortMiniIns(lub.spentTxos)
-		for _, stxo := range lub.spentTxos {
-			if stxo.height != seekHeight {
+		for i, stxo := range lub.spentTxos {
+			if stxo.height != seekHeight { // height change, get byte offsets
 				offsets.Seek(int64(stxo.height*8), 0) // offsets are 8bytes each
 				binary.Read(offsets, binary.BigEndian, &heightOffset)
 				// TODO: make sure this is OK.  If we always have a
@@ -108,18 +117,30 @@ func TTLLookupWorker(lChan chan ttlLookupBlock, txidFile, offsets io.ReadSeeker)
 				blockLen = nextOffset - heightOffset
 				seekHeight = stxo.height
 			}
-			blockLen++ // just to compile
-			// do interpolation search here
+
+			resultBlock.results[i].createHeight = stxo.height
+			resultBlock.results[i].indexWithinBlock =
+				interpSearch(stxo, heightOffset, nextOffset, txidFile)
+
 		}
 	}
 }
 
 // interpSearch performs an interpolation search
-func interpSearch(m miniIn, blkStart, blkEnd int64, mtx io.ReadSeeker) uint16 {
+// give it a miniInput, the start and end positions of the block creating it,
+// as well as the block file, and it will return the position within the block
+// of that output.
+// blkStart and blkEnd are positions, not byte offsets; for byte offsets
+// multiply by 16
+// actually start with a binary search
+func interpSearch(mi miniIn,
+	blkStart, blkEnd int64, mtx io.ReadSeeker) uint16 {
 
-	var guess, lowBound, hiBound int64
-	for {
-		// guess where the txid will be
-		guess = lowBound + int64()
-	}
+	// TODO outpoint should be truncated earlier on
+
+	// start with binary.  will go to interp & see how it's faster
+	guessPos := blkStart + ((blkEnd - blkStart) / 2)
+	_, _ = mtx.Seek(guessPos*16, 0)
+	mtx.Read()
+	bytes.Compare()
 }

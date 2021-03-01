@@ -108,7 +108,7 @@ func FlatFileWriter(
 				panic(err)
 			}
 		case ttlRes := <-ttlResultChan:
-			for ttlRes.Height > ff.currentHeight {
+			for ttlRes.destroyHeight > ff.currentHeight {
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
 				if err != nil {
@@ -237,11 +237,11 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
 	// for all the TTLs, seek and overwrite the empty values there
-	for _, c := range ttlRes.Created {
+	for _, c := range ttlRes.results {
 		// seek to the location of that txo's ttl value in the proof file
 
 		binary.BigEndian.PutUint32(
-			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
+			ttlArr[:], uint32(ttlRes.destroyHeight-c.createHeight))
 
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
