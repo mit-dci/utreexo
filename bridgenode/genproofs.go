@@ -83,23 +83,21 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	}
 	defer lvdb.Close()
 
-	var proofwg sync.WaitGroup
-
 	// BlockAndRevReader will push blocks into here
 	blockAndRevProofChan := make(chan BlockAndRev, 10) // blocks for accumulator
 	blockAndRevTTLChan := make(chan BlockAndRev, 10)   // same thing, but for TTL
 	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)           // from proof processing to proof writer
 
+	fileWait := new(sync.WaitGroup)
+
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go BlockAndRevReader(
-		blockAndRevProofChan, blockAndRevTTLChan, cfg, knownTipHeight, height)
+		blockAndRevProofChan, blockAndRevTTLChan, fileWait, cfg, knownTipHeight, height)
 
-	var fileWait sync.WaitGroup
-
-	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, &fileWait)
-	go BNRTTLSpliter(blockAndRevTTLChan, &proofwg)
+	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, fileWait)
+	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -118,11 +116,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevProofChan
 
-		// start waitgroups, beyond this point we have to finish all the
-		// disk writes for this iteration of the loop
-		proofwg.Add(1)  // DbWorker calls Done()
-		fileWait.Add(2) // flatFileWorker calls Done() when done writing ttls and proof.
-
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
 		blockAdds, delLeaves, err := blockToAddDel(bnr)
@@ -138,6 +131,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 		// We don't know the TTL values, but know how many spots to allocate
 		ud.TxoTTLs = make([]int32, len(blockAdds))
+
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
@@ -160,10 +154,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 
 	}
-
-	// wait until dbWorker() has written to the ttldb file
-	// allows leveldb to close gracefully
-	proofwg.Wait()
 
 	fmt.Printf("blocked on fileWait\n")
 	// Wait for the file workers to finish

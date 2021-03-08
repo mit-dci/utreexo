@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -50,7 +51,7 @@ type RawHeaderData struct {
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
-	aChan, bChan chan BlockAndRev, cfg *Config,
+	aChan, bChan chan BlockAndRev, wg *sync.WaitGroup, cfg *Config,
 	maxHeight, curHeight int32) {
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
@@ -75,6 +76,7 @@ func BlockAndRevReader(
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
+			wg.Add(2)
 			aChan <- bnr
 			bChan <- bnr
 			curHeight++
