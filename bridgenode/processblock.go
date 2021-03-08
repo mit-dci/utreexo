@@ -56,12 +56,15 @@ type ttlLookupBlock struct {
 type miniIn struct {
 	hashprefix [6]byte
 	idx        uint16
-	height     int32
+	height     int32 // height of the utxo consumed
 }
 
 // to int... which will turn into a float
 func (mt *miniIn) hashToUint64() uint64 {
-	return binary.BigEndian.Uint64(mt.hashprefix[:])
+	// welll this is ugly but probably the fastest way
+	return uint64(mt.hashprefix[5]) | uint64(mt.hashprefix[4])<<8 |
+		uint64(mt.hashprefix[3])<<16 | uint64(mt.hashprefix[2])<<24 |
+		uint64(mt.hashprefix[1])<<32 | uint64(mt.hashprefix[0])<<40
 }
 
 type miniTx struct {
