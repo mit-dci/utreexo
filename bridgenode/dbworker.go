@@ -73,14 +73,15 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, ttlResultChan chan ttlResultBlock) 
 // TxidSortWriterWorker takes miniTxids in, sorts them, and writes them
 // into a flat file (also writes the offsets files.  The offset file
 // doesn't describe byte offsets, but rather 8 byte miniTxids
-func TxidSortWriterWorker(tChan chan []miniTx, mtxs, offsetFile io.Writer) {
+func TxidSortWriterWorker(tChan chan []miniTx, mtxs, txidOffsetFile io.WriteSeeker) {
 	var startOffset int64 // starting byte offset of current block
 	// sort then write.
 	for {
 		miniTxSlice := <-tChan
 		// first write the current start offset, then increment it for next time
 		fmt.Printf("write startOffset %d\t", startOffset)
-		err := binary.Write(offsetFile, binary.BigEndian, startOffset)
+		_, _ = txidOffsetFile.Seek(0, io.SeekEnd)
+		err := binary.Write(txidOffsetFile, binary.BigEndian, startOffset)
 		if err != nil {
 			panic(err)
 		}
@@ -97,7 +98,7 @@ func TxidSortWriterWorker(tChan chan []miniTx, mtxs, offsetFile io.Writer) {
 	}
 }
 
-// TODO: if the utxi is coinbase, don't have to look up position in block
+// TODO: if the utxo is coinbase, don't have to look up position in block
 // because you know it starts at 0.
 // In fact could omit writing coinbase txids entirely?
 
@@ -105,9 +106,10 @@ func TxidSortWriterWorker(tChan chan []miniTx, mtxs, offsetFile io.Writer) {
 // how old the utxo lasted, and sends the resutls to writeTTLs via ttlResultChan
 func TTLLookupWorker(
 	lChan chan ttlLookupBlock, ttlResultChan chan ttlResultBlock,
-	txidFile, txidOffsetFile io.ReadSeeker) {
+	txidFile, txidOffsetFile io.ReaderAt) {
 	var seekHeight int32
 	var heightOffset, nextOffset int64
+	var startOffsetBytes, nextOffsetBytes [8]byte
 
 	for {
 		lub := <-lChan
@@ -123,11 +125,18 @@ func TTLLookupWorker(
 			fmt.Printf("need txid %x from height %d\n", stxo.hashprefix, stxo.height)
 			if stxo.height != seekHeight { // height change, get byte offsets
 				// subtract 1 from stxo height because this file starts at height 1
-				txidOffsetFile.Seek(int64((stxo.height-1)*8), 0) // offsets are 8bytes each
-				binary.Read(txidOffsetFile, binary.BigEndian, &heightOffset)
+				_, _ = txidOffsetFile.ReadAt(
+					startOffsetBytes[:], int64(stxo.height-1)*8)
+
+				heightOffset = int64(binary.BigEndian.Uint64(startOffsetBytes[:]))
+
 				// TODO: make sure this is OK.  If we always have a
 				// block after the one we're seeking this will not error.
-				binary.Read(txidOffsetFile, binary.BigEndian, &nextOffset)
+
+				_, _ = txidOffsetFile.ReadAt(
+					nextOffsetBytes[:], int64(stxo.height)*8)
+				nextOffset = int64(binary.BigEndian.Uint64(nextOffsetBytes[:]))
+
 				seekHeight = stxo.height
 			}
 
@@ -142,16 +151,16 @@ func TTLLookupWorker(
 
 // actually start with a binary search, easier
 func binSearch(mi miniIn,
-	blkStart, blkEnd int64, mtxFile io.ReadSeeker) (txoPosInBlock uint16) {
+	blkStart, blkEnd int64, mtxFile io.ReaderAt) (txoPosInBlock uint16) {
 
 	fmt.Printf("looking for %x blkstart/end %d/%d\n", mi.hashprefix, blkStart, blkEnd)
 	var guessMi miniIn
+	var positionBytes [2]byte
 
 	top, bottom := blkEnd, blkStart
 	// start in the middle
 	guessPos := (top + bottom) / 2
-	_, _ = mtxFile.Seek(guessPos*8, 0)
-	mtxFile.Read(guessMi.hashprefix[:])
+	_, _ = mtxFile.ReadAt(guessMi.hashprefix[:], guessPos*8)
 	fmt.Printf("see %x at position %d (byte %d)\n",
 		guessMi.hashprefix, guessPos, guessPos*8)
 
@@ -168,18 +177,17 @@ func binSearch(mi miniIn,
 			bottom = guessPos
 		}
 
-		guessPos = (top + bottom) / 2      // pick a position halfway in the range
-		_, _ = mtxFile.Seek(guessPos*8, 0) // seek & read
-		mtxFile.Read(guessMi.hashprefix[:])
+		guessPos = (top + bottom) / 2 // pick a position halfway in the range
+		mtxFile.ReadAt(guessMi.hashprefix[:], guessPos*8)
 		fmt.Printf("see %x at position %d (byte %d)\n",
 			guessMi.hashprefix, guessPos, guessPos*8)
 	}
 	fmt.Printf("found %x\n", mi.hashprefix)
 	// found it, read the next 2 bytes to get starting point of tx
-	binary.Read(mtxFile, binary.BigEndian, &txoPosInBlock)
+	_, _ = mtxFile.ReadAt(positionBytes[:], (guessPos*8)+6)
+	txoPosInBlock = binary.BigEndian.Uint16(positionBytes[:]) + mi.idx
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
-	txoPosInBlock += mi.idx
 	return
 }
 
