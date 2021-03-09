@@ -143,7 +143,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 
 		if bnr.Height%100 == 0 {
-			fmt.Println("On block :", bnr.Height+1)
+			fmt.Printf("On block %d of max %d", bnr.Height+1, knownTipHeight)
 		}
 
 		// Check if stopSig is no longer false
@@ -152,7 +152,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		case stop = <-haltRequest: // receives true from stopBuildProofs()
 		default:
 		}
-
 	}
 
 	fmt.Printf("blocked on fileWait\n")

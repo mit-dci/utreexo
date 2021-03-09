@@ -239,7 +239,6 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.results {
 		// seek to the location of that txo's ttl value in the proof file
-
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.destroyHeight-c.createHeight))
 
@@ -251,7 +250,6 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if err != nil {
 			return err
 		}
-
 	}
 	ff.fileWait.Done()
 	return nil

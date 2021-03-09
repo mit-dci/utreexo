@@ -84,8 +84,7 @@ func TxidSortWriterWorker(
 		miniTxSlice := <-tChan
 		height++
 		// first write the current start offset, then increment it for next time
-		fmt.Printf("write h %d startOffset %d\t", height, startOffset)
-		// _, _ = txidOffsetFile.Seek(0, io.SeekEnd)
+		// fmt.Printf("write h %d startOffset %d\t", height, startOffset)
 		err := binary.Write(txidOffsetFile, binary.BigEndian, startOffset)
 		if err != nil {
 			panic(err)
@@ -95,7 +94,7 @@ func TxidSortWriterWorker(
 
 		sortTxids(miniTxSlice)
 		for _, mt := range miniTxSlice {
-			fmt.Printf("wrote txid %x p %d\n", mt.txid[:6], mt.startsAt)
+			// fmt.Printf("wrote txid %x p %d\n", mt.txid[:6], mt.startsAt)
 			err := mt.serialize(mtxs)
 			if err != nil {
 				fmt.Printf("miniTx write error: %s\n", err.Error())
@@ -122,8 +121,8 @@ func TTLLookupWorker(
 	var startOffsetBytes, nextOffsetBytes [8]byte
 
 	for {
-		lub := <-lChan
 		<-goChan
+		lub := <-lChan
 		// build a TTL result block
 		var resultBlock ttlResultBlock
 		resultBlock.destroyHeight = lub.destroyHeight
@@ -132,7 +131,7 @@ func TTLLookupWorker(
 		// sort the txins by utxo height; hopefully speeds up search
 		sortMiniIns(lub.spentTxos)
 		for i, stxo := range lub.spentTxos {
-			fmt.Printf("need txid %x from height %d\n", stxo.hashprefix, stxo.height)
+			// fmt.Printf("need txid %x from height %d\n", stxo.hashprefix, stxo.height)
 			if stxo.height != seekHeight { // height change, get byte offsets
 				// subtract 1 from stxo height because this file starts at height 1
 				_, err := txidOffsetFile.ReadAt(
