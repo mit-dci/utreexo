@@ -480,7 +480,7 @@ func (p *Pollard) toFull() (*Forest, error) {
 func (p *Pollard) GetRoots() (h []Hash) {
 	// pre-allocate. Shouldn't matter too much because this is only to export the
 	// utreexo state
-	h = make([]Hash, len(p.roots))
+	h = make([]Hash, 0, len(p.roots))
 
 	for _, pn := range p.roots {
 		h = append(h, pn.data)
