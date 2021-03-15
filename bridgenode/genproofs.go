@@ -17,28 +17,41 @@ import (
 /*
 The pipeline:
 
-The tricky part is that we read blocks, but that block data goes to 2 places.
-It goes to the accumulator to generate a proof, and it goes to the DB to
-get the TTL data.  The proof then gets written to a flat file,
+DATA INFLOW:
+Block & Rev data comes in from BlockAndRevReader, which duplicates the block
+data and sends it to both the proof path and the TTL path.
 
-BlockAndRevReader reads from bitcoind flat files
--> blockAndRevReadQueue -> read by main loop, sent to 2 places
+PROOF PATH:
+The proof path is in the main for loop right now and not in its own worker
+thread.  This path converts the block & rev data into accumulator adds & dels
+with blockToAddDel(), then calls GenUData() to generate a proof for the
+deletions, which it sends via proofChan to the FlatFileWriter() which writes
+the proof to disk.  Then it calls Modify() on the accumulator, removing the
+deleted hashes and adding new ones.
 
+TTL PATH:
+The block & rev data is first sent to BNRTTLSpliter(), which spawns 2 new
+threads: TxidSortWriterWorker() and TTLLookupWorker().  BNRTTLSpliter() splits
+the block up into inputs and outputs; inputs go to the TTLLookupWorker() and
+outputs go to the TxidSortWriterWorker() (barely even outputs; just TXIDs and
+number of outputs)
 
-  \--> genUData --------> forest.Modify()
-   \               \-----> proofchan -> flatFileBlockWorker -> offsets
-    \
-     \-> BNRTTLSplit -> dbWriteChan -> dbWorker -> ttlResultChan
+TxidSortWriterWorker() builds a flat file of per-block sorted, truncated TXIDs.
+TTLLookupWorker() looks up inputs in this sorted TXID file, and obtains position
+data for the TTL value of a UTXO.  We already have the TTL data for the UTXO
+from the current block height and the rev data which tells the utxo creation
+height.  We want to write the TTL into the TTL area of the proof block, but
+we need to look up where in the block this UTXO was created, and that's what
+TTLLookupWorker() gets us.  Once we have the full TTL result, we send that
+via ttlResultChan to FlatFileWriter()
 
-then flatFileTTLWorker needs both the offsets from the flatFileBlockWorker
-and the TTL data from the dbWorker.
-
-
-this all stays in order, so the flatFileTTLWorker grabs from the offset channel,
-and then only if the offset channel is empty will it grab from ttlResultChan.
-This ensures that it's always got the offset data first.
-if restoring, initially it gets a flood of offset data, so this works OK because
-it grabs all that before trying to look for TTL data.
+FLAT FILE:
+FlatFileWriter() takes in proof data as well as TTL data.  When it gets a
+proof block it appends that to the end of the proof file, allocating a bunch
+of empty space in the beginning for TTL values.
+When it gets a TTL result block, it writes the TTL values to various previous
+blocks, overwriting the allocated empty (zero) data in the TTL region of the
+proof block.
 
 */
 
