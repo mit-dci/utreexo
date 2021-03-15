@@ -47,7 +47,7 @@ offsetInRam values and writing to the correct 4-byte location in the proof file.
 
 // shared state for the flat file worker methods
 type flatFileState struct {
-	offsets               []int64
+	heightOffsets         []int64
 	proofFile, offsetFile *os.File
 	currentHeight         int32
 	currentOffset         int64
@@ -144,7 +144,7 @@ func (ff *flatFileState) ffInit() error {
 		if err != nil {
 			return err
 		}
-		ff.offsets = make([]int64, maxHeight)
+		ff.heightOffsets = make([]int64, maxHeight)
 		// run through the file, read everything and push into the channel
 		for ff.currentHeight < maxHeight {
 			err = binary.Read(ff.offsetFile, binary.BigEndian, &ff.currentOffset)
@@ -152,7 +152,7 @@ func (ff *flatFileState) ffInit() error {
 				fmt.Printf("couldn't populate in-ram offsets on startup")
 				return err
 			}
-			ff.offsets[ff.currentHeight] = ff.currentOffset
+			ff.heightOffsets[ff.currentHeight] = ff.currentOffset
 			ff.currentHeight++
 		}
 
@@ -167,7 +167,7 @@ func (ff *flatFileState) ffInit() error {
 			return err
 		}
 		// do the same with the in-ram slice
-		ff.offsets = make([]int64, 1)
+		ff.heightOffsets = make([]int64, 1)
 		// start writing at block 1
 		ff.currentHeight = 1
 	}
@@ -187,7 +187,7 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 
 	// write write the offset of the current proof to the offset file
 	buf = buf[:8]
-	ff.offsets = append(ff.offsets, ff.currentOffset)
+	ff.heightOffsets = append(ff.heightOffsets, ff.currentOffset)
 
 	binary.BigEndian.PutUint64(buf, uint64(ff.currentOffset))
 	_, err := ff.offsetFile.WriteAt(buf, int64(8*ud.Height))
@@ -236,8 +236,15 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
+
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.results {
+		if c.createHeight >= int32(len(ff.heightOffsets)) {
+			return fmt.Errorf("utxo created h %d destroyed h %d but "+
+				"max h %d cur h %d", c.createHeight, ttlRes.destroyHeight,
+				len(ff.heightOffsets), ff.currentHeight)
+		}
+
 		// seek to the location of that txo's ttl value in the proof file
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.destroyHeight-c.createHeight))
@@ -246,7 +253,7 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// 2 or 3 bytes would work)
 		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
 		_, err := ff.proofFile.WriteAt(ttlArr[:],
-			ff.offsets[c.createHeight]+16+int64(c.indexWithinBlock*4))
+			ff.heightOffsets[c.createHeight]+16+int64(c.indexWithinBlock*4))
 		if err != nil {
 			return err
 		}
