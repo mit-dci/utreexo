@@ -116,25 +116,24 @@ type ttlResult struct {
 }
 
 // blockToAddDel turns a block into add leaves and del leaves
-func blockToAddDel(bnr BlockAndRev) (
+func blockToAddDel(bnr blockAndRev) (
 	blockAdds []accumulator.Leaf, delLeaves []btcacc.LeafData, err error) {
 
-	inskip, outskip := bnr.Blk.DedupeBlock()
 	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
-	delLeaves, err = blockNRevToDelLeaves(bnr, inskip)
+	delLeaves, err = blockNRevToDelLeaves(bnr)
 	if err != nil {
 		return
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
+	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, bnr.outskip, bnr.Height)
 
 	return
 }
 
 // blockNRevToDelLeaves turns a block's inputs into delLeaves to be removed from the
 // accumulator
-func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
+func blockNRevToDelLeaves(bnr blockAndRev) (
 	delLeaves []btcacc.LeafData, err error) {
 
 	// make sure same number of txs and rev txs (minus coinbase)
@@ -145,6 +144,8 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 	}
 
 	var blockInIdx uint32
+	var skippos, maxskip int
+	maxskip = len(bnr.inskip)
 	for txinblock, tx := range bnr.Blk.Transactions() {
 		if txinblock == 0 {
 			blockInIdx++ // coinbase tx always has 1 input
@@ -161,9 +162,9 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
 		// loop through inputs
 		for i, txin := range tx.MsgTx().TxIn {
 			// check if on skiplist.  If so, don't make leaf
-			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
+			if skippos < maxskip && bnr.inskip[skippos] == blockInIdx {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
-				skiplist = skiplist[1:]
+				skippos++
 				blockInIdx++
 				continue
 			}

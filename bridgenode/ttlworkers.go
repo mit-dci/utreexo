@@ -10,7 +10,7 @@ import (
 // BNRTTLSplit gets a block&rev and splits the input and output sides.  it
 // sends the output side to the txid sorter, and the input side to the
 // ttl lookup worker
-func BNRTTLSpliter(bnrChan chan BlockAndRev, ttlResultChan chan ttlResultBlock) {
+func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) {
 
 	txidFile, err := os.OpenFile(
 		"/dev/shm/txidFile", os.O_CREATE|os.O_RDWR, 0600)
@@ -34,21 +34,43 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, ttlResultChan chan ttlResultBlock) 
 
 	for {
 		bnr := <-bnrChan
-		var txoInBlock uint16
+		var skippedTxoInBlock uint16
 		var lub ttlLookupBlock
+		var inskippos, outskippos, txoInBlock, txinInBlock uint32
+		inskipMax := uint32(len(bnr.inskip))
+		outskipMax := uint32(len(bnr.outskip))
 		lub.destroyHeight = bnr.Height
 		transactions := bnr.Blk.Transactions()
 		miniTxSlice := make([]miniTx, len(transactions))
+
+		if inskipMax+outskipMax != 0 {
+			fmt.Printf("h %d inskip %v\t outskip %v\n",
+				bnr.Height, bnr.inskip, bnr.outskip)
+		}
+
 		// iterate through the transactions in a block
 		for txInBlock, tx := range transactions {
 
-			// ignore skiplists for now?
-			// TODO use skiplists.  Saves space.
-
-			// add all txids
+			// add txid and skipped position in block
 			miniTxSlice[txInBlock].txid = tx.Hash()
-			miniTxSlice[txInBlock].startsAt = txoInBlock
-			txoInBlock += uint16(len(tx.Txos()))
+			miniTxSlice[txInBlock].startsAt = skippedTxoInBlock
+
+			// first add all the outputs in this tx, then range through the
+			// outputs and decrement them if they're on the skiplist
+			skippedTxoInBlock += uint16(len(tx.Txos()))
+			// look at number of txos; the txoinblock doesn't increment if
+			// it's on the outskiplist.
+			for _, _ = range tx.Txos() {
+				// if txo is on the out skiplist, decrement skippedTxoInBlock
+				// as it has already been added
+				if outskippos < outskipMax && bnr.outskip[outskippos] == txoInBlock {
+					outskippos++
+					skippedTxoInBlock--
+					fmt.Printf("h %d tx %d skip output %d\n",
+						bnr.Height, txInBlock, txoInBlock)
+				}
+				txoInBlock++
+			}
 
 			// for all the txins, throw that into the work as well; just a bunch of
 			// outpoints
@@ -57,6 +79,14 @@ func BNRTTLSpliter(bnrChan chan BlockAndRev, ttlResultChan chan ttlResultBlock) 
 					// inputInBlock += uint32(len(tx.MsgTx().TxIn))
 					break // skip coinbase input
 				}
+				if inskippos < inskipMax && bnr.inskip[inskippos] == txinInBlock {
+					inskippos++
+					txinInBlock++
+					fmt.Printf("h %d tx %d skip input %d\n",
+						bnr.Height, txInBlock, txinInBlock)
+					continue
+				}
+				txinInBlock++
 				//make new miniIn
 				mI := miniIn{idx: uint16(in.PreviousOutPoint.Index),
 					height: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height}
@@ -174,7 +204,7 @@ func TTLLookupWorker(
 func binSearch(mi miniIn,
 	blkStart, blkEnd int64, mtxFile io.ReaderAt) (txoPosInBlock uint16) {
 
-	fmt.Printf("looking for %x blkstart/end %d/%d\n", mi.hashprefix, blkStart, blkEnd)
+	// fmt.Printf("looking for %x blkstart/end %d/%d\n", mi.hashprefix, blkStart, blkEnd)
 	var guessMi miniIn
 	var positionBytes [2]byte
 
@@ -182,8 +212,8 @@ func binSearch(mi miniIn,
 	// start in the middle
 	guessPos := (top + bottom) / 2
 	_, _ = mtxFile.ReadAt(guessMi.hashprefix[:], guessPos*8)
-	fmt.Printf("see %x at position %d (byte %d)\n",
-		guessMi.hashprefix, guessPos, guessPos*8)
+	// fmt.Printf("see %x at position %d (byte %d)\n",
+	// guessMi.hashprefix, guessPos, guessPos*8)
 
 	for guessMi.hashprefix != mi.hashprefix {
 		if guessMi.hashToUint64() > mi.hashToUint64() { // too high, lower top
@@ -200,10 +230,10 @@ func binSearch(mi miniIn,
 
 		guessPos = (top + bottom) / 2 // pick a position halfway in the range
 		mtxFile.ReadAt(guessMi.hashprefix[:], guessPos*8)
-		fmt.Printf("see %x at position %d (byte %d)\n",
-			guessMi.hashprefix, guessPos, guessPos*8)
+		// fmt.Printf("see %x at position %d (byte %d)\n",
+		// guessMi.hashprefix, guessPos, guessPos*8)
 	}
-	fmt.Printf("found %x\n", mi.hashprefix)
+	// fmt.Printf("found %x\n", mi.hashprefix)
 	// found it, read the next 2 bytes to get starting point of tx
 	_, _ = mtxFile.ReadAt(positionBytes[:], (guessPos*8)+6)
 	txoPosInBlock = binary.BigEndian.Uint16(positionBytes[:]) + mi.idx

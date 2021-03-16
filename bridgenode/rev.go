@@ -51,7 +51,7 @@ type RawHeaderData struct {
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
-	aChan, bChan chan BlockAndRev, wg *sync.WaitGroup, cfg *Config,
+	aChan, bChan chan blockAndRev, wg *sync.WaitGroup, cfg *Config,
 	maxHeight, curHeight int32) {
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
@@ -71,11 +71,12 @@ func BlockAndRevReader(
 		}
 
 		for i := 0; i < len(blocks); i++ {
-			bnr := BlockAndRev{
+			bnr := blockAndRev{
 				Height: curHeight,
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
+			bnr.inskip, bnr.outskip = bnr.Blk.DedupeBlock()
 			wg.Add(2)
 			aChan <- bnr
 			bChan <- bnr
@@ -292,10 +293,12 @@ func GetBlockBytesFromFile(
 }
 
 // BlockAndRev is a regular block and a rev block stuck together
-type BlockAndRev struct {
-	Height int32
-	Rev    RevBlock
-	Blk    *btcutil.Block
+// also contains the skiplists
+type blockAndRev struct {
+	Height          int32
+	Rev             RevBlock
+	Blk             *btcutil.Block
+	inskip, outskip []uint32
 }
 
 /*

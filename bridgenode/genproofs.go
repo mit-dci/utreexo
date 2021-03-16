@@ -97,8 +97,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	defer lvdb.Close()
 
 	// BlockAndRevReader will push blocks into here
-	blockAndRevProofChan := make(chan BlockAndRev, 10) // blocks for accumulator
-	blockAndRevTTLChan := make(chan BlockAndRev, 10)   // same thing, but for TTL
+	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
+	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
 	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)           // from proof processing to proof writer
 
@@ -156,7 +156,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 
 		if bnr.Height%100 == 0 {
-			fmt.Printf("On block %d of max %d", bnr.Height+1, knownTipHeight)
+			fmt.Printf("On block %d of max %d ", bnr.Height+1, knownTipHeight)
 		}
 
 		// Check if stopSig is no longer false

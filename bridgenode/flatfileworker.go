@@ -240,9 +240,9 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.results {
 		if c.createHeight >= int32(len(ff.heightOffsets)) {
-			return fmt.Errorf("utxo created h %d destroyed h %d but "+
-				"max h %d cur h %d", c.createHeight, ttlRes.destroyHeight,
-				len(ff.heightOffsets), ff.currentHeight)
+			return fmt.Errorf("utxo created h %d idx in block %d destroyed h %d"+
+				" but max h %d cur h %d", c.createHeight, c.indexWithinBlock,
+				ttlRes.destroyHeight, len(ff.heightOffsets), ff.currentHeight)
 		}
 
 		// seek to the location of that txo's ttl value in the proof file
