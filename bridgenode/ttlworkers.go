@@ -36,7 +36,8 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 		bnr := <-bnrChan
 		var skippedTxoInBlock uint16
 		var lub ttlLookupBlock
-		var inskippos, outskippos, txoInBlock, txinInBlock uint32
+		var inskippos, outskippos, outputInBlock, inputInBlock uint32
+		var skipOutputs, skipInputs bool
 		inskipMax := uint32(len(bnr.inskip))
 		outskipMax := uint32(len(bnr.outskip))
 		lub.destroyHeight = bnr.Height
@@ -46,6 +47,12 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 		if inskipMax+outskipMax != 0 {
 			fmt.Printf("h %d inskip %v\t outskip %v\n",
 				bnr.Height, bnr.inskip, bnr.outskip)
+		}
+		if inskipMax > 0 {
+			skipInputs = true
+		}
+		if outskipMax > 0 {
+			skipOutputs = true
 		}
 
 		// iterate through the transactions in a block
@@ -63,30 +70,37 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 			for _, _ = range tx.Txos() {
 				// if txo is on the out skiplist, decrement skippedTxoInBlock
 				// as it has already been added
-				if outskippos < outskipMax && bnr.outskip[outskippos] == txoInBlock {
-					outskippos++
-					skippedTxoInBlock--
+				if skipOutputs && bnr.outskip[outskippos] == outputInBlock {
 					fmt.Printf("h %d tx %d skip output %d\n",
-						bnr.Height, txInBlock, txoInBlock)
+						bnr.Height, txInBlock, outputInBlock)
+					outskippos++
+					if outskippos == outskipMax {
+						skipOutputs = false
+					}
+					skippedTxoInBlock--
+
 				}
-				txoInBlock++
+				outputInBlock++
 			}
 
 			// for all the txins, throw that into the work as well; just a bunch of
 			// outpoints
 			for inputInTx, in := range tx.MsgTx().TxIn {
 				if txInBlock == 0 {
-					// inputInBlock += uint32(len(tx.MsgTx().TxIn))
+					inputInBlock += uint32(len(tx.MsgTx().TxIn))
 					break // skip coinbase input
 				}
-				if inskippos < inskipMax && bnr.inskip[inskippos] == txinInBlock {
-					inskippos++
-					txinInBlock++
+				if skipInputs && bnr.inskip[inskippos] == inputInBlock {
 					fmt.Printf("h %d tx %d skip input %d\n",
-						bnr.Height, txInBlock, txinInBlock)
+						bnr.Height, txInBlock, inputInBlock)
+					inskippos++
+					if inskippos == inskipMax {
+						skipInputs = false
+					}
+					inputInBlock++
 					continue
 				}
-				txinInBlock++
+				inputInBlock++
 				//make new miniIn
 				mI := miniIn{idx: uint16(in.PreviousOutPoint.Index),
 					height: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height}
