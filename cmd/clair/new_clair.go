@@ -1,4 +1,5 @@
 package main
+
 /*
 
 What proportion is remembered vs if we just remember ttls with less than 10. Can do a similar method
@@ -11,18 +12,17 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
+
 	//"strconv"
 	//"time"
 	"bytes"
 
 	//"github.com/mit-dci/utreexo/cmd/ibdsim"
-	
+
 	"github.com/mit-dci/utreexo/bridgenode"
 	"github.com/mit-dci/utreexo/btcacc"
 	//"github.com/mit-dci/utreexo/utreexo"
 )
-
-
 
 /* idea here:
 input: load a txo / ttl file, and a memory size
@@ -49,14 +49,13 @@ read 4 bytes, then seek to *that* /8 in the schedule file, and shift around as n
 
 type txoEnd struct {
 	txoIdx uint32 // which utxo (in order)
-	end    int32 // when it dies (block height)
+	end    int32  // when it dies (block height)
 }
 
 type cBlock struct {
 	blockHeight int32
 	ttls        []int32 // addHashes[i] corresponds with ttls[i]; same length
 }
-
 
 func main() {
 	fmt.Printf("reclair file reader")
@@ -67,18 +66,18 @@ func main() {
 	//remembers 437/555 = 78.74%
 	Clairvoy(25000000)
 
-
 	//runs using old remembering system
 	//remembers 296/555 = 53.33%
 	oldRun(25000000)
 }
+
 // NOTE I think we don't actually need to keep track of insertions or deletions
 // at all, and ONLY the TTLs are needed!
 // Because, who cares *what* the element being added is, the only reason to
 // be able to identify it is so we can find it to remove it.  But we
 // can assign it a sequential number instead of using a hash
 
-func getCBlocks(start int32, count int32, cfg bridgenode.Config) ([]cBlock, error) {
+func getCBlocks(start int32, count int32) ([]cBlock, error) {
 	// build cblock slice to return
 	cblocks := make([]cBlock, count)
 	print("getting blocks\n")
@@ -89,11 +88,11 @@ func getCBlocks(start int32, count int32, cfg bridgenode.Config) ([]cBlock, erro
 	//Change lines below to the path of your proof and proofoffset files on your computer
 	proofdir.PFile = "/Users/cb/Desktop/MIT/UROP/Spring 2021/proofdata/proof.dat"
 	proofdir.POffsetFile = "/Users/cb/Desktop/MIT/UROP/Spring 2021/proofdata/proofoffset.dat"
-	
+
 	// grab utreexo data and populate cblocks
 	for i, _ := range cblocks {
 		udataBytes, err := bridgenode.GetUDataBytesFromFile(
-		proofdir, start+int32(i))
+			proofdir, start+int32(i))
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +106,6 @@ func getCBlocks(start int32, count int32, cfg bridgenode.Config) ([]cBlock, erro
 	}
 	return cblocks, nil
 }
-
 
 type sortableTxoSlice []txoEnd
 
@@ -159,19 +157,15 @@ func Clairvoy(mem int) error {
 	var clairSlice sortableTxoSlice
 	var remembers sortableTxoSlice
 	var numTotalOutputs uint32
-	cfg, err := bridgenode.Parse(os.Args[1:])
-	
-	if err != nil {
-		panic(err)
-	}
-	allCBlocks,err := getCBlocks(1, 200, *cfg)	
+
+	allCBlocks, err := getCBlocks(1, 200)
 	//print(len(allCBlocks))
 	//print("\n")
 	numTotalOutputs, scheduleSlice, clairSlice, remembers, err = genClair(allCBlocks, scheduleSlice, clairSlice, maxmem)
 	if err != nil {
 		panic(err)
 	}
-		
+
 	fmt.Printf("done\n")
 
 	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
@@ -208,19 +202,14 @@ func oldRun(mem int) error {
 	var clairSlice sortableTxoSlice
 	var remembers sortableTxoSlice
 	var numTotalOutputs uint32
-	cfg, err := bridgenode.Parse(os.Args[1:])
-	
-	if err != nil {
-		panic(err)
-	}
-	allCBlocks,err := getCBlocks(1, 200, *cfg)	
+	allCBlocks, err := getCBlocks(1, 200)
 	//print(len(allCBlocks))
 	//print("\n")
 	numTotalOutputs, scheduleSlice, clairSlice, remembers, err = gen10(allCBlocks, scheduleSlice, clairSlice, maxmem)
 	if err != nil {
 		panic(err)
 	}
-		
+
 	fmt.Printf("done\n")
 
 	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
@@ -254,8 +243,8 @@ func assertBitInRam(txoIdx uint32, scheduleSlice []byte) {
 	offset := int64(txoIdx / 8)
 	scheduleSlice[offset] |= 1 << (7 - (txoIdx % 8))
 }
-func gen10(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, maxmem int) (uint32,[]byte, sortableTxoSlice, sortableTxoSlice, error){
-	
+func gen10(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, maxmem int) (uint32, []byte, sortableTxoSlice, sortableTxoSlice, error) {
+
 	var utxoCounter uint32
 	utxoCounter = 0
 	var allCounts uint32
@@ -274,9 +263,9 @@ func gen10(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, 
 		print(len(cBlocks[i].ttls))
 		print("\n")*/
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
-		for j:= 0; j < len(cBlocks[i].ttls);j++{
-			allCounts  = allCounts + 1
-			if(cBlocks[i].ttls[j] > 10){
+		for j := 0; j < len(cBlocks[i].ttls); j++ {
+			allCounts = allCounts + 1
+			if cBlocks[i].ttls[j] > 10 {
 				continue
 			}
 			var e txoEnd
@@ -288,14 +277,14 @@ func gen10(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, 
 			print("\n")*/
 			e = txoEnd{
 				txoIdx: utxoCounter,
-				end : cBlocks[i].blockHeight + cBlocks[i].ttls[j],
+				end:    cBlocks[i].blockHeight + cBlocks[i].ttls[j],
 			}
 			utxoCounter++
 			blockEnds = append(blockEnds, e)
 		}
 		//print("finished adding\n")
 		//sortStart := time.Now()
-		sort.SliceStable(blockEnds,func(i, j int) bool {
+		sort.SliceStable(blockEnds, func(i, j int) bool {
 			return blockEnds[i].end < blockEnds[j].end
 		})
 		//print("sorted \n")
@@ -308,7 +297,7 @@ func gen10(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, 
 		//print("split\n")
 		allRemembers = mergeSortedSlices(allRemembers, remembers)
 		//postLen := len(clairSlice)
-		if(len(clairSlice)>maxmem){
+		if len(clairSlice) > maxmem {
 			clairSlice = clairSlice[:maxmem]
 		}
 		print("num remembers ")
@@ -327,10 +316,10 @@ func gen10(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, 
 			}
 		}
 	}
-	return allCounts,scheduleSlice, clairSlice, allRemembers, nil
+	return allCounts, scheduleSlice, clairSlice, allRemembers, nil
 }
-func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, maxmem int) (uint32, []byte, sortableTxoSlice, sortableTxoSlice, error){
-	
+func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, maxmem int) (uint32, []byte, sortableTxoSlice, sortableTxoSlice, error) {
+
 	var utxoCounter uint32
 	utxoCounter = 0
 	var allCounts uint32
@@ -349,7 +338,7 @@ func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlic
 		print(len(cBlocks[i].ttls))
 		print("\n")*/
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
-		for j:= 0; j < len(cBlocks[i].ttls);j++{
+		for j := 0; j < len(cBlocks[i].ttls); j++ {
 			allCounts += 1
 			var e txoEnd
 			/*print("utxo counter: ")
@@ -360,14 +349,14 @@ func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlic
 			print("\n")*/
 			e = txoEnd{
 				txoIdx: utxoCounter,
-				end : cBlocks[i].blockHeight + cBlocks[i].ttls[j],
+				end:    cBlocks[i].blockHeight + cBlocks[i].ttls[j],
 			}
 			utxoCounter++
 			blockEnds = append(blockEnds, e)
 		}
 		//print("finished adding\n")
 		//sortStart := time.Now()
-		sort.SliceStable(blockEnds,func(i, j int) bool {
+		sort.SliceStable(blockEnds, func(i, j int) bool {
 			return blockEnds[i].end < blockEnds[j].end
 		})
 		//print("sorted \n")
@@ -380,7 +369,7 @@ func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlic
 		//print("split\n")
 		allRemembers = mergeSortedSlices(allRemembers, remembers)
 		//postLen := len(clairSlice)
-		if(len(clairSlice)>maxmem){
+		if len(clairSlice) > maxmem {
 			clairSlice = clairSlice[:maxmem]
 		}
 		print("num remembers ")
