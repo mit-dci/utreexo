@@ -17,7 +17,8 @@ The bridgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
-  -forest                      select forest type to use (ram, cow, cache, disk). Defaults to disk
+  -forest                      select forest type to use (ram, cow, cache, disk). 
+  Defaults to disk
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path
   -datadir="path/to/directory" set a custom DATADIR.
@@ -93,9 +94,10 @@ type utreeDir struct {
 func initUtreeDir(basePath string) utreeDir {
 	offBase := filepath.Join(basePath, "offsetdata")
 	off := offsetDir{
-		base:                      offBase,
-		OffsetFile:                filepath.Join(offBase, "offsetfile.dat"),
-		lastIndexOffsetHeightFile: filepath.Join(offBase, "lastindexoffsetheightfile.dat"),
+		base:       offBase,
+		OffsetFile: filepath.Join(offBase, "offsetfile.dat"),
+		lastIndexOffsetHeightFile: filepath.Join(offBase,
+			"lastindexoffsetheightfile.dat"),
 	}
 
 	proofBase := filepath.Join(basePath, "proofdata")
@@ -109,12 +111,13 @@ func initUtreeDir(basePath string) utreeDir {
 	forestBase := filepath.Join(basePath, "forestdata")
 	cowDir := filepath.Join(forestBase, "cow")
 	forest := forestDir{
-		base:                            forestBase,
-		forestFile:                      filepath.Join(forestBase, "forestfile.dat"),
-		miscForestFile:                  filepath.Join(forestBase, "miscforestfile.dat"),
-		forestLastSyncedBlockHeightFile: filepath.Join(forestBase, "forestlastsyncedheight.dat"),
-		cowForestDir:                    cowDir,
-		cowForestCurFile:                filepath.Join(cowDir, "CURRENT"),
+		base:           forestBase,
+		forestFile:     filepath.Join(forestBase, "forestfile.dat"),
+		miscForestFile: filepath.Join(forestBase, "miscforestfile.dat"),
+		forestLastSyncedBlockHeightFile: filepath.Join(forestBase,
+			"forestlastsyncedheight.dat"),
+		cowForestDir:     cowDir,
+		cowForestCurFile: filepath.Join(cowDir, "CURRENT"),
 	}
 
 	ttldb := filepath.Join(basePath, "ttldb")

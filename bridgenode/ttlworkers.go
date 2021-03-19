@@ -45,8 +45,8 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 		miniTxSlice := make([]miniTx, len(transactions))
 
 		if inskipMax+outskipMax != 0 {
-			fmt.Printf("h %d inskip %v\t outskip %v\n",
-				bnr.Height, bnr.inskip, bnr.outskip)
+			// fmt.Printf("h %d inskip %v\t outskip %v\n",
+			// bnr.Height, bnr.inskip, bnr.outskip)
 		}
 		if inskipMax > 0 {
 			skipInputs = true
@@ -71,8 +71,8 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 				// if txo is on the out skiplist, decrement skippedTxoInBlock
 				// as it has already been added
 				if skipOutputs && bnr.outskip[outskippos] == outputInBlock {
-					fmt.Printf("h %d tx %d skip output %d\n",
-						bnr.Height, txInBlock, outputInBlock)
+					// fmt.Printf("h %d tx %d skip output %d\n",
+					// bnr.Height, txInBlock, outputInBlock)
 					outskippos++
 					if outskippos == outskipMax {
 						skipOutputs = false
@@ -91,8 +91,8 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 					break // skip coinbase input
 				}
 				if skipInputs && bnr.inskip[inskippos] == inputInBlock {
-					fmt.Printf("h %d tx %d skip input %d\n",
-						bnr.Height, txInBlock, inputInBlock)
+					// fmt.Printf("h %d tx %d skip input %d\n",
+					// bnr.Height, txInBlock, inputInBlock)
 					inskippos++
 					if inskippos == inskipMax {
 						skipInputs = false

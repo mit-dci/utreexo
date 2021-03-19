@@ -100,8 +100,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
 	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
 	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)           // from proof processing to proof writer
-
+	proofChan := make(chan btcacc.UData, 10)           // from processing to flat writer
 	fileWait := new(sync.WaitGroup)
 
 	// Reads block asynchronously from .dat files
@@ -155,9 +154,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 
-		if bnr.Height%100 == 0 {
-			fmt.Printf("On block %d of max %d ", bnr.Height+1, knownTipHeight)
-		}
+		// if bnr.Height%100 == 0 {
+		// fmt.Printf("On block %d of max %d ", bnr.Height+1, knownTipHeight)
+		// }
 
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit
