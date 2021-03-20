@@ -108,7 +108,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevProofChan
-		fmt.Printf("loop got bnr h %d chan buffer %d\n", bnr.Height, len(blockAndRevProofChan))
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
 		blockAdds, delLeaves, err := blockToAddDel(bnr)
@@ -135,9 +134,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 
-		// if bnr.Height%100 == 0 {
-		// fmt.Printf("On block %d of max %d ", bnr.Height+1, knownTipHeight)
-		// }
+		if bnr.Height%1000 == 0 {
+			fmt.Printf("On block %d of max %d\n", bnr.Height+1, knownTipHeight)
+		}
 
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit

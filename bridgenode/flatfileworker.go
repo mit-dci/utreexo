@@ -111,8 +111,6 @@ func FlatFileWriter(
 			// if we get a ttlRes before the ud, wait for & write ud first, then
 			// deal with the ttlRes
 			for ttlRes.destroyHeight > ff.currentHeight {
-				fmt.Printf("got early ttl h %d proof h %d\n",
-					ttlRes.destroyHeight, ff.currentHeight)
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
 				if err != nil {
@@ -234,7 +232,6 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	ff.currentHeight++
 
 	ff.fileWait.Done()
-	fmt.Printf("cleared wg after writing proof h %d\n", ud.Height)
 	return nil
 }
 
@@ -263,6 +260,5 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		}
 	}
 	ff.fileWait.Done()
-	fmt.Printf("cleared wg - TTLs from h %d\n", ttlRes.destroyHeight)
 	return nil
 }

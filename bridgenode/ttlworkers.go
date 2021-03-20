@@ -39,7 +39,6 @@ func BNRTTLSpliter(
 
 	for {
 		bnr := <-bnrChan
-		fmt.Printf("splitter got bnr h %d chan buffer %d\n", bnr.Height, len(bnrChan))
 		var skippedTxoInBlock uint16
 		var lub ttlLookupBlock
 		var inskippos, outskippos, outputInBlock, inputInBlock uint32
