@@ -5,20 +5,26 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // BNRTTLSplit gets a block&rev and splits the input and output sides.  it
 // sends the output side to the txid sorter, and the input side to the
 // ttl lookup worker
-func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) {
+func BNRTTLSpliter(
+	bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock,
+	utdir utreeDir) {
 
 	txidFile, err := os.OpenFile(
-		"/dev/shm/txidFile", os.O_CREATE|os.O_RDWR, 0600)
+		filepath.Join(utdir.TtlDir, "txidFile"),
+		os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
+
 	txidOffsetFile, err := os.OpenFile(
-		"/dev/shm/txidOffsetFile", os.O_CREATE|os.O_RDWR, 0600)
+		filepath.Join(utdir.TtlDir, "txidOffsetFile"),
+		os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -28,12 +34,12 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 	goChan := make(chan bool, 10)
 
 	go TxidSortWriterWorker(miniTxidChan, goChan, txidFile, txidOffsetFile)
-
 	// TTLLookupWorker needs to send the final data to the flatFileWorker
 	go TTLLookupWorker(lookupChan, ttlResultChan, goChan, txidFile, txidOffsetFile)
 
 	for {
 		bnr := <-bnrChan
+		fmt.Printf("splitter got bnr h %d chan buffer %d\n", bnr.Height, len(bnrChan))
 		var skippedTxoInBlock uint16
 		var lub ttlLookupBlock
 		var inskippos, outskippos, outputInBlock, inputInBlock uint32
@@ -44,20 +50,11 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 		transactions := bnr.Blk.Transactions()
 		miniTxSlice := make([]miniTx, len(transactions))
 
-		if inskipMax+outskipMax != 0 {
-			// fmt.Printf("h %d inskip %v\t outskip %v\n",
-			// bnr.Height, bnr.inskip, bnr.outskip)
-		}
-		if inskipMax > 0 {
-			skipInputs = true
-		}
-		if outskipMax > 0 {
-			skipOutputs = true
-		}
+		skipInputs = inskipMax > 0
+		skipOutputs = outskipMax > 0
 
 		// iterate through the transactions in a block
 		for txInBlock, tx := range transactions {
-
 			// add txid and skipped position in block
 			miniTxSlice[txInBlock].txid = tx.Hash()
 			miniTxSlice[txInBlock].startsAt = skippedTxoInBlock
@@ -71,14 +68,9 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 				// if txo is on the out skiplist, decrement skippedTxoInBlock
 				// as it has already been added
 				if skipOutputs && bnr.outskip[outskippos] == outputInBlock {
-					// fmt.Printf("h %d tx %d skip output %d\n",
-					// bnr.Height, txInBlock, outputInBlock)
 					outskippos++
-					if outskippos == outskipMax {
-						skipOutputs = false
-					}
 					skippedTxoInBlock--
-
+					skipOutputs = outskippos != outskipMax
 				}
 				outputInBlock++
 			}
@@ -91,13 +83,9 @@ func BNRTTLSpliter(bnrChan chan blockAndRev, ttlResultChan chan ttlResultBlock) 
 					break // skip coinbase input
 				}
 				if skipInputs && bnr.inskip[inskippos] == inputInBlock {
-					// fmt.Printf("h %d tx %d skip input %d\n",
-					// bnr.Height, txInBlock, inputInBlock)
 					inskippos++
-					if inskippos == inskipMax {
-						skipInputs = false
-					}
 					inputInBlock++
+					skipInputs = inskippos != inskipMax
 					continue
 				}
 				inputInBlock++
@@ -208,7 +196,6 @@ func TTLLookupWorker(
 			resultBlock.results[i].createHeight = stxo.height
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
-
 		}
 		ttlResultChan <- resultBlock
 	}

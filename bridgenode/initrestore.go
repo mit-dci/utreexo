@@ -152,7 +152,8 @@ func createForest(cfg *Config) (
 		forest = accumulator.NewForest(nil, false, "", 0)
 		return
 	case cowForest:
-		forest = accumulator.NewForest(nil, false, cfg.UtreeDir.ForestDir.cowForestDir, cfg.cowMaxCache)
+		forest = accumulator.NewForest(
+			nil, false, cfg.UtreeDir.ForestDir.cowForestDir, cfg.cowMaxCache)
 		return
 	default:
 		var cache bool

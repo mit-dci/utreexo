@@ -87,7 +87,7 @@ type utreeDir struct {
 	OffsetDir offsetDir
 	ProofDir  proofDir
 	ForestDir forestDir
-	Ttldb     string
+	TtlDir    string
 }
 
 // init an utreeDir with a selected basepath. Has all the names for the forest
@@ -120,13 +120,13 @@ func initUtreeDir(basePath string) utreeDir {
 		cowForestCurFile: filepath.Join(cowDir, "CURRENT"),
 	}
 
-	ttldb := filepath.Join(basePath, "ttldb")
+	ttlpath := filepath.Join(basePath, "ttldata")
 
 	return utreeDir{
 		OffsetDir: off,
 		ProofDir:  proof,
 		ForestDir: forest,
-		Ttldb:     ttldb,
+		TtlDir:    ttlpath,
 	}
 }
 
@@ -134,6 +134,7 @@ func initUtreeDir(basePath string) utreeDir {
 func makePaths(dir utreeDir) {
 	os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
 	os.MkdirAll(dir.ProofDir.base, os.ModePerm)
+	os.MkdirAll(dir.TtlDir, os.ModePerm)
 	os.MkdirAll(dir.ForestDir.base, os.ModePerm)
 	os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
 }

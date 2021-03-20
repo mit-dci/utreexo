@@ -63,7 +63,8 @@ func BlockAndRevReader(
 	defer offsetFile.Close() // file always closes
 
 	for curHeight < maxHeight {
-		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFile, cfg.BlockDir)
+		blocks, revs, err :=
+			GetRawBlocksFromDisk(curHeight, 100000, offsetFile, cfg.BlockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)

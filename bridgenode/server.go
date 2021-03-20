@@ -76,7 +76,7 @@ func ArchiveServer(cfg *Config, sig chan bool) error {
 		CompactionTableSizeMultiplier: 8,
 		Compression:                   opt.NoCompression,
 	}
-	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
+	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.TtlDir, &o)
 	if err != nil {
 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)

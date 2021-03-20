@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/mit-dci/utreexo/btcacc"
-
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 /*
@@ -80,22 +77,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		return err
 	}
 
-	// Open leveldb
-	o := opt.Options{
-		CompactionTableSizeMultiplier: 8,
-		Compression:                   opt.NoCompression,
-	}
-
-	// init ttldb
-	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
-	if err != nil {
-		err := fmt.Errorf("initialization error: %s.  If your .blk and .dat "+
-			"files are not in %s, specify alternate path with -datadir\n.",
-			err.Error(), cfg.BlockDir)
-		return err
-	}
-	defer lvdb.Close()
-
 	// BlockAndRevReader will push blocks into here
 	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
 	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
@@ -109,13 +90,13 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		blockAndRevProofChan, blockAndRevTTLChan, fileWait, cfg, knownTipHeight, height)
 
 	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, fileWait)
-	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan)
+	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
 	fmt.Println("Building Proofs and ttldb...")
 
 	var stop bool // bool for stopping the main loop
 
-	for ; height != knownTipHeight && !stop; height++ {
+	for ; height <= knownTipHeight && !stop; height++ {
 		if cfg.quitAt != -1 && int(height) == cfg.quitAt {
 			fmt.Println("quitAfter value reached. Quitting...")
 
@@ -127,7 +108,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevProofChan
-
+		fmt.Printf("loop got bnr h %d chan buffer %d\n", bnr.Height, len(blockAndRevProofChan))
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
 		blockAdds, delLeaves, err := blockToAddDel(bnr)
@@ -166,7 +147,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 	}
 
-	fmt.Printf("blocked on fileWait\n")
 	// Wait for the file workers to finish
 	fileWait.Wait()
 
