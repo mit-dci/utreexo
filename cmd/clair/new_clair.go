@@ -62,25 +62,30 @@ func main() {
 
 	// this initializes the configuration of files and directories to be read
 	allCBlocks, err := getCBlocks(1, 1780701)
-	//allCBlocks, err := getCBlocks(1, 200000)
+	//allCBlocks, err := getCBlocks(1, 100000)
 	if(err!=nil){
 		panic(err)
 	}
-	/*total number of remembers for CLAIRVOY: 590429
-	all Blocks:  636548
-	total number of remembers for gen10:  406096
-	max number of remembers for gen10:  9429*/
 	//runs using clairvoyint algo
 	//remembers 437/555 = 78.74%
-	numRemembers, numTotalOutputs := Clairvoy(allCBlocks,1750000)
+	numTotalOutputs, numRemembers,err := genClair(allCBlocks,287000)
+	//numTotalOutputs, numRemembers,err := genClair(allCBlocks,67200)
+	if(err!= nil){
+		panic(err)
+	}
 	fmt.Println("Clairvoy done")
 	//runs using old remembering system
 	//remembers 296/555 = 53.33%
-	numTotalRemembers, maxRemembers :=oldRun(allCBlocks,1750000)
+	//numTotalRemembers, maxRemembers :=oldRun(1780701,1750000)
+	numTotalRemembers, maxRemembers :=LookAhead(allCBlocks,10)
+	numTotalRemembersBehind, maxRemembersBehind :=LookBehind(allCBlocks,287000)
+	//numTotalRemembersBehind, maxRemembersBehind :=LookBehind(allCBlocks,67200)
 	fmt.Println("total number of remembers for CLAIRVOY:",numRemembers)
 	fmt.Println("all Blocks: ",numTotalOutputs)
-	fmt.Println("total number of remembers for gen10: ",numTotalRemembers)
-	fmt.Println("max number of remembers for gen10: ",maxRemembers)
+	fmt.Println("total number of remembers for look ahead: ",numTotalRemembers)
+	fmt.Println("max number of remembers for look ahead: ",maxRemembers)
+	fmt.Println("total number of remembers for look behind: ",numTotalRemembersBehind)
+	fmt.Println("max number of remembers for look behind: ",maxRemembersBehind)
 }
 
 /*Run utreexoserver exe file on the tn3 blocks folder*/
@@ -131,6 +136,7 @@ func getCBlocks(start int32, count int32) ([]cBlock, error) {
 	return cblocks, nil
 }
 
+
 type sortableTxoSlice []txoEnd
 
 func (s sortableTxoSlice) Len() int      { return len(s) }
@@ -160,7 +166,7 @@ func SplitAfter(s sortableTxoSlice, h int32) (top, bottom sortableTxoSlice) {
 	return
 }
 
-func Clairvoy(allCBlocks []cBlock, mem int) (numRemembers int, numTotalOutputs uint32){
+/*func Clairvoy(allCBlocks []cBlock, mem int) (numRemembers int, numTotalOutputs uint32){
 	//fmt.Printf("genclair - builds clairvoyant caching schedule\n")
 
 	//Channel to alert the main loop to break
@@ -175,11 +181,11 @@ func Clairvoy(allCBlocks []cBlock, mem int) (numRemembers int, numTotalOutputs u
 	/*if maxmem == 0 {
 		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
 
-	}*/
+	}
 
 	//var utxoCounter uint32
 	var clairSlice sortableTxoSlice
-	var remembers sortableTxoSlice
+	var remembers int
 	//var numTotalOutputs uint32
 	var err error
 
@@ -194,11 +200,10 @@ func Clairvoy(allCBlocks []cBlock, mem int) (numRemembers int, numTotalOutputs u
 	//fmt.Printf("done\n")
 
 	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
-	/* How should I write this part?*/
+	
 	ioutil.WriteFile(fileString, scheduleSlice, 0644)
 	scheduleSlice = nil
-	numRemembers = len(remembers)
-	fmt.Println("total number of remembers for CLAIRVOY:",len(remembers))
+	fmt.Println("total number of remembers for CLAIRVOY:",remembers)
 	fmt.Println("all Blocks: ",numTotalOutputs)
 
 	/*print("total number of remembers for CLAIRVOY: ")
@@ -206,13 +211,13 @@ func Clairvoy(allCBlocks []cBlock, mem int) (numRemembers int, numTotalOutputs u
 	print("\n")
 	print("all Blocks: ")
 	print((numTotalOutputs))
-	print("\n")*/
+	print("\n")
 	done <- true
 	//return nil
-	return numRemembers, numTotalOutputs
-}
+	return remembers, numTotalOutputs
+}*/
 
-func oldRun(allCBlocks []cBlock,mem int) (numTotalRemembers int, maxRemembers int) {
+/*func oldRun(numBlocks int,mem int) (numTotalRemembers int, maxRemembers int) {
 	//fmt.Printf("genclair - builds clairvoyant caching schedule\n")
 
 	//Channel to alert the main loop to break
@@ -226,7 +231,7 @@ func oldRun(allCBlocks []cBlock,mem int) (numTotalRemembers int, maxRemembers in
 	/*if maxmem == 0 {
 		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
 
-	}*/
+	}
 
 	//var utxoCounter uint32
 	//var clairSlice sortableTxoSlice
@@ -235,18 +240,18 @@ func oldRun(allCBlocks []cBlock,mem int) (numTotalRemembers int, maxRemembers in
 	
 	//print(len(allCBlocks))
 	//print("\n")
-	numTotalRemembers, maxRemembers = gen10(allCBlocks)
+	numTotalRemembers, maxRemembers = gen10(numBlocks)
 	
 
 	fmt.Println("total number of remembers for gen10: ",numTotalRemembers)
 	fmt.Println("max number of remembers for gen10: ",maxRemembers)
 
 	//fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
-	/* How should I write this part?*/
+
 	//ioutil.WriteFile(fileString, scheduleSlice, 0644)
 	done <- true
 	return numTotalRemembers,maxRemembers
-}
+}*/
 
 // basically flips bit n of a big file to 1.
 func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
@@ -267,38 +272,120 @@ func assertBitInRam(txoIdx uint32, scheduleSlice []byte) {
 	scheduleSlice[offset] |= 1 << (7 - (txoIdx % 8))
 }
 
-func gen10(cBlocks []cBlock) (int,int) {
-	//print out maxmem usage instead of taking it in as an argument
-	//if cBlocks[i].ttls[j] < 10 then add remember
-	
+
+func LookBehind(allCBlocks []cBlock, maxmem int) (int,int) {
+	cache := make([]int, 0)
+	deletion := make([][]int,len(allCBlocks))
+	for i := 0; i < len(allCBlocks); i++ {
+		deletion[i] = make([]int, 0)
+	}
+	utxoCounter := 0
 	totalRemembers := 0
 	maxRemembers := 0
-	for i := 0; i < len(cBlocks); i++ {
+	for i := 0; i < len(allCBlocks); i++ {
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			//if lives too long and we don't look at that block to delete, then just ignore
+			if(allCBlocks[i].ttls[j] >= int32(len(deletion))){
+				continue
+			}
+			deletion[allCBlocks[i].ttls[j]] = append(deletion[allCBlocks[i].ttls[j]],utxoCounter)
+			cache = append(cache, utxoCounter)
+			utxoCounter += 1
+		}
+		// The way cache and deletion are built, both should always be sorted 
+		currDelPos := 0
+		currCachePos := 0
+		numRemember := 0
+		for (currDelPos < len(deletion[0]) && currCachePos < len(cache)){
+			for (currDelPos < len(deletion[0]) && deletion[0][currDelPos] < cache[currCachePos]){
+				//continue incrementing deletion pos if cache already passed it
+				currDelPos += 1
+			}
+			if(currDelPos >= len(deletion[0])){
+				break
+			}
+			if(deletion[0][currDelPos] == cache[currCachePos]){
+				// we found it! This means we remembered it and we can increment 
+				numRemember += 1
+			}
+			currCachePos += 1
+		}
+		totalRemembers += numRemember
+		deletion = deletion[1:]
+
+		/* UPDATE CACHE ACCORDINGLY */
+		trimPos := len(cache) - maxmem
+		if(trimPos > 0){
+			cache = cache[trimPos:]
+		}
+		
+		if(len(cache) > maxRemembers){
+			maxRemembers = len(cache)
+		}
+	}
+	return totalRemembers, maxRemembers
+}
+//change to take 10 as argument.
+//or take slice of integers as the arguments for ttls and calculate in one pass
+func LookAhead(allCBlocks []cBlock, maxHold int) (int,int) {
+	//print out maxmem usage instead of taking it in as an argument
+	//if cBlocks[i].ttls[j] < 10 then add remember
+	//change maxRemember way by keeping slice of 10 and sum up and roll
+	currRemembers := make([]int, maxHold)
+	totalRemembers := 0
+	maxRemembers := 0
+	prevSum := 0
+	for i := 0; i < len(allCBlocks); i++ {
+		/*currBlocks, err := getCBlocks(int32(i)+1,1)
+		currBlock := currBlocks[0]
+		if(err != nil){
+			panic(err)
+		}*/
 		if(i%100 == 0){
 			fmt.Println("On block: ",i)
 		}
 		numRemember := 0
-		for j := 0; j < len(cBlocks[i].ttls); j++ {
-			if(cBlocks[i].ttls[j] <= 10){
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			if(allCBlocks[i].ttls[j] <= int32(maxHold)){
 				numRemember += 1
 			}
 		}
-		if(numRemember > maxRemembers){
-			maxRemembers = numRemember
+		var currSum int
+		if (i<maxHold){
+			currRemembers[i] = numRemember
+			currSum = prevSum + numRemember
+			prevSum = currSum
+		}else{
+			currRemembers = append(currRemembers, numRemember)
+			currSum = prevSum + numRemember - currRemembers[0]
+			currRemembers = currRemembers[1:]
+			prevSum = currSum
+		}
+		
+		if(currSum > maxRemembers){
+			maxRemembers = currSum
 		}
 		totalRemembers += numRemember
 	}
+	fmt.Println("total number of remembers for gen10: ",totalRemembers)
+	fmt.Println("max number of remembers for gen10: ",maxRemembers)
 	return totalRemembers, maxRemembers
 }
-func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlice, maxmem int) (uint32, []byte, sortableTxoSlice, sortableTxoSlice, error) {
 
+func genClair(allCBlocks []cBlock, maxmem int) (uint32, int, error) {
+	scheduleSlice := make([]byte, 125000000)
+	var clairSlice sortableTxoSlice
 	var utxoCounter uint32
 	utxoCounter = 0
 	var allCounts uint32
 	allCounts = 0
-	var allRemembers sortableTxoSlice
-	//get rid of for loop. Only one block but multiple transaction
-	for i := 0; i < len(cBlocks); i++ {
+	numRemembers := 0
+	for i := 0; i < len(allCBlocks); i++ {
+		/*currBlocks,err := getCBlocks(int32(i)+1,1)
+		if(err != nil){
+			panic(err)
+		}
+		currBlock := currBlocks[0]*/
 		var blockEnds sortableTxoSlice
 		if(i%100 == 0){
 			fmt.Println("On block: ",i)
@@ -314,7 +401,7 @@ func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlic
 		print(len(cBlocks[i].ttls))
 		print("\n")*/
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
-		for j := 0; j < len(cBlocks[i].ttls); j++ {
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
 			allCounts += 1
 			var e txoEnd
 			/*print("utxo counter: ")
@@ -325,47 +412,41 @@ func genClair(cBlocks []cBlock, scheduleSlice []byte, clairSlice sortableTxoSlic
 			print("\n")*/
 			e = txoEnd{
 				txoIdx: utxoCounter,
-				end:    cBlocks[i].blockHeight + cBlocks[i].ttls[j],
+				end:    allCBlocks[i].blockHeight + allCBlocks[i].ttls[j],
 			}
 			utxoCounter++
 			blockEnds = append(blockEnds, e)
 		}
-		//print("finished adding\n")
-		//sortStart := time.Now()
 		sort.SliceStable(blockEnds, func(i, j int) bool {
 			return blockEnds[i].end < blockEnds[j].end
 		})
-		//print("sorted \n")
 		clairSlice = mergeSortedSlices(clairSlice, blockEnds)
-		//print("merged\n")
-		//preLen := len(clairSlice)
+		
 		var remembers sortableTxoSlice
-		//height blockHeight
-		remembers, clairSlice = SplitAfter(clairSlice, cBlocks[i].blockHeight)
-		//print("split\n")
-		allRemembers = mergeSortedSlices(allRemembers, remembers)
-		//postLen := len(clairSlice)
+		remembers, clairSlice = SplitAfter(clairSlice, allCBlocks[i].blockHeight)
+
+
+		numRemembers += len(remembers)
 		if len(clairSlice) > maxmem {
 			clairSlice = clairSlice[:maxmem]
 		}
-		/*print("num remembers ")
-		print(len(remembers))
-		print("\n")*/
 		//add counter that cumulatively counts how many we are remembering(i.e. density of schedule)
 		if len(remembers) > 0 {
 			for _, r := range remembers {
-				//scheduleSlice[r.txoIdx] = 1
 				assertBitInRam(r.txoIdx, scheduleSlice)
-				//err := assertBitInFile(r.txoIdx, scheduleFile)
-				// if err != nil {
-				// 	fmt.Printf("assertBitInFile error\n")
-				// 	return err
-				// }
 			}
 		}
 	}
-	return allCounts, scheduleSlice, clairSlice, allRemembers, nil
+	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
+	/* How should I write this part?*/
+	ioutil.WriteFile(fileString, scheduleSlice, 0644)
+	scheduleSlice = nil
+	fmt.Println("total number of remembers for CLAIRVOY:",numRemembers)
+	fmt.Println("all Blocks: ",allCounts)
+	return allCounts, numRemembers, nil
 }
+
+
 
 // This is copied from utreexo utils, and in this cases there will be no
 // duplicates, so that part is removed.  Uses sortableTxoSlices.
