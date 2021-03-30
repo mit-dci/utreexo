@@ -166,92 +166,6 @@ func SplitAfter(s sortableTxoSlice, h int32) (top, bottom sortableTxoSlice) {
 	return
 }
 
-/*func Clairvoy(allCBlocks []cBlock, mem int) (numRemembers int, numTotalOutputs uint32){
-	//fmt.Printf("genclair - builds clairvoyant caching schedule\n")
-
-	//Channel to alert the main loop to break
-	//stopGoing := make(chan bool, 1)
-
-	//Channel to alert stopTxottl it's ok to exit
-	done := make(chan bool, 1)
-
-	scheduleSlice := make([]byte, 125000000)
-
-	maxmem := mem
-	/*if maxmem == 0 {
-		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
-
-	}
-
-	//var utxoCounter uint32
-	var clairSlice sortableTxoSlice
-	var remembers int
-	//var numTotalOutputs uint32
-	var err error
-
-	//allCBlocks, err := getCBlocks(1, 1780701)
-	//print(len(allCBlocks))
-	//print("\n")
-	numTotalOutputs, scheduleSlice, clairSlice, remembers, err = genClair(allCBlocks, scheduleSlice, clairSlice, maxmem)
-	if err != nil {
-		panic(err)
-	}
-
-	//fmt.Printf("done\n")
-
-	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
-	
-	ioutil.WriteFile(fileString, scheduleSlice, 0644)
-	scheduleSlice = nil
-	fmt.Println("total number of remembers for CLAIRVOY:",remembers)
-	fmt.Println("all Blocks: ",numTotalOutputs)
-
-	/*print("total number of remembers for CLAIRVOY: ")
-	print(len(remembers))
-	print("\n")
-	print("all Blocks: ")
-	print((numTotalOutputs))
-	print("\n")
-	done <- true
-	//return nil
-	return remembers, numTotalOutputs
-}*/
-
-/*func oldRun(numBlocks int,mem int) (numTotalRemembers int, maxRemembers int) {
-	//fmt.Printf("genclair - builds clairvoyant caching schedule\n")
-
-	//Channel to alert the main loop to break
-	//stopGoing := make(chan bool, 1)
-
-	//Channel to alert stopTxottl it's ok to exit
-	done := make(chan bool, 1)
-	//scheduleSlice := make([]byte, 125000000)
-
-	//maxmem := mem
-	/*if maxmem == 0 {
-		return fmt.Errorf("usage: clair memorysize  (eg ./clair 3000)\n")
-
-	}
-
-	//var utxoCounter uint32
-	//var clairSlice sortableTxoSlice
-	//var numTotalRemembers int
-	//var maxRemembers int
-	
-	//print(len(allCBlocks))
-	//print("\n")
-	numTotalRemembers, maxRemembers = gen10(numBlocks)
-	
-
-	fmt.Println("total number of remembers for gen10: ",numTotalRemembers)
-	fmt.Println("max number of remembers for gen10: ",maxRemembers)
-
-	//fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
-
-	//ioutil.WriteFile(fileString, scheduleSlice, 0644)
-	done <- true
-	return numTotalRemembers,maxRemembers
-}*/
 
 // basically flips bit n of a big file to 1.
 func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
@@ -325,12 +239,8 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int,int) {
 	}
 	return totalRemembers, maxRemembers
 }
-//change to take 10 as argument.
-//or take slice of integers as the arguments for ttls and calculate in one pass
+
 func LookAhead(allCBlocks []cBlock, maxHold int) (int,int) {
-	//print out maxmem usage instead of taking it in as an argument
-	//if cBlocks[i].ttls[j] < 10 then add remember
-	//change maxRemember way by keeping slice of 10 and sum up and roll
 	currRemembers := make([]int, maxHold)
 	totalRemembers := 0
 	maxRemembers := 0
@@ -390,26 +300,11 @@ func genClair(allCBlocks []cBlock, maxmem int) (uint32, int, error) {
 		if(i%100 == 0){
 			fmt.Println("On block: ",i)
 		}
-		//fmt.Println("On block: ",i)
-		/*print("block: ")
-		print(i)
-		print("\n")
-		print("block height: ")
-		print(cBlocks[i].blockHeight)
-		print("\n")
-		print("num ttls: ")
-		print(len(cBlocks[i].ttls))
-		print("\n")*/
+		
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
 		for j := 0; j < len(allCBlocks[i].ttls); j++ {
 			allCounts += 1
 			var e txoEnd
-			/*print("utxo counter: ")
-			print(utxoCounter)
-			print("\n")
-			print("curr ttl: ")
-			print(cBlocks[i].ttls[j])
-			print("\n")*/
 			e = txoEnd{
 				txoIdx: utxoCounter,
 				end:    allCBlocks[i].blockHeight + allCBlocks[i].ttls[j],
