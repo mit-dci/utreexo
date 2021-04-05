@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 const HashSize = 32
@@ -104,6 +106,67 @@ func (l *LeafData) Deserialize(r io.Reader) (err error) {
 			l.BlockHash, l.OPString(), pkSize)
 		return
 	}
+	l.PkScript = make([]byte, pkSize)
+	_, err = io.ReadFull(r, l.PkScript)
+	if l.Height&1 == 1 {
+		l.Coinbase = true
+	}
+	l.Height >>= 1
+	return
+}
+
+// SerializeSize says how big a leafdata is
+func (l *LeafData) SerializeSizeVarInt() int {
+	// 32B blockhash, 36B outpoint, 4B h/coinbase, 8B amt, 2B pkslen, pks
+	// so 82B + pks
+	var size int
+	size += util.VarIntSerializeSize(uint64(l.Index))
+	size += util.VarIntSerializeSize(uint64(l.Height))
+	size += util.VarIntSerializeSize(uint64(l.Amt))
+	size += util.VarIntSerializeSize(uint64(len(l.PkScript)))
+	return size + 32 + 32 + len(l.PkScript)
+}
+
+func (l *LeafData) Encode(w io.Writer) (err error) {
+	hcb := l.Height << 1
+	if l.Coinbase {
+		hcb |= 1
+	}
+
+	_, err = w.Write(l.BlockHash[:])
+	_, err = w.Write(l.TxHash[:])
+	err = util.WriteVarInt(w, 0, uint64(l.Index))
+	err = util.WriteVarInt(w, 0, uint64(hcb))
+	err = util.WriteVarInt(w, 0, uint64(l.Amt))
+	if len(l.PkScript) > 10000 {
+		err = fmt.Errorf("pksize too long")
+		return
+	}
+	err = util.WriteVarInt(w, 0, uint64(len(l.PkScript)))
+	_, err = w.Write(l.PkScript)
+	return
+}
+
+func (l *LeafData) Decode(r io.Reader) (err error) {
+	_, err = io.ReadFull(r, l.BlockHash[:])
+	_, err = io.ReadFull(r, l.TxHash[:])
+
+	index, err := util.ReadVarInt(r, 0)
+	l.Index = uint32(index)
+
+	height, err := util.ReadVarInt(r, 0)
+	l.Height = int32(height)
+
+	amt, err := util.ReadVarInt(r, 0)
+	l.Amt = int64(amt)
+
+	pkSizeRaw, err := util.ReadVarInt(r, 0)
+	if pkSizeRaw > 10000 {
+		err = fmt.Errorf("bh %x op %s pksize %d byte too long",
+			l.BlockHash, l.OPString(), pkSizeRaw)
+		return
+	}
+	pkSize := uint16(pkSizeRaw)
 	l.PkScript = make([]byte, pkSize)
 	_, err = io.ReadFull(r, l.PkScript)
 	if l.Height&1 == 1 {

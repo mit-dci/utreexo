@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/mit-dci/utreexo/util"
 )
 
 // BatchProof :
@@ -22,6 +24,84 @@ Batchproof serialization is:
 []Targets (8 bytes each)
 []Hashes (32 bytes each)
 */
+
+func (bp *BatchProof) Encode(w io.Writer) (err error) {
+	// first write the number of targets (4 byte uint32)
+	err = util.WriteVarInt(w, 0, uint64(len(bp.Targets)))
+	if err != nil {
+		return err
+	}
+	// write out number of hashes in the proof
+	err = util.WriteVarInt(w, 0, uint64(len(bp.Proof)))
+	if err != nil {
+		return
+	}
+
+	// write out each target
+	for _, t := range bp.Targets {
+		// there's no need for these to be 64 bit for the next few decades...
+		err = util.WriteVarInt(w, 0, uint64(t))
+		if err != nil {
+			return
+		}
+	}
+
+	// then the rest is just hashes
+	for _, h := range bp.Proof {
+		_, err = w.Write(h[:])
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+// Decode gives a block proof back from the serialized bytes
+func (bp *BatchProof) Decode(r io.Reader) (err error) {
+	//var numTargets, numHashes uint32
+	numTargets, err := util.ReadVarInt(r, 0) // &numTargets)
+	if err != nil {
+		return
+	}
+
+	if numTargets > 1<<16 {
+		err = fmt.Errorf("%d targets - too many\n", numTargets)
+		return
+	}
+
+	// read number of hashes
+	numHashes, err := util.ReadVarInt(r, 0)
+	if err != nil {
+		fmt.Printf("bp deser err %s\n", err.Error())
+		return
+	}
+	if numHashes > 1<<16 {
+		err = fmt.Errorf("%d hashes - too many\n", numHashes)
+		return
+	}
+
+	bp.Targets = make([]uint64, numTargets)
+	for i, _ := range bp.Targets {
+		bp.Targets[i], err = util.ReadVarInt(r, 0)
+		if err != nil {
+			fmt.Printf("bp deser err %s\n", err.Error())
+			return err
+		}
+	}
+
+	bp.Proof = make([]Hash, numHashes)
+	for i, _ := range bp.Proof {
+		_, err = io.ReadFull(r, bp.Proof[i][:])
+		if err != nil {
+			fmt.Printf("bp deser err %s\n", err.Error())
+			if err == io.EOF && i == len(bp.Proof) {
+				err = nil // EOF at the end is not an error...
+			}
+			return
+		}
+	}
+	return
+}
 
 // Serialize a batchproof to a writer.
 func (bp *BatchProof) Serialize(w io.Writer) (err error) {
@@ -95,6 +175,18 @@ func (bp *BatchProof) SerializeSize() int {
 	// }
 	// 8B for numTargets and numHashes, 8B per target, 32B per hash
 	return 8 + (8 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
+}
+
+func (bp *BatchProof) SerializeSizeVarInt() int {
+	// 8B for numTargets and numHashes, 8B per target, 32B per hash
+	var targetSize int
+	for _, target := range bp.Targets {
+		targetSize += util.VarIntSerializeSize(target)
+	}
+
+	return util.VarIntSerializeSize(uint64(len(bp.Targets))) +
+		util.VarIntSerializeSize(uint64(len(bp.Proof))) +
+		targetSize + (32 * (len(bp.Proof)))
 }
 
 // Deserialize gives a block proof back from the serialized bytes

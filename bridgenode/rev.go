@@ -9,8 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/mit-dci/utreexo/chain"
+	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/wire"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	dbutil "github.com/syndtr/goleveldb/leveldb/util"
@@ -72,7 +73,7 @@ func BlockAndRevReader(
 		for i := 0; i < len(blocks); i++ {
 			bnr := BlockAndRev{
 				Height: curHeight,
-				Blk:    btcutil.NewBlock(&blocks[i]),
+				Blk:    chain.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
 			blockChan <- bnr
@@ -292,7 +293,7 @@ func GetBlockBytesFromFile(
 type BlockAndRev struct {
 	Height int32
 	Rev    RevBlock
-	Blk    *btcutil.Block
+	Blk    *chain.Block
 }
 
 /*
@@ -342,7 +343,7 @@ type TxInUndo struct {
 // Deserialize takes a reader and reads a single block
 // Only initializes the Block var in RevBlock
 func (rb *RevBlock) Deserialize(r io.Reader) error {
-	txCount, err := wire.ReadVarInt(r, pver)
+	txCount, err := util.ReadVarInt(r, pver)
 	if err != nil {
 		return err
 	}
@@ -362,7 +363,7 @@ func (rb *RevBlock) Deserialize(r io.Reader) error {
 func (tx *TxUndo) Deserialize(r io.Reader) error {
 
 	// Read the Variable Integer
-	count, err := wire.ReadVarInt(r, pver)
+	count, err := util.ReadVarInt(r, pver)
 	if err != nil {
 		return err
 	}
@@ -390,7 +391,7 @@ func readTxInUndo(r io.Reader, ti *TxInUndo) error {
 	// Has varint that isn't 0. see
 	// github.com/bitcoin/bitcoin/blob/9cc7eba1b5651195c05473004c00021fe3856f30/src/undo.h#L42
 	// if ti.Height > 0 {
-	_, err := wire.ReadVarInt(r, pver)
+	_, err := util.ReadVarInt(r, pver)
 	if err != nil {
 		return err
 	}
