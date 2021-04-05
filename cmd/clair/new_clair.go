@@ -9,9 +9,10 @@ Scp copies ssh
 */
 import (
 	"fmt"
-	"io/ioutil"
+	//"io/ioutil"
 	"os"
 	"sort"
+	"encoding/csv"
 
 	//"strconv"
 	//"time"
@@ -51,6 +52,11 @@ type txoEnd struct {
 	txoIdx uint32 // which utxo (in order)
 	end    int32  // when it dies (block height)
 }
+type txoEndSlice struct {
+	txoIdx uint32 // which utxo (in order)
+	end    int32  // when it dies (block height)
+	inSlice []bool // whether txoEnd is kept for corresponding maxmem
+}
 
 type cBlock struct {
 	blockHeight int32
@@ -69,23 +75,63 @@ func main() {
 	//runs using clairvoyint algo
 	//remembers 437/555 = 78.74%
 	numTotalOutputs, numRemembers,err := genClair(allCBlocks,287000)
-	//numTotalOutputs, numRemembers,err := genClair(allCBlocks,67200)
+	/*numTotalOutputs1, numRemembers1,err := genClair(allCBlocks,30001)
+	numTotalOutputs1, numRemembers100,err := genClair(allCBlocks,921832)
+	numTotalOutputs1, numRemembers1000,err := genClair(allCBlocks,1903977)*/
 	if(err!= nil){
 		panic(err)
 	}
+	
 	fmt.Println("Clairvoy done")
 	//runs using old remembering system
 	//remembers 296/555 = 53.33%
 	//numTotalRemembers, maxRemembers :=oldRun(1780701,1750000)
-	numTotalRemembers, maxRemembers :=LookAhead(allCBlocks,10)
+
+	numTotalRemembers, maxRemembers, currSumSlice :=LookAhead(allCBlocks,10)
+
+	//maxHoldsSlice := []int{1,10,100,1000}
+	//numTotalRemembers, maxRemembers :=LookAheadSlice(allCBlocks,maxHoldsSlice)
+	
 	numTotalRemembersBehind, maxRemembersBehind :=LookBehind(allCBlocks,287000)
-	//numTotalRemembersBehind, maxRemembersBehind :=LookBehind(allCBlocks,67200)
-	fmt.Println("total number of remembers for CLAIRVOY:",numRemembers)
+	
+	//numTotalRemembersBehind1, maxRemembersBehind1 :=LookBehind(allCBlocks,30001)
+	//numTotalRemembersBehind100, maxRemembersBehind100 :=LookBehind(allCBlocks,921832)
+	//numTotalRemembersBehind1000, maxRemembersBehind1000 :=LookBehind(allCBlocks,1903977)
+	
+	/*for i := 0; i < len(maxHoldsSlice); i++ {
+		fmt.Println("total number of remembers for look ahead ", maxHoldsSlice[i],": ",numTotalRemembers[i])
+		fmt.Println("max number of remembers for look ahead: ", maxHoldsSlice[i],": ",maxRemembers[i])
+	}*/
+
+	file, err := os.Create("resultAll.csv")
+	writer := csv.NewWriter(file)
+	if(err!= nil){
+		panic(err)
+	}
+	for _, value := range currSumSlice {
+        err := writer.Write(value)
+        if(err != nil){
+			panic(err)
+		}
+	}
+	
+	fmt.Println("total number of remembers for look ahead : ",numTotalRemembers)
+	fmt.Println("max number of remembers for look ahead: : ",maxRemembers)
+
+	/*fmt.Println("total number of remembers for CLAIRVOY 1:",numRemembers1)
+	fmt.Println("total number of remembers for CLAIRVOY 100:",numRemembers100)
+	fmt.Println("total number of remembers for CLAIRVOY 1000:",numRemembers1000)*/
+
+	fmt.Println("total number of remembers for CLAIRVOY 10:",numRemembers)
 	fmt.Println("all Blocks: ",numTotalOutputs)
-	fmt.Println("total number of remembers for look ahead: ",numTotalRemembers)
-	fmt.Println("max number of remembers for look ahead: ",maxRemembers)
-	fmt.Println("total number of remembers for look behind: ",numTotalRemembersBehind)
-	fmt.Println("max number of remembers for look behind: ",maxRemembersBehind)
+	/*fmt.Println("total number of remembers for look behind 1: ",numTotalRemembersBehind1)
+	fmt.Println("max number of remembers for look behind 1: ",maxRemembersBehind1)
+	fmt.Println("total number of remembers for look behind 100: ",numTotalRemembersBehind100)
+	fmt.Println("max number of remembers for look behind 100: ",maxRemembersBehind100)
+	fmt.Println("total number of remembers for look behind 1000: ",numTotalRemembersBehind1000)
+	fmt.Println("max number of remembers for look behind 1000: ",maxRemembersBehind1000)*/
+	fmt.Println("total number of remembers for look behind 10: ",numTotalRemembersBehind)
+	fmt.Println("max number of remembers for look behind 10: ",maxRemembersBehind)
 }
 
 /*Run utreexoserver exe file on the tn3 blocks folder*/
@@ -98,6 +144,7 @@ func main() {
 /* ctrl+b d*/
 /* tmux a*/
 /* scp utreexoserver 34.105.121.136:~/ut for the new_clair.go not utreexoserver*/
+/*scp 34.105.121.136:~/go/src/github.com/mit-dci/utreexo/cmd/clair/result.csv /Users/cb/Desktop/MIT/UROP/Spring\ 2021*/
 /*GOOS=linux go build -v  for */
 
 // NOTE I think we don't actually need to keep track of insertions or deletions
@@ -115,8 +162,11 @@ func getCBlocks(start int32, count int32) ([]cBlock, error) {
 	var proofdir bridgenode.ProofDir
 
 	//Change lines below to the path of your proof and proofoffset files on your computer
-	proofdir.PFile = "/home/cb/ut/testnet3/proofdata/proof.dat"
-	proofdir.POffsetFile = "/home/cb/ut/testnet3/proofdata/proofoffset.dat"
+	/*proofdir.PFile = "/home/cb/ut/testnet3/proofdata/proof.dat"
+	proofdir.POffsetFile = "/home/cb/ut/testnet3/proofdata/proofoffset.dat"*/
+
+	proofdir.PFile = "/home/cb/ut/mainnet/proofdata/proof.dat"
+	proofdir.POffsetFile = "/home/cb/ut/mainnet/proofdata/offset.dat"
 
 	// grab utreexo data and populate cblocks
 	for i, _ := range cblocks {
@@ -167,6 +217,8 @@ func SplitAfter(s sortableTxoSlice, h int32) (top, bottom sortableTxoSlice) {
 }
 
 
+
+
 // basically flips bit n of a big file to 1.
 func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
 	offset := int64(txoIdx / 8)
@@ -185,6 +237,7 @@ func assertBitInRam(txoIdx uint32, scheduleSlice []byte) {
 	offset := int64(txoIdx / 8)
 	scheduleSlice[offset] |= 1 << (7 - (txoIdx % 8))
 }
+
 
 
 func LookBehind(allCBlocks []cBlock, maxmem int) (int,int) {
@@ -239,13 +292,64 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int,int) {
 	}
 	return totalRemembers, maxRemembers
 }
+func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int,[]int) {
+	currRemembers := make([][]int, len(maxHolds))
+	for i := 0; i < len(maxHolds); i++ {
+		currRemembers[i] = make([]int, maxHolds[i])
+	}
+	totalRemembers := make([]int, len(maxHolds))
+	maxRemembers := make([]int, len(maxHolds))
+	prevSum := make([]int, len(maxHolds))
+	currSum := make([]int, len(maxHolds))
+	for i := 0; i < len(allCBlocks); i++ {
+		/*currBlocks, err := getCBlocks(int32(i)+1,1)
+		currBlock := currBlocks[0]
+		if(err != nil){
+			panic(err)
+		}*/
+		if(i%100 == 0){
+			fmt.Println("On block: ",i)
+		}
+		numRemember := make([]int, len(maxHolds))
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			for k := 0; k < len(maxHolds); k++ {
+				if(allCBlocks[i].ttls[j] <= int32(maxHolds[k])){
+					numRemember[k] += 1
+				}
+			}
+		}
+		for j := 0; j < len(maxHolds); j++ {
+			if (i<maxHolds[j]){
+				currRemembers[j][i] = numRemember[j]
+				currSum[j] = prevSum[j] + numRemember[j]
+				prevSum[j] = currSum[j]
+			}else{
+				currRemembers[j] = append(currRemembers[j], numRemember[j])
+				currSum[j] = prevSum[j] + numRemember[j] - currRemembers[j][0]
+				currRemembers[j] = currRemembers[j][1:]
+				prevSum[j] = currSum[j]
+			}
+			
+			if(currSum[j] > maxRemembers[j]){
+				maxRemembers[j] = currSum[j]
+			}
+			totalRemembers[j] += numRemember[j]
+		}
+	}
+	//fmt.Println("total number of remembers for gen10: ",totalRemembers)
+	//fmt.Println("max number of remembers for gen10: ",maxRemembers)
+	return totalRemembers, maxRemembers
+}
 
-func LookAhead(allCBlocks []cBlock, maxHold int) (int,int) {
+func LookAhead(allCBlocks []cBlock, maxHold int) (int,int,[][]string) {
 	currRemembers := make([]int, maxHold)
 	totalRemembers := 0
 	maxRemembers := 0
 	prevSum := 0
+	currSumStores := make([][]string, len(allCBlocks))
 	for i := 0; i < len(allCBlocks); i++ {
+		currSumStores[i] = make([]string,2)
+		currSumStores[i][0] = fmt.Sprint(i)
 		/*currBlocks, err := getCBlocks(int32(i)+1,1)
 		currBlock := currBlocks[0]
 		if(err != nil){
@@ -271,7 +375,7 @@ func LookAhead(allCBlocks []cBlock, maxHold int) (int,int) {
 			currRemembers = currRemembers[1:]
 			prevSum = currSum
 		}
-		
+		currSumStores[i][1] = fmt.Sprint(currSum)
 		if(currSum > maxRemembers){
 			maxRemembers = currSum
 		}
@@ -279,11 +383,79 @@ func LookAhead(allCBlocks []cBlock, maxHold int) (int,int) {
 	}
 	fmt.Println("total number of remembers for gen10: ",totalRemembers)
 	fmt.Println("max number of remembers for gen10: ",maxRemembers)
-	return totalRemembers, maxRemembers
+	return totalRemembers, maxRemembers,currSumStores
 }
 
+/*func genClairSlice(allCBlocks []cBlock, maxmem []int) (uint32, int, error) {
+	//scheduleSlice := make([]byte, 125000000)
+	var clairSlice []txoEndSlice
+	var utxoCounter uint32
+	utxoCounter = 0
+	var allCounts uint32
+	allCounts = 0
+	numRemembers := 0
+	for i := 0; i < len(allCBlocks); i++ {
+		currBlocks,err := getCBlocks(int32(i)+1,1)
+		if(err != nil){
+			panic(err)
+		}
+		currBlock := currBlocks[0]
+		var blockEnds []txoEndSlice
+		if(i%100 == 0){
+			fmt.Println("On block: ",i)
+		}
+		allTrue := make([]bool,len(maxmem))
+		for j := 0; j < len(maxmem); j++ {
+			allTrue[j] = true
+		}
+		//another for loop going through ttls. utxocounter increment for ttls not blocks
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			allCounts += 1
+			var e txoEndSlice
+			e = txoEndSlice{
+				txoIdx: utxoCounter,
+				end:    allCBlocks[i].blockHeight + allCBlocks[i].ttls[j],
+				inSlice: allTrue,
+			}
+			utxoCounter++
+			blockEnds = append(blockEnds, e)
+		}
+		sort.SliceStable(blockEnds, func(i, j int) bool {
+			return blockEnds[i].end < blockEnds[j].end
+		})
+		clairSlice = mergeSortedSliceSlices(clairSlice, blockEnds)
+		
+		var remembers sortableTxoSlice
+		remembers, clairSlice = SplitAfter(clairSlice, allCBlocks[i].blockHeight)
+
+
+		numRemembers += len(remembers)
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			if len(clairSlice) > maxmem[j] {
+				for k := maxmem; k < len(clairSlice); k++ {
+					clairSlice[k].inSlice[j] = false
+				}
+			}
+		}
+		//add counter that cumulatively counts how many we are remembering(i.e. density of schedule)
+		/*if len(remembers) > 0 {
+			for _, r := range remembers {
+				assertBitInRam(r.txoIdx, scheduleSlice)
+			}
+		}
+	}
+	//fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
+	/* How should I write this part?
+	//ioutil.WriteFile(fileString, scheduleSlice, 0644)
+	//scheduleSlice = nil
+	fmt.Println("total number of remembers for CLAIRVOY:",numRemembers)
+	fmt.Println("all Blocks: ",allCounts)
+	return allCounts, numRemembers, nil
+}*/
+
+
 func genClair(allCBlocks []cBlock, maxmem int) (uint32, int, error) {
-	scheduleSlice := make([]byte, 125000000)
+	//scheduleSlice := make([]byte, 125000000)
 	var clairSlice sortableTxoSlice
 	var utxoCounter uint32
 	utxoCounter = 0
@@ -326,16 +498,16 @@ func genClair(allCBlocks []cBlock, maxmem int) (uint32, int, error) {
 			clairSlice = clairSlice[:maxmem]
 		}
 		//add counter that cumulatively counts how many we are remembering(i.e. density of schedule)
-		if len(remembers) > 0 {
+		/*if len(remembers) > 0 {
 			for _, r := range remembers {
 				assertBitInRam(r.txoIdx, scheduleSlice)
 			}
-		}
+		}*/
 	}
-	fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
+	//fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
 	/* How should I write this part?*/
-	ioutil.WriteFile(fileString, scheduleSlice, 0644)
-	scheduleSlice = nil
+	//ioutil.WriteFile(fileString, scheduleSlice, 0644)
+	//scheduleSlice = nil
 	fmt.Println("total number of remembers for CLAIRVOY:",numRemembers)
 	fmt.Println("all Blocks: ",allCounts)
 	return allCounts, numRemembers, nil
@@ -356,6 +528,40 @@ func mergeSortedSlices(a sortableTxoSlice, b sortableTxoSlice) (c sortableTxoSli
 
 	// make it the right size (no dupes)
 	c = make(sortableTxoSlice, maxa+maxb)
+
+	idxa, idxb := 0, 0
+	for j := 0; j < len(c); j++ {
+		// if we're out of a or b, just use the remainder of the other one
+		if idxa >= maxa {
+			// a is done, copy remainder of b
+			j += copy(c[j:], b[idxb:])
+			c = c[:j] // truncate empty section of c
+			break
+		}
+		if idxb >= maxb {
+			// b is done, copy remainder of a
+			j += copy(c[j:], a[idxa:])
+			c = c[:j] // truncate empty section of c
+			break
+		}
+
+		obja, objb := a[idxa], b[idxb]
+		if obja.end < objb.end { // a is less so append that
+			c[j] = obja
+			idxa++
+		} else { // b is less so append that
+			c[j] = objb
+			idxb++
+		}
+	}
+	return
+}
+func mergeSortedSliceSlices(a []txoEndSlice, b []txoEndSlice) (c []txoEndSlice) {
+	maxa := len(a)
+	maxb := len(b)
+
+	// make it the right size (no dupes)
+	c = make([]txoEndSlice, maxa+maxb)
 
 	idxa, idxb := 0, 0
 	for j := 0; j < len(c); j++ {
