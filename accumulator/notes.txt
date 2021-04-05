@@ -1,14 +1,67 @@
-things to try:
+New swapless deletion:
 
-Make moving / swapping nodes happen by changing the pointers of their parents, not by copying values
-.. that might help with some of this?  Then if you tag a node as dirty, you don't care where it ends up; you have a pointer
-to it and it will be hashed, regardless of where it does.
-problem: how to deal with the tops / top slice.  When you swap with a top, there is no parent, so you can't change the 
-parent.niece[x] pointer as there isn't one.  So you might have to have exceptions / different code for swapping to / from tops.
-Since if you try like &topSlice[h] = n it says "cannot assign to &whatever"
+Trees are a bit different; since nothing even moves left/right, the number of trees is determined by total additions ever.  Number of "leaves" is still number of utxos, because leaves can move up.  So leaves are no longer just on the bottom row.  A leaf is just a node without any children.  It can't go *below* the tree height, but it doesn't have to be on the bottom.
 
-move everything then hash everything.  Then you have "dirt" that is also subject to moves just like swapCollapses.
-In fact the output from removeTransform can be all the swaps, and all the dirt post-swap; it does it all for you.
-The downside here: you're going to descend each time you want to swap things.  But then you're going to descend again,
-to the exact same things you just descended to, in order to hash them after all the swaps are done.  That seems pretty
-ugly / lame.  Hmm.
+Leaf: node without children
+Root: node without sibling
+
+All nodes have siblings unless they're a root, and all nodes have either 2 or 0 children (this is saying the same thing...)
+
+Deletion is promotion.  Example with an 8-tree
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Delete 05
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      04      11
+|---\   |---\           |---\
+00  01  02  03          06  07
+
+overwrite 10 with 04.  That was easy.  Harder operations.  Now delete 06 and 07 at the same time.
+You *could* do them separately.  That would be first deleting 06
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      04      07
+|---\   |---\           
+00  01  02  03          
+
+Then deleting 07
+
+14
+|---------------\
+12              04
+|-------\      
+08      09     
+|---\   |---\            
+00  01  02  03   
+
+But instead we should do them both at once, and just delete 11 to start with.  This is handled by raiseTwins()
+
+Delete 00, 01, 04.  That just moves 09 to 14.  raiseTwins() will turn 00, 01, 04 into 08, 04
+
+but given this setup:
+
+14
+|---------------\
+12              13
+|-------\        
+08      09      
+|---\   |---\
+00  01  02  03
+
+and 08, 13, how do you jump to "move subtree 09 to position 14"?  
+
+Another way to say that though is "09 up 2"...

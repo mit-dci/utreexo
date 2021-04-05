@@ -30,12 +30,8 @@ type ForestData interface {
 	// writes the given hash at the given position
 	write(pos uint64, h Hash)
 
-	// for the given two positions, swap the hash values
-	swapHash(a, b uint64)
-
-	// given positions a and b, take the width value (w) and swap
-	// all the positions widthin it.
-	swapHashRange(a, b, w uint64)
+	// moves the subtree at position pos up r rows
+	// promote(pos uin64, r uint8)
 
 	// returns how many leaves the current forest can hold
 	size() uint64

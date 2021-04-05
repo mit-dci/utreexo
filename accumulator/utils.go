@@ -151,6 +151,16 @@ func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 	return
 }
 
+// raiseTwins takes a sorted list of positions, and returns a sorted list of
+// positions where all twins are eliminated, and replaced with their parents.
+// for example, in a tree of 15 elements the input
+// [2, 3, 5, 10, 11, 20] returns [5, 17, 26]
+// 5 stays in place, 2 and 3 pair to 17, 10 and 11 to 21, and 20 and 21 to 26.
+// This gives the "actual" deletions that need to take place.
+func raiseTwins(dels []uint64, forestRows uint8) (upDels []uint64) {
+	return dels
+}
+
 // detectSubTreeHight finds the rows of the subtree a given LEAF position and
 // the number of leaves (& the forest rows which is redundant)
 // This thing is a tricky one.  Makes a weird serpinski fractal thing if

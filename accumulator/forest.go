@@ -36,7 +36,8 @@ There might be a better / optimal way to do this but it seems OK for now.
 // 04 is the concatenation and the hash of 00 and 01. 06 is the root
 // This tree would have a row of 2.
 type Forest struct {
-	numLeaves uint64 // number of leaves in the forest (bottom row)
+	maxLeaf   uint64 // the rightmost leaf; total adds ever
+	numLeaves uint64 // number of remaining leaves in the forest
 
 	// rows in the forest. (forest height) NON INTUITIVE!
 	// When there is only 1 tree in the forest, it is equal to the rows of
@@ -152,12 +153,17 @@ const bridgeVerbose = false
 // of the forest
 var empty [32]byte
 
-// TODO forest.removev4 and pollard.rem2 are VERY similar.  It seems like
-// whether it's forest or pollard, most of the complicated stuff is the same.
-// so maybe they can both satisfy an interface.  In the case of remove, the only
-// specific calls are HnFromPos and swapNodes
-//
-//
+// removev5 us swapless
+func (f *Forest) removev5(dels []uint64) error {
+	nextNumLeaves := f.numLeaves - uint64(len(dels))
+
+	for _, del := range dels {
+		f.promote(del ^ 1)
+	}
+
+	f.numLeaves = nextNumLeaves
+	return nil
+}
 
 // rnew -- emove v4 with swapHashRange
 func (f *Forest) removev4(dels []uint64) error {
@@ -171,6 +177,7 @@ func (f *Forest) removev4(dels []uint64) error {
 	}
 	var hashDirt []uint64
 	// fmt.Printf("call rem2 nl %d rem %v\n", f.numLeaves, dels)
+
 	swapRows := remTrans2(dels, f.numLeaves, f.rows)
 	// fmt.Printf("got swaps %v\n", swapRows)
 	// loop taken from pollard rem2.  maybe pollard and forest can both
@@ -178,9 +185,7 @@ func (f *Forest) removev4(dels []uint64) error {
 	// TODO try that ^^^^^^
 	for r := uint8(0); r < f.rows; r++ {
 		hashDirt = updateDirt(hashDirt, swapRows[r], f.numLeaves, f.rows)
-		for _, swap := range swapRows[r] {
-			f.swapNodes(swap, r)
-		}
+
 		// do all the hashes at once at the end
 		err := f.hashRow(hashDirt)
 		if err != nil {
@@ -234,40 +239,13 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 	// swapping
 	hashDest := parent(maybeArrow[0].to, rows)
 	return true, hashDest
+
 }
 
-func (f *Forest) swapNodes(s arrow, row uint8) {
-	if s.from == s.to {
-		// these shouldn't happen, and seems like the don't
+// promote moves a node up to it's parent
+func (f *Forest) promote(p uint64) {
+	//
 
-		fmt.Printf("%s\nmove %d to %d\n", f.ToString(), s.from, s.to)
-		panic("got non-moving swap")
-	}
-	if row == 0 {
-		f.data.swapHash(s.from, s.to)
-		f.positionMap[f.data.read(s.to).Mini()] = s.to
-		f.positionMap[f.data.read(s.from).Mini()] = s.from
-		return
-	}
-	// fmt.Printf("swapnodes %v\n", s)
-	a := childMany(s.from, row, f.rows)
-	b := childMany(s.to, row, f.rows)
-	run := uint64(1 << row)
-
-	// happens before the actual swap, so swapping a and b
-	for i := uint64(0); i < run; i++ {
-		f.positionMap[f.data.read(a+i).Mini()] = b + i
-		f.positionMap[f.data.read(b+i).Mini()] = a + i
-	}
-
-	// start at the bottom and go to the top
-	for r := uint8(0); r <= row; r++ {
-		// fmt.Printf("shr %d %d %d\n", a, b, run)
-		f.data.swapHashRange(a, b, run)
-		a = parent(a, f.rows)
-		b = parent(b, f.rows)
-		run >>= 1
-	}
 }
 
 // reHash hashes new data in the forest based on dirty positions.
