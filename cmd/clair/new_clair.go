@@ -74,7 +74,7 @@ func main() {
 	}
 	//runs using clairvoyint algo
 	//remembers 437/555 = 78.74%
-	numTotalOutputs, numRemembers,err := genClair(allCBlocks,287000)
+	//numTotalOutputs, numRemembers,err := genClair(allCBlocks,287000)
 	/*numTotalOutputs1, numRemembers1,err := genClair(allCBlocks,30001)
 	numTotalOutputs1, numRemembers100,err := genClair(allCBlocks,921832)
 	numTotalOutputs1, numRemembers1000,err := genClair(allCBlocks,1903977)*/
@@ -87,23 +87,34 @@ func main() {
 	//remembers 296/555 = 53.33%
 	//numTotalRemembers, maxRemembers :=oldRun(1780701,1750000)
 
-	numTotalRemembers, maxRemembers, currSumSlice :=LookAhead(allCBlocks,10)
+	//numTotalRemembers, maxRemembers, currSumSlice :=LookAhead(allCBlocks,10)
 
-	//maxHoldsSlice := []int{1,10,100,1000}
-	//numTotalRemembers, maxRemembers :=LookAheadSlice(allCBlocks,maxHoldsSlice)
+	maxHoldsSlice := []int{1,10,100,1000}
+	numTotalRemembers, maxRemembers, currSumSlice :=LookAheadSlice(allCBlocks,maxHoldsSlice)
 	
-	numTotalRemembersBehind, maxRemembersBehind :=LookBehind(allCBlocks,287000)
+	//numTotalRemembersBehind, maxRemembersBehind :=LookBehind(allCBlocks,287000)
 	
 	//numTotalRemembersBehind1, maxRemembersBehind1 :=LookBehind(allCBlocks,30001)
 	//numTotalRemembersBehind100, maxRemembersBehind100 :=LookBehind(allCBlocks,921832)
 	//numTotalRemembersBehind1000, maxRemembersBehind1000 :=LookBehind(allCBlocks,1903977)
 	
-	/*for i := 0; i < len(maxHoldsSlice); i++ {
+	for i := 0; i < len(maxHoldsSlice); i++ {
 		fmt.Println("total number of remembers for look ahead ", maxHoldsSlice[i],": ",numTotalRemembers[i])
 		fmt.Println("max number of remembers for look ahead: ", maxHoldsSlice[i],": ",maxRemembers[i])
-	}*/
+		file, err := os.Create(fmt.Sprintf("result%d.csv",maxHoldsSlice[i]))
+		writer := csv.NewWriter(file)
+		if(err!= nil){
+			panic(err)
+		}
+		for _, value := range currSumSlice[i] {
+			err := writer.Write(value)
+			if(err != nil){
+				panic(err)
+			}
+		}
+	}
 
-	file, err := os.Create("resultAll.csv")
+	/*file, err := os.Create("resultAll.csv")
 	writer := csv.NewWriter(file)
 	if(err!= nil){
 		panic(err)
@@ -113,25 +124,25 @@ func main() {
         if(err != nil){
 			panic(err)
 		}
-	}
+	}*/
 	
-	fmt.Println("total number of remembers for look ahead : ",numTotalRemembers)
-	fmt.Println("max number of remembers for look ahead: : ",maxRemembers)
+	//fmt.Println("total number of remembers for look ahead : ",numTotalRemembers)
+	//fmt.Println("max number of remembers for look ahead: : ",maxRemembers)
 
 	/*fmt.Println("total number of remembers for CLAIRVOY 1:",numRemembers1)
 	fmt.Println("total number of remembers for CLAIRVOY 100:",numRemembers100)
 	fmt.Println("total number of remembers for CLAIRVOY 1000:",numRemembers1000)*/
 
-	fmt.Println("total number of remembers for CLAIRVOY 10:",numRemembers)
-	fmt.Println("all Blocks: ",numTotalOutputs)
+	//fmt.Println("total number of remembers for CLAIRVOY 10:",numRemembers)
+	//fmt.Println("all Blocks: ",numTotalOutputs)
 	/*fmt.Println("total number of remembers for look behind 1: ",numTotalRemembersBehind1)
 	fmt.Println("max number of remembers for look behind 1: ",maxRemembersBehind1)
 	fmt.Println("total number of remembers for look behind 100: ",numTotalRemembersBehind100)
 	fmt.Println("max number of remembers for look behind 100: ",maxRemembersBehind100)
 	fmt.Println("total number of remembers for look behind 1000: ",numTotalRemembersBehind1000)
 	fmt.Println("max number of remembers for look behind 1000: ",maxRemembersBehind1000)*/
-	fmt.Println("total number of remembers for look behind 10: ",numTotalRemembersBehind)
-	fmt.Println("max number of remembers for look behind 10: ",maxRemembersBehind)
+	//fmt.Println("total number of remembers for look behind 10: ",numTotalRemembersBehind)
+	//fmt.Println("max number of remembers for look behind 10: ",maxRemembersBehind)
 }
 
 /*Run utreexoserver exe file on the tn3 blocks folder*/
@@ -162,11 +173,11 @@ func getCBlocks(start int32, count int32) ([]cBlock, error) {
 	var proofdir bridgenode.ProofDir
 
 	//Change lines below to the path of your proof and proofoffset files on your computer
-	/*proofdir.PFile = "/home/cb/ut/testnet3/proofdata/proof.dat"
-	proofdir.POffsetFile = "/home/cb/ut/testnet3/proofdata/proofoffset.dat"*/
+	proofdir.PFile = "/home/cb/ut/testnet3/proofdata/proof.dat"
+	proofdir.POffsetFile = "/home/cb/ut/testnet3/proofdata/proofoffset.dat"
 
-	proofdir.PFile = "/home/cb/ut/mainnet/proofdata/proof.dat"
-	proofdir.POffsetFile = "/home/cb/ut/mainnet/proofdata/offset.dat"
+	/*proofdir.PFile = "/home/cb/ut/mainnet/proofdata/proof.dat"
+	proofdir.POffsetFile = "/home/cb/ut/mainnet/proofdata/offset.dat"*/
 
 	// grab utreexo data and populate cblocks
 	for i, _ := range cblocks {
@@ -292,7 +303,7 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int,int) {
 	}
 	return totalRemembers, maxRemembers
 }
-func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int,[]int) {
+func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int,[]int,[][][]string) {
 	currRemembers := make([][]int, len(maxHolds))
 	for i := 0; i < len(maxHolds); i++ {
 		currRemembers[i] = make([]int, maxHolds[i])
@@ -301,6 +312,13 @@ func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int,[]int) {
 	maxRemembers := make([]int, len(maxHolds))
 	prevSum := make([]int, len(maxHolds))
 	currSum := make([]int, len(maxHolds))
+	currSumStores := make([][][]string, len(maxHolds))
+	for i := 0; i < len(maxHolds); i++ {
+		currSumStores[i] = make([][]string,len(allCBlocks))
+		for j := 0; j < len(allCBlocks); j++ {
+			currSumStores[i][j] = make([]string,2)
+		}
+	}
 	for i := 0; i < len(allCBlocks); i++ {
 		/*currBlocks, err := getCBlocks(int32(i)+1,1)
 		currBlock := currBlocks[0]
@@ -329,7 +347,8 @@ func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int,[]int) {
 				currRemembers[j] = currRemembers[j][1:]
 				prevSum[j] = currSum[j]
 			}
-			
+			currSumStores[j][i][0] = fmt.Sprint(i)
+			currSumStores[j][i][1] = fmt.Sprint(currSum[j])
 			if(currSum[j] > maxRemembers[j]){
 				maxRemembers[j] = currSum[j]
 			}
@@ -338,7 +357,7 @@ func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int,[]int) {
 	}
 	//fmt.Println("total number of remembers for gen10: ",totalRemembers)
 	//fmt.Println("max number of remembers for gen10: ",maxRemembers)
-	return totalRemembers, maxRemembers
+	return totalRemembers, maxRemembers,currSumStores
 }
 
 func LookAhead(allCBlocks []cBlock, maxHold int) (int,int,[][]string) {
