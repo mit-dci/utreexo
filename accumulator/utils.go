@@ -157,9 +157,30 @@ func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 // [2, 3, 5, 10, 11, 20] returns [5, 17, 26]
 // 5 stays in place, 2 and 3 pair to 17, 10 and 11 to 21, and 20 and 21 to 26.
 // This gives the "actual" deletions that need to take place.
-func raiseTwins(dels []uint64, forestRows uint8) (upDels []uint64) {
+func raiseTwins(dels []uint64, forestRows uint8) []uint64 {
+
+	var stash []uint64
+	for i := 1; i < len(dels); i++ {
+		fmt.Printf("i %d dels %v stash %v\n", i, dels, stash)
+
+		// for len(stash) != 0 {
+
+		// }
+
+		if dels[i] == dels[i-1]^1 {
+			stash = append(stash, parent(dels[i], forestRows))
+			dels = append(dels[:i-1], dels[i+1:]...)
+			i--
+			fmt.Printf("twin i %d dels %v stash %v\n", i, dels, stash)
+		}
+
+	}
+	fmt.Printf("done dels %v stash %v\n", dels, stash)
 	return dels
 }
+
+// move through.  if you find twins, remove them, and add parent to another slice
+// insert from that slice when appropriate
 
 // detectSubTreeHight finds the rows of the subtree a given LEAF position and
 // the number of leaves (& the forest rows which is redundant)
