@@ -118,6 +118,63 @@ func matchPop(n *polNode, h Hash) error {
 	return fmt.Errorf("Proof doesn't match; expect %x, got %x", n.data, h)
 }
 
+// blazeLeaves blazes a trail to all positions, creating empty nodes and
+// siblings along the way if needed.  Returns a slice of nodes that should
+// correspond to the proof
+func (p *Pollard) blazeLeaves(targets []uint64) (pslice []*polNode, err error) {
+
+	// run through each position
+	for _, pos := range targets {
+		// Determine the tree that the position is at
+		tree, branchLen, bits := detectOffset(pos, p.numLeaves)
+		if tree >= uint8(len(p.roots)) {
+			err = ErrorStrings[ErrorNotEnoughTrees]
+			return
+		}
+		// not sure about this
+		if branchLen == 0 {
+			return
+		}
+		// allocate branches
+		nbranch, sibbranch := make([]*polNode, branchLen), make([]*polNode, branchLen)
+		// start with the tree's root
+		n, nsib := p.roots[tree], p.roots[tree]
+
+		// loop downward from the root, building nodes as we go, copying pointers
+		for h := branchLen - 1; h != 0; h-- { // go through branch
+			// copy pointers into slice
+			nbranch[h], sibbranch[h] = n, nsib
+
+			// left / right determined by the bits of position number
+			lr := uint8(bits>>h) & 1
+			// follow the sibling of lr
+			lrSib := lr ^ 1
+
+			// if a sib doesn't exist, need to create it and hook it in
+			if n.niece[lrSib] == nil {
+				n.niece[lrSib] = &polNode{}
+			}
+			n, nsib = n.niece[lr], n.niece[lrSib]
+
+			if n == nil {
+				// if a node doesn't exist, crash
+				// no niece in this case
+				// TODO error message could be better
+				err = ErrorStrings[ErrorNoPollardNode]
+				return
+			}
+		}
+
+		lr := uint8(bits) & 1
+		// grab the sibling of lr
+		lrSib := lr ^ 1
+
+		n, nsib = n.niece[lrSib], n.niece[lr]
+
+	}
+	return // only happens when returning a root
+}
+
 // populate takes a root and populates it with the nodes of the paritial proof
 // tree that was computed in `verifyBatchProof`.
 func (p *Pollard) populate(
