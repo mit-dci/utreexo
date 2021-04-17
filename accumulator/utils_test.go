@@ -58,3 +58,18 @@ func benchmarkTreeRowsOrig(i uint64, b *testing.B) {
 		treeRowsOrig(n)
 	}
 }
+
+func TestProofPositions(t *testing.T) {
+
+	targets := []uint64{2, 4, 5, 8, 10, 12, 14, 22, 23, 28, 33, 35, 39, 55}
+	prpos2 := ProofPositions2(targets, 62, 6)
+	prpos := ProofPositions(targets, 62, 6)
+
+	fmt.Printf("\ntargets: %v prfs : %v\n", targets, prpos)
+	fmt.Printf("targets: %v prfs2: %v\n", targets, prpos2)
+}
+
+func TestTreeEdges(t *testing.T) {
+	e, r := treeEdges(15)
+	fmt.Printf("%v %v\n", e, r)
+}

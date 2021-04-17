@@ -302,7 +302,7 @@ func TestCache(t *testing.T) {
 			pos := leafProof.Targets[0]
 
 			fmt.Println(pos, l)
-			_, nsib, _, err := p.grabPos(pos, false)
+			_, nsib, _, err := p.grabPos(pos)
 
 			if pos == p.numLeaves-1 {
 				// roots are always cached

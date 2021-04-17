@@ -92,6 +92,60 @@ func ProofPositions(
 	return proofPositions
 }
 
+/*
+Proof positions are computed by building a branch up to the root for every leaf,
+but stopping early if that branch intersects a previously built branch.
+In addition to stoping early, we delete the position where the intersection
+occurs.
+*/
+
+// ProofPositions2 returns the positions that are needed to prove that
+// targets exist.  In top to bottom, then left to right ordering.
+func ProofPositions2(
+	targets []uint64, numLeaves uint64, forestRows uint8) (prpos []uint64) {
+	edges, toprows := treeEdges(numLeaves)
+	maxRow := toprows[0] // top row we should make proofs up to
+	// each target gets its own proof slice.  branches[targetnum][height] = pos
+	branches := make([][]uint64, len(targets))
+	for i := range branches {
+		branches[i] = make([]uint64, forestRows)
+	}
+	// I think we don't have to worry that it starts out filled with 0s.
+	// We should always fill in entries before comparing them... probably OK
+nextBranch:
+	for i, _ := range branches {
+		pos := targets[i] ^ 1 // position starts at the target's sibling
+		for len(edges) > 1 && pos > edges[0] {
+			edges = edges[1:]
+			toprows = toprows[1:]
+			maxRow = toprows[0]
+		}
+		for h, _ := range branches[i] {
+			if uint8(h) >= maxRow {
+				continue nextBranch
+			}
+			// check prior target branches to see if we collide positions
+			for k := i - 1; k >= 0; k-- {
+				// if branches have a sibling collision, remove it
+				if pos>>1 == branches[k][h]>>1 {
+					branches[k][h] = 0
+					continue nextBranch // done with this branch
+				}
+			}
+			branches[i][h] = pos
+			pos = parent(pos, forestRows) ^ 1 // next pos is parent's sibling
+		}
+	}
+	for h, _ := range branches[0] {
+		for i, _ := range branches {
+			if branches[i][h] != 0 {
+				prpos = append(prpos, branches[i][h])
+			}
+		}
+	}
+	return
+}
+
 // takes a slice of dels, removes the twins (in place) and returns a slice
 // of parents of twins
 //
@@ -146,6 +200,25 @@ func detectRow(position uint64, forestRows uint8) uint8 {
 	}
 
 	return h
+}
+
+// treeEdges tells you the right edge of every tree, and the number of
+// rows in that tree
+func treeEdges(numLeaves uint64) (edge []uint64, toprow []uint8) {
+	maxRow := uint8(64 - bits.LeadingZeros64(numLeaves-1))
+	edge = make([]uint64, numRoots(numLeaves))
+	toprow = make([]uint8, numRoots(numLeaves))
+	treenum := uint8(0)
+	treeedge := uint64(0)
+	for h := maxRow; h < 64; h-- {
+		if numLeaves&(1<<h) != 0 { // there is a tree top at this row
+			treeedge += numLeaves & (1 << h)
+			edge[treenum] = treeedge - 1
+			toprow[treenum] = h
+			treenum++
+		}
+	}
+	return
 }
 
 // detectOffset takes a node position and number of leaves in forest, and
@@ -317,7 +390,7 @@ func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 }
 
 // getroots gives you the positions of the tree roots, given a number of leaves.
-// LOWEST first (right to left) (blarg change this)
+// LOWEST first (right to left) (blarg change this) (or not...)
 func getRootsReverse(leaves uint64, forestRows uint8) (roots []uint64, rows []uint8) {
 	position := uint64(0)
 
