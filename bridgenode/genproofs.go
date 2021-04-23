@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/mit-dci/utreexo/btcacc"
-
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -66,33 +65,43 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		return err
 	}
 
-	// Open leveldb
+	// async ttldb variables
+	var dbwg sync.WaitGroup
+	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
+	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
+	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
+
+	// sorta ugly as in one of these will just be sitting around
+	// doing nothing
+	memTTLdb := NewMemTTLdb()
+	var lvdb *leveldb.DB
+
+	// leveldb option used by both
 	o := opt.Options{
 		CompactionTableSizeMultiplier: 8,
 		Compression:                   opt.NoCompression,
 	}
 
-	// init ttldb
-	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
-	if err != nil {
-		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
-			"not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
-		return err
-	}
-	defer lvdb.Close()
+	// Start ttldb worker
+	if cfg.memTTLdb {
+		err = memTTLdb.InitMemDB(cfg.UtreeDir.Ttldb,
+			cfg.allInMemTTLdb, &o)
+		if err != nil {
+			return err
+		}
+		go MemDbWorker(dbWriteChan, ttlResultChan, memTTLdb, &dbwg)
+	} else {
 
-	var dbwg sync.WaitGroup
+		// init ttldb
+		lvdb, err = leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
+		if err != nil {
+			return err
+		}
+		go DbWorker(dbWriteChan, ttlResultChan, lvdb, &dbwg)
+	}
 
 	// To send/receive blocks from blockreader()
 	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
-
-	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
-	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
-
-	// Start 16 workers. Just an arbitrary number
-	// I think we can only have one dbworker now, since it needs to all happen in order?
-	go DbWorker(dbWriteChan, ttlResultChan, lvdb, &dbwg)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
@@ -170,6 +179,16 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	// wait until dbWorker() has written to the ttldb file
 	// allows leveldb to close gracefully
 	dbwg.Wait()
+
+	// Close ttldb
+	if cfg.memTTLdb {
+		err := memTTLdb.Close()
+		if err != nil {
+			return err
+		}
+	} else {
+		lvdb.Close()
+	}
 
 	fmt.Printf("blocked on fileWait\n")
 	// Wait for the file workers to finish
