@@ -24,11 +24,11 @@ func LookAheadResetSlice(
 			}
 		}
 		numRemember := make([]int, len(maxResets))
-		for j := 0; j < len(allCBlocks[i].ttls); j++ {
-			for k := 0; k < len(maxResets); k++ {
-				if allCBlocks[i].ttls[j] <= int32(maxHold) &&
-					int32(maxResets[k]-i) >= allCBlocks[i].ttls[j] {
-					numRemember[k] += 1
+		for _, ttl := range allCBlocks[i].ttls {
+			for j := 0; j < len(maxResets); j++ {
+				if ttl <= int32(maxHold) &&
+					int32(maxResets[j]-(i%maxResets[j])) >= ttl {
+					numRemember[j] += 1
 				}
 			}
 		}
@@ -66,9 +66,9 @@ func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int, []int) {
 			fmt.Println("On block: ", i)
 		}
 		numRemember := make([]int, len(maxHolds))
-		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+		for _, ttl := range allCBlocks[i].ttls {
 			for k := 0; k < len(maxHolds); k++ {
-				if allCBlocks[i].ttls[j] <= int32(maxHolds[k]) {
+				if ttl <= int32(maxHolds[k]) {
 					numRemember[k] += 1
 				}
 			}
@@ -106,8 +106,8 @@ func LookAhead(allCBlocks []cBlock, maxHold int) (int, int, [][]string) {
 			fmt.Println("On block: ", i)
 		}
 		numRemember := 0
-		for j := 0; j < len(allCBlocks[i].ttls); j++ {
-			if allCBlocks[i].ttls[j] <= int32(maxHold) {
+		for _, ttl := range allCBlocks[i].ttls {
+			if ttl <= int32(maxHold) {
 				numRemember += 1
 			}
 		}
