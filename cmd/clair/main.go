@@ -49,7 +49,8 @@ func main() {
 
 	fmt.Println("Clairvoy done")
 
-	maxHoldsSlice := []int{10, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 20000, 20000, 160000}
+	maxHoldsSlice := []int{
+		10, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 20000, 20000, 160000}
 	numTotalRemembers, maxRemembers := LookAheadSlice(allCBlocks, maxHoldsSlice)
 	fmt.Println("done with look ahead")
 	numTotalRemembersBehind := LookBehindSlice(allCBlocks, maxRemembers)
@@ -65,7 +66,8 @@ func main() {
 	}
 	all := make([][]string, len(maxHoldsSlice))
 	for i := 0; i < len(maxHoldsSlice); i++ {
-		fmt.Println("Total outputs for hold size ", maxHoldsSlice[i], ": ", numTotalOutputs)
+		fmt.Println("Total outputs for hold size ",
+			maxHoldsSlice[i], ": ", numTotalOutputs)
 		fmt.Println("Lookahead  remembers :", numTotalRemembers[i])
 		fmt.Println("Lookbehind  remembers :", numTotalRemembersBehind[i])
 		fmt.Println("Clairvoy  remembers :", numRemembers[i])

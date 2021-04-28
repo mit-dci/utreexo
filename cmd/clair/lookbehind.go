@@ -29,7 +29,8 @@ func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) 
 				if allCBlocks[i].ttls[j] >= int32(len(deletion[k])) {
 					continue
 				}
-				deletion[k][allCBlocks[i].ttls[j]] = append(deletion[k][allCBlocks[i].ttls[j]], utxoCounter)
+				deletion[k][allCBlocks[i].ttls[j]] =
+					append(deletion[k][allCBlocks[i].ttls[j]], utxoCounter)
 				cache[k] = append(cache[k], utxoCounter)
 			}
 			utxoCounter += 1
@@ -87,7 +88,8 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) []int {
 			if allCBlocks[i].ttls[j] >= int32(len(deletion)) {
 				continue
 			}
-			deletion[allCBlocks[i].ttls[j]] = append(deletion[allCBlocks[i].ttls[j]], utxoCounter)
+			deletion[allCBlocks[i].ttls[j]] =
+				append(deletion[allCBlocks[i].ttls[j]], utxoCounter)
 			cache = append(cache, utxoCounter)
 			utxoCounter += 1
 		}
@@ -130,7 +132,8 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) []int {
 			if(len(cache)-trimPos > maxRemembers[j]){
 				maxRemembers[j] = len(cache)-trimPos
 			}*/
-			lenOfNewCache := oldLenCache - memPointers[j] + len(allCBlocks[i].ttls) - numRemembers[j]
+			lenOfNewCache := oldLenCache - memPointers[j] +
+				len(allCBlocks[i].ttls) - numRemembers[j]
 			if lenOfNewCache >= maxmems[j] {
 				memPointers[j] = len(cache) - maxmems[j]
 				maxRemembers[j] = maxmems[j]
@@ -160,7 +163,8 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
 			if allCBlocks[i].ttls[j] >= int32(len(deletion)) {
 				continue
 			}
-			deletion[allCBlocks[i].ttls[j]] = append(deletion[allCBlocks[i].ttls[j]], utxoCounter)
+			deletion[allCBlocks[i].ttls[j]] =
+				append(deletion[allCBlocks[i].ttls[j]], utxoCounter)
 			cache = append(cache, utxoCounter)
 			utxoCounter += 1
 		}
