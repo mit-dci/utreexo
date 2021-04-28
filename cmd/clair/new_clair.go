@@ -118,7 +118,7 @@ func main() {
 	fmt.Println("done with look behind")
 	numTotalOutputs, numRemembers, err := genClairSlice(allCBlocks, maxRemembers)
 	fmt.Println("done with clairvoy")
-	file, err := os.Create("resultAllThree.csv")
+	file, err := os.Create("resultAllThree every 200 mainnet.csv")
 	defer file.Close()
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
@@ -308,6 +308,75 @@ func assertBitInRam(txoIdx uint32, scheduleSlice []byte) {
 	offset := int64(txoIdx / 8)
 	scheduleSlice[offset] |= 1 << (7 - (txoIdx % 8))
 }
+func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) ([]int) {
+    cache := make([][]int, len(resetSizes))
+    deletion := make([][][]int,len(resetSizes))
+    for i := 0; i < len(resetSizes); i++ {
+        cache[i] = make([]int,0)
+        deletion[i] = make([][]int, resetSizes[i])
+        for j:=0;j<resetSizes[i];j++{
+            deletion[i][j] =  make([]int,0)
+        }
+    }
+    memPointers := make([]int, len(maxmems))
+    utxoCounter := 0
+    totalRemembers := make([]int, len(maxmems))
+    for i := 0; i < len(allCBlocks); i++ {
+        for j := 0; j < len(resetSizes); j++ {
+            if(i%resetSizes[j] == 0){
+                cache[j] = cache[j][:0]
+                deletion[j] = make([][]int,resetSizes[j])
+                for k:=0;k<resetSizes[j];k++{
+                    deletion[j][k] =  make([]int,0)
+                }
+            }
+        }
+        for j := 0; j < len(allCBlocks[i].ttls); j++ {
+            //if lives too long and we don't look at that block to delete, then just ignore
+            for k:=0;k<len(resetSizes);k++{
+                if(allCBlocks[i].ttls[j] >= int32(len(deletion[k]))){
+                    continue
+                }
+                deletion[k][allCBlocks[i].ttls[j]] = append(deletion[k][allCBlocks[i].ttls[j]],utxoCounter)
+                cache[k] = append(cache[k], utxoCounter)
+            }
+            utxoCounter += 1
+        }
+        numRemembers := make([]int, len(resetSizes))
+        // The way cache and deletion are built, both should always be sorted 
+        for j:=0;j<len(resetSizes);j++{
+            currDelPos := len(deletion[j][0])-1
+            currCachePos := len(cache[j])-1
+            for (currDelPos >= 0 && currCachePos >=0){
+                for (currDelPos >= 0 && deletion[j][0][currDelPos] > cache[j][currCachePos]){
+                    //continue incrementing deletion pos if cache already passed it
+                    currDelPos -= 1
+                }
+                if(currDelPos < 0){
+                    break
+                }
+                if(deletion[j][0][currDelPos] == cache[j][currCachePos]){
+                    // we found it! This means we remembered it and we can increment 
+                    if(memPointers[j] <= currCachePos){
+                        // this is remembered for this specific size
+                        numRemembers[j] += 1
+                        totalRemembers[j] += 1
+                    }
+                }
+                currDelPos -= 1 
+                //remove from cache
+                cache[j] = append(cache[j][:currCachePos],cache[j][currCachePos+1:]...)
+                currCachePos -= 1   
+            }
+            deletion[j] = deletion[j][1:]
+            trimPos := len(cache[j]) - maxmems[j]
+            if(trimPos > 0){
+                cache[j] = cache[j][trimPos:]
+            }
+        }
+    }
+    return totalRemembers
+}
 
 func LookBehindSlice(allCBlocks []cBlock, maxmems []int) []int {
 	cache := make([]int, 0)
@@ -441,6 +510,72 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
 	}
 	return totalRemembers, maxRemembers
 }
+
+func LookAheadResetSlice(allCBlocks []cBlock, maxResets []int, maxHold int) ([]int,[]int,) {
+    currRemembers := make([][]int, len(maxResets))
+    for i := 0; i < len(maxResets); i++ {
+        currRemembers[i] = make([]int, maxHold)
+    }
+    totalRemembers := make([]int, len(maxResets))
+    maxRemembers := make([]int, len(maxResets))
+    prevSum := make([]int, len(maxResets))
+    currSum := make([]int, len(maxResets))
+    //currSumStores := make([][][]string, len(maxHolds))
+    //writers := make([]Writer,len(maxHolds))
+    /*for i := 0; i < len(maxHolds); i++ {
+        currSumStores[i] = make([][]string,len(allCBlocks))
+        for j := 0; j < len(allCBlocks); j++ {
+            currSumStores[i][j] = make([]string,2)
+        }
+    }*/
+    for i := 0; i < len(allCBlocks); i++ {
+        /*currBlocks, err := getCBlocks(int32(i)+1,1)
+        currBlock := currBlocks[0]
+        if(err != nil){
+            panic(err)
+        }*/
+        if(i%100 == 0){
+            fmt.Println("On block: ",i)
+        }
+        for j := 0; j < len(maxResets); j++ {
+            if(i%maxResets[j] == 0){
+                prevSum[j] = 0
+                currSum[j] = 0
+                currRemembers[j] = make([]int,maxHold)
+            }
+        }
+        numRemember := make([]int,len(maxResets))
+        for j := 0; j < len(allCBlocks[i].ttls); j++ {
+            for k:= 0;k <len(maxResets);k++{
+                if(allCBlocks[i].ttls[j] <= int32(maxHold) && int32(maxResets[k]-i) >= allCBlocks[i].ttls[j]){
+                    numRemember[k] += 1
+                }
+            }
+        }
+        for j := 0; j < len(maxResets); j++ {
+            if (i<maxHold){
+                currRemembers[j][i] = numRemember[j]
+                currSum[j] = prevSum[j] + numRemember[j]
+                prevSum[j] = currSum[j]
+            }else{
+                currRemembers[j] = append(currRemembers[j], numRemember[j])
+                currSum[j] = prevSum[j] + numRemember[j] - currRemembers[j][0]
+                currRemembers[j] = currRemembers[j][1:]
+                prevSum[j] = currSum[j]
+            }
+            //currSumStores[j][i][0] = fmt.Sprint(i)
+            //currSumStores[j][i][1] = fmt.Sprint(currSum[j])
+            if(currSum[j] > maxRemembers[j]){
+                maxRemembers[j] = currSum[j]
+            }
+            totalRemembers[j] += numRemember[j]
+        }
+    }
+    //fmt.Println("total number of remembers for gen10: ",totalRemembers)
+    //fmt.Println("max number of remembers for gen10: ",maxRemembers)
+    return totalRemembers, maxRemembers
+}
+
 
 func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int, []int) {
 	currRemembers := make([][]int, len(maxHolds))
@@ -603,6 +738,69 @@ func genClairSlice(allCBlocks []cBlock, maxmems []int) (uint32, []int, error) {
 	fmt.Println("all Blocks: ", allCounts)
 	return allCounts, numRemembers, nil
 }
+func genClairResetSlice(allCBlocks []cBlock, resetSize []int,maxmems []int) (uint32, []int, error) {
+    //scheduleSlice := make([]byte, 125000000)
+    resetSlices := make([]sortableTxoSlice,len(resetSize))
+    var utxoCounter uint32
+    utxoCounter = 0
+    var allCounts uint32
+    allCounts = 0
+    numRemembers := make([]int,len(resetSize))
+    for i := 0; i < len(allCBlocks); i++ {
+        /*currBlocks,err := getCBlocks(int32(i)+1,1)
+        if(err != nil){
+            panic(err)
+        }
+        currBlock := currBlocks[0]*/
+        for j := 0; j < len(resetSize); j++ {
+            if (i%resetSize[j] == 0){
+                resetSlices[j] = resetSlices[j][:0]
+            }
+        }
+        var blockEnds sortableTxoSlice
+        if(i%100 == 0){
+            fmt.Println("On block: ",i)
+        }
+        
+        //another for loop going through ttls. utxocounter increment for ttls not blocks
+        for j := 0; j < len(allCBlocks[i].ttls); j++ {
+            allCounts += 1
+            var e txoEnd
+            e = txoEnd{
+                txoIdx: utxoCounter,
+                end:    allCBlocks[i].blockHeight + allCBlocks[i].ttls[j],
+            }
+            utxoCounter++
+            blockEnds = append(blockEnds, e)
+        }
+        sort.SliceStable(blockEnds, func(i, j int) bool {
+            return blockEnds[i].end < blockEnds[j].end
+        })
+        for j := 0; j < len(maxmems); j++ {
+            resetSlices[j] = mergeSortedSlices(resetSlices[j], blockEnds)
+            var remembers sortableTxoSlice
+            remembers, resetSlices[j] = SplitAfter(resetSlices[j], allCBlocks[i].blockHeight)
+            numRemembers[j] += len(remembers)
+            if len(resetSlices[j]) > maxmems[j] {
+                resetSlices[j] = resetSlices[j][:maxmems[j]]
+            }
+        }
+        //add counter that cumulatively counts how many we are remembering(i.e. density of schedule)
+        /*if len(remembers) > 0 {
+            for _, r := range remembers {
+                assertBitInRam(r.txoIdx, scheduleSlice)
+            }
+        }*/
+    }
+    //fileString := fmt.Sprintf("schedule%dpos.clr", maxmem)
+    /* How should I write this part?*/
+    //ioutil.WriteFile(fileString, scheduleSlice, 0644)
+    //scheduleSlice = nil
+    fmt.Println("total number of remembers for CLAIRVOY:",numRemembers)
+    fmt.Println("all Blocks: ",allCounts)
+    return allCounts, numRemembers, nil
+}
+
 
 func genClair(allCBlocks []cBlock, maxmem int) (uint32, int, error) {
 	//scheduleSlice := make([]byte, 125000000)
