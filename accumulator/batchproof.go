@@ -216,6 +216,16 @@ func (bp *BatchProof) ToString() string {
 	return s
 }
 
+// miniTree is a tree of height 1 that holds a parent and its children along with
+// metadata.
+type miniTree struct {
+	tree       uint8
+	branchLen  uint8
+	parent     node
+	leftChild  node
+	rightChild node
+}
+
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
 
@@ -228,7 +238,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// cached should be a function that fetches nodes from the pollard and
 	// indicates whether they exist or not, this is only useful for the pollard
 	// and nil should be passed for the forest.
-	cached func(pos uint64) (bool, Hash)) (bool, [][3]node, []node) {
+	cached func(pos uint64) (bool, Hash)) (bool, [][]miniTree, []node) {
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
@@ -246,8 +256,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	positionList := NewPositionList()
 	defer positionList.Free()
 
-	computablePositions :=
-		ProofPositions(targets, numLeaves, rows, &positionList.list)
+	ProofPositions(targets, numLeaves, rows, &positionList.list)
 
 	// The proof should have as many hashes as there are proof positions.
 	if len(positionList.list)+len(bp.Targets) != len(bp.Proof) {
@@ -260,12 +269,12 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// compared to the actual roots at the end.
 	targetNodes := make([]node, 0, len(targets)*int(rows))
 	rootCandidates := make([]node, 0, len(roots))
-	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
-	// tuple[0] is the parent, tuple[1] is the left child and tuple[2]
-	// is the right child.
-	// trees holds the entire proof tree of the batchproof in this way,
-	// sorted by the tuple[0].
-	trees := make([][3]node, 0, computablePositions)
+
+	// trees holds the entire proof tree of the batchproof. MiniTrees are
+	// grouped by which root they are a part of. These miniTrees are then
+	// also sorted by the parent's position in ascending order.
+	trees := make([][]miniTree, len(roots))
+
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
@@ -344,16 +353,46 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 			right, left = left, right
 		}
 
-		// get the hash of the parent from the cache or compute it
+		// check if the parent is cached
 		parentPos := parent(target.Pos, rows)
-		isParentCached, cachedHash := cached(parentPos)
-		hash := parentHash(left.Val, right.Val)
-		if isParentCached && hash != cachedHash {
-			// The hash did not match the cached hash
-			return false, nil, nil
+		isParentCached, cachedParent := cached(parentPos)
+
+		var hash Hash
+		// if parent is cached, also check if the left and right is cached.
+		// if they're all there, no need to re-hash for the parent.
+		if isParentCached {
+			isLeftCached, cachedLeft := cached(left.Pos)
+			isRightCached, cachedRight := cached(right.Pos)
+
+			if isRightCached && isLeftCached {
+				if left.Val == cachedLeft &&
+					right.Val == cachedRight {
+					hash = cachedParent
+				} else {
+					// The left and right did not match the cached
+					// left and right.
+					return false, nil, nil
+				}
+			} else {
+				hash = parentHash(left.Val, right.Val)
+				if hash != cachedParent {
+					// The calculated hash did not match the cached parent.
+					return false, nil, nil
+				}
+			}
+		} else {
+			hash = parentHash(left.Val, right.Val)
 		}
 
-		trees = append(trees, [3]node{{Val: hash, Pos: parentPos}, left, right})
+		// sort the miniTrees by which tree they are in
+		tree, branchLen, _ := detectOffset(parentPos, numLeaves)
+		trees[tree] = append(trees[tree], miniTree{
+			tree:       tree,
+			branchLen:  branchLen,
+			parent:     node{Val: hash, Pos: parentPos},
+			leftChild:  left,
+			rightChild: right,
+		})
 
 		row := detectRow(parentPos, rows)
 		if numLeaves&(1<<row) > 0 && parentPos == rootPosition(numLeaves, row, rows) {
