@@ -20,6 +20,10 @@ func genClairSlice(allCBlocks []cBlock, maxmems []int) (uint32, []int, error) {
 
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
 		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			if(allCBlocks[i].ttls[j] >= 2147483600){
+				//invalid output, so skip and don't count
+				continue
+			}
 			allCounts += 1
 			var e txoEnd
 			e = txoEnd{
@@ -69,6 +73,10 @@ func genClairResetSlice(
 
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
 		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			if(allCBlocks[i].ttls[j] >= 2147483600){
+				//invalid output, so skip and don't count
+				continue
+			}
 			allCounts += 1
 			var e txoEnd
 			e = txoEnd{
@@ -112,6 +120,10 @@ func genClair(allCBlocks []cBlock, maxmem int) (uint32, int, error) {
 
 		//another for loop going through ttls. utxocounter increment for ttls not blocks
 		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			if(allCBlocks[i].ttls[j] >= 2147483600){
+				//invalid output, so skip and don't count
+				continue
+			}
 			allCounts += 1
 			var e txoEnd
 			e = txoEnd{

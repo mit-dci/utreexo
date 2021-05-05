@@ -2,8 +2,7 @@ package main
 
 import "fmt"
 
-func LookAheadResetSlice(
-	allCBlocks []cBlock, maxResets []int, maxHold int) ([]int, []int) {
+func LookAheadResetSlice(allCBlocks []cBlock, maxResets []int, maxHold int) ([]int, []int) {
 	currRemembers := make([][]int, len(maxResets))
 	for i := 0; i < len(maxResets); i++ {
 		currRemembers[i] = make([]int, maxHold)
@@ -18,6 +17,9 @@ func LookAheadResetSlice(
 		}
 		for j := 0; j < len(maxResets); j++ {
 			if i%maxResets[j] == 0 {
+				if(currSum[j] > maxRemembers[j]){
+					maxRemembers[j] = currSum[j]
+				}
 				prevSum[j] = 0
 				currSum[j] = 0
 				currRemembers[j] = make([]int, maxHold)
@@ -25,6 +27,10 @@ func LookAheadResetSlice(
 		}
 		numRemember := make([]int, len(maxResets))
 		for _, ttl := range allCBlocks[i].ttls {
+			if (ttl >= 2147483600){
+				//invalid output, so skip and don't count
+				continue
+			}
 			for j := 0; j < len(maxResets); j++ {
 				if ttl <= int32(maxHold) &&
 					int32(maxResets[j]-(i%maxResets[j])) >= ttl {
@@ -33,8 +39,8 @@ func LookAheadResetSlice(
 			}
 		}
 		for j := 0; j < len(maxResets); j++ {
-			if i < maxHold {
-				currRemembers[j][i] = numRemember[j]
+			if i%maxResets[j] < maxHold {
+				currRemembers[j][i%maxResets[j]] = numRemember[j]
 				currSum[j] = prevSum[j] + numRemember[j]
 				prevSum[j] = currSum[j]
 			} else {
@@ -67,6 +73,10 @@ func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int, []int) {
 		}
 		numRemember := make([]int, len(maxHolds))
 		for _, ttl := range allCBlocks[i].ttls {
+			if(ttl >= 2147483600){
+				//invalid output, so skip and don't count
+				continue
+			}
 			for k := 0; k < len(maxHolds); k++ {
 				if ttl <= int32(maxHolds[k]) {
 					numRemember[k] += 1
@@ -93,20 +103,24 @@ func LookAheadSlice(allCBlocks []cBlock, maxHolds []int) ([]int, []int) {
 	return totalRemembers, maxRemembers
 }
 
-func LookAhead(allCBlocks []cBlock, maxHold int) (int, int, [][]string) {
+func LookAhead(allCBlocks []cBlock, maxHold int) (int, int) {
 	currRemembers := make([]int, maxHold)
 	totalRemembers := 0
 	maxRemembers := 0
 	prevSum := 0
-	currSumStores := make([][]string, len(allCBlocks))
+	//currSumStores := make([][]string, len(allCBlocks))
 	for i := 0; i < len(allCBlocks); i++ {
-		currSumStores[i] = make([]string, 2)
-		currSumStores[i][0] = fmt.Sprint(i)
+		//currSumStores[i] = make([]string, 2)
+		//currSumStores[i][0] = fmt.Sprint(i)
 		if i%100 == 0 {
 			fmt.Println("On block: ", i)
 		}
 		numRemember := 0
 		for _, ttl := range allCBlocks[i].ttls {
+			if(ttl >= 2147483600){
+				//invalid output, so skip and don't count
+				continue
+			}
 			if ttl <= int32(maxHold) {
 				numRemember += 1
 			}
@@ -122,7 +136,7 @@ func LookAhead(allCBlocks []cBlock, maxHold int) (int, int, [][]string) {
 			currRemembers = currRemembers[1:]
 			prevSum = currSum
 		}
-		currSumStores[i][1] = fmt.Sprint(currSum)
+		//currSumStores[i][1] = fmt.Sprint(currSum)
 		if currSum > maxRemembers {
 			maxRemembers = currSum
 		}
@@ -130,5 +144,5 @@ func LookAhead(allCBlocks []cBlock, maxHold int) (int, int, [][]string) {
 	}
 	fmt.Println("total number of remembers for gen10: ", totalRemembers)
 	fmt.Println("max number of remembers for gen10: ", maxRemembers)
-	return totalRemembers, maxRemembers, currSumStores
+	return totalRemembers, maxRemembers
 }
