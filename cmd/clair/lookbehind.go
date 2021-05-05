@@ -222,7 +222,7 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
 		currDelPos := 0
 		currCachePos := 0
 		numRemember := 0
-		markedPosition := make([]int, 0)
+		//		markedPosition := make([]int, 0)
 		for currDelPos < len(deletion[0]) && currCachePos < len(cache) {
 			for currDelPos < len(deletion[0]) && deletion[0][currDelPos] < cache[currCachePos] {
 				//continue incrementing deletion pos if cache already passed it
