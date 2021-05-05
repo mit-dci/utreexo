@@ -1,6 +1,6 @@
 package main
 
-func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) ([]int,int) {
+func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) ([]int, int) {
 	cache := make([][]int, len(resetSizes))
 	deletion := make([][][]int, len(resetSizes))
 	for i := 0; i < len(resetSizes); i++ {
@@ -16,7 +16,7 @@ func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) 
 	for i := 0; i < len(allCBlocks); i++ {
 		for j := 0; j < len(resetSizes); j++ {
 			if i%resetSizes[j] == 0 {
-				cache[j] = make([]int,0)
+				cache[j] = make([]int, 0)
 				deletion[j] = make([][]int, resetSizes[j])
 				for k := 0; k < resetSizes[j]; k++ {
 					deletion[j][k] = make([]int, 0)
@@ -61,9 +61,9 @@ func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) 
 					currDelPos -= 1
 					cache[j] = append(cache[j][:currCachePos], cache[j][currCachePos+1:]...)
 				}
-				
+
 				//remove from cache
-				
+
 				currCachePos -= 1
 			}
 			totalRemembers[j] += numRemembers[j]
@@ -91,11 +91,11 @@ func LookBehindResetSlice(allCBlocks []cBlock, resetSizes []int, maxmems []int) 
 				} else {
 					currCachePos += 1
 				}
-	
+
 			}
 			totalRemembers[j] += numRemembers[j]
 			deletion[j] = deletion[j][1:]
-	
+
 			/* UPDATE CACHE ACCORDINGLY */
 			trimPos := len(cache[j]) - maxmems[j]
 			if trimPos > 0 {
@@ -134,8 +134,8 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) ([]int, int) {
 		currDelPos := len(deletion[0]) - 1
 		currCachePos := len(cache) - 1
 		numRemembers := make([]int, len(maxmems))
-		newMemPointers := make([]int,len(maxmems))
-		for j:=0;j<len(maxmems);j++{
+		newMemPointers := make([]int, len(maxmems))
+		for j := 0; j < len(maxmems); j++ {
 			newMemPointers[j] = memPointers[j]
 		}
 		for currDelPos >= 0 && currCachePos >= 0 {
@@ -153,9 +153,9 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) ([]int, int) {
 						// this is remembered for this specific size
 						numRemembers[j] += 1
 						totalRemembers[j] += 1
-					}else{
+					} else {
 						newMemPointers[j] -= 1
-						if(newMemPointers[j] < 0){
+						if newMemPointers[j] < 0 {
 							newMemPointers[j] = 0
 						}
 					}
@@ -165,7 +165,6 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) ([]int, int) {
 				cache = append(cache[:currCachePos], cache[currCachePos+1:]...)
 			}
 			currCachePos -= 1
-
 		}
 		deletion = deletion[1:]
 
@@ -185,7 +184,7 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) ([]int, int) {
 				maxRemembers[j] = maxmems[j]
 			} else {
 				memPointers[j] = len(cache) - lenOfNewCache
-				if(memPointers[j] < 0){
+				if memPointers[j] < 0 {
 					memPointers[j] = 0
 				}
 				if lenOfNewCache > maxRemembers[j] {
@@ -194,7 +193,7 @@ func LookBehindSlice(allCBlocks []cBlock, maxmems []int) ([]int, int) {
 			}
 		}
 	}
-	return totalRemembers,utxoCounter
+	return totalRemembers, utxoCounter
 }
 
 func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
@@ -223,6 +222,7 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
 		currDelPos := 0
 		currCachePos := 0
 		numRemember := 0
+		markedPosition := make([]int, 0)
 		for currDelPos < len(deletion[0]) && currCachePos < len(cache) {
 			for currDelPos < len(deletion[0]) && deletion[0][currDelPos] < cache[currCachePos] {
 				//continue incrementing deletion pos if cache already passed it
@@ -236,12 +236,26 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
 				numRemember += 1
 				currDelPos += 1
 				//remove from cache
-				cache = append(cache[:currCachePos], cache[currCachePos+1:]...)
+				// try: markedPosition = append(markedPosition, currCachePos)
+				// cache = append(cache[:currCachePos], cache[currCachePos+1:]...)
 			} else {
 				currCachePos += 1
 			}
-
 		}
+		/*
+		   new deletion method.  faster?
+		   		newCache := make([]int, len(cache)-len(markedPosition))
+		   		prevPos := 0
+		   		for z, deletePosition := range markedPosition {
+		   			copy(newCache[prevPos-z:], cache[prevPos:deletePosition])
+		   			prevPos = deletePosition + 1
+
+		   			// other way?
+		   			copy(cache[prevPos-z:], cache[prevPos:deletePosition-z])
+		   		}
+
+		   		cache = newCache
+		*/
 		totalRemembers += numRemember
 		deletion = deletion[1:]
 
@@ -257,3 +271,12 @@ func LookBehind(allCBlocks []cBlock, maxmem int) (int, int) {
 	}
 	return totalRemembers, maxRemembers
 }
+
+/*
+      x   x
+0 1 2 3 4 5
+
+0 1 2 3 4 5
+
+
+*/
