@@ -12,7 +12,21 @@ func TestExtremesAllStrategies(t *testing.T) {
 
 	// first make 3 identical slices of random cBlocks.  The caching functions
 	// might change the slices as they go, so we shouldn't re-use slices here
-	behindSet, totalTTLs := getSimCBlocks(3330)
+	behindSet, totalTTLs := getSimCBlocks(400)
+	// for i, cb := range behindSet {
+	// 	fmt.Printf("cb %d %v\n", i, cb.ttls)
+	// 	var ones, twos int
+	// 	for _, ttl := range cb.ttls {
+	// 		if ttl == 2 {
+	// 			twos++
+	// 		}
+	// 		if ttl == 1 {
+	// 			ones++
+	// 		}
+	// 	}
+	// 	fmt.Printf("ones: %d twos: %d\n", ones, twos)
+	// }
+
 	aheadSet := make([]cBlock, len(behindSet))
 	copy(aheadSet, behindSet)
 	clairvoySet := make([]cBlock, len(behindSet))
@@ -28,27 +42,27 @@ func TestExtremesAllStrategies(t *testing.T) {
 
 	// first test 0 memory ------------------------------------------------
 
-	behindTotal, _ := LookBehind(behindSet, 0)
-	fmt.Printf("0 mem look behind: %d\n", behindTotal)
+	behind0Total, _ := LookBehind(behindSet, 0)
+	fmt.Printf("0 mem look behind: %d\n", behind0Total)
 
-	aheadTotal, _ := LookAhead(aheadSet, 0)
-	fmt.Printf("0 mem look ahead: %d\n", aheadTotal)
+	ahead0Total, _ := LookAhead(aheadSet, 0)
+	fmt.Printf("0 mem look ahead: %d\n", ahead0Total)
 
-	if behindTotal != aheadTotal {
+	if behind0Total != ahead0Total {
 		t.Fatalf("0 mem look ahead / look behind mismatch, %d vs %d remembered",
-			behindTotal, aheadTotal)
+			behind0Total, ahead0Total)
 	}
 
 	// we know 0mem ahead and behind match, so match ahead with clairvoyant
-	_, clairRemember, err := genClair(clairvoySet, 0)
+	_, clair0Remember, err := genClair(clairvoySet, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("0 mem clairvoyant: %d\n", clairRemember)
+	fmt.Printf("0 mem clairvoyant: %d\n", clair0Remember)
 
-	if aheadTotal != clairRemember {
+	if ahead0Total != clair0Remember {
 		t.Fatalf("0 mem look ahead / clairvoyant mismatch, %d vs %d remembered",
-			aheadTotal, clairRemember)
+			ahead0Total, clair0Remember)
 	}
 
 	// next test unlimited memory -----------------------------------------
@@ -71,16 +85,16 @@ func TestExtremesAllStrategies(t *testing.T) {
 	}
 	fmt.Printf("unlimited mem clairvoyant: %d\n", unlimClairRemember)
 
-	if aheadTotal != clairRemember {
+	if aheadUnlimTotal != unlimClairRemember {
 		t.Fatalf("unlimited mem ahead / clairvoyant mismatch, %d vs %d remembered",
-			aheadTotal, clairRemember)
+			aheadUnlimTotal, unlimClairRemember)
 	}
 }
 
 // make sure the multi slice and 1-pass agree
 func TestSlicedStrategy(t *testing.T) {
 
-	behindSet, _ := getSimCBlocks(3330)
+	behindSet, _ := getSimCBlocks(333)
 	BehindSet2 := make([]cBlock, len(behindSet))
 	copy(BehindSet2, behindSet)
 
@@ -112,8 +126,8 @@ func TestSlicedStrategy(t *testing.T) {
 		t.Fatalf("ahead non-set %d set %d", aresult, aresultslice[0])
 	}
 
-	bresult, _ := LookBehind(behindSet, 20)
-	bresultslice, _ := LookBehindSlice(BehindSet2, []int{20})
+	bresult, _ := LookBehind(behindSet, 10)
+	bresultslice, _ := LookBehindSlice(BehindSet2, []int{10})
 	if bresult != bresultslice[0] {
 		t.Fatalf("behind non-set %d set %d", bresult, bresultslice[0])
 	}

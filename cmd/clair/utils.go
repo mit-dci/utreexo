@@ -23,13 +23,13 @@ func (s *sortableTxoSlice) MergeSort(a sortableTxoSlice) {
 func SplitAfter(s sortableTxoSlice, h int32) (top, bottom sortableTxoSlice) {
 	for i, c := range s {
 		if c.end > h {
-			top = s[0:i]   // return the beginning of the slice
+			top = s[:i]    // return the beginning of the slice
 			bottom = s[i:] // chop that part off
 			break
 		}
 	}
 	if top == nil {
-		bottom = s
+		top = s
 	}
 	return
 }
