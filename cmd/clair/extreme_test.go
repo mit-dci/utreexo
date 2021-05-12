@@ -76,3 +76,49 @@ func TestExtremesAllStrategies(t *testing.T) {
 			aheadTotal, clairRemember)
 	}
 }
+
+// make sure the multi slice and 1-pass agree
+func TestSlicedStrategy(t *testing.T) {
+
+	behindSet, _ := getSimCBlocks(3330)
+	BehindSet2 := make([]cBlock, len(behindSet))
+	copy(BehindSet2, behindSet)
+
+	aheadSet := make([]cBlock, len(behindSet))
+	copy(aheadSet, behindSet)
+	aheadSet2 := make([]cBlock, len(behindSet))
+	copy(aheadSet2, behindSet)
+
+	clairvoyantSet := make([]cBlock, len(behindSet))
+	copy(clairvoyantSet, behindSet)
+	clairvoyantSet2 := make([]cBlock, len(behindSet))
+	copy(clairvoyantSet2, behindSet)
+
+	_, cresult, err := genClair(clairvoyantSet, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, cresultslice, err := genClairSlice(clairvoyantSet2, []int{50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cresult != cresultslice[0] {
+		t.Fatalf("clairvoyant non-set %d set %d", cresult, cresultslice[0])
+	}
+
+	aresult, _ := LookAhead(aheadSet, 8)
+	aresultslice, _ := LookAheadSlice(aheadSet2, []int{8})
+	if aresult != aresultslice[0] {
+		t.Fatalf("ahead non-set %d set %d", aresult, aresultslice[0])
+	}
+
+	bresult, _ := LookBehind(behindSet, 50)
+	bresultslice, _ := LookBehindSlice(BehindSet2, []int{50})
+	if bresult != bresultslice[0] {
+		t.Fatalf("behind non-set %d set %d", bresult, bresultslice[0])
+	}
+}
+
+// func TestSliceExtremes(t *testing.T) {
+
+// }
