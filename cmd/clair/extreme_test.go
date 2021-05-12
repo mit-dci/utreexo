@@ -94,11 +94,11 @@ func TestSlicedStrategy(t *testing.T) {
 	clairvoyantSet2 := make([]cBlock, len(behindSet))
 	copy(clairvoyantSet2, behindSet)
 
-	_, cresult, err := genClair(clairvoyantSet, 50)
+	_, cresult, err := genClair(clairvoyantSet, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, cresultslice, err := genClairSlice(clairvoyantSet2, []int{50})
+	_, cresultslice, err := genClairSlice(clairvoyantSet2, []int{100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,8 +112,8 @@ func TestSlicedStrategy(t *testing.T) {
 		t.Fatalf("ahead non-set %d set %d", aresult, aresultslice[0])
 	}
 
-	bresult, _ := LookBehind(behindSet, 50)
-	bresultslice, _ := LookBehindSlice(BehindSet2, []int{50})
+	bresult, _ := LookBehind(behindSet, 20)
+	bresultslice, _ := LookBehindSlice(BehindSet2, []int{20})
 	if bresult != bresultslice[0] {
 		t.Fatalf("behind non-set %d set %d", bresult, bresultslice[0])
 	}
