@@ -99,8 +99,8 @@ type Forest struct {
 }
 
 // NewForest : use ram if not given a file
-func NewForest(forestFile *os.File, cached bool,
-	cowPath string, cowMaxCache int) *Forest {
+func NewForest(
+	forestFile *os.File, cached bool, cowPath string, cowMaxCache int) *Forest {
 
 	f := new(Forest)
 	f.numLeaves = 0
@@ -153,7 +153,7 @@ const bridgeVerbose = false
 // of the forest
 var empty [32]byte
 
-// removev5 us swapless
+// removev5 swapless
 func (f *Forest) removev5(dels []uint64) error {
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
@@ -244,8 +244,8 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 
 // promote moves a node up to it's parent
 func (f *Forest) promote(p uint64) {
-	//
-
+	parentPos := parent(p, f.rows)
+	f.data.write(parentPos, f.data.read(p))
 }
 
 // reHash hashes new data in the forest based on dirty positions.

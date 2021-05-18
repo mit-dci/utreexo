@@ -64,7 +64,10 @@ func benchmarkTreeRowsOrig(i uint64, b *testing.B) {
 // 5 stays in place, 2 and 3 pair to 17, 10 and 11 to 21, and 20 and 21 to 26.
 func TestRaiseTwins(t *testing.T) {
 
+	fmt.Printf("max on row %d %d\n", 1, maxPosOnRow(1, 3))
 	in := []uint64{2, 3, 5, 10, 11, 20}
+	// in := []uint64{0, 1, 2, 3, 6, 7, 22, 23} // should be 19, 24, 27
+	// in := []uint64{0, 1}
 	// in := []uint64{2, 3, 8, 9, 10, 11}
 
 	out := raiseTwins(in, 4)

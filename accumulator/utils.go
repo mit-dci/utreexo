@@ -158,25 +158,30 @@ func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 // 5 stays in place, 2 and 3 pair to 17, 10 and 11 to 21, and 20 and 21 to 26.
 // This gives the "actual" deletions that need to take place.
 func raiseTwins(dels []uint64, forestRows uint8) []uint64 {
-
-	var stash []uint64
-	for i := 1; i < len(dels); i++ {
-		fmt.Printf("i %d dels %v stash %v\n", i, dels, stash)
-
-		// for len(stash) != 0 {
-
-		// }
-
-		if dels[i] == dels[i-1]^1 {
-			stash = append(stash, parent(dels[i], forestRows))
-			dels = append(dels[:i-1], dels[i+1:]...)
-			i--
-			fmt.Printf("twin i %d dels %v stash %v\n", i, dels, stash)
+	var nextRow, output []uint64
+	fmt.Printf("inpt %v\n", dels)
+	h := uint8(0)
+	for h < forestRows {
+		if len(dels) == 0 || dels[0] > maxPosOnRow(h, forestRows) {
+			fmt.Printf("end h %d dels %v nr %v\n", h, dels, nextRow)
+			dels = mergeSortedSlices(dels, nextRow)
+			nextRow = []uint64{}
+			h++ // increase height until on correct row
+			continue
 		}
-
+		if len(dels) > 1 && dels[1] == dels[0]+1 { // this is a twin
+			fmt.Printf("happens ")
+			nextRow = append(nextRow, parent(dels[0], forestRows))
+			dels = dels[2:]
+		} else {
+			fmt.Printf("this ")
+			output = append(output, dels[0])
+			dels = dels[1:]
+		}
 	}
-	fmt.Printf("done dels %v stash %v\n", dels, stash)
-	return dels
+
+	fmt.Printf("done output %v\n", output)
+	return output
 }
 
 // move through.  if you find twins, remove them, and add parent to another slice
@@ -195,6 +200,13 @@ func detectSubTreeRows(
 		position -= (1 << h) & numLeaves
 	}
 	return
+}
+
+// maxPosOnRow returns the maximum (rightmost) position on the given row
+// useful for knowing when you've gone past one row and are on the next
+func maxPosOnRow(row, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
+	return ((mask << uint64(forestRows-row)) & mask) - 1
 }
 
 // TODO optimization if it's worth it --

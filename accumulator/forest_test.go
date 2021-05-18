@@ -25,6 +25,25 @@ func TestDeleteReverseOrder(t *testing.T) {
 	}
 }
 
+func TestSwaplessPromote(t *testing.T) {
+	f := NewForest(nil, false, "", 0)
+
+	startingLeaves := make([]Leaf, 8)
+	for i, _ := range startingLeaves {
+		startingLeaves[i].Hash = HashFromString(fmt.Sprintf("%d", i))
+	}
+
+	_, err := f.Modify(startingLeaves, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf(f.ToString())
+
+	f.removev5([]uint64{4, 6})
+
+	fmt.Printf(f.ToString())
+}
+
 func TestForestAddDel(t *testing.T) {
 	numAdds := uint32(10)
 
