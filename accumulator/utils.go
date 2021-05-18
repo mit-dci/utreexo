@@ -163,24 +163,19 @@ func raiseTwins(dels []uint64, forestRows uint8) []uint64 {
 	h := uint8(0)
 	for h < forestRows {
 		if len(dels) == 0 || dels[0] > maxPosOnRow(h, forestRows) {
-			fmt.Printf("end h %d dels %v nr %v\n", h, dels, nextRow)
 			dels = mergeSortedSlices(dels, nextRow)
 			nextRow = []uint64{}
 			h++ // increase height until on correct row
 			continue
 		}
 		if len(dels) > 1 && dels[1] == dels[0]+1 { // this is a twin
-			fmt.Printf("happens ")
 			nextRow = append(nextRow, parent(dels[0], forestRows))
 			dels = dels[2:]
 		} else {
-			fmt.Printf("this ")
 			output = append(output, dels[0])
 			dels = dels[1:]
 		}
 	}
-
-	fmt.Printf("done output %v\n", output)
 	return output
 }
 

@@ -157,7 +157,10 @@ var empty [32]byte
 func (f *Forest) removev5(dels []uint64) error {
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
+	dels = raiseTwins(dels, f.rows)
+
 	for _, del := range dels {
+		f.data.write(del, empty)
 		f.promote(del ^ 1)
 	}
 

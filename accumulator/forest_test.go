@@ -28,7 +28,7 @@ func TestDeleteReverseOrder(t *testing.T) {
 func TestSwaplessPromote(t *testing.T) {
 	f := NewForest(nil, false, "", 0)
 
-	startingLeaves := make([]Leaf, 8)
+	startingLeaves := make([]Leaf, 16)
 	for i, _ := range startingLeaves {
 		startingLeaves[i].Hash = HashFromString(fmt.Sprintf("%d", i))
 	}
@@ -38,9 +38,7 @@ func TestSwaplessPromote(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Printf(f.ToString())
-
-	f.removev5([]uint64{4, 6})
-
+	f.removev5([]uint64{8, 9, 10, 16, 17})
 	fmt.Printf(f.ToString())
 }
 
