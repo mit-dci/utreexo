@@ -105,23 +105,16 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 	return
 }
 
-//
+// SerializeSize outputs the size of the udata when it is serialized
 func (ud *UData) SerializeSize() int {
 	var ldsize int
 	var b bytes.Buffer
 
-	// TODO this is slow, can remove double checking once it works reliably
+	// Grab the size of all the stxos
 	for _, l := range ud.Stxos {
 		ldsize += l.SerializeSize()
-		b.Reset()
-		l.Serialize(&b)
-		if b.Len() != l.SerializeSize() {
-			fmt.Printf(" b.Len() %d, l.SerializeSize() %d\n",
-				b.Len(), l.SerializeSize())
-		}
 	}
 
-	b.Reset()
 	ud.AccProof.Serialize(&b)
 	if b.Len() != ud.AccProof.SerializeSize() {
 		fmt.Printf(" b.Len() %d, AccProof.SerializeSize() %d\n",
