@@ -7,8 +7,11 @@ import (
 	"io"
 
 	"github.com/mit-dci/utreexo/accumulator"
+	"github.com/mit-dci/utreexo/common"
 )
 
+// UData is all the data needed to verify the utreexo accumulator proof
+// for a given block
 type UData struct {
 	Height   int32
 	AccProof accumulator.BatchProof
@@ -52,8 +55,7 @@ func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
 			return false
 		}
 	}
-	// return to presorted target list
-	// ud.AccProof.Targets = presort
+
 	return true
 }
 
@@ -61,13 +63,12 @@ func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
 // aaff aaff 0000 0014 0000 0001 0000 0001 0000 0000 0000 0000 0000 0000
 //  magic   |   size  |  height | numttls |   ttl0  | numTgts | ????
 
-// ToBytes serializes UData into bytes.
+// Serialize serializes UData into bytes.
 // First, height, 4 bytes.
 // Then, number of TTL values (4 bytes, even though we only need 2)
-// Then a bunch of TTL values, (4B each) one for each txo in the associated block
-// batch proof
-// Bunch of LeafDatas
-
+// Then a bunch of TTL values, (4B each) one for each txo in the
+// associated block batch proof
+// And the rest is a bunch of LeafDatas
 func (ud *UData) Serialize(w io.Writer) (err error) {
 	err = binary.Write(w, binary.BigEndian, ud.Height)
 	if err != nil { // ^ 4B block height
@@ -89,43 +90,33 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 		return
 	}
 
-	// fmt.Printf("accproof %d bytes\n", ud.AccProof.SerializeSize())
-
 	// write all the leafdatas
 	for _, ld := range ud.Stxos {
-		// fmt.Printf("writing ld %d %s\n", i, ld.ToString())
 		err = ld.Serialize(w)
 		if err != nil {
 			return
 		}
-		// fmt.Printf("h %d leaf %d %s len %d\n",
-		// ud.Height, i, ld.Outpoint.String(), len(ld.PkScript))
 	}
 
 	return
 }
 
-//
+// SerializeSize outputs the size of the udata when it is serialized
 func (ud *UData) SerializeSize() int {
 	var ldsize int
-	var b bytes.Buffer
+	buf := common.NewFreeBytes()
+	bufWriter := bytes.NewBuffer(buf.Bytes)
 
-	// TODO this is slow, can remove double checking once it works reliably
+	// Grab the size of all the stxos
 	for _, l := range ud.Stxos {
 		ldsize += l.SerializeSize()
-		b.Reset()
-		l.Serialize(&b)
-		if b.Len() != l.SerializeSize() {
-			fmt.Printf(" b.Len() %d, l.SerializeSize() %d\n",
-				b.Len(), l.SerializeSize())
-		}
 	}
 
-	b.Reset()
-	ud.AccProof.Serialize(&b)
-	if b.Len() != ud.AccProof.SerializeSize() {
+	bufWriter.Reset()
+	ud.AccProof.Serialize(bufWriter)
+	if bufWriter.Len() != ud.AccProof.SerializeSize() {
 		fmt.Printf(" b.Len() %d, AccProof.SerializeSize() %d\n",
-			b.Len(), ud.AccProof.SerializeSize())
+			bufWriter.Len(), ud.AccProof.SerializeSize())
 	}
 
 	guess := 8 + (4 * len(ud.TxoTTLs)) + ud.AccProof.SerializeSize() + ldsize
@@ -134,14 +125,13 @@ func (ud *UData) SerializeSize() int {
 	return guess
 }
 
+// Deserialize reads from the reader and deserializes the udata
 func (ud *UData) Deserialize(r io.Reader) (err error) {
-
 	err = binary.Read(r, binary.BigEndian, &ud.Height)
 	if err != nil { // ^ 4B block height
 		fmt.Printf("ud deser Height err %s\n", err.Error())
 		return
 	}
-	// fmt.Printf("read height %d\n", ud.Height)
 
 	var numTTLs uint32
 	err = binary.Read(r, binary.BigEndian, &numTTLs)
@@ -149,8 +139,6 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 		fmt.Printf("ud deser numTTLs err %s\n", err.Error())
 		return
 	}
-	// fmt.Printf("read ttls %d\n", numTTLs)
-	// fmt.Printf("UData deser read h %d - %d ttls ", ud.Height, numTTLs)
 
 	ud.TxoTTLs = make([]int32, numTTLs)
 	for i, _ := range ud.TxoTTLs { // write all ttls
@@ -159,7 +147,6 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 			fmt.Printf("ud deser LeafTTLs[%d] err %s\n", i, err.Error())
 			return
 		}
-		// fmt.Printf("read ttl[%d] %d\n", i, ud.TxoTTLs[i])
 	}
 
 	err = ud.AccProof.Deserialize(r)
@@ -168,8 +155,6 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 		return
 	}
 
-	// fmt.Printf("%d byte accproof, read %d targets\n",
-	// ud.AccProof.SerializeSize(), len(ud.AccProof.Targets))
 	// we've already gotten targets.  1 leafdata per target
 	ud.Stxos = make([]LeafData, len(ud.AccProof.Targets))
 	for i, _ := range ud.Stxos {
@@ -180,9 +165,6 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 				ud.Height, numTTLs, len(ud.AccProof.Targets), i, err.Error())
 			return
 		}
-		// fmt.Printf("h %d leaf %d %s len %d\n",
-		// ud.Height, i, ud.Stxos[i].Outpoint.String(), len(ud.Stxos[i].PkScript))
-
 	}
 
 	return
@@ -212,6 +194,7 @@ func GenUData(delLeaves []LeafData, forest *accumulator.Forest, height int32) (
 
 	ud.Height = height
 	ud.Stxos = delLeaves
+
 	// make slice of hashes from leafdata
 	delHashes := make([]accumulator.Hash, len(ud.Stxos))
 	for i, _ := range ud.Stxos {
@@ -233,6 +216,5 @@ func GenUData(delLeaves []LeafData, forest *accumulator.Forest, height int32) (
 		return
 	}
 
-	// fmt.Printf(ud.AccProof.ToString())
 	return
 }

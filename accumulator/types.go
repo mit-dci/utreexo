@@ -5,9 +5,11 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"math/rand"
+
+	"github.com/mit-dci/utreexo/common"
 )
 
-// Hash :
+// Hash is the 32 bytes of a sha256 hash
 type Hash [32]byte
 
 // Prefix for printfs
@@ -15,16 +17,16 @@ func (h Hash) Prefix() []byte {
 	return h[:4]
 }
 
-// Mini :
+// Mini takes the first 12 slices of a hash and outputs a MiniHash
 func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])
 	return
 }
 
-// MiniHash :
+// MiniHash is the first 12 bytes of a sha256 hash
 type MiniHash [12]byte
 
-// HashFromString :
+// HashFromString takes a string and hashes with sha256
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
@@ -35,7 +37,8 @@ type arrow struct {
 	collapse bool
 }
 
-// Node :
+// node is an element in the utreexo tree and is represented by a position
+// and a hash
 type node struct {
 	Pos uint64
 	Val Hash
@@ -53,14 +56,18 @@ type simLeaf struct {
 	duration int32
 }
 
-// Parent gets you the merkle parent.  So far no committing to height.
-// if the left child is zero it should crash...
+// parentHash gets you the merkle parent of two children hashes.
+// TODO So far no committing to height.
 func parentHash(l, r Hash) Hash {
 	var empty Hash
 	if l == empty || r == empty {
 		panic("got an empty leaf here. ")
 	}
-	return sha512.Sum512_256(append(l[:], r[:]...))
+	buf := common.NewFreeBytes()
+	defer buf.Free()
+	buf.Bytes = append(buf.Bytes, l[:]...)
+	buf.Bytes = append(buf.Bytes, r[:]...)
+	return sha512.Sum512_256(buf.Bytes)
 }
 
 // SimChain is for testing; it spits out "blocks" of adds and deletes
@@ -73,7 +80,7 @@ type SimChain struct {
 	lookahead    int32
 }
 
-// NewSimChain :
+// NewSimChain initializes and returns a Simchain
 func NewSimChain(duration uint32) *SimChain {
 	var s SimChain
 	s.blockHeight = -1
@@ -119,7 +126,8 @@ func (s *SimChain) ttlString() string {
 	return x
 }
 
-// NextBlock :
+// NextBlock outputs a new simulation block given the additions for the block
+// to be outputed
 func (s *SimChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
