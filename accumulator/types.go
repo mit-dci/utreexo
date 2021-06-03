@@ -7,6 +7,15 @@ import (
 	"math/rand"
 )
 
+var (
+	// empty is needed as go initializes an array as all 0s. Used to compare
+	// if read 32 byte slices were empty.
+	empty [32]byte
+)
+
+// MiniHash is the first 12 bytes of a sha256 hash
+type MiniHash [12]byte
+
 // Hash is the 32 bytes of a sha256 hash
 type Hash [32]byte
 
@@ -20,9 +29,6 @@ func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])
 	return
 }
-
-// MiniHash is the first 12 bytes of a sha256 hash
-type MiniHash [12]byte
 
 // HashFromString takes a string and hashes with sha256
 func HashFromString(s string) Hash {
@@ -64,9 +70,8 @@ func parentHash(l, r Hash) Hash {
 	return sha512.Sum512_256(append(l[:], r[:]...))
 }
 
-// SimChain is for testing; it spits out "blocks" of adds and deletes
-type SimChain struct {
-	// ttlMap is when the hashes get removed
+// simChain is for testing; it spits out "blocks" of adds and deletes
+type simChain struct {
 	ttlSlices    [][]Hash
 	blockHeight  int32
 	leafCounter  uint64
@@ -74,9 +79,9 @@ type SimChain struct {
 	lookahead    int32
 }
 
-// NewSimChain initializes and returns a Simchain
-func NewSimChain(duration uint32) *SimChain {
-	var s SimChain
+// newSimChain initializes and returns a simchain
+func newSimChain(duration uint32) *simChain {
+	var s simChain
 	s.blockHeight = -1
 	s.durationMask = duration
 	s.ttlSlices = make([][]Hash, s.durationMask+1)
@@ -84,7 +89,7 @@ func NewSimChain(duration uint32) *SimChain {
 }
 
 // BackOne takes the output of NextBlock and undoes the block
-func (s *SimChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
+func (s *simChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
 	s.ttlSlices =
@@ -107,7 +112,7 @@ func (s *SimChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 	s.blockHeight--
 }
 
-func (s *SimChain) ttlString() string {
+func (s *simChain) ttlString() string {
 	x := "-------------\n"
 	for i, d := range s.ttlSlices {
 		x += fmt.Sprintf("%d: ", i)
@@ -122,7 +127,7 @@ func (s *SimChain) ttlString() string {
 
 // NextBlock outputs a new simulation block given the additions for the block
 // to be outputed
-func (s *SimChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
+func (s *simChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
 

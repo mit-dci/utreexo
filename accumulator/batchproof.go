@@ -7,24 +7,38 @@ import (
 	"io"
 )
 
-// BatchProof :
+// BatchProof is the inclusion-proof for multiple leaves.
 type BatchProof struct {
+	// Targets are the ist of leaf locations to delete. These are the bottommost leaves.
+	// With the tree below, the Targets can only consist of one of these: 00, 01, 02, 03
+	//
+	// 06
+	// |-------\
+	// 04      05
+	// |---\   |---\
+	// 00  01  02  03
 	Targets []uint64
-	Proof   []Hash
-	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
-	// the position of the hashes is implied / computable from the leaf positions
+
+	// All the nodes in the tree that are needed to hash up to the root of
+	// the tree. If Targets are [00, 01], then Proof would be [00, 01, 05].
+	// TODO: Remove targets from the proof as it is redundant.
+	//
+	// 06
+	// |-------\
+	// 04      05
+	// |---\   |---\
+	// 00  01  02  03
+	Proof []Hash
 }
 
-/*
-Batchproof serialization is:
-4bytes numTargets
-4bytes numHashes
-[]Targets (8 bytes each)
-[]Hashes (32 bytes each)
-*/
-
-// Serialize a batchproof to a writer.
+// Serialize serializes a batchproof to a writer.
 func (bp *BatchProof) Serialize(w io.Writer) (err error) {
+	// Batchproof serialization is, in order:
+	// 4bytes numTargets
+	// 4bytes numHashes
+	// []Targets (8 bytes each)
+	// []Hashes (32 bytes each)
+
 	// first write the number of targets (4 byte uint32)
 	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Targets)))
 	if err != nil {
@@ -86,18 +100,15 @@ func (bp *BatchProof) SerializeBytes() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// TODO: could make this more efficient by not encoding as much empty stuff
-
+// SerializeSize returns the number of bytes it would take to serialize
+// the BatchProof.
 func (bp *BatchProof) SerializeSize() int {
-	// empty batchProofs are 4 bytes
-	// if len(bp.Targets) == 0 {
-	// 	return 4
-	// }
 	// 8B for numTargets and numHashes, 8B per target, 32B per hash
+	// TODO: could make this more efficient by not encoding as much empty stuff
 	return 8 + (8 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
 }
 
-// Deserialize gives a block proof back from the serialized bytes
+// Deserialize gives a BatchProof back from a reader.
 func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 	var numTargets, numHashes uint32
 	err = binary.Read(r, binary.BigEndian, &numTargets)

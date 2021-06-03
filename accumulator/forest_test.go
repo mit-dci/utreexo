@@ -30,7 +30,7 @@ func TestForestAddDel(t *testing.T) {
 
 	f := NewForest(nil, false, "", 0)
 
-	sc := NewSimChain(0x07)
+	sc := newSimChain(0x07)
 
 	for b := 0; b < 1000; b++ {
 
@@ -56,7 +56,7 @@ func TestCowForestAddDelComp(t *testing.T) {
 	cowF := NewForest(nil, false, tmpDir, 2500)
 	memF := NewForest(nil, false, "", 0)
 
-	sc := NewSimChain(0x07)
+	sc := newSimChain(0x07)
 	sc.lookahead = 400
 
 	for b := 0; b <= 1000; b++ {
@@ -175,7 +175,7 @@ func TestCowForestAddDel(t *testing.T) {
 	tmpDir := os.TempDir()
 	cowF := NewForest(nil, false, tmpDir, 500)
 
-	sc := NewSimChain(0x07)
+	sc := newSimChain(0x07)
 	sc.lookahead = 400
 
 	for b := 0; b < 1000; b++ {

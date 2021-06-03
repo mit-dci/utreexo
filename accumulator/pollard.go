@@ -14,33 +14,46 @@ var ErrorStrings = map[uint32]error{
 	ErrorNoPollardNode:  fmt.Errorf("ErrorNoPollardNode"),
 }
 
-// Pollard is the sparse representation of the utreexo forest, using
-// binary tree pointers instead of a hash map.
-
-// I generally avoid recursion as much as I can, using regular for loops and
-// ranges instead.  That might start looking pretty contrived here, but
-// I'm still going to try it.
-
-// Pollard :
+// Pollard is the sparse representation of the utreexo forest, represented as
+// a collection of binary trees.
 type Pollard struct {
-	numLeaves uint64 // number of leaves in the pollard forest
+	// number of leaves in the pollard forest
+	numLeaves uint64
 
-	roots []*polNode // slice of the tree roots, which are polNodes.
-	// roots are in big to small order
-	// BUT THEY'RE WEIRD!  The left / right children are actual children,
-	// not nieces as they are in every lower level.
+	// roots are the slice of the tree roots ordered in big to small
+	// (right to left of the forest).
+	//
+	// NOTE: Since roots don't have nieces, they point to children.
+	// In the below tree, 06 is the root and it points to its children,
+	// 04 and 05. However, 04 points to 02 and 03; 05 points to 00 and 01.
+	// 04 and 05 are pointing to their nieces.
+	// The leaves are also different in that they don't point to anything
+	// (as of now, the leaves point to themselves if it's to be cached).
+	//
+	// 06
+	// |-------\
+	// 04      05
+	// |---\   |---\
+	// 00  01  02  03
+	roots []*polNode
 
-	hashesEver, rememberEver, overWire uint64
+	// Lookahead is the threshold that sets which leaves should be cached.
+	// TODO not currently implemented yet.
+	Lookahead int32
 
-	Lookahead int32 // remember leafs below this TTL
-	//	Minleaves uint64 // remember everything below this leaf count
-
+	// positionMap is maps hashes to positions.
+	// It is only used for fullPollard.
 	positionMap map[MiniHash]uint64
+
+	// these three are for keeping statistics.
+	// hashesEver is all the hashes that have ever been performed.
+	// rememberEver is all the nodes that have ever been cached.
+	// overWire is all the leaves that have been received over the network
+	hashesEver, rememberEver, overWire uint64
 }
 
-// Modify is the main function that deletes then adds elements to the accumulator
+// Modify deletes then adds elements to the accumulator.
 func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
-
 	dels := make([]uint64, len(delsUn))
 	copy(dels, delsUn)
 	sortUint64s(dels)
@@ -58,23 +71,23 @@ func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
 	return nil
 }
 
-// Stats :
+// Stats returns the current pollard statistics as a string.
 func (p *Pollard) Stats() string {
 	s := fmt.Sprintf("pol nl %d roots %d he %d re %d ow %d \n",
 		p.numLeaves, len(p.roots), p.hashesEver, p.rememberEver, p.overWire)
 	return s
 }
 
-// TODO remove
-// Temporary -- returns numleaves and row so that batch proofs can be
+// ReconstructStats returns numleaves and row so that batch proofs can be
 // reconstructed and hashes can be matches.
-// Replace this with proofs that do not include the things being proven, and
+//
+// TODO Replace this with proofs that do not include the things being proven, and
 // take the proved leaves as a separate argument
 func (p *Pollard) ReconstructStats() (uint64, uint8) {
 	return p.numLeaves, p.rows()
 }
 
-// Add a leaf to a pollard.  Not as simple!
+// add adds all the given adds to the pollard.
 func (p *Pollard) add(adds []Leaf) error {
 
 	// General algo goes:
@@ -88,12 +101,6 @@ func (p *Pollard) add(adds []Leaf) error {
 	// pretty sub-optimal, but we're not doing multi-thread yet
 
 	for _, a := range adds {
-
-		//		if p.numLeaves < p.Minleaves ||
-		//			(add.Duration < p.Lookahead && add.Duration > 0) {
-		//			remember = true
-		//			p.rememberEver++
-		//		}
 		if a.Remember {
 			p.rememberEver++
 		}
@@ -103,29 +110,42 @@ func (p *Pollard) add(adds []Leaf) error {
 			return err
 		}
 	}
-	//	fmt.Printf("added %d, nl %d roots %d\n", len(adds), p.numLeaves, len(p.roots))
+
 	return nil
 }
 
-/*
-Algo explanation with catchy terms: grab, swap, hash, new, pop
-we're iterating through the roots of the pollard.  Roots correspond with 1-bits
-in numLeaves.  As soon as we hit a 0 (no root), we're done.
-
-grab: Grab the lowest root.
-pop: pop off the lowest root.
-swap: swap the nieces of the node we grabbed and our new node
-hash: calculate the hashes of the old root and new node
-new: create a new parent node, with the hash as data, and the old root / prev new node
-as nieces (not nieces though, children)
-*/
-
-// add a single leaf to a pollard
+// addOne adds a single leaf to a pollard
 func (p *Pollard) addOne(add Hash, remember bool) error {
-	// basic idea: you're going to start at the LSB and move left;
-	// the first 0 you find you're going to turn into a 1.
+	// Basic idea: we're iterating through the roots of the pollard and roots correspond with 1-bits.
+	// We're going to start at the LSB and move left until we hit a 0 and turn it into a 1.
+	//
+	// The algorithm can be explained with catchy terms: grab, swap, hash, new, pop.
+	// grab: Grab the current lowest root.
+	// pop: pop off the current lowest root.
+	// swap: swap the nieces of the node we grabbed and our new node.
+	// hash: calculate the hashes of the old root and new node.
+	// new: create a new parent node, with the hash as data, and the old root / prev new node
+	// as nieces (not nieces though, children).
+	//
+	// For example a tree of five leaves would look like this. We can
+	// tell where all the roots are by looking at the binary representation
+	// of 5: 101.
+	//
+	// 12
+	// |-------\
+	// em      em
+	// |---\   |---\
+	// em  em  em  em  04
+	//
+	// The resulting tree would have 6 leaves. The binary representation is now 110 and
+	// the tree would look like so:
+	//
+	// 12
+	// |-------\
+	// em      em      10
+	// |---\   |---\   |---\
+	// em  em  em  em  em  em
 
-	// make the new leaf & populate it with the actual data you're trying to add
 	n := new(polNode)
 	n.data = add
 	if remember || p.positionMap != nil {
@@ -138,8 +158,8 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	}
 
 	// if add is forgetable, forget all the new nodes made
-	var h uint8
 	// loop until we find a zero; destroy roots until you make one
+	var h uint8
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
 		leftRoot := p.roots[len(p.roots)-1] // grab
@@ -162,22 +182,21 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	return nil
 }
 
-// Hash and swap.  "grabPos" in rowdirt / hashdirt is inefficient because you
-// descend to the place you already just decended to perform swapNodes.
-
-// rem2 outline:
-// perform swaps & hash, then select new roots.
-
-// swap & hash is row based.  Swaps on row 0 cause hashing on row 1.
-// So the sequence is: Swap row 0, hash row 1, swap row 1, hash row 2,
-// swap row 2... etc.
-// The tricky part is that we have a big for loop with h being the current
-// row.  When h=0 and we're swapping things on the bottom, we can hash
-// things at row 1 (h+1).  Before we start swapping row 1, we need to be sure
-// that all hashing for row 1 has finished.
-
-// rem2 deletes stuff from the pollard, using remtrans2
+// rem2 deletes the passed in dels from the pollard
 func (p *Pollard) rem2(dels []uint64) error {
+	// Hash and swap.  "grabPos" in rowdirt / hashdirt is inefficient because you
+	// descend to the place you already just decended to perform swapNodes.
+
+	// rem2 outline:
+	// perform swaps & hash, then select new roots.
+
+	// swap & hash is row based.  Swaps on row 0 cause hashing on row 1.
+	// So the sequence is: Swap row 0, hash row 1, swap row 1, hash row 2,
+	// swap row 2... etc.
+	// The tricky part is that we have a big for loop with h being the current
+	// row.  When h=0 and we're swapping things on the bottom, we can hash
+	// things at row 1 (h+1).  Before we start swapping row 1, we need to be sure
+	// that all hashing for row 1 has finished.
 	if len(dels) == 0 {
 		return nil // that was quick
 	}
@@ -191,20 +210,15 @@ func (p *Pollard) rem2(dels []uint64) error {
 	}
 
 	// get all the swaps, then apply them all
-	// fmt.Printf("call rem2 nl %d rem %v\n", p.numLeaves, dels)
 	swapRows := remTrans2(dels, p.numLeaves, ph)
-	// fmt.Printf("got swaps %v\n", swapRows)
 
 	var hashDirt, nextHashDirt []uint64
 	var prevHash uint64
 	var err error
-	// fmt.Printf("start rem %s", p.toString())
 	// swap & hash all the nodes
 	for h := uint8(0); h < ph; h++ {
 		var hnslice []*hashableNode
-		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		hashDirt = dedupeSwapDirt(hashDirt, swapRows[h])
-		// fmt.Printf("row %d hd %v nhd %v swaps %v\n", h, hashDirt, nextHashDirt, swaprows[h])
 		for len(swapRows[h]) != 0 || len(hashDirt) != 0 {
 			var hn *hashableNode
 			var collapse bool
@@ -213,14 +227,12 @@ func (p *Pollard) rem2(dels []uint64) error {
 			if len(swapRows[h]) == 0 ||
 				len(hashDirt) != 0 && hashDirt[0] > swapRows[h][0].to {
 				// re-descending here which isn't great
-				// fmt.Printf("hashing from dirt %d\n", hashDirt[0])
 				hn, err = p.hnFromPos(hashDirt[0])
 				if err != nil {
 					return err
 				}
 				hashDirt = hashDirt[1:]
 			} else { // swapping
-				// fmt.Printf("swapping %v\n", swaprows[h][0])
 				if swapRows[h][0].from == swapRows[h][0].to {
 					// TODO should get rid of these upstream
 					// panic("got non-moving swap")
@@ -258,18 +270,13 @@ func (p *Pollard) rem2(dels []uint64) error {
 				// TODO when is hn nil?  is this OK?
 				// it'd be better to avoid this and not create hns that aren't
 				// supposed to exist.
-				// fmt.Printf("hn %d nil or incomputable\n", hn.position)
 				continue
 			}
-			// fmt.Printf("giving hasher %d %x %x\n",
-			// hn.position, hn.sib.niece[0].data[:4], hn.sib.niece[1].data[:4])
 			hn.dest.data = hn.sib.auntOp()
 			hn.sib.prune()
 		}
-		// fmt.Printf("done with row %d %s\n", h, p.toString())
 	}
 
-	// fmt.Printf("preroot %s", p.toString())
 	positionList := NewPositionList()
 	defer positionList.Free()
 
@@ -302,7 +309,6 @@ func (p *Pollard) rem2(dels []uint64) error {
 
 func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 	if !inForest(pos, p.numLeaves, p.rows()) {
-		// fmt.Printf("HnFromPos %d out of forest\n", pos)
 		return nil, nil
 	}
 	_, _, hn, err := p.grabPos(pos)
@@ -362,6 +368,8 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	return bhn, nil
 }
 
+// readPos returns a pointer to the node at the requested position. readPos does not
+// mutate the Pollard in any way.
 func (p *Pollard) readPos(pos uint64) (
 	n, nsib *polNode, hn *hashableNode, err error) {
 	// Grab the tree that the position is at
@@ -396,9 +404,12 @@ func (p *Pollard) readPos(pos uint64) (
 	return // only happens when returning a root
 }
 
-// grabPos returns the thing you asked for, as well as its sibling
-// and a hashable node for the position ABOVE pos
+// grabPos takes the given position and returns a pointer to the polNode at the position,
+// its sibling, and a hashableNode at the parent position.
 // Returns an error if it can't get it.
+//
+// NOTE grabPos will attach an empty polNode while descending down the tree for all
+// empty siblings. This mutates the Pollard.
 // NOTE errors are not exhaustive; could return garbage without an error
 func (p *Pollard) grabPos(
 	pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
@@ -488,6 +499,7 @@ func (p *Pollard) GetRoots() (h []Hash) {
 	return
 }
 
+// ToString returns a string visualization of the Pollard that can be printed
 func (p *Pollard) ToString() string {
 	f, err := p.toFull()
 	if err != nil {
