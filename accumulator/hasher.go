@@ -15,3 +15,10 @@ func (f *Forest) hashRow(dirtpositions []uint64) error {
 
 	return nil
 }
+
+// hashdirt takes in dirt from revmovev5
+// dirt positions should be in order, but not on
+// the same row
+func (f *Forest) hashDirt5(dirt []uint64) error {
+	return nil
+}

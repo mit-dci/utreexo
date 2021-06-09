@@ -38,7 +38,7 @@ func TestSwaplessPromote(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Printf(f.ToString())
-	f.removev5([]uint64{8, 9, 10, 16, 17})
+	f.removev5([]uint64{8, 9, 10})
 	fmt.Printf(f.ToString())
 }
 

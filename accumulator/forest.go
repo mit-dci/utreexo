@@ -155,14 +155,29 @@ var empty [32]byte
 
 // removev5 swapless
 func (f *Forest) removev5(dels []uint64) error {
+
+	// calculate what numLeaves will be after this removal
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
-	dels = raiseTwins(dels, f.rows)
-
-	for _, del := range dels {
-		f.data.write(del, empty)
-		f.promote(del ^ 1)
+	// remove all the entries in the positionMap.
+	// no rush; can do this later / some other time / not at all
+	// this is really just to save some space in the map so might be better
+	// if it happens at some other time.
+	for _, d := range dels {
+		delete(f.positionMap, f.data.read(d).Mini())
+		// clear out the hash (also can probably be skipped)
+		f.data.write(d, empty)
 	}
+
+	// consolodate deletions; only delete what we need to
+	grabs, rise := delToRaise(dels, f.rows)
+	fmt.Printf("raised to:\n%v\n%v\n", grabs, rise)
+	dirt := []uint64{}
+	for _, del := range grabs {
+		// f.data.write(del, empty)
+		dirt = append(dirt, f.promote(del^1))
+	}
+	fmt.Printf("dirt: %v\n", dirt)
 
 	f.numLeaves = nextNumLeaves
 	return nil
@@ -246,9 +261,11 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 }
 
 // promote moves a node up to it's parent
-func (f *Forest) promote(p uint64) {
+// returns the parent position
+func (f *Forest) promote(p uint64) uint64 {
 	parentPos := parent(p, f.rows)
 	f.data.write(parentPos, f.data.read(p))
+	return parentPos
 }
 
 // reHash hashes new data in the forest based on dirty positions.
@@ -350,16 +367,6 @@ func (f *Forest) reHash(dirt []uint64) error {
 	return nil
 }
 
-// cleanup removes extraneous hashes from the forest.  Currently only the bottom
-// Probably don't need this at all, if everything else is working.
-func (f *Forest) cleanup(overshoot uint64) {
-	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
-		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
-		// TODO ^^^^ that probably does nothing. or at least should...
-		// f.data.write(p, empty) // clear forest
-	}
-}
-
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) Add(adds []Leaf) {
 	f.addv2(adds)
@@ -406,10 +413,6 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
 			len(delsUn), f.numLeaves)
 	}
 
-	// if !checkSortedNoDupes(dels) { // check for sorted deletion slice
-	// fmt.Printf("%v\n", dels)
-	// return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
-	// }
 	// TODO for now just sort
 	dels := make([]uint64, len(delsUn))
 	copy(dels, delsUn)
@@ -431,11 +434,10 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
 	}
 
 	// v3 should do the exact same thing as v2 now
-	err := f.removev4(dels)
+	err := f.removev5(dels)
 	if err != nil {
 		return nil, err
 	}
-	f.cleanup(uint64(numdels))
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?

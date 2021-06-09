@@ -151,32 +151,59 @@ func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 	return
 }
 
-// raiseTwins takes a sorted list of positions, and returns a sorted list of
-// positions where all twins are eliminated, and replaced with their parents.
+// delToRaise takes a sorted list of positions to delete and returns a
+// sorted list of positions to raise, and how much to raise them.
+// This saves time as we won't move hashes only to move them again right after.
+// Instead each hash will move directly to it's final destination.
+//
 // for example, in a tree of 15 elements the input
-// [2, 3, 5, 10, 11, 20] returns [5, 17, 26]
-// 5 stays in place, 2 and 3 pair to 17, 10 and 11 to 21, and 20 and 21 to 26.
-// This gives the "actual" deletions that need to take place.
-func raiseTwins(dels []uint64, forestRows uint8) []uint64 {
-	var nextRow, output []uint64
-	fmt.Printf("inpt %v\n", dels)
-	h := uint8(0)
-	for h < forestRows {
-		if len(dels) == 0 || dels[0] > maxPosOnRow(h, forestRows) {
-			dels = mergeSortedSlices(dels, nextRow)
-			nextRow = []uint64{}
-			h++ // increase height until on correct row
-			continue
+// [2, 3, 5, 10, 11, 20] returns [4:1, 16:1, 27:1]
+// 5 stays so 6 moves up, 2 and 3 pair to 17 so 16 moves up,
+// 10 and 11 merge to 21, and 20 and 21 merge to 26, causing 27 to move up 1.
+// Another example: [8, 9, 10] returns [11:2].  8 and 9 pair to 20; 10 causes
+// 11 to move up to 21, but 20 deletion causes 21 to move up again to 26
+func delToRaise(dels []uint64, forestRows uint8) ([]uint64, []uint8) {
+
+	var rise []uint8
+	var output, nextRow []uint64
+	var h uint8
+
+	rows := make([][]uint64, forestRows)
+
+	// take dels slice and organize it into rows
+	for _, d := range dels {
+		for d > maxPosOnRow(h, forestRows) { // assumes no del is too big
+			h++
 		}
-		if len(dels) > 1 && dels[1] == dels[0]+1 { // this is a twin
-			nextRow = append(nextRow, parent(dels[0], forestRows))
-			dels = dels[2:]
-		} else {
-			output = append(output, dels[0])
-			dels = dels[1:]
+		rows[h] = append(rows[h], d)
+	}
+	fmt.Printf("raise input %v -> %v\n", dels, rows)
+
+	// go through each row.  Look for twins and stash then in nextRow, then
+	// merge nextRow in one row above when done with the row
+	for h, _ := range rows { // breaks when h == forestRows
+		curRow := mergeSortedSlices(nextRow, rows[h])
+		rows[h] = []uint64{}
+		nextRow = []uint64{}
+		for i := 0; i < len(curRow); i++ {
+			if i < len(curRow)-1 && curRow[i+1] == curRow[i]+1 { // this is a twin
+				// add parent to next row, remove twins from this row
+				nextRow = append(nextRow, parent(curRow[i], forestRows))
+				i++
+			} else {
+				rows[h] = append(rows[h], curRow[i])
+			}
 		}
 	}
-	return output
+
+	fmt.Printf("done rows: %v\n", rows)
+	for _, row := range rows {
+		for _, d := range row {
+			output = append(output, d)
+		}
+	}
+
+	return output, rise
 }
 
 // move through.  if you find twins, remove them, and add parent to another slice
