@@ -214,6 +214,8 @@ bitcoind -datadir=$BITCOIN_DATA -conf=$BITCOIN_CONF
 log "Waiting for bitcoind to start"
 sleep 5
 
+bitcoin-cli -conf=$BITCOIN_CONF createwallet test-wallet
+
 # mine 200 blocks to have a bunch of spendable coins
 mine_blocks 200
 
