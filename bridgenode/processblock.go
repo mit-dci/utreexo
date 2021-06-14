@@ -3,12 +3,11 @@ package bridgenode
 import (
 	"fmt"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/btcacc"
-	uwire "github.com/mit-dci/utreexo/wire"
+	"github.com/mit-dci/utreexo/wire"
 
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/chain"
 )
 
 /*
@@ -116,7 +115,7 @@ func blockToAddDel(bnr BlockAndRev) (
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
+	blockAdds = chain.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
 
 	return
 }
@@ -204,13 +203,13 @@ func ParseBlockForDB(
 				txoInBlock++
 				continue
 			}
-			if util.IsUnspendable(txo) {
+			if chain.IsUnspendable(txo) {
 				txoInBlock++
 				continue
 			}
 
 			trb.newTxos = append(trb.newTxos,
-				util.OutpointToBytes(wire.NewOutPoint(txid, uint32(txoInTx))))
+				chain.OutpointToBytes(wire.NewOutPoint(txid, uint32(txoInTx))))
 			txoInBlock++
 		}
 
@@ -230,7 +229,7 @@ func ParseBlockForDB(
 			}
 			// append outpoint to slice
 			trb.spentTxos = append(trb.spentTxos,
-				util.OutpointToBytes(&in.PreviousOutPoint))
+				chain.OutpointToBytes(&in.PreviousOutPoint))
 			// append start height to slice (get from rev data)
 			trb.spentStartHeights = append(trb.spentStartHeights,
 				bnr.Rev.Txs[txInBlock-1].TxIn[txinInTx].Height)

@@ -9,10 +9,10 @@ import (
 
 	"github.com/adiabat/bech32"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
+	"github.com/mit-dci/utreexo/wire"
 )
 
 // RunIBD calls everything to run IBD

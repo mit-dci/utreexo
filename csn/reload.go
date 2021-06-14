@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
+	"github.com/mit-dci/utreexo/wire"
 )
 
 // restorePollard restores the pollard from disk to memory.

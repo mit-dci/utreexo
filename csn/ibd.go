@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/btcacc"
-	uwire "github.com/mit-dci/utreexo/wire"
+	"github.com/mit-dci/utreexo/chain"
+	"github.com/mit-dci/utreexo/wire"
 )
 
 // run IBD from block proof data
@@ -32,11 +31,11 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 	// blocks come in and sit in the blockQueue
 	// They should come in from the network -- right now they're coming from the
 	// disk but it should be the exact same thing
-	ublockQueue := make(chan uwire.UBlock, 10)
+	ublockQueue := make(chan chain.UBlock, 10)
 
 	// Reads blocks asynchronously from blk*.dat files, and the proof.dat, and DB
 	// this will be a network reader, with the server sending the same stuff over
-	go uwire.UblockNetworkReader(
+	go UblockNetworkReader(
 		ublockQueue, c.remoteHost, c.CurrentHeight, lookahead)
 
 	var plustime time.Duration
@@ -62,7 +61,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 
 		c.HeightChan <- c.CurrentHeight
 
-		c.ScanBlock(blocknproof.Block)
+		c.ScanBlock(blocknproof.Block())
 
 		if c.CurrentHeight%10000 == 0 {
 			fmt.Printf("Block %d add %d del %d %s plus %.2f total %.2f \n",
@@ -100,7 +99,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 
 // ScanBlock looks through a block using the CSN's maps and sends matches
 // into the tx channel.
-func (c *Csn) ScanBlock(b *btcutil.Block) {
+func (c *Csn) ScanBlock(b *chain.Block) {
 	var curAdr [20]byte
 	for _, tx := range b.Transactions() {
 		// first check utxo loss
@@ -141,21 +140,21 @@ func (c *Csn) ScanBlock(b *btcutil.Block) {
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as Leaf type.
 func (c *Csn) putBlockInPollard(
-	ub uwire.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
+	ub chain.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
 
 	plusstart := time.Now()
 
 	nl, h := c.pollard.ReconstructStats()
 
-	_, outskip := ub.Block.DedupeBlock()
+	inskip, outskip := ub.Block().DedupeBlock()
 
-	err := ub.ProofSanity(nl, h)
+	err := ub.ProofSanity(inskip, nl, h)
 	if err != nil {
 		return fmt.Errorf(
-			"uData missing utxo data for block %d err: %e", ub.UtreexoData.Height, err)
+			"uData missing utxo data for block %d err: %e", ub.UData().Height, err)
 	}
 
-	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
+	*totalDels += len(ub.UData().AccProof.Targets) // for benchmarking
 
 	// **************************************
 	// check transactions and signatures here
@@ -170,36 +169,36 @@ func (c *Csn) putBlockInPollard(
 	if c.CheckSignatures {
 		if !ub.CheckBlock(outskip, &c.Params) {
 			return fmt.Errorf("height %d hash %s block invalid",
-				ub.UtreexoData.Height, ub.Block.Hash().String())
+				ub.UData().Height, ub.Hash().String())
 		}
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err = c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
+	err = c.pollard.IngestBatchProof(ub.UData().AccProof)
 	if err != nil {
-		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
+		fmt.Printf("height %d ingest error\n", ub.UData().Height)
 		return err
 	}
 
-	remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
-	for i, ttl := range ub.UtreexoData.TxoTTLs {
+	remember := make([]bool, len(ub.UData().TxoTTLs))
+	for i, ttl := range ub.UData().TxoTTLs {
 		// ttl-ub.Height is the number of blocks until the block is spend.
 		remember[i] = ttl < c.pollard.Lookahead
 	}
 
 	// get hashes to add into the accumulator
-	blockAdds := uwire.BlockToAddLeaves(
-		ub.Block, remember, outskip, ub.UtreexoData.Height)
+	blockAdds := chain.BlockToAddLeaves(
+		ub.Block(), remember, outskip, ub.UData().Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// for i, leaf := range blockAdds {
-	// fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
+	// fmt.Printf("\th %d add leaf %d %x\n", ub.MsgUBlock().UtreexoData.Height, i, leaf.Hash)
 	// }
 
 	// Utreexo tree modification. blockAdds are the added txos and
 	// bp.Targets are the positions of the leaves to delete
 
-	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
+	err = c.pollard.Modify(blockAdds, ub.UData().AccProof.Targets)
 	if err != nil {
 
 		return fmt.Errorf("csn h %d modify %s", c.CurrentHeight, err.Error())

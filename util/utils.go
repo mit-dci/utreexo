@@ -10,7 +10,6 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 )
 
 type Hash [32]byte
@@ -56,47 +55,6 @@ func GenHashForNet(p chaincfg.Params) (*Hash, error) {
 // HashFromString hashes the given string with sha256
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
-}
-
-// turns an outpoint into a 36 byte... mixed endian thing.
-// (the 32 bytes txid is "reversed" and the 4 byte index is in order (big)
-func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
-	copy(b[0:32], op.Hash[:])
-	binary.BigEndian.PutUint32(b[32:36], op.Index)
-	return
-}
-
-// blockToDelOPs gives all the UTXOs in a block that need proofs in order to be
-// deleted.  All txinputs except for the coinbase input and utxos created
-// within the same block (on the skiplist)
-func BlockToDelOPs(
-	blk *btcutil.Block) (delOPs []wire.OutPoint) {
-
-	transactions := blk.Transactions()
-	inskip, _ := blk.DedupeBlock()
-
-	var blockInIdx uint32
-	for txinblock, tx := range transactions {
-		if txinblock == 0 {
-			blockInIdx++ // coinbase tx always has 1 input
-			continue
-		}
-
-		// loop through inputs
-		for _, txin := range tx.MsgTx().TxIn {
-			// check if on skiplist.  If so, don't make leaf
-			if len(inskip) > 0 && inskip[0] == blockInIdx {
-				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
-				inskip = inskip[1:]
-				blockInIdx++
-				continue
-			}
-
-			delOPs = append(delOPs, txin.PreviousOutPoint)
-			blockInIdx++
-		}
-	}
-	return
 }
 
 // DedupeBlock takes a bitcoin block, and returns two int slices: the indexes of
@@ -201,17 +159,4 @@ func HasAccess(fileName string) bool {
 		return false
 	}
 	return true
-}
-
-//IsUnspendable determines whether a tx is spendable or not.
-//returns true if spendable, false if unspendable.
-func IsUnspendable(o *wire.TxOut) bool {
-	switch {
-	case len(o.PkScript) > 10000: //len 0 is OK, spendable
-		return true
-	case len(o.PkScript) > 0 && o.PkScript[0] == 0x6a: // OP_RETURN is 0x6a
-		return true
-	default:
-		return false
-	}
 }
