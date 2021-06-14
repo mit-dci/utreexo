@@ -58,7 +58,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	}
 
 	donetime := time.Now()
-	f.TimeInProve += donetime.Sub(starttime)
+	f.timeInProve += donetime.Sub(starttime)
 	return pr, nil
 }
 
@@ -193,7 +193,7 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	}
 
 	donetime := time.Now()
-	f.TimeInProve += donetime.Sub(starttime)
+	f.timeInProve += donetime.Sub(starttime)
 	return bp, nil
 }
 

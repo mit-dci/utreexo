@@ -30,11 +30,6 @@ func TestGPosToLocPos(t *testing.T) {
 }
 
 func TestGetTreeBlockPos(t *testing.T) {
-	//pos := uint64(4)
-	//forestRows := uint8(3)
-	//maxCachedTables := 1
-
-	//pos := uint64(1040384)
 	pos := uint64(67108860)
 	forestRows := uint8(25)
 	treeBlockRow, offset, err := getTreeBlockPos(pos, forestRows)
@@ -141,7 +136,7 @@ func TestCowForestWrite(t *testing.T) {
 	f := NewForest(nil, false, os.TempDir(), 1)
 
 	numAdds := uint32(10)   // adds per block
-	sc := NewSimChain(0x07) // A chain simulator
+	sc := newSimChain(0x07) // A chain simulator
 
 	// go through block 0 to 1000 and test the add/dels
 	for blockNum := 0; blockNum < 250; blockNum++ {

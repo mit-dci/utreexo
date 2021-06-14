@@ -65,7 +65,7 @@ func pollardRandomRemember(blocks int32) error {
 
 	var p Pollard
 
-	sn := NewSimChain(0x07)
+	sn := newSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
 		adds, _, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
@@ -214,7 +214,7 @@ func fixedPollard(leaves int32) error {
 
 func TestCache(t *testing.T) {
 	// simulate blocks with simchain
-	chain := NewSimChain(7)
+	chain := newSimChain(7)
 	chain.lookahead = 8
 
 	f := NewForest(nil, false, "", 0)
