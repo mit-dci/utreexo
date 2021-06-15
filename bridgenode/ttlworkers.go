@@ -103,6 +103,8 @@ func BNRTTLSpliter(
 		miniTxidChan <- miniTxSlice
 		lookupChan <- lub
 	}
+	close(miniTxidChan)
+	close(lookupChan)
 }
 
 // TxidSortWriterWorker takes miniTxids in, sorts them, and writes them
@@ -115,7 +117,11 @@ func TxidSortWriterWorker(
 
 	// sort then write.
 	for {
-		miniTxSlice := <-tChan
+		miniTxSlice, open := <-tChan
+		if !open {
+			fmt.Printf("TxidSortWriterWorker finished at height %d\n", height)
+			break
+		}
 		height++
 		// first write the current start offset, then increment it for next time
 		// fmt.Printf("write h %d startOffset %d\t", height, startOffset)
@@ -156,7 +162,10 @@ func TTLLookupWorker(
 
 	for {
 		<-goChan
-		lub := <-lChan
+		lub, open := <-lChan
+		if !open {
+			break
+		}
 		// build a TTL result block
 		var resultBlock ttlResultBlock
 		resultBlock.destroyHeight = lub.destroyHeight
@@ -171,7 +180,8 @@ func TTLLookupWorker(
 				_, err := txidOffsetFile.ReadAt(
 					startOffsetBytes[:], int64(stxo.height-1)*8)
 				if err != nil {
-					fmt.Printf("tried to read start at %d  ", (stxo.height-1)*8)
+					fmt.Printf("tried to read at txidoffset file byte %d  ",
+						(stxo.height-1)*8)
 					panic(err)
 				}
 
@@ -221,11 +231,13 @@ func binSearch(mi miniIn,
 	for guessMi.hashprefix != mi.hashprefix {
 		if guessMi.hashToUint64() > mi.hashToUint64() { // too high, lower top
 			if top == guessPos {
+				fmt.Printf("h %d %x idx %d", mi.height, mi.hashprefix, mi.idx)
 				panic("can't find it")
 			}
 			top = guessPos
 		} else { // must be too low (not equal), raise bottom
 			if bottom == guessPos {
+				fmt.Printf("h %d %x idx %d", mi.height, mi.hashprefix, mi.idx)
 				panic("can't find it")
 			}
 			bottom = guessPos

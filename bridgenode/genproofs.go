@@ -90,10 +90,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	}
 
 	// BlockAndRevReader will push blocks into here
-	blockAndRevProofChan := make(chan blockAndRev, 1) // blocks for accumulator
-	blockAndRevTTLChan := make(chan blockAndRev, 1)   // same thing, but for TTL
-	ttlResultChan := make(chan ttlResultBlock, 1)     // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 1)           // from processing to flat writer
+	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
+	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
+	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
+	proofChan := make(chan btcacc.UData, 10)           // from processing to flat writer
 	fileWait := new(sync.WaitGroup)
 
 	// Reads block asynchronously from .dat files
@@ -114,6 +114,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			break
 		}
 		height = bnr.Height
+		if bnr.Blk == nil {
+			fmt.Print("h %d empty block ", bnr.Height)
+			panic("empty")
+		}
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
 		blockAdds, delLeaves, err := blockToAddDel(bnr)

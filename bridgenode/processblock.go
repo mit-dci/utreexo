@@ -136,6 +136,10 @@ func blockToAddDel(bnr blockAndRev) (
 func blockNRevToDelLeaves(bnr blockAndRev) (
 	delLeaves []btcacc.LeafData, err error) {
 
+	if bnr.Blk == nil {
+		err = fmt.Errorf("h %d bnr nil block ", bnr.Height)
+		return
+	}
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions())-1 != len(bnr.Rev.Txs) {
 		err = fmt.Errorf("genDels block %d %d txs but %d rev txs",
