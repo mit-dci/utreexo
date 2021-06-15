@@ -51,27 +51,27 @@ type RawHeaderData struct {
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
-	aChan, bChan chan blockAndRev, wg *sync.WaitGroup, cfg *Config,
-	maxHeight, curHeight int32) {
+	aChan, bChan chan blockAndRev, haltRequest chan bool, wg *sync.WaitGroup,
+	cfg *Config, maxHeight, curHeight int32) {
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
-
+	stop := false
 	offsetFile, err := os.Open(offsetFilePath)
 	if err != nil {
 		panic(err)
 	}
 	defer offsetFile.Close() // file always closes
 
-	for curHeight < maxHeight {
+	for curHeight < maxHeight && !stop {
 		blocks, revs, err :=
-			GetRawBlocksFromDisk(curHeight, 100000, offsetFile, cfg.BlockDir)
+			GetRawBlocksFromDisk(curHeight, 100, offsetFile, cfg.BlockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
 			return
 		}
 
-		for i := 0; i < len(blocks); i++ {
+		for i := 0; i < len(blocks) && !stop; i++ {
 			bnr := blockAndRev{
 				Height: curHeight,
 				Blk:    btcutil.NewBlock(&blocks[i]),
@@ -82,8 +82,15 @@ func BlockAndRevReader(
 			aChan <- bnr
 			bChan <- bnr
 			curHeight++
+			select {
+			case stop = <-haltRequest: // receives true from stopBuildProofs()
+			default:
+			}
 		}
 	}
+
+	close(aChan)
+	close(bChan)
 }
 
 // GetRawBlocksFromDisk retrives multiple consecutive blocks starting at height `startAt`.

@@ -52,6 +52,7 @@ func InitBridgeNodeState(cfg *Config, offsetFinished chan bool) (forest *accumul
 			err = fmt.Errorf("restoreHeight error: %s", err.Error())
 			return
 		}
+		fmt.Printf("restore height %d\n", height)
 	} else {
 		fmt.Println("Creating new forest")
 		// TODO Add a path for CowForest here

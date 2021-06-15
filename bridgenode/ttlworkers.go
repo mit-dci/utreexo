@@ -38,7 +38,10 @@ func BNRTTLSpliter(
 	go TTLLookupWorker(lookupChan, ttlResultChan, goChan, txidFile, txidOffsetFile)
 
 	for {
-		bnr := <-bnrChan
+		bnr, open := <-bnrChan
+		if !open {
+			break
+		}
 		var skippedTxoInBlock uint16
 		var lub ttlLookupBlock
 		var inskippos, outskippos, outputInBlock, inputInBlock uint32

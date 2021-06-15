@@ -52,6 +52,14 @@ proof block.
 
 */
 
+/* Problem : BlockAndRevReader keeps going after the stop signal happens.
+So it fills up buffers with ~10 blocks, and will keep going forever;
+need to tell BlockAndRevReader to stop, and then let everything else
+(including the main loop with Modify() I guess) keep running until that
+buffer clears out.
+
+*/
+
 // build the bridge node / proofs
 func BuildProofs(cfg *Config, sig chan bool) error {
 	// Channel to alert the tell the main loop it's ok to exit
@@ -76,38 +84,36 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			err.Error(), cfg.BlockDir)
 		return err
 	}
+	if cfg.quitAt > 0 && cfg.quitAt < int(knownTipHeight) {
+		fmt.Printf("quitting at early height %d\n", cfg.quitAt)
+		knownTipHeight = int32(cfg.quitAt)
+	}
 
 	// BlockAndRevReader will push blocks into here
-	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
-	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
-	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)           // from processing to flat writer
+	blockAndRevProofChan := make(chan blockAndRev, 1) // blocks for accumulator
+	blockAndRevTTLChan := make(chan blockAndRev, 1)   // same thing, but for TTL
+	ttlResultChan := make(chan ttlResultBlock, 1)     // from db worker to flat ttl writer
+	proofChan := make(chan btcacc.UData, 1)           // from processing to flat writer
 	fileWait := new(sync.WaitGroup)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go BlockAndRevReader(
-		blockAndRevProofChan, blockAndRevTTLChan, fileWait, cfg, knownTipHeight, height)
+		blockAndRevProofChan, blockAndRevTTLChan, haltRequest, fileWait,
+		cfg, knownTipHeight, height)
 
 	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, fileWait)
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
 	fmt.Println("Building Proofs and ttldb...")
 
-	var stop bool // bool for stopping the main loop
-
-	for ; height <= knownTipHeight && !stop; height++ {
-		if cfg.quitAt != -1 && int(height) == cfg.quitAt {
-			fmt.Println("quitAfter value reached. Quitting...")
-
-			// TODO this is ugly, have an actually quitter. Need to refactor
-			// a bunch of things..
-			trace.Stop()
-			pprof.StopCPUProfile()
+	for {
+		// Receive txs from the asynchronous blk*.dat reader
+		bnr, open := <-blockAndRevProofChan
+		if !open { // channel is closed by BlockAndRevReader & empty, we're done
 			break
 		}
-		// Receive txs from the asynchronous blk*.dat reader
-		bnr := <-blockAndRevProofChan
+		height = bnr.Height
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
 		blockAdds, delLeaves, err := blockToAddDel(bnr)
@@ -134,15 +140,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 
-		if bnr.Height%1000 == 0 {
+		if height%1000 == 0 {
 			fmt.Printf("On block %d of max %d\n", bnr.Height+1, knownTipHeight)
-		}
-
-		// Check if stopSig is no longer false
-		// stop = true makes the loop exit
-		select {
-		case stop = <-haltRequest: // receives true from stopBuildProofs()
-		default:
 		}
 	}
 
