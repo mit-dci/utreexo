@@ -85,7 +85,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		return err
 	}
 	if cfg.quitAt > 0 && cfg.quitAt < int(knownTipHeight) {
-		fmt.Printf("quitting at early height %d\n", cfg.quitAt)
+		fmt.Printf("quitting early at height %d\n", cfg.quitAt)
 		knownTipHeight = int32(cfg.quitAt)
 	}
 
@@ -158,7 +158,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		panic(err)
 	}
 
-	fmt.Println("Done writing")
+	fmt.Printf("Done writing.  Forest: %s", forest.ToString())
 
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true
