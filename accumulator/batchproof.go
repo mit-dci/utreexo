@@ -20,8 +20,9 @@ type BatchProof struct {
 	Targets []uint64
 
 	// All the nodes in the tree that are needed to hash up to the root of
-	// the tree. If Targets are [00, 01], then Proof would be [00, 01, 05].
-	// TODO: Remove targets from the proof as it is redundant.
+	// the tree. Here, the root is 06. If Targets are [00, 01], then Proof
+	// would be [05] as you need 04 and 05 to hash to 06. 04 can be calculated
+	// by hashing 00 and 01.
 	//
 	// 06
 	// |-------\
@@ -237,40 +238,70 @@ type miniTree struct {
 	rightChild node
 }
 
-// TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
-// roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
+// targPos is just targets with their hashes. Used for sorting
+type targPos struct {
+	pos uint64
+	val Hash
+}
 
 // verifyBatchProof verifies a batchproof by checking against the set of known
 // correct roots.
 // Takes a BatchProof, the accumulator roots, and the number of leaves in the forest.
 // Returns wether or not the proof verified correctly, the partial proof tree,
 // and the subset of roots that was computed.
-func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
+//
+// NOTE: targetHashes MUST be in the same order they were proven in. (aka they
+// have to be in the same order as hashes given to ProveBatch(). In Bitcoin's
+// case, this would be the order in which they appear in a block.
+//
+// TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
+// roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
+func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeaves uint64,
 	// cached should be a function that fetches nodes from the pollard and
 	// indicates whether they exist or not, this is only useful for the pollard
 	// and nil should be passed for the forest.
 	cached func(pos uint64) (bool, Hash)) (bool, [][]miniTree, []node) {
+
+	// If there is nothing to prove, return true
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
+	// There should be a hash for each of the targets being proven
+	if len(bp.Targets) != len(targetHashes) {
+		return false, nil, nil
+	}
 
-	// copy targets to leave them in original order
+	tPos := make([]targPos, len(bp.Targets))
+
+	for i, hash := range targetHashes {
+		tPos[i].val = hash
+		tPos[i].pos = bp.Targets[i]
+	}
+
+	sortTargPos(tPos)
+
+	sortedDelHashes := make([]Hash, len(bp.Targets))
 	targets := make([]uint64, len(bp.Targets))
-	copy(targets, bp.Targets)
-	sortUint64s(targets)
+	for i, t := range tPos {
+		sortedDelHashes[i] = t.val
+		targets[i] = t.pos
+	}
+
+	targetHashes = sortedDelHashes
 
 	if cached == nil {
 		cached = func(_ uint64) (bool, Hash) { return false, empty }
 	}
 
 	rows := treeRows(numLeaves)
-	positionList := NewPositionList()
-	defer positionList.Free()
+	proofPositions := NewPositionList()
+	defer proofPositions.Free()
 
-	ProofPositions(targets, numLeaves, rows, &positionList.list)
+	// Grab all the positions needed to prove the targets
+	ProofPositions(targets, numLeaves, rows, &proofPositions.list)
 
 	// The proof should have as many hashes as there are proof positions.
-	if len(positionList.list)+len(bp.Targets) != len(bp.Proof) {
+	if len(proofPositions.list) != len(bp.Proof) {
 		return false, nil, nil
 	}
 
@@ -287,9 +318,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	trees := make([][]miniTree, len(roots))
 
 	// initialise the targetNodes for row 0.
-	// TODO: this would be more straight forward if bp.Proofs wouldn't
-	// contain the targets
-	proofHashes := make([]Hash, 0, len(positionList.list))
+	proofHashes := make([]Hash, 0, len(proofPositions.list))
 	var targetsMatched uint64
 	for len(targets) > 0 {
 		// check if the target is the row 0 root.
@@ -299,21 +328,20 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 			// target is the row 0 root, append it to the root candidates.
 			rootCandidates = append(rootCandidates,
 				node{Val: roots[len(roots)-1], Pos: targets[0]})
-			bp.Proof = bp.Proof[1:]
 			break
 		}
 
 		// `targets` might contain a target and its sibling or just the target, if
 		// only the target is present the sibling will be in `proofPositions`.
-		if uint64(len(positionList.list)) > targetsMatched &&
-			targets[0]^1 == positionList.list[targetsMatched] {
-			// the sibling of the target is included in the proof positions.
-			lr := targets[0] & 1
-			targetNodes = append(targetNodes, node{Pos: targets[0], Val: bp.Proof[lr]})
-			proofHashes = append(proofHashes, bp.Proof[lr^1])
+		if uint64(len(proofPositions.list)) > targetsMatched &&
+			targets[0]^1 == proofPositions.list[targetsMatched] {
+			targetNodes = append(targetNodes, node{Pos: targets[0], Val: targetHashes[0]})
+			proofHashes = append(proofHashes, bp.Proof[0])
+
 			targetsMatched++
-			bp.Proof = bp.Proof[2:]
+			bp.Proof = bp.Proof[1:]
 			targets = targets[1:]
+			targetHashes = targetHashes[1:]
 			continue
 		}
 
@@ -321,14 +349,15 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		// it has to be included in targets. if there are less than 2 proof
 		// hashes or less than 2 targets left the proof is invalid because
 		// there is a target without matching proof.
-		if len(bp.Proof) < 2 || len(targets) < 2 {
+		if len(targetHashes) < 2 || len(targets) < 2 {
 			return false, nil, nil
 		}
 
 		targetNodes = append(targetNodes,
-			node{Pos: targets[0], Val: bp.Proof[0]},
-			node{Pos: targets[1], Val: bp.Proof[1]})
-		bp.Proof = bp.Proof[2:]
+			node{Pos: targets[0], Val: targetHashes[0]},
+			node{Pos: targets[1], Val: targetHashes[1]})
+
+		targetHashes = targetHashes[2:]
 		targets = targets[2:]
 	}
 
@@ -340,10 +369,11 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	for len(targetNodes) > 0 {
 		var target, proof node
 		target = targetNodes[0]
-		if len(positionList.list) > 0 && target.Pos^1 == positionList.list[0] {
+
+		if len(proofPositions.list) > 0 && target.Pos^1 == proofPositions.list[0] {
 			// target has a sibling in the proof positions, fetch proof
-			proof = node{Pos: positionList.list[0], Val: bp.Proof[0]}
-			positionList.list = positionList.list[1:]
+			proof = node{Pos: proofPositions.list[0], Val: bp.Proof[0]}
+			proofPositions.list = proofPositions.list[1:]
 			bp.Proof = bp.Proof[1:]
 			targetNodes = targetNodes[1:]
 		} else {
@@ -464,7 +494,6 @@ func (bp *BatchProof) Reconstruct(
 	defer positionList.Free()
 
 	ProofPositions(targets, numleaves, forestRows, &positionList.list)
-	positionList.list = mergeSortedSlices(targets, positionList.list)
 
 	if len(positionList.list) != len(bp.Proof) {
 		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d",

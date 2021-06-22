@@ -53,8 +53,11 @@ func TestPollardSimpleIngest(t *testing.T) {
 	var p Pollard
 	p.Modify(adds, nil)
 	// Modify the proof so that the verification should fail.
-	bp.Proof[0][0] = 0xFF
-	err := p.IngestBatchProof(bp)
+	if len(bp.Proof) <= 0 {
+		bp.Proof = make([]Hash, 1)
+		bp.Proof[0][0] = 0xFF
+	}
+	err := p.IngestBatchProof(hashes, bp)
 	if err == nil {
 		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
 	}
@@ -78,12 +81,12 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
+
 		// verify proofs on rad node
-		err = p.IngestBatchProof(bp)
+		err = p.IngestBatchProof(delHashes, bp)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("deletions: %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
@@ -230,12 +233,13 @@ func TestCache(t *testing.T) {
 		if err != nil {
 			t.Fatal("ProveBatch failed", err)
 		}
+
 		_, err = f.Modify(adds, proof.Targets)
 		if err != nil {
 			t.Fatal("Modify failed", err)
 		}
 
-		err = p.IngestBatchProof(proof)
+		err = p.IngestBatchProof(delHashes, proof)
 		if err != nil {
 			t.Fatal("IngestBatchProof failed", err)
 		}
