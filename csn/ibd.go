@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 	uwire "github.com/mit-dci/utreexo/wire"
 )
@@ -155,6 +156,13 @@ func (c *Csn) putBlockInPollard(
 			"uData missing utxo data for block %d err: %e", ub.UtreexoData.Height, err)
 	}
 
+	// make slice of hashes from leafdata. These are the hash commitments
+	// to be proven.
+	delHashes := make([]accumulator.Hash, len(ub.UtreexoData.Stxos))
+	for i, _ := range ub.UtreexoData.Stxos {
+		delHashes[i] = ub.UtreexoData.Stxos[i].LeafHash()
+	}
+
 	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
 
 	// **************************************
@@ -175,7 +183,7 @@ func (c *Csn) putBlockInPollard(
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err = c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
+	err = c.pollard.IngestBatchProof(delHashes, ub.UtreexoData.AccProof)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
 		return err
@@ -192,13 +200,8 @@ func (c *Csn) putBlockInPollard(
 		ub.Block, remember, outskip, ub.UtreexoData.Height)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
-	// for i, leaf := range blockAdds {
-	// fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
-	// }
-
 	// Utreexo tree modification. blockAdds are the added txos and
-	// bp.Targets are the positions of the leaves to delete
-
+	// AccProof.Targets are the positions of the leaves to delete
 	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
 	if err != nil {
 
