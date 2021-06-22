@@ -12,5 +12,5 @@ require (
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 )
 
-replace github.com/btcsuite/btcd => github.com/mit-dci/utcd v0.21.0-beta.0.20210201215500-359f1ee1429a
+replace github.com/btcsuite/btcd => github.com/mit-dci/utcd v0.21.0-beta.0.20210622094436-95ee13404deb
 replace github.com/btcsuite/btcutil => github.com/mit-dci/utcutil v1.0.3-0.20210201144513-fb3ce8742498
