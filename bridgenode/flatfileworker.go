@@ -163,7 +163,7 @@ func (ff *flatFileState) ffInit() error {
 
 	} else { // first time startup
 		// there is no block 0 so leave that empty
-		fmt.Printf("setting h=1\n")
+		// fmt.Printf("setting h=1\n")
 		_, err = ff.offsetFile.Write(make([]byte, 8))
 		if err != nil {
 			return err

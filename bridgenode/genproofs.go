@@ -76,18 +76,15 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	go stopBuildProofs(cfg, sig, offsetFinished, haltRequest, haltAccept)
 
 	// Init forest and variables. Resumes if the data directory exists
-	forest, height, knownTipHeight, err :=
-		InitBridgeNodeState(cfg, offsetFinished)
+	forest, finishedHeight, err := InitBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
 		err := fmt.Errorf("initialization error: %s.  If your .blk and .dat "+
 			"files are not in %s, specify alternate path with -datadir\n.",
 			err.Error(), cfg.BlockDir)
 		return err
 	}
-	if cfg.quitAt > 0 && cfg.quitAt < int(knownTipHeight) {
-		fmt.Printf("quitting early at height %d\n", cfg.quitAt)
-		knownTipHeight = int32(cfg.quitAt)
-	}
+
+	fmt.Printf("Starting forest: %s\n", forest.ToString())
 
 	// BlockAndRevReader will push blocks into here
 	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
@@ -99,8 +96,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go BlockAndRevReader(
-		blockAndRevProofChan, blockAndRevTTLChan, haltRequest, fileWait,
-		cfg, knownTipHeight, height)
+		blockAndRevProofChan, blockAndRevTTLChan,
+		haltRequest, fileWait, cfg, finishedHeight)
 
 	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, fileWait)
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
@@ -113,7 +110,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if !open { // channel is closed by BlockAndRevReader & empty, we're done
 			break
 		}
-		height = bnr.Height
+		finishedHeight = bnr.Height
+		fmt.Printf("read height %d from block %s\n", finishedHeight, bnr.Blk.Hash().String())
 		if bnr.Blk == nil {
 			fmt.Print("h %d empty block ", bnr.Height)
 			panic("empty")
@@ -144,21 +142,21 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 
-		if height%1000 == 0 {
-			fmt.Printf("On block %d of max %d\n", bnr.Height+1, knownTipHeight)
-		}
+		// if height%1000 == 0 {
+		fmt.Printf("Finished block %d of max %d\n", bnr.Height, cfg.quitAfter)
+		// }
 	}
 
 	// Wait for the file workers to finish
 	fileWait.Wait()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, height, cfg)
+	err = saveBridgeNodeData(forest, finishedHeight, cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Done writing.  Forest: %s", forest.ToString())
+	fmt.Printf("Done writing. Height %d Forest: %s", finishedHeight, forest.ToString())
 
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true

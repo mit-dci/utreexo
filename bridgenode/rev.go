@@ -52,7 +52,9 @@ type RawHeaderData struct {
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
 	aChan, bChan chan blockAndRev, haltRequest chan bool, wg *sync.WaitGroup,
-	cfg *Config, maxHeight, curHeight int32) {
+	cfg *Config, finishedHeight int32) {
+
+	// finishedHeight is the height we're finsihed reading & sending out.
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
 	stop := false
@@ -62,13 +64,13 @@ func BlockAndRevReader(
 	}
 	defer offsetFile.Close() // file always closes
 
-	for curHeight < maxHeight && !stop {
+	for finishedHeight < cfg.quitAfter && !stop {
 		blocksToRead := int32(1000)
-		if curHeight+blocksToRead >= maxHeight {
-			blocksToRead = maxHeight - curHeight
+		if finishedHeight+blocksToRead >= cfg.quitAfter {
+			blocksToRead = cfg.quitAfter - finishedHeight
 		}
 		blocks, revs, err :=
-			GetRawBlocksFromDisk(curHeight, blocksToRead, offsetFile, cfg.BlockDir)
+			GetRawBlocksFromDisk(finishedHeight+1, blocksToRead, offsetFile, cfg.BlockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
@@ -77,7 +79,7 @@ func BlockAndRevReader(
 
 		for i := 0; i < len(blocks) && !stop; i++ {
 			bnr := blockAndRev{
-				Height: curHeight,
+				Height: finishedHeight + 1,
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
@@ -85,14 +87,14 @@ func BlockAndRevReader(
 			wg.Add(2)
 			aChan <- bnr
 			bChan <- bnr
-			curHeight++
+			finishedHeight++
 			select {
 			case stop = <-haltRequest: // receives true from stopBuildProofs()
 			default:
 			}
 		}
 	}
-	fmt.Printf("finished reading blocks, last height %d\n", curHeight-1)
+	fmt.Printf("finished reading blocks, last height %d\n", finishedHeight-1)
 	close(aChan)
 	close(bChan)
 }

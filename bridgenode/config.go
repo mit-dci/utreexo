@@ -43,7 +43,7 @@ var (
 		`Set a forest type to use (cow, ram, disk, cache). Usage: "-forest=cow"`)
 	cowMaxCache = argCmd.Int("cowmaxcache", 500,
 		`how many treetables to cache with copy-on-write forest`)
-	quitAtCmd = argCmd.Int("quitat", -1,
+	quitAfterCmd = argCmd.Int("quitafter", -1,
 		`quit generating proofs after the given block height. (meant for testing)`)
 	serve = argCmd.Bool("serve", false,
 		`immediately start server without building or checking proof data`)
@@ -172,7 +172,7 @@ type Config struct {
 	forestType forestType
 
 	// quitAfter syncing to this block height
-	quitAt int
+	quitAfter int32
 
 	// how much cache to allow for cowforest
 	cowMaxCache int
@@ -261,7 +261,7 @@ func Parse(args []string) (*Config, error) {
 		return nil, errWrongForestType(*forestTypeCmd)
 	}
 
-	cfg.quitAt = *quitAtCmd
+	cfg.quitAfter = int32(*quitAfterCmd)
 	cfg.noServe = *noServeCmd
 	cfg.serve = *serve
 
