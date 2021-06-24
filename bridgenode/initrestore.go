@@ -67,6 +67,9 @@ func InitBridgeNodeState(
 		}
 	}
 
+	if cfg.quitAfter < 1 { // quitafter not assigned, go to tip
+		cfg.quitAfter = knownTipHeight
+	}
 	if cfg.quitAfter > knownTipHeight { // quit after too high, after the end
 		err = fmt.Errorf("Quitafter %d after known tip of %d",
 			cfg.quitAfter, knownTipHeight)
@@ -74,10 +77,6 @@ func InitBridgeNodeState(
 	if cfg.quitAfter <= height { // quit after too low, already past that
 		err = fmt.Errorf("Quitafter %d not after saved height of %d",
 			cfg.quitAfter, height)
-	}
-
-	if cfg.quitAfter < 1 { // quitafter not assigned, go to tip
-		cfg.quitAfter = knownTipHeight
 	}
 
 	return

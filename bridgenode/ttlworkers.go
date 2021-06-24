@@ -117,7 +117,6 @@ func BNRTTLSpliter(
 				lub.spentTxos = append(lub.spentTxos, mI)
 			}
 		}
-		fmt.Printf("sending split block h %d wbh %d\n", bnr.Height, wb.createHeight)
 		// done with block, send out split data to the two workers
 		writeBlockChan <- wb
 		lookupChan <- lub
@@ -140,17 +139,13 @@ func TxidSortWriterWorker(
 			// fmt.Printf("TxidSortWriterWorker finished at height %d\n", wb.createHeight)
 			break
 		}
-
 		// first write the current start offset, then increment it for next time
 		// fmt.Printf("write h %d startOffset %d\t", height, startOffset)
 		err := binary.Write(txidOffsetFile, binary.BigEndian, startOffset)
 		if err != nil {
 			panic(err)
 		}
-
 		startOffset += int64(len(wb.mTxids))
-		fmt.Printf("startOffset now %d\n", startOffset)
-
 		sortTxids(wb.mTxids)
 		for _, mt := range wb.mTxids {
 			// fmt.Printf("wrote txid %x p %d\n", mt.txid[:6], mt.startsAt)
@@ -230,11 +225,6 @@ func TTLLookupWorker(
 		}
 		ttlResultChan <- resultBlock
 	}
-	// lookup worker has final access & closes the files
-	txidLen, _ := txidFile.Seek(0, 2)
-	txidOffsetLen, _ := txidOffsetFile.Seek(0, 2)
-	fmt.Printf("Closing txid files.  Txid len %d, txid offset len %d\n",
-		txidLen, txidOffsetLen)
 
 	err := txidFile.Close()
 	if err != nil {
