@@ -29,13 +29,22 @@ func BNRTTLSpliter(
 		panic(err)
 	}
 
-	miniTxidChan := make(chan []miniTx, 10)
+	startOffset, err := txidFile.Seek(0, 2)
+	if err != nil {
+		panic(err)
+	}
+	startOffset >>= 3 // divide by 8 to get the offset in miniTxids
+
+	writeBlockChan := make(chan ttlWriteBlock, 10)
 	lookupChan := make(chan ttlLookupBlock, 10)
 	goChan := make(chan bool, 10)
 
-	go TxidSortWriterWorker(miniTxidChan, goChan, txidFile, txidOffsetFile)
+	go TxidSortWriterWorker(
+		writeBlockChan, goChan, startOffset, txidFile, txidOffsetFile)
+
 	// TTLLookupWorker needs to send the final data to the flatFileWorker
-	go TTLLookupWorker(lookupChan, ttlResultChan, goChan, txidFile, txidOffsetFile)
+	go TTLLookupWorker(
+		lookupChan, ttlResultChan, goChan, txidFile, txidOffsetFile)
 
 	for {
 		bnr, open := <-bnrChan
@@ -44,13 +53,16 @@ func BNRTTLSpliter(
 		}
 		var skippedTxoInBlock uint16
 		var lub ttlLookupBlock
+		var wb ttlWriteBlock
 		var inskippos, outskippos, outputInBlock, inputInBlock uint32
 		var skipOutputs, skipInputs bool
 		inskipMax := uint32(len(bnr.inskip))
 		outskipMax := uint32(len(bnr.outskip))
 		lub.destroyHeight = bnr.Height
 		transactions := bnr.Blk.Transactions()
-		miniTxSlice := make([]miniTx, len(transactions))
+
+		wb.createHeight = bnr.Height
+		wb.mTxids = make([]miniTx, len(transactions))
 
 		skipInputs = inskipMax > 0
 		skipOutputs = outskipMax > 0
@@ -58,8 +70,8 @@ func BNRTTLSpliter(
 		// iterate through the transactions in a block
 		for txInBlock, tx := range transactions {
 			// add txid and skipped position in block
-			miniTxSlice[txInBlock].txid = tx.Hash()
-			miniTxSlice[txInBlock].startsAt = skippedTxoInBlock
+			wb.mTxids[txInBlock].txid = tx.Hash()
+			wb.mTxids[txInBlock].startsAt = skippedTxoInBlock
 
 			// first add all the outputs in this tx, then range through the
 			// outputs and decrement them if they're on the skiplist
@@ -99,11 +111,12 @@ func BNRTTLSpliter(
 				lub.spentTxos = append(lub.spentTxos, mI)
 			}
 		}
+		fmt.Printf("sending split block h %d wbh %d\n", bnr.Height, wb.createHeight)
 		// done with block, send out split data to the two workers
-		miniTxidChan <- miniTxSlice
+		writeBlockChan <- wb
 		lookupChan <- lub
 	}
-	close(miniTxidChan)
+	close(writeBlockChan)
 	close(lookupChan)
 }
 
@@ -111,18 +124,17 @@ func BNRTTLSpliter(
 // into a flat file (also writes the offsets files.  The offset file
 // doesn't describe byte offsets, but rather 8 byte miniTxids
 func TxidSortWriterWorker(
-	tChan chan []miniTx, goChan chan bool, mtxs, txidOffsetFile io.Writer) {
-	var startOffset int64 // starting byte offset of current block
-	var height int32
+	tChan chan ttlWriteBlock, goChan chan bool, startOffset int64,
+	miniTxidFile, txidOffsetFile io.Writer) {
 
 	// sort then write.
 	for {
-		miniTxSlice, open := <-tChan
+		wb, open := <-tChan
 		if !open {
-			fmt.Printf("TxidSortWriterWorker finished at height %d\n", height)
+			// fmt.Printf("TxidSortWriterWorker finished at height %d\n", wb.createHeight)
 			break
 		}
-		height++
+
 		// first write the current start offset, then increment it for next time
 		// fmt.Printf("write h %d startOffset %d\t", height, startOffset)
 		err := binary.Write(txidOffsetFile, binary.BigEndian, startOffset)
@@ -130,12 +142,13 @@ func TxidSortWriterWorker(
 			panic(err)
 		}
 
-		startOffset += int64(len(miniTxSlice))
+		startOffset += int64(len(wb.mTxids))
+		fmt.Printf("startOffset now %d\n", startOffset)
 
-		sortTxids(miniTxSlice)
-		for _, mt := range miniTxSlice {
+		sortTxids(wb.mTxids)
+		for _, mt := range wb.mTxids {
 			// fmt.Printf("wrote txid %x p %d\n", mt.txid[:6], mt.startsAt)
-			err := mt.serialize(mtxs)
+			err := mt.serialize(miniTxidFile)
 			if err != nil {
 				fmt.Printf("miniTx write error: %s\n", err.Error())
 			}
@@ -155,7 +168,7 @@ func TxidSortWriterWorker(
 // TTL lookup worker after its done writing to its files
 func TTLLookupWorker(
 	lChan chan ttlLookupBlock, ttlResultChan chan ttlResultBlock, goChan chan bool,
-	txidFile, txidOffsetFile io.ReaderAt) {
+	txidFile, txidOffsetFile *os.File) {
 	var seekHeight int32
 	var heightOffset, nextOffset int64
 	var startOffsetBytes, nextOffsetBytes [8]byte
@@ -210,6 +223,20 @@ func TTLLookupWorker(
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 		}
 		ttlResultChan <- resultBlock
+	}
+	// lookup worker has final access & closes the files
+	txidLen, _ := txidFile.Seek(0, 2)
+	txidOffsetLen, _ := txidOffsetFile.Seek(0, 2)
+	fmt.Printf("Closing txid files.  Txid len %d, txid offset len %d\n",
+		txidLen, txidOffsetLen)
+
+	err := txidFile.Close()
+	if err != nil {
+		panic(err)
+	}
+	err = txidOffsetFile.Close()
+	if err != nil {
+		panic(err)
 	}
 }
 

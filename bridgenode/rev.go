@@ -94,7 +94,7 @@ func BlockAndRevReader(
 			}
 		}
 	}
-	fmt.Printf("finished reading blocks, last height %d\n", finishedHeight-1)
+	fmt.Printf("finished reading blocks, last height %d\n", finishedHeight)
 	close(aChan)
 	close(bChan)
 }

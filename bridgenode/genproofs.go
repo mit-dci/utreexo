@@ -110,8 +110,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if !open { // channel is closed by BlockAndRevReader & empty, we're done
 			break
 		}
-		finishedHeight = bnr.Height
-		fmt.Printf("read height %d from block %s\n", finishedHeight, bnr.Blk.Hash().String())
+
 		if bnr.Blk == nil {
 			fmt.Print("h %d empty block ", bnr.Height)
 			panic("empty")
@@ -141,10 +140,11 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if err != nil {
 			return err
 		}
-
-		// if height%1000 == 0 {
-		fmt.Printf("Finished block %d of max %d\n", bnr.Height, cfg.quitAfter)
-		// }
+		finishedHeight = bnr.Height
+		if finishedHeight%1000 == 0 {
+			fmt.Printf("Finished block %d of max %d\n",
+				finishedHeight, cfg.quitAfter)
+		}
 	}
 
 	// Wait for the file workers to finish
@@ -156,7 +156,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		panic(err)
 	}
 
-	fmt.Printf("Done writing. Height %d Forest: %s", finishedHeight, forest.ToString())
+	fmt.Printf("Done writing. Height %d Forest: %s",
+		finishedHeight, forest.ToString())
 
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true

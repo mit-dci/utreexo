@@ -44,7 +44,13 @@ down further if needed.
 
 */
 
-// ttlBlock is the data from a block about txo creation and deletion
+// ttlWriteBlock is data about the creation of txids (& their position) in a block
+type ttlWriteBlock struct {
+	createHeight int32    // height of this block, creating txos
+	mTxids       []miniTx // one for tx
+}
+
+// ttlLookupBlock is the data from a block about txo creation and deletion
 // needed for TTL calculations
 type ttlLookupBlock struct {
 	destroyHeight int32    // height of this block, destroying the txos
