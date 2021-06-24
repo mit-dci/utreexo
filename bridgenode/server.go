@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/mit-dci/utreexo/util"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 func Start(cfg *Config, sig chan bool) error {
@@ -69,21 +67,6 @@ func ArchiveServer(cfg *Config, sig chan bool) error {
 	if !util.HasAccess(cfg.BlockDir) {
 		return errNoDataDir(cfg.BlockDir)
 	}
-
-	// TODO ****** server shouldn't need levelDB access, fix this
-	// Open leveldb
-	o := opt.Options{
-		CompactionTableSizeMultiplier: 8,
-		Compression:                   opt.NoCompression,
-	}
-	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.TtlDir, &o)
-	if err != nil {
-		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
-		return err
-	}
-	defer lvdb.Close()
-	// **********************************
 
 	// Init forest and variables. Resumes if the data directory exists
 	maxHeight, err := restoreHeight(cfg)

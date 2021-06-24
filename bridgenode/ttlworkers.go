@@ -35,6 +35,12 @@ func BNRTTLSpliter(
 	}
 	startOffset >>= 3 // divide by 8 to get the offset in miniTxids
 
+	// seek to the end of the offset file as TxidSortWriterWorker will start
+	// appending to it
+	_, err = txidOffsetFile.Seek(0, 2)
+	if err != nil {
+		panic(err)
+	}
 	writeBlockChan := make(chan ttlWriteBlock, 10)
 	lookupChan := make(chan ttlLookupBlock, 10)
 	goChan := make(chan bool, 10)
