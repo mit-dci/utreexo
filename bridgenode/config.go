@@ -275,6 +275,11 @@ func Parse(args []string) (*Config, error) {
 	cfg.TraceProf = *traceCmd
 	cfg.ProfServer = *profServerCmd
 	cfg.memTTLdb = *memTTLdb
+
+	// If allInMemTTLdb flag was given, the ttldb has to be kept in ram
+	if *allInMemTTLdb {
+		cfg.memTTLdb = true
+	}
 	cfg.allInMemTTLdb = *allInMemTTLdb
 
 	switch *forestTypeCmd {
