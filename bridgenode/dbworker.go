@@ -314,6 +314,8 @@ func (mdb *MemTTLdb) Flush() error {
 		mdb.flushMax += (mdb.flushMax / 10)
 	}
 
+	// make new map and force gc to free the old map
+	mdb.cache = make(map[[36]byte]*cachedTTLIdx)
 	fmt.Println("Flushed ttldb cache", mdb.memUsage, len(mdb.cache))
 	return nil
 }
