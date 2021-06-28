@@ -58,7 +58,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	}
 
 	donetime := time.Now()
-	f.TimeInProve += donetime.Sub(starttime)
+	f.timeInProve += donetime.Sub(starttime)
 	return pr, nil
 }
 
@@ -177,8 +177,12 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	copy(sortedTargets, bp.Targets)
 	sortUint64s(sortedTargets)
 
-	proofPositions, _ := ProofPositions(sortedTargets, f.numLeaves, f.rows)
-	targetsAndProof := mergeSortedSlices(proofPositions, sortedTargets)
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	ProofPositions(sortedTargets, f.numLeaves, f.rows, &positionList.list)
+	targetsAndProof := mergeSortedSlices(positionList.list, sortedTargets)
+
 	bp.Proof = make([]Hash, len(targetsAndProof))
 	for i, proofPos := range targetsAndProof {
 		bp.Proof[i] = f.data.read(proofPos)
@@ -189,7 +193,7 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	}
 
 	donetime := time.Now()
-	f.TimeInProve += donetime.Sub(starttime)
+	f.timeInProve += donetime.Sub(starttime)
 	return bp, nil
 }
 

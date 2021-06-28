@@ -7,7 +7,16 @@ import (
 	"math/rand"
 )
 
-// Hash :
+var (
+	// empty is needed as go initializes an array as all 0s. Used to compare
+	// if read 32 byte slices were empty.
+	empty [32]byte
+)
+
+// MiniHash is the first 12 bytes of a sha256 hash
+type MiniHash [12]byte
+
+// Hash is the 32 bytes of a sha256 hash
 type Hash [32]byte
 
 // Prefix for printfs
@@ -15,16 +24,13 @@ func (h Hash) Prefix() []byte {
 	return h[:4]
 }
 
-// Mini :
+// Mini takes the first 12 slices of a hash and outputs a MiniHash
 func (h Hash) Mini() (m MiniHash) {
 	copy(m[:], h[:12])
 	return
 }
 
-// MiniHash :
-type MiniHash [12]byte
-
-// HashFromString :
+// HashFromString takes a string and hashes with sha256
 func HashFromString(s string) Hash {
 	return sha256.Sum256([]byte(s))
 }
@@ -35,7 +41,8 @@ type arrow struct {
 	collapse bool
 }
 
-// Node :
+// node is an element in the utreexo tree and is represented by a position
+// and a hash
 type node struct {
 	Pos uint64
 	Val Hash
@@ -53,9 +60,9 @@ type simLeaf struct {
 	duration int32
 }
 
-// Parent gets you the merkle parent.  So far no committing to height.
-// if the left child is zero it should crash...
+// parentHash gets you the merkle parent of two children hashes.
 func parentHash(l, r Hash) Hash {
+	// TODO So far no committing to height.
 	var empty Hash
 	if l == empty || r == empty {
 		panic("got an empty leaf here. ")
@@ -63,9 +70,8 @@ func parentHash(l, r Hash) Hash {
 	return sha512.Sum512_256(append(l[:], r[:]...))
 }
 
-// SimChain is for testing; it spits out "blocks" of adds and deletes
-type SimChain struct {
-	// ttlMap is when the hashes get removed
+// simChain is for testing; it spits out "blocks" of adds and deletes
+type simChain struct {
 	ttlSlices    [][]Hash
 	blockHeight  int32
 	leafCounter  uint64
@@ -73,9 +79,9 @@ type SimChain struct {
 	lookahead    int32
 }
 
-// NewSimChain :
-func NewSimChain(duration uint32) *SimChain {
-	var s SimChain
+// newSimChain initializes and returns a simchain
+func newSimChain(duration uint32) *simChain {
+	var s simChain
 	s.blockHeight = -1
 	s.durationMask = duration
 	s.ttlSlices = make([][]Hash, s.durationMask+1)
@@ -83,7 +89,7 @@ func NewSimChain(duration uint32) *SimChain {
 }
 
 // BackOne takes the output of NextBlock and undoes the block
-func (s *SimChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
+func (s *simChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 
 	// push in the deleted hashes on the left, trim the rightmost
 	s.ttlSlices =
@@ -106,7 +112,7 @@ func (s *SimChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 	s.blockHeight--
 }
 
-func (s *SimChain) ttlString() string {
+func (s *simChain) ttlString() string {
 	x := "-------------\n"
 	for i, d := range s.ttlSlices {
 		x += fmt.Sprintf("%d: ", i)
@@ -119,8 +125,9 @@ func (s *SimChain) ttlString() string {
 	return x
 }
 
-// NextBlock :
-func (s *SimChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
+// NextBlock outputs a new simulation block given the additions for the block
+// to be outputed
+func (s *simChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	s.blockHeight++
 	fmt.Printf("blockHeight %d\n", s.blockHeight)
 

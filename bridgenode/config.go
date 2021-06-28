@@ -2,6 +2,7 @@ package bridgenode
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -41,10 +42,12 @@ var (
 		`Set a custom bridgenode datadir. Usage: "-bridgedir='path/to/directory"`)
 	forestTypeCmd = argCmd.String("forest", "disk",
 		`Set a forest type to use (cow, ram, disk, cache). Usage: "-forest=cow"`)
-	cowMaxCache = argCmd.Int("cowmaxcache", 500,
-		`how many treetables to cache with copy-on-write forest`)
 	quitAfterCmd = argCmd.Int("quitafter", -1,
 		`quit generating proofs after the given block height. (meant for testing)`)
+	cowMaxCache = argCmd.Int("cowmaxcache", 4000,
+		`how much memory to use in MB for the copy-on-write forest`)
+	memTTL = argCmd.Bool("memttl", false,
+		`keep the ttls in memory instead of on disk. Uses lots of ram.`)
 	serve = argCmd.Bool("serve", false,
 		`immediately start server without building or checking proof data`)
 	noServeCmd = argCmd.Bool("noserve", false,
@@ -55,6 +58,8 @@ var (
 		`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 	memProfCmd = argCmd.String("memprof", "",
 		`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
+	profServerCmd = argCmd.String("profserver", "",
+		`Enable pprof server. Usage: 'profserver='port'`)
 )
 
 // utreexo home directory
@@ -131,12 +136,24 @@ func initUtreeDir(basePath string) utreeDir {
 }
 
 // MakePaths makes the necessary paths for all files in a given network
-func makePaths(dir utreeDir) {
-	os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
-	os.MkdirAll(dir.ProofDir.base, os.ModePerm)
-	os.MkdirAll(dir.TtlDir, os.ModePerm)
-	os.MkdirAll(dir.ForestDir.base, os.ModePerm)
-	os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
+func makePaths(dir utreeDir) error {
+	err := os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.ProofDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.ForestDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	return nil
 }
 
 type forestType int
@@ -177,6 +194,9 @@ type Config struct {
 	// how much cache to allow for cowforest
 	cowMaxCache int
 
+	// keep ttls in memory
+	memTTL bool
+
 	// just immidiately start serving what you have on disk
 	serve bool
 
@@ -191,6 +211,9 @@ type Config struct {
 
 	// enable memory profiling
 	MemProf string
+
+	// enable profiling http server
+	ProfServer string
 }
 
 // Parse parses the command line arguments and inits the server Config
@@ -240,12 +263,16 @@ func Parse(args []string) (*Config, error) {
 		return nil, errInvalidNetwork(*netCmd)
 	}
 
-	makePaths(cfg.UtreeDir)
-
+	err := makePaths(cfg.UtreeDir)
+	if err != nil {
+		return nil, err
+	}
 	// set profiling
 	cfg.CpuProf = *cpuProfCmd
 	cfg.MemProf = *memProfCmd
 	cfg.TraceProf = *traceCmd
+	cfg.ProfServer = *profServerCmd
+	cfg.memTTL = *memTTL
 
 	switch *forestTypeCmd {
 	case "disk":

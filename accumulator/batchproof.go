@@ -7,33 +7,43 @@ import (
 	"io"
 )
 
-// BatchProof :
+// BatchProof is the inclusion-proof for multiple leaves.
 type BatchProof struct {
+	// Targets are the ist of leaf locations to delete. These are the bottommost leaves.
+	// With the tree below, the Targets can only consist of one of these: 00, 01, 02, 03
+	//
+	// 06
+	// |-------\
+	// 04      05
+	// |---\   |---\
+	// 00  01  02  03
 	Targets []uint64
-	Proof   []Hash
-	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
-	// the position of the hashes is implied / computable from the leaf positions
+
+	// All the nodes in the tree that are needed to hash up to the root of
+	// the tree. If Targets are [00, 01], then Proof would be [00, 01, 05].
+	// TODO: Remove targets from the proof as it is redundant.
+	//
+	// 06
+	// |-------\
+	// 04      05
+	// |---\   |---\
+	// 00  01  02  03
+	Proof []Hash
 }
 
-/*
-Batchproof serialization is:
-4bytes numTargets
-4bytes numHashes
-[]Targets (8 bytes each)
-[]Hashes (32 bytes each)
-*/
-
-// Serialize a batchproof to a writer.
+// Serialize serializes a batchproof to a writer.
 func (bp *BatchProof) Serialize(w io.Writer) (err error) {
+	// Batchproof serialization is, in order:
+	// 4bytes numTargets
+	// 4bytes numHashes
+	// []Targets (8 bytes each)
+	// []Hashes (32 bytes each)
+
 	// first write the number of targets (4 byte uint32)
 	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Targets)))
 	if err != nil {
 		return err
 	}
-	// if there are no targets, finish early & don't write proofs
-	// if len(bp.Targets) == 0 {
-	// return
-	// }
 	// write out number of hashes in the proof
 	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Proof)))
 	if err != nil {
@@ -43,7 +53,7 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	// write out each target
 	for _, t := range bp.Targets {
 		// there's no need for these to be 64 bit for the next few decades...
-		err = binary.Write(w, binary.BigEndian, t)
+		err = binary.Write(w, binary.BigEndian, uint64(t))
 		if err != nil {
 			return
 		}
@@ -90,18 +100,15 @@ func (bp *BatchProof) SerializeBytes() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// TODO: could make this more efficient by not encoding as much empty stuff
-
+// SerializeSize returns the number of bytes it would take to serialize
+// the BatchProof.
 func (bp *BatchProof) SerializeSize() int {
-	// empty batchProofs are 4 bytes
-	// if len(bp.Targets) == 0 {
-	// 	return 4
-	// }
 	// 8B for numTargets and numHashes, 8B per target, 32B per hash
+	// TODO: could make this more efficient by not encoding as much empty stuff
 	return 8 + (8 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
 }
 
-// Deserialize gives a block proof back from the serialized bytes
+// Deserialize gives a BatchProof back from a reader.
 func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 	var numTargets, numHashes uint32
 	err = binary.Read(r, binary.BigEndian, &numTargets)
@@ -220,6 +227,16 @@ func (bp *BatchProof) ToString() string {
 	return s
 }
 
+// miniTree is a tree of height 1 that holds a parent and its children along with
+// metadata.
+type miniTree struct {
+	tree       uint8
+	branchLen  uint8
+	parent     node
+	leftChild  node
+	rightChild node
+}
+
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
 
@@ -232,7 +249,7 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// cached should be a function that fetches nodes from the pollard and
 	// indicates whether they exist or not, this is only useful for the pollard
 	// and nil should be passed for the forest.
-	cached func(pos uint64) (bool, Hash)) (bool, [][3]node, []node) {
+	cached func(pos uint64) (bool, Hash)) (bool, [][]miniTree, []node) {
 	if len(bp.Targets) == 0 {
 		return true, nil, nil
 	}
@@ -247,11 +264,13 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	}
 
 	rows := treeRows(numLeaves)
-	proofPositions, computablePositions :=
-		ProofPositions(targets, numLeaves, rows)
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	ProofPositions(targets, numLeaves, rows, &positionList.list)
 
 	// The proof should have as many hashes as there are proof positions.
-	if len(proofPositions)+len(bp.Targets) != len(bp.Proof) {
+	if len(positionList.list)+len(bp.Targets) != len(bp.Proof) {
 		return false, nil, nil
 	}
 
@@ -261,16 +280,16 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// compared to the actual roots at the end.
 	targetNodes := make([]node, 0, len(targets)*int(rows))
 	rootCandidates := make([]node, 0, len(roots))
-	// trees is a slice of 3-Tuples, each tuple represents a parent and its children.
-	// tuple[0] is the parent, tuple[1] is the left child and tuple[2]
-	// is the right child.
-	// trees holds the entire proof tree of the batchproof in this way,
-	// sorted by the tuple[0].
-	trees := make([][3]node, 0, len(computablePositions))
+
+	// trees holds the entire proof tree of the batchproof. MiniTrees are
+	// grouped by which root they are a part of. These miniTrees are then
+	// also sorted by the parent's position in ascending order.
+	trees := make([][]miniTree, len(roots))
+
 	// initialise the targetNodes for row 0.
 	// TODO: this would be more straight forward if bp.Proofs wouldn't
 	// contain the targets
-	proofHashes := make([]Hash, 0, len(proofPositions))
+	proofHashes := make([]Hash, 0, len(positionList.list))
 	var targetsMatched uint64
 	for len(targets) > 0 {
 		// check if the target is the row 0 root.
@@ -279,15 +298,15 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 		if targets[0] == numLeaves-1 && numLeaves&1 == 1 {
 			// target is the row 0 root, append it to the root candidates.
 			rootCandidates = append(rootCandidates,
-				node{Val: roots[0], Pos: targets[0]})
+				node{Val: roots[len(roots)-1], Pos: targets[0]})
 			bp.Proof = bp.Proof[1:]
 			break
 		}
 
 		// `targets` might contain a target and its sibling or just the target, if
 		// only the target is present the sibling will be in `proofPositions`.
-		if uint64(len(proofPositions)) > targetsMatched &&
-			targets[0]^1 == proofPositions[targetsMatched] {
+		if uint64(len(positionList.list)) > targetsMatched &&
+			targets[0]^1 == positionList.list[targetsMatched] {
 			// the sibling of the target is included in the proof positions.
 			lr := targets[0] & 1
 			targetNodes = append(targetNodes, node{Pos: targets[0], Val: bp.Proof[lr]})
@@ -321,10 +340,10 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	for len(targetNodes) > 0 {
 		var target, proof node
 		target = targetNodes[0]
-		if len(proofPositions) > 0 && target.Pos^1 == proofPositions[0] {
+		if len(positionList.list) > 0 && target.Pos^1 == positionList.list[0] {
 			// target has a sibling in the proof positions, fetch proof
-			proof = node{Pos: proofPositions[0], Val: bp.Proof[0]}
-			proofPositions = proofPositions[1:]
+			proof = node{Pos: positionList.list[0], Val: bp.Proof[0]}
+			positionList.list = positionList.list[1:]
 			bp.Proof = bp.Proof[1:]
 			targetNodes = targetNodes[1:]
 		} else {
@@ -345,16 +364,46 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 			right, left = left, right
 		}
 
-		// get the hash of the parent from the cache or compute it
+		// check if the parent is cached
 		parentPos := parent(target.Pos, rows)
-		isParentCached, cachedHash := cached(parentPos)
-		hash := parentHash(left.Val, right.Val)
-		if isParentCached && hash != cachedHash {
-			// The hash did not match the cached hash
-			return false, nil, nil
+		isParentCached, cachedParent := cached(parentPos)
+
+		var hash Hash
+		// if parent is cached, also check if the left and right is cached.
+		// if they're all there, no need to re-hash for the parent.
+		if isParentCached {
+			isLeftCached, cachedLeft := cached(left.Pos)
+			isRightCached, cachedRight := cached(right.Pos)
+
+			if isRightCached && isLeftCached {
+				if left.Val == cachedLeft &&
+					right.Val == cachedRight {
+					hash = cachedParent
+				} else {
+					// The left and right did not match the cached
+					// left and right.
+					return false, nil, nil
+				}
+			} else {
+				hash = parentHash(left.Val, right.Val)
+				if hash != cachedParent {
+					// The calculated hash did not match the cached parent.
+					return false, nil, nil
+				}
+			}
+		} else {
+			hash = parentHash(left.Val, right.Val)
 		}
 
-		trees = append(trees, [3]node{{Val: hash, Pos: parentPos}, left, right})
+		// sort the miniTrees by which tree they are in
+		tree, branchLen, _ := detectOffset(parentPos, numLeaves)
+		trees[tree] = append(trees[tree], miniTree{
+			tree:       tree,
+			branchLen:  branchLen,
+			parent:     node{Val: hash, Pos: parentPos},
+			leftChild:  left,
+			rightChild: right,
+		})
 
 		row := detectRow(parentPos, rows)
 		if numLeaves&(1<<row) > 0 && parentPos == rootPosition(numLeaves, row, rows) {
@@ -375,9 +424,9 @@ func verifyBatchProof(bp BatchProof, roots []Hash, numLeaves uint64,
 	// holds a subset of the roots
 	// we count the roots that match in order.
 	rootMatches := 0
-	for _, root := range roots {
+	for i, _ := range roots {
 		if len(rootCandidates) > rootMatches &&
-			root == rootCandidates[rootMatches].Val {
+			roots[len(roots)-(i+1)] == rootCandidates[rootMatches].Val {
 			rootMatches++
 		}
 	}
@@ -410,15 +459,19 @@ func (bp *BatchProof) Reconstruct(
 	targets := make([]uint64, len(bp.Targets))
 	copy(targets, bp.Targets)
 	sortUint64s(targets)
-	proofPositions, _ := ProofPositions(targets, numleaves, forestRows)
-	proofPositions = mergeSortedSlices(targets, proofPositions)
 
-	if len(proofPositions) != len(bp.Proof) {
+	positionList := NewPositionList()
+	defer positionList.Free()
+
+	ProofPositions(targets, numleaves, forestRows, &positionList.list)
+	positionList.list = mergeSortedSlices(targets, positionList.list)
+
+	if len(positionList.list) != len(bp.Proof) {
 		return nil, fmt.Errorf("Reconstruct wants %d hashes, has %d",
-			len(proofPositions), len(bp.Proof))
+			len(positionList.list), len(bp.Proof))
 	}
 
-	for i, pos := range proofPositions {
+	for i, pos := range positionList.list {
 		proofTree[pos] = bp.Proof[i]
 	}
 

@@ -93,6 +93,20 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	proofChan := make(chan btcacc.UData, 10)           // from processing to flat writer
 	fileWait := new(sync.WaitGroup)
 
+	// Start memTTL worker if configured
+	/*
+		if cfg.memTTL {
+			err = memTTLdb.InitMemDB(cfg.UtreeDir.Ttldb,
+				cfg.allInMemTTLdb, &o)
+			if err != nil {
+				return err
+			}
+			go MemDbWorker(ttlResultChan, memTTLdb, &dbwg)
+		} else {
+			go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
+		}
+	*/
+
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
 	go BlockAndRevReader(
@@ -146,6 +160,16 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 				finishedHeight, cfg.quitAfter)
 		}
 	}
+
+	// Close ttldb
+	/*
+		if cfg.memTTL {
+			err := memTTLdb.Close()
+			if err != nil {
+				return err
+			}
+		}
+	*/
 
 	// Wait for the file workers to finish
 	fileWait.Wait()
