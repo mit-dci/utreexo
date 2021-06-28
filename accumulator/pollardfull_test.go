@@ -46,7 +46,7 @@ func pollardFullRandomRemember(blocks int32) error {
 		}
 
 		// verify proofs on rad node
-		err = p.IngestBatchProof(bp)
+		err = p.IngestBatchProof(delHashes, bp)
 		if err != nil {
 			return err
 		}

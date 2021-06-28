@@ -6,10 +6,10 @@ import (
 
 // IngestBatchProof populates the Pollard with all needed data to delete the
 // targets in the block proof
-func (p *Pollard) IngestBatchProof(bp BatchProof) error {
+func (p *Pollard) IngestBatchProof(toProve []Hash, bp BatchProof) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesForward()
-	ok, trees, roots := verifyBatchProof(bp, rootHashes, p.numLeaves,
+	ok, trees, roots := verifyBatchProof(toProve, bp, rootHashes, p.numLeaves,
 		// pass a closure that checks the pollard for cached nodes.
 		// returns true and the hash value of the node if it exists.
 		// returns false if the node does not exist or the hash value is empty.
