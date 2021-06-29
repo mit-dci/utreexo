@@ -49,7 +49,7 @@ offsetInRam values and writing to the correct 4-byte location in the proof file.
 type flatFileState struct {
 	heightOffsets         []int64
 	proofFile, offsetFile *os.File
-	currentHeight         int32 // height flatFileState is *finished* writing
+	finishedHeight        int32
 	currentOffset         int64
 	fileWait              *sync.WaitGroup
 }
@@ -110,7 +110,7 @@ func FlatFileWriter(
 		case ttlRes := <-ttlResultChan:
 			// if we get a ttlRes before the ud, wait for & write ud first, then
 			// deal with the ttlRes
-			for ttlRes.destroyHeight > ff.currentHeight {
+			for ttlRes.destroyHeight > ff.finishedHeight {
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
 				if err != nil {
@@ -140,22 +140,22 @@ func (ff *flatFileState) ffInit() error {
 	if offsetFileSize > 0 {
 		// offsetFile already exists so read the whole thing and send over the
 		// channel to the ttl worker.
-		maxHeight := int32(offsetFileSize / 8)
+		savedHeight := int32(offsetFileSize/8) - 1
+		// TODO I'm not really sure why theres a -1 there
 		// seek back to the file start / block "0"
 		_, err := ff.offsetFile.Seek(0, 0)
 		if err != nil {
 			return err
 		}
-		ff.heightOffsets = make([]int64, maxHeight)
-		// run through the file, read everything and push into the channel
-		for ff.currentHeight < maxHeight {
+		ff.heightOffsets = make([]int64, savedHeight)
+		for ff.finishedHeight < savedHeight {
 			err = binary.Read(ff.offsetFile, binary.BigEndian, &ff.currentOffset)
 			if err != nil {
 				fmt.Printf("couldn't populate in-ram offsets on startup")
 				return err
 			}
-			ff.heightOffsets[ff.currentHeight] = ff.currentOffset
-			ff.currentHeight++
+			ff.heightOffsets[ff.finishedHeight] = ff.currentOffset
+			ff.finishedHeight++
 		}
 
 		// set currentOffset to the end of the proof file
@@ -171,17 +171,34 @@ func (ff *flatFileState) ffInit() error {
 		// do the same with the in-ram slice
 		ff.heightOffsets = make([]int64, 1)
 		// does nothing.  We're *finished* writing block 0
-		ff.currentHeight = 0
+		ff.finishedHeight = 0
 	}
 
 	return nil
 }
 
 func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
+	// fmt.Printf("udata height %d flat file height %d\n",
+	// ud.Height, ff.finishedHeight)
+
 	// get the new block proof
 	// put offset in ram
 	// write to offset file so we can resume; offset file is only
 	// read on startup and always incremented so we shouldn't need to seek
+
+	// fmt.Printf("saving h %d to offset %d\n", ud.Height, ff.currentOffset)
+
+	if ud.Height == 112 {
+		var zbuf bytes.Buffer
+		ud.Serialize(&zbuf)
+		fmt.Printf("h %d\n%x\n", ud.Height, zbuf.Bytes())
+		fmt.Printf(ud.AccProof.ToString())
+		var zud btcacc.UData
+		err := zud.Deserialize(&zbuf)
+		if err != nil {
+			return err
+		}
+	}
 
 	// pre-allocated the needed buffer
 	udSize := ud.SerializeSize()
@@ -229,7 +246,12 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 
 	// 4B magic & 4B size comes first
 	ff.currentOffset += int64(ud.SerializeSize()) + 8
-	ff.currentHeight++
+	ff.finishedHeight++
+
+	if ud.Height != ff.finishedHeight {
+		fmt.Printf("WARNING udata height %d flat file height %d\n",
+			ud.Height, ff.finishedHeight)
+	}
 
 	ff.fileWait.Done()
 	return nil
@@ -243,7 +265,7 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if c.createHeight >= int32(len(ff.heightOffsets)) {
 			return fmt.Errorf("utxo created h %d idx in block %d destroyed h %d"+
 				" but max h %d cur h %d", c.createHeight, c.indexWithinBlock,
-				ttlRes.destroyHeight, len(ff.heightOffsets), ff.currentHeight)
+				ttlRes.destroyHeight, len(ff.heightOffsets), ff.finishedHeight)
 		}
 
 		// seek to the location of that txo's ttl value in the proof file

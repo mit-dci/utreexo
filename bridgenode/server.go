@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"runtime/trace"
 	"time"
 
+	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
 )
 
@@ -228,6 +230,19 @@ func serveBlocksWorker(UtreeDir utreeDir,
 		if err != nil {
 			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			break
+		}
+
+		if curHeight == 112 {
+			buf := bytes.NewBuffer(udb)
+			// deserialize to find errors
+			var ud btcacc.UData
+			err = ud.Deserialize(buf)
+			if err != nil {
+				fmt.Printf("serveBlocksWorker h %d deser error %s\n", curHeight, err.Error())
+				fmt.Printf("ttls: %v targets %s\n", ud.TxoTTLs, ud.AccProof.ToString())
+				fmt.Printf("udb: %x\n", udb)
+				break
+			}
 		}
 
 		blkbytes, err := GetBlockBytesFromFile(

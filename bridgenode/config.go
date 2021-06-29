@@ -153,6 +153,10 @@ func makePaths(dir utreeDir) error {
 	if err != nil {
 		return fmt.Errorf("init makePaths error %s")
 	}
+	err = os.MkdirAll(dir.TtlDir, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
 	return nil
 }
 
