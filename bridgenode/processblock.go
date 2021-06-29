@@ -73,6 +73,11 @@ func (mt *miniIn) hashToUint64() uint64 {
 		uint64(mt.hashprefix[1])<<32 | uint64(mt.hashprefix[0])<<40
 }
 
+func miniBytesToUint64(b [6]byte) uint64 {
+	return uint64(b[5]) | uint64(b[4])<<8 | uint64(b[3])<<16 |
+		uint64(b[2])<<24 | uint64(b[1])<<32 | uint64(b[0])<<40
+}
+
 type miniTx struct {
 	txid     *chainhash.Hash
 	startsAt uint16

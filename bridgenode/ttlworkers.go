@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // BNRTTLSplit gets a block&rev and splits the input and output sides.  it
@@ -245,46 +246,26 @@ func TTLLookupWorker(
 
 // actually start with a binary search, easier
 func binSearch(mi miniIn,
-	blkStart, blkEnd int64, mtxFile io.ReaderAt) (txoPosInBlock uint16) {
-
+	bottom, top int64, mtxFile io.ReaderAt) uint16 {
 	// fmt.Printf("looking for %x blkstart/end %d/%d\n", mi.hashprefix, blkStart, blkEnd)
-	var guessMi miniIn
+
 	var positionBytes [2]byte
-
-	top, bottom := blkEnd, blkStart
-	// start in the middle
-	guessPos := (top + bottom) / 2
-	_, _ = mtxFile.ReadAt(guessMi.hashprefix[:], guessPos*8)
-	// fmt.Printf("see %x at position %d (byte %d)\n",
-	// guessMi.hashprefix, guessPos, guessPos*8)
-
-	for guessMi.hashprefix != mi.hashprefix {
-		if guessMi.hashToUint64() > mi.hashToUint64() { // too high, lower top
-			if top == guessPos {
-				fmt.Printf("h %d %x idx %d", mi.height, mi.hashprefix, mi.idx)
-				panic("can't find it")
-			}
-			top = guessPos
-		} else { // must be too low (not equal), raise bottom
-			if bottom == guessPos {
-				fmt.Printf("h %d %x idx %d", mi.height, mi.hashprefix, mi.idx)
-				panic("can't find it")
-			}
-			bottom = guessPos
-		}
-
-		guessPos = (top + bottom) / 2 // pick a position halfway in the range
-		mtxFile.ReadAt(guessMi.hashprefix[:], guessPos*8)
-		// fmt.Printf("see %x at position %d (byte %d)\n",
-		// guessMi.hashprefix, guessPos, guessPos*8)
-	}
-	// fmt.Printf("found %x\n", mi.hashprefix)
-	// found it, read the next 2 bytes to get starting point of tx
-	_, _ = mtxFile.ReadAt(positionBytes[:], (guessPos*8)+6)
-	txoPosInBlock = binary.BigEndian.Uint16(positionBytes[:]) + mi.idx
+	width := int(top - bottom)
+	pos := sort.Search(
+		width, searchReaderFunc(int(bottom), mi.hashToUint64(), mtxFile))
+	_, _ = mtxFile.ReadAt(positionBytes[:], int64(pos*8)+6)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
-	return
+	return binary.BigEndian.Uint16(positionBytes[:]) + mi.idx
+}
+
+func searchReaderFunc(
+	startPosition int, lookFor64 uint64, mtxFile io.ReaderAt) func(int) bool {
+	return func(pos int) bool {
+		var miniTxidBytes [6]byte
+		mtxFile.ReadAt(miniTxidBytes[:], int64(pos+startPosition)*8)
+		return miniBytesToUint64(miniTxidBytes) < lookFor64
+	}
 }
 
 // interpSearch performs an interpolation search
