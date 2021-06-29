@@ -187,19 +187,6 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	// read on startup and always incremented so we shouldn't need to seek
 
 	// fmt.Printf("saving h %d to offset %d\n", ud.Height, ff.currentOffset)
-
-	if ud.Height == 112 {
-		var zbuf bytes.Buffer
-		ud.Serialize(&zbuf)
-		fmt.Printf("h %d\n%x\n", ud.Height, zbuf.Bytes())
-		fmt.Printf(ud.AccProof.ToString())
-		var zud btcacc.UData
-		err := zud.Deserialize(&zbuf)
-		if err != nil {
-			return err
-		}
-	}
-
 	// pre-allocated the needed buffer
 	udSize := ud.SerializeSize()
 	buf := make([]byte, udSize)

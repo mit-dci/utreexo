@@ -222,6 +222,13 @@ func TTLLookupWorker(
 			resultBlock.results[i].createHeight = stxo.height
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
+			// fmt.Printf("search from %d range %d\n", heightOffset,
+			// nextOffset-heightOffset)
+			if resultBlock.results[i].indexWithinBlock > uint16(nextOffset-heightOffset) {
+				fmt.Printf("WARNING got ttlidx %d in range %d\n",
+					resultBlock.results[i].indexWithinBlock, nextOffset-heightOffset)
+			}
+
 		}
 		ttlResultChan <- resultBlock
 	}
