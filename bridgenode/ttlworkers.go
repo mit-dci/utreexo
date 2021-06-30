@@ -212,6 +212,7 @@ func TTLLookupWorker(
 					panic(err)
 				}
 				nextOffset = int64(binary.BigEndian.Uint64(nextOffsetBytes[:]))
+				// if nextOffset==heightOffset{}
 				if nextOffset < heightOffset {
 					fmt.Printf("nextOffset %d < start %d byte %d\n",
 						nextOffset, heightOffset, stxo.height*8)
@@ -219,17 +220,16 @@ func TTLLookupWorker(
 				}
 				seekHeight = stxo.height
 			}
-
 			resultBlock.results[i].createHeight = stxo.height
+			// fmt.Printf("search for %x from %d range %d\n",
+			// stxo.hashprefix, heightOffset, nextOffset-heightOffset)
 			resultBlock.results[i].indexWithinBlock =
-				binSearch(stxo, heightOffset, nextOffset, txidFile)
-			// fmt.Printf("search from %d range %d\n", heightOffset,
-			// nextOffset-heightOffset)
-			if resultBlock.results[i].indexWithinBlock > uint16(nextOffset-heightOffset) {
-				fmt.Printf("WARNING got ttlidx %d in range %d\n",
-					resultBlock.results[i].indexWithinBlock, nextOffset-heightOffset)
-			}
-
+				binSearch(stxo, heightOffset, nextOffset, txidFile) + stxo.idx
+			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d ttlidx %d\n",
+			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
+			// lub.destroyHeight-resultBlock.results[i].createHeight,
+			// stxo.height,
+			// resultBlock.results[i].indexWithinBlock)
 		}
 		ttlResultChan <- resultBlock
 	}
@@ -250,21 +250,41 @@ func binSearch(mi miniIn,
 	// fmt.Printf("looking for %x blkstart/end %d/%d\n", mi.hashprefix, blkStart, blkEnd)
 
 	var positionBytes [2]byte
+	var pos int
 	width := int(top - bottom)
-	pos := sort.Search(
-		width, searchReaderFunc(int(bottom), mi.hashToUint64(), mtxFile))
+	if width == 0 {
+		pos = int(bottom)
+	} else {
+		pos = sort.Search(
+			width, searchReaderFunc(int(bottom), mi.hashprefix, mtxFile))
+		if pos == width {
+			fmt.Printf("WARNING can't find %x\n", mi.hashprefix)
+			panic("not there")
+		}
+	}
+
 	_, _ = mtxFile.ReadAt(positionBytes[:], int64(pos*8)+6)
+
+	// fmt.Printf("got match at position %d of %d\n", pos, width)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
 	return binary.BigEndian.Uint16(positionBytes[:]) + mi.idx
 }
 
+// using sort.Search is inefficient because - well first it's binary not
+// interpolation which works better here because its uniform hashes, but also
+// because it's trying to find the lowest index or first instance of a target,
+// but in this case we know the hashes are unique so we don't have keep going
+// once we find it.
+
 func searchReaderFunc(
-	startPosition int, lookFor64 uint64, mtxFile io.ReaderAt) func(int) bool {
+	startPosition int, lookFor [6]byte, mtxFile io.ReaderAt) func(int) bool {
 	return func(pos int) bool {
 		var miniTxidBytes [6]byte
 		mtxFile.ReadAt(miniTxidBytes[:], int64(pos+startPosition)*8)
-		return miniBytesToUint64(miniTxidBytes) < lookFor64
+		// fmt.Printf("looking for %x at pos %d idx %d byte position %d, found %x\n",
+		// lookFor, pos, pos+startPosition, int64(pos+startPosition)*8, miniTxidBytes)
+		return miniBytesToUint64(miniTxidBytes) >= miniBytesToUint64(lookFor)
 	}
 }
 
