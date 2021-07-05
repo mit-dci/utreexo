@@ -2,6 +2,8 @@ package csn
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
@@ -38,6 +40,15 @@ func RunIBD(cfg *Config, sig chan bool) error {
 			return err
 		}
 		trace.Start(f)
+	}
+	if cfg.ProfServer != "" {
+		go func() {
+			listenAddr := net.JoinHostPort("", cfg.ProfServer)
+			profileRedirect := http.RedirectHandler("/debug/pprof",
+				http.StatusSeeOther)
+			http.Handle("/", profileRedirect)
+			fmt.Printf("%v", http.ListenAndServe(listenAddr, nil))
+		}()
 	}
 
 	// check on disk for pre-existing state and load it
