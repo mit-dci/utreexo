@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"runtime/pprof"
-	"runtime/trace"
 	"syscall"
 
 	"github.com/mit-dci/utreexo/csn"
@@ -34,12 +33,6 @@ func handleIntSig(sig chan bool, cfg *csn.Config) {
 	signal.Notify(s, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
 		<-s
-		if cfg.CpuProf != "" {
-			pprof.StopCPUProfile()
-		}
-		if cfg.TraceProf != "" {
-			trace.Stop()
-		}
 		sig <- true
 	}()
 }

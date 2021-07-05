@@ -49,6 +49,8 @@ var (
 		`size of the look-ahead cache in blocks`)
 	quitafter = argCmd.Int("quitafter", -1,
 		`quit ibd after n blocks. (for testing)`)
+	profServerCmd = argCmd.String("profserver", "",
+		`Enable pprof server. Usage: 'profserver='port'`)
 )
 
 type Config struct {
@@ -77,6 +79,9 @@ type Config struct {
 
 	// enable memory profiling
 	MemProf string
+
+	// enable profiling http server
+	ProfServer string
 }
 
 func Parse(args []string) (*Config, error) {
@@ -113,6 +118,7 @@ func Parse(args []string) (*Config, error) {
 	cfg.CpuProf = *cpuProfCmd
 	cfg.MemProf = *memProfCmd
 	cfg.TraceProf = *traceCmd
+	cfg.ProfServer = *profServerCmd
 
 	return &cfg, nil
 }
