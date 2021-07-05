@@ -28,13 +28,6 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 		return fmt.Errorf("block proof mismatch")
 	}
 
-	// preallocating polNodes helps with garbage collection
-	polNodeCount := 0
-	for _, tree := range trees {
-		polNodeCount += len(tree)
-	}
-	polNodes := make([]polNode, polNodeCount*3)
-
 	// rootIdx and rootIdxBackwards is needed because p.populate()
 	// expects the roots in a reverse order. Thus the need for two
 	// indexes. TODO fix this to have only one index
@@ -49,7 +42,7 @@ func (p *Pollard) IngestBatchProof(bp BatchProof) error {
 		}
 		// populate the pollard
 		nodesAllocated += populate(rows, root.Pos, p.roots[(len(p.roots)-rootIdxBackwards)-1],
-			&trees[len(p.roots)-rootIdxBackwards-1], polNodes[nodesAllocated:])
+			&trees[len(p.roots)-rootIdxBackwards-1])
 	}
 
 	return nil
@@ -272,17 +265,17 @@ func nextNodes(curBranch, rows uint8, curNodes []*polNodeAndPos, trees []miniTre
 // Given a single miniTree and a single aunt (aka sibling of the miniTree.parent),
 // populateOne populates the niceces with the children of the tree with
 // the passed in polNodes.
-func populateOne(tree miniTree, node *polNode, polNodes []polNode) int {
+func populateOne(tree miniTree, node *polNode) int {
 	nodesAllocated := 0
 
 	if node.niece[0] == nil {
-		node.niece[0] = &polNodes[nodesAllocated]
+		node.niece[0] = &polNode{}
 		nodesAllocated++
 	}
 	node.niece[0].data = tree.leftChild.Val
 
 	if node.niece[1] == nil {
-		node.niece[1] = &polNodes[nodesAllocated]
+		node.niece[1] = &polNode{}
 		nodesAllocated++
 	}
 	node.niece[1].data = tree.rightChild.Val
@@ -295,7 +288,7 @@ func populateOne(tree miniTree, node *polNode, polNodes []polNode) int {
 // that we'll be populating into. Length of polNodes MUST match all the nodes that will be populated.
 //
 // populate returns how many polNodes have been populated.
-func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree, polNodes []polNode) int {
+func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree) int { //, polNodes []*polNode) int {
 	// If there's nothing to populate, return early
 	if len(*trees) <= 0 {
 		return 0
@@ -304,7 +297,7 @@ func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree, polNodes
 	nodesAllocated := 0
 
 	// treat root as special since it points to children not niceces. Populate these first.
-	nodesAllocated += populateOne((*trees)[len(*trees)-1], root, polNodes[nodesAllocated:])
+	nodesAllocated += populateOne((*trees)[len(*trees)-1], root)
 
 	// pop off root
 	*trees = (*trees)[:len(*trees)-1]
@@ -350,12 +343,12 @@ func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree, polNodes
 				left := (*trees)[len(*trees)-2]
 				nodeForLeft := curNodes[curNodeIdx]
 				curNodeIdx--
-				nodesAllocated += populateOne(left, nodeForLeft.node, polNodes[nodesAllocated:])
+				nodesAllocated += populateOne(left, nodeForLeft.node)
 
 				right := (*trees)[len(*trees)-1]
 				nodeForRight := curNodes[curNodeIdx]
 				curNodeIdx--
-				nodesAllocated += populateOne(right, nodeForRight.node, polNodes[nodesAllocated:])
+				nodesAllocated += populateOne(right, nodeForRight.node)
 
 				// pop off 2 since we just processed two
 				*trees = (*trees)[:len(*trees)-2]
@@ -366,7 +359,7 @@ func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree, polNodes
 			curNode := curNodes[curNodeIdx]
 
 			if curNode.pos == tree.parent.Pos^1 {
-				nodesAllocated += populateOne(tree, curNode.node, polNodes[nodesAllocated:])
+				nodesAllocated += populateOne(tree, curNode.node)
 				*trees = (*trees)[:len(*trees)-1]
 			}
 
