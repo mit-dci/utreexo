@@ -12,7 +12,7 @@ import (
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-func (c *Csn) IBDThread(sig chan bool, quitafter int) {
+func (c *Csn) IBDThread(cfg Config, sig chan bool) {
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
 	haltRequest := make(chan bool, 1)
@@ -21,7 +21,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 	// Makes it wait for flushing to disk
 	haltAccept := make(chan bool, 1)
 
-	go stopRunIBD(sig, haltRequest, haltAccept)
+	go stopRunIBD(cfg, sig, haltRequest, haltAccept)
 
 	// caching parameter. Keeps txos that are spent before than this many blocks
 	lookahead := int32(1000)
@@ -72,7 +72,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 
 		// quit after `quitafter` blocks if the -quitafter option is set
 		blockCount++
-		if quitafter > -1 && blockCount >= quitafter {
+		if cfg.quitafter > -1 && blockCount >= cfg.quitafter {
 			fmt.Println("quit after", quitafter, "blocks")
 			sig <- true
 			stop = true
