@@ -11,6 +11,10 @@ import (
 const (
 	sibSwap       = false
 	bridgeVerbose = false
+
+	// maxMapCount denotes how many deletes from a map there can be
+	// before a new map is created.
+	maxMapCount = 4000000
 )
 
 // A FullForest is the entire accumulator of the UTXO set. This is
@@ -63,6 +67,9 @@ type Forest struct {
 
 	// map from hashes to positions.
 	positionMap map[MiniHash]uint64
+
+	// mapFreeCount keeps track of how many deletions happened from a map
+	mapFreeCount int
 
 	/*
 	 * below are just for testing / benchmarking
@@ -366,6 +373,24 @@ func (f *Forest) cleanup(overshoot uint64) {
 	for p := f.numLeaves; p < f.numLeaves+overshoot; p++ {
 		// TODO this probably does nothing. or at least should.
 		delete(f.positionMap, f.data.read(p).Mini()) // clear position map
+
+	}
+	// increment per delete
+	f.mapFreeCount += int(overshoot)
+
+	// Make new map and copy over the contents of the old to a new map
+	// This needs to be done as Go maps don't shrink with deletes as of
+	// version 1.16.4.
+	//
+	// NOTE: If this changes in later Go versions, remove this.
+	if f.mapFreeCount > maxMapCount {
+		newPositionMap := make(map[MiniHash]uint64, len(f.positionMap))
+		for hash, pos := range f.positionMap {
+			newPositionMap[hash] = pos
+		}
+
+		f.positionMap = newPositionMap
+		f.mapFreeCount = 0
 	}
 }
 
