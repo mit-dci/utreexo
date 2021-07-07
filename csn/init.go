@@ -2,7 +2,10 @@ package csn
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 	"time"
@@ -25,19 +28,21 @@ func RunIBD(cfg *Config, sig chan bool) error {
 		}
 		pprof.StartCPUProfile(f)
 	}
-	if cfg.MemProf != "" {
-		f, err := os.Create(*memProfCmd)
-		if err != nil {
-			return err
-		}
-		pprof.WriteHeapProfile(f)
-	}
 	if cfg.TraceProf != "" {
 		f, err := os.Create(*traceCmd)
 		if err != nil {
 			return err
 		}
 		trace.Start(f)
+	}
+	if cfg.ProfServer != "" {
+		go func() {
+			listenAddr := net.JoinHostPort("", cfg.ProfServer)
+			profileRedirect := http.RedirectHandler("/debug/pprof",
+				http.StatusSeeOther)
+			http.Handle("/", profileRedirect)
+			fmt.Printf("%v", http.ListenAndServe(listenAddr, nil))
+		}()
 	}
 
 	// check on disk for pre-existing state and load it
@@ -110,7 +115,7 @@ func (c *Csn) Start(cfg *Config, height int32, path, proxyURL string, haltSig ch
 	c.remoteHost = cfg.remoteHost
 
 	// start client & connect
-	go c.IBDThread(haltSig, cfg.quitafter)
+	go c.IBDThread(*cfg, haltSig)
 
 	return c.TxChan, c.HeightChan, nil
 }
@@ -147,7 +152,7 @@ func initCSNState() (
 	return
 }
 
-func stopRunIBD(sig chan bool, stopGoing chan bool, done chan bool) {
+func stopRunIBD(cfg Config, sig chan bool, stopGoing chan bool, done chan bool) {
 	// Listen for SIGINT, SIGTERM, and SIGQUIT from the user
 	<-sig
 	pprof.StopCPUProfile()
@@ -170,5 +175,20 @@ func stopRunIBD(sig chan bool, stopGoing chan bool, done chan bool) {
 
 	// Wait until RunIBD() says it's ok to quit
 	<-done
+
+	if cfg.CpuProf != "" {
+		pprof.StopCPUProfile()
+	}
+	if cfg.TraceProf != "" {
+		trace.Stop()
+	}
+	if cfg.MemProf != "" {
+		f, err := os.Create(cfg.MemProf)
+		if err != nil {
+			fmt.Println(err)
+		}
+		runtime.GC()
+		pprof.WriteHeapProfile(f)
+	}
 	os.Exit(0)
 }

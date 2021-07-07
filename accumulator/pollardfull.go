@@ -38,9 +38,9 @@ func (p *Pollard) PosMapSanity() error {
 // TODO make interface to reduce code dupe
 
 // ProveBatch but for pollard.
-// Now getting really obvious that forest and pollard should both satisfy some
-// kind of utreexo-like interface.  And maybe forest shouldn't be called forest.
-// Anyway do that after this.
+//
+// NOTE: The order in which the hashes are given matter when verifying
+// (aka permutation matters).
 func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	var bp BatchProof
 	// skip everything if empty (should this be an error?
@@ -50,10 +50,6 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	if p.numLeaves < 2 {
 		return bp, nil
 	}
-
-	// for h, p := range f.positionMap {
-	// 	fmt.Printf("%x@%d ", h[:4], p)
-	// }
 
 	// first get all the leaf positions
 	// there shouldn't be any duplicates in hs, but if there are I guess
@@ -83,14 +79,18 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	// NOTE that this is a big deal -- we lose in-block positional information
 	// because of this sorting.  Does that hurt locality or performance?  My
 	// guess is no, but that's untested.
-	sortUint64s(bp.Targets)
+	sortedTargets := make([]uint64, len(bp.Targets))
+	copy(sortedTargets, bp.Targets)
+	sortUint64s(sortedTargets)
 
-	positionList := NewPositionList()
-	defer positionList.Free()
-	ProofPositions(bp.Targets, p.numLeaves, p.rows(), &positionList.list)
-	targetsAndProof := mergeSortedSlices(positionList.list, bp.Targets)
-	bp.Proof = make([]Hash, len(targetsAndProof))
-	for i, proofPos := range targetsAndProof {
+	proofPositions := NewPositionList()
+	defer proofPositions.Free()
+
+	// Get the positions of all the hashes that are needed to prove the targets
+	ProofPositions(sortedTargets, p.numLeaves, p.rows(), &proofPositions.list)
+
+	bp.Proof = make([]Hash, len(proofPositions.list))
+	for i, proofPos := range proofPositions.list {
 		bp.Proof[i] = p.read(proofPos)
 	}
 

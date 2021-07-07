@@ -33,6 +33,8 @@ github.com/kcalvinalvin/btcd v0.20.1-beta.0.20210202084407-63bae2d12e01/go.mod h
 github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23/go.mod h1:J+Gs4SYgM6CZQHDETBtE9HaSEkGmuNXF86RwHhHUvq4=
 github.com/mit-dci/utcd v0.21.0-beta.0.20210201215500-359f1ee1429a h1:RzhKLugFs87PMOHxrQUcvkqyuqerpd7bWaUKdxwKMLI=
 github.com/mit-dci/utcd v0.21.0-beta.0.20210201215500-359f1ee1429a/go.mod h1:t4zbDmIvP+nfkgR383HSMks64wA8cloaI7o3THoptXY=
+github.com/mit-dci/utcd v0.21.0-beta.0.20210622094436-95ee13404deb h1:Nbl8bHM+atyDLFj7/PtL/kEzS0Ivrli4XSmj9e+F9Zo=
+github.com/mit-dci/utcd v0.21.0-beta.0.20210622094436-95ee13404deb/go.mod h1:aD9kiI2TXv3Fri33fAgQhRmUBJ0WwkiUchFTWnLXNPs=
 github.com/mit-dci/utcutil v1.0.3-0.20210201144513-fb3ce8742498 h1:luTD6pTVYv5BMGuf+GkOCedIYZo9jMaA5USZULZCCvM=
 github.com/mit-dci/utcutil v1.0.3-0.20210201144513-fb3ce8742498/go.mod h1:ST9y+SCOD6G6J48CwoMwtmQ+ATLrDuwS7rfZWNrsEPg=
 github.com/mit-dci/utreexo v0.0.0-20210113220559-fe368b8feff3/go.mod h1:Fkwf5QjCAkJxTCWWARKviyBWIX4v2NRcFsd0f0eZZjs=
