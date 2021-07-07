@@ -147,6 +147,7 @@ func pollardRandomRemember(blocks int32) error {
 			}
 		}
 		fmt.Printf("\n")
+		p.GetTotalSize()
 	}
 
 	return nil
@@ -251,6 +252,7 @@ func TestCache(t *testing.T) {
 
 		// remove deleted leaves from the leaf map
 		for _, del := range delHashes {
+			fmt.Printf("del hash:%x\n", del.Mini())
 			delete(leaves, del)
 		}
 		// add new leaves to the leaf map
@@ -259,6 +261,12 @@ func TestCache(t *testing.T) {
 			leaves[leaf.Hash] = leaf
 		}
 
+		fmt.Println("root count:", len(p.roots))
+		for _, root := range p.roots {
+			fmt.Printf("root hash:%x\n", root.data.Mini())
+		}
+
+		fmt.Println("i:", i)
 		for hash, l := range leaves {
 			leafProof, err := f.ProveBatch([]Hash{hash})
 			if err != nil {
@@ -266,25 +274,63 @@ func TestCache(t *testing.T) {
 			}
 			pos := leafProof.Targets[0]
 
+			fmt.Printf("Proving pos %d with hash of %x\n", pos, hash.Mini())
+
 			fmt.Println(pos, l)
-			_, nsib, _, err := p.readPos(pos)
+			n, nsib, _, err := p.readPos(pos)
+			if err != nil {
+				t.Fatal("could not read leaf pos at", pos)
+			}
 
 			if pos == p.numLeaves-1 {
 				// roots are always cached
 				continue
 			}
 
+			// If the leaf wasn't marked to be remembered, check if the sibling is remembered.
+			// If the sibling is supposed to be remembered, it's ok to remember this leaf as it
+			// is the proof for the sibling.
+			if !l.Remember && n != nil {
+				// If the sibling exists, check if the sibling leaf was supposed to be remembered.
+				if nsib != nil {
+					sibling := leaves[nsib.data]
+					if !sibling.Remember || nsib.data == empty {
+						fmt.Println(p.ToString())
+						fmt.Println("nsib.niece[0]==nsib", nsib.niece[0] == nsib)
+						fmt.Println("sibling.Remember", sibling.Remember)
+						t.Fatal("leaf at", pos, "exists but it was added with remember=false")
+					}
+				} else {
+					// If the sibling does not exist, fail as this leaf should not be
+					// remembered.
+					fmt.Println(p.ToString())
+					fmt.Println("nsib", nsib)
+					fmt.Println("n", n)
+					fmt.Println("n.niece[0]", n.niece[0])
+					t.Fatal("leaf at", pos, "exists but was added with remember=false "+
+						"and its sibling isn't remembered")
+				}
+			}
+
 			siblingDoesNotExists := nsib == nil || nsib.data == empty || err != nil
 			if l.Remember && siblingDoesNotExists {
 				// the proof for l is not cached even though it should have been because it
 				// was added with remember=true.
+				fmt.Println(p.ToString())
 				t.Fatal("proof for leaf at", pos, "does not exist but it was added with remember=true")
 			} else if !l.Remember && !siblingDoesNotExists {
-				// the proof for l was cached even though it should not have been because it
-				// was added with remember = false.
-				fmt.Println(p.ToString())
-				t.Fatal("proof for leaf at", pos, "does exist but it was added with remember=false")
+				sibling := leaves[nsib.data]
+				if !sibling.Remember {
+
+					// the proof for l was cached even though it should not have been because it
+					// was added with remember = false.
+					fmt.Println(p.ToString())
+					t.Fatal("proof for leaf at", pos, "does exist but it was added with remember=false")
+
+				}
 			}
+			fmt.Println(p.ToString())
 		}
 	}
+	fmt.Println(p.ToString())
 }

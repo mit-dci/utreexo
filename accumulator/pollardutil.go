@@ -69,6 +69,26 @@ func (n *polNode) prune() {
 	}
 }
 
+func (n *polNode) GetSize(size int) int {
+	// n.niece[0] is set to itself to be remembered in addOne()
+	if n.niece[0] != nil {
+		// hash and two pointers
+		size += 32 + 16
+
+		if n.niece[0] != n {
+			n.niece[0].GetSize(size)
+		}
+	}
+	if n.niece[1] != nil {
+		// hash and two pointers
+		size += 32 + 16
+
+		n.niece[1].GetSize(size)
+	}
+
+	return size
+}
+
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
 // need their siblings so that the siblings' nieces can swap.
 // for a root, just say the root's sibling is itself and it should work.
@@ -185,4 +205,13 @@ func (p *Pollard) Deserialize(serialized []byte) error {
 	}
 
 	return nil
+}
+
+func (p *Pollard) GetTotalSize() {
+	size := 0
+	for _, root := range p.roots {
+		size += root.GetSize(size)
+	}
+
+	fmt.Println("GetTotalSize", size)
 }

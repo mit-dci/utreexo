@@ -127,8 +127,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	// new: create a new parent node, with the hash as data, and the old root / prev new node
 	// as nieces (not nieces though, children).
 	//
-	// For example a tree of five leaves would look like this. We can
-	// tell where all the roots are by looking at the binary representation
+	// For example a tree of five leaves would look like this. We can tell where all the roots are by looking at the binary representation
 	// of 5: 101.
 	//
 	// 12
@@ -157,6 +156,9 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		p.positionMap[add.Mini()] = p.numLeaves
 	}
 
+	fmt.Printf("Adding hash: %x remember:%t\n",
+		add.Mini(), remember)
+
 	// if add is forgetable, forget all the new nodes made
 	// loop until we find a zero; destroy roots until you make one
 	var h uint8
@@ -164,8 +166,34 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		// grab, pop, swap, hash, new
 		leftRoot := p.roots[len(p.roots)-1] // grab
 		p.roots = p.roots[:len(p.roots)-1]  // pop
-
-		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
+		// If we're not at bottom, just swap nieces
+		if h != 0 {
+			if leftRoot.niece[0] == leftRoot {
+				panic("")
+			}
+			if n.niece[0] == n {
+				panic("")
+			}
+			leftRoot.niece, n.niece = n.niece, leftRoot.niece // swap
+		} else {
+			// If we're at bottom (aka row 0), check if the leaf is
+			// supposed to be remembered.
+			if remember {
+				// Also remember the leftRoot (sibling) if this leaf is to be
+				// remembered. The sibling is needed as a proof for this leaf.
+				leftRoot.niece[0] = leftRoot
+			} else {
+				// Wether is polNode is supposed to be remembered is denoted by:
+				// polNode.niece[0] = polNode.
+				//
+				// If the leftRoot is supposed to be remembered, we also need
+				// to remember this leaf regardless of whether Remember is set
+				// to true or not.
+				if leftRoot.niece[0] == leftRoot {
+					n.niece[0] = n
+				}
+			}
+		}
 		nHash := parentHash(leftRoot.data, n.data)                 // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
 		p.hashesEver++
@@ -358,13 +386,34 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 
 	bhn.position = parent(s.to, p.rows())
 	// do the actual swap here
-	err = polSwap(a, asib, b, bsib)
-	if err != nil {
-		return nil, err
+	if row == 0 {
+		err = polSwap(a, asib, b, bsib)
+		if err != nil {
+			return nil, err
+		}
+
+		if a.niece[0] == a {
+			fmt.Println("a.niece[0] == a")
+		}
+		if asib.niece[0] == asib {
+			fmt.Println("asib.niece[0] == asib")
+		}
+		if b.niece[0] == b {
+			fmt.Println("b.niece[0] == b")
+		}
+		if bsib.niece[0] == bsib {
+			fmt.Println("bsib.niece[0] == bsib")
+		}
+	} else {
+		err = polSwap(a, asib, b, bsib)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
 		bhn = nil // we can't perform this hash as we don't know the children
 	}
+
 	return bhn, nil
 }
 
