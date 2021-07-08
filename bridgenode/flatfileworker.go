@@ -73,7 +73,7 @@ func FlatFileWriter(
 	}
 
 	ff.proofFile, err = os.OpenFile(
-		utreeDir.ProofDir.pFile, os.O_CREATE|os.O_WRONLY, 0600)
+		utreeDir.ProofDir.pFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -271,24 +271,26 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
 		loc := ff.heightOffsets[c.createHeight] + 16 + int64(c.indexWithinBlock*4)
 
-		if loc > 5420 && loc < 8548 {
-			fmt.Printf("write ttl %d to byte location %d\n",
-				ttlRes.destroyHeight-c.createHeight, loc)
-		}
+		// if loc > 5420 && loc < 8548 {
+		// fmt.Printf("write ttl %d to byte location %d\n",
+		// ttlRes.destroyHeight-c.createHeight, loc)
+		// }
 
 		// first, read the data there to make sure it's empty.
 		// If there's something already there, we messed up & should panic.
 		// TODO once everything works great can remove this
 
-		_, _ = ff.proofFile.ReadAt(readEmpty[:], loc)
+		_, err := ff.proofFile.ReadAt(readEmpty[:], loc)
+		if err != nil {
+			return err
+		}
 		if readEmpty != expectedEmpty {
-			return fmt.Errorf("writeTTLs Wanted to overwrite byte %d with %x"+
-				"but %x was already there", loc, ttlArr)
+			return fmt.Errorf("writeTTLs Wanted to overwrite byte %d with %x "+
+				"but %x was already there", loc, ttlArr, readEmpty)
 		}
 		// fmt.Printf("overwriting %x with %x\t", readEmpty, ttlArr)
 
-		_, err := ff.proofFile.WriteAt(ttlArr[:], loc)
-
+		_, err = ff.proofFile.WriteAt(ttlArr[:], loc)
 		if err != nil {
 			return err
 		}
