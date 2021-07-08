@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"runtime/pprof"
@@ -116,7 +117,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, fileWait)
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
-	fmt.Println("Building Proofs and ttldb...")
+	fmt.Println("Building Proofs and ttls...")
 
 	for {
 		// Receive txs from the asynchronous blk*.dat reader
@@ -160,16 +161,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 				finishedHeight, cfg.quitAfter)
 		}
 	}
-
-	// Close ttldb
-	/*
-		if cfg.memTTL {
-			err := memTTLdb.Close()
-			if err != nil {
-				return err
-			}
-		}
-	*/
 
 	// Wait for the file workers to finish
 	fileWait.Wait()
@@ -235,4 +226,31 @@ func stopBuildProofs(
 	// Wait until BuildProofs() or buildOffsetFile() says it's ok to exit
 	<-haltAccept
 	os.Exit(0)
+}
+
+// go through all the proofs and just try to deserialize them
+func VerifyProofs(cfg *Config) error {
+
+	for h := int32(1); h < cfg.quitAfter; h++ {
+		fmt.Printf("verify h %d\n", h)
+		udb, err := GetUDataBytesFromFile(cfg.UtreeDir.ProofDir, h)
+		if err != nil {
+			return fmt.Errorf("GetUDataBytesFromFile %s\n", err.Error())
+		}
+		// fmt.Printf("got udb %d bytes:\n%x\n", len(udb), udb)
+		buf := bytes.NewBuffer(udb)
+		// deserialize to find errors
+		var ud btcacc.UData
+		err = ud.Deserialize(buf)
+		if err != nil {
+			fmt.Printf("serveBlocksWorker h %d deser error %s\n", h, err.Error())
+			fmt.Printf("ttls: %v targets %s\n", ud.TxoTTLs, ud.AccProof.ToString())
+			fmt.Printf("udb: %x\n", udb)
+			return err
+		}
+		if len(ud.AccProof.Targets) != 0 {
+			fmt.Printf("h %d has proofs\n", h)
+		}
+	}
+	return nil
 }

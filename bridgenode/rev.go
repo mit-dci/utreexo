@@ -105,7 +105,7 @@ func BlockAndRevReader(
 func GetRawBlocksFromDisk(startAt int32, count int32, offsetFile *os.File,
 	blockDir string) (blocks []wire.MsgBlock, revs []RevBlock, err error) {
 	if startAt == 0 {
-		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		err = fmt.Errorf("GetRawBlocksFromDisk: Block 0 is not not a thing")
 		return
 	}
 	startAt--
@@ -245,7 +245,7 @@ func FetchBlockHeightFromBufDB(header [32]byte, db map[[32]byte]int32) (int32, e
 func GetBlockBytesFromFile(
 	height int32, offsetFileName string, blockDir string) (b []byte, err error) {
 	if height == 0 {
-		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		err = fmt.Errorf("GetBlockBytesFromFile: Block 0 is not not a thing")
 		return
 	}
 	height--

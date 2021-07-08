@@ -247,7 +247,7 @@ func restoreForest(cfg *Config) (
 // restoreHeight restores height from util.ForestLastSyncedBlockHeightFileName
 func restoreHeight(cfg *Config) (height int32, err error) {
 	// if there is a heightfile, get the height from that
-	// heightFile saves the last block that was written to ttldb
+	// heightFile saves the last block that was written to ttl files
 	if util.HasAccess(cfg.UtreeDir.ForestDir.forestLastSyncedBlockHeightFile) {
 		heightFile, err := os.OpenFile(
 			cfg.UtreeDir.ForestDir.forestLastSyncedBlockHeightFile,

@@ -153,7 +153,8 @@ func (c *Csn) putBlockInPollard(
 	err := ub.ProofSanity(nl, h)
 	if err != nil {
 		return fmt.Errorf(
-			"uData missing utxo data for block %d err: %e", ub.UtreexoData.Height, err)
+			"uData missing utxo data for block %d err: %s",
+			ub.UtreexoData.Height, err.Error())
 	}
 
 	// make slice of hashes from leafdata. These are the hash commitments
@@ -186,6 +187,7 @@ func (c *Csn) putBlockInPollard(
 	err = c.pollard.IngestBatchProof(delHashes, ub.UtreexoData.AccProof)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
+		fmt.Printf("proof %s\n", ub.UtreexoData.AccProof.ToString())
 		return err
 	}
 
