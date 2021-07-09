@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -10,9 +11,8 @@ import (
 	"runtime/trace"
 	"time"
 
+	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 func Start(cfg *Config, sig chan bool) error {
@@ -48,6 +48,11 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 	}
 
+	err := VerifyProofs(cfg)
+	if err != nil {
+		return err
+	}
+
 	if !cfg.noServe {
 		// serve when finished
 		err := ArchiveServer(cfg, sig)
@@ -72,21 +77,6 @@ func ArchiveServer(cfg *Config, sig chan bool) error {
 	if !util.HasAccess(cfg.BlockDir) {
 		return errNoDataDir(cfg.BlockDir)
 	}
-
-	// TODO ****** server shouldn't need levelDB access, fix this
-	// Open leveldb
-	o := opt.Options{
-		CompactionTableSizeMultiplier: 8,
-		Compression:                   opt.NoCompression,
-	}
-	lvdb, err := leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
-	if err != nil {
-		fmt.Printf("initialization error.  If your .blk and .dat files are ")
-		fmt.Printf("not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
-		return err
-	}
-	defer lvdb.Close()
-	// **********************************
 
 	// Init forest and variables. Resumes if the data directory exists
 	maxHeight, err := restoreHeight(cfg)
@@ -247,6 +237,21 @@ func serveBlocksWorker(UtreeDir utreeDir,
 			break
 		}
 
+		// if curHeight == 112 {
+		buf := bytes.NewBuffer(udb)
+		// deserialize to find errors
+		var ud btcacc.UData
+		err = ud.Deserialize(buf)
+		if err != nil {
+			fmt.Printf("serveBlocksWorker h %d deser error %s\n", curHeight, err.Error())
+			fmt.Printf("ttls: %v targets %s\n", ud.TxoTTLs, ud.AccProof.ToString())
+			fmt.Printf("udb: %x\n", udb)
+			break
+		}
+		if len(ud.AccProof.Targets) != 0 {
+			fmt.Printf("h %d proof %s\n", curHeight, ud.AccProof.ToString())
+		}
+
 		blkbytes, err := GetBlockBytesFromFile(
 			curHeight, UtreeDir.OffsetDir.OffsetFile, blockDir)
 		if err != nil {
@@ -274,7 +279,7 @@ func serveBlocksWorker(UtreeDir utreeDir,
 // But there is an offset for block 0, which is 0, so it collides with block 1
 func GetUDataBytesFromFile(proofDir proofDir, height int32) (b []byte, err error) {
 	if height == 0 {
-		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		err = fmt.Errorf("GetUDataBytesFromFile: Block 0 is not not a thing")
 		return
 	}
 
@@ -300,21 +305,18 @@ func GetUDataBytesFromFile(proofDir proofDir, height int32) (b []byte, err error
 		err = fmt.Errorf("offsetFile.Seek %s", err.Error())
 		return
 	}
-
 	// read the offset of the block we want from the offset file
 	err = binary.Read(offsetFile, binary.BigEndian, &offset)
 	if err != nil {
 		err = fmt.Errorf("binary.Read h %d offset %d %s", height, offset, err.Error())
 		return
 	}
-
 	// seek to that offset
 	_, err = proofFile.Seek(offset, 0)
 	if err != nil {
 		err = fmt.Errorf("proofFile.Seek %s", err.Error())
 		return
 	}
-
 	// first read 4-byte magic aaffaaff
 	n, err := proofFile.Read(readMagic[:])
 	if err != nil {
@@ -328,13 +330,11 @@ func GetUDataBytesFromFile(proofDir proofDir, height int32) (b []byte, err error
 			realMagic, readMagic, height, offset)
 	}
 
-	// fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
-
 	err = binary.Read(proofFile, binary.BigEndian, &size)
 	if err != nil {
 		return
 	}
-
+	// fmt.Printf("height %d offset %d says size %d\n", height, offset, size)
 	if size > 1<<24 {
 		return nil, fmt.Errorf(
 			"size at offest %d says %d which is too big", offset, size)

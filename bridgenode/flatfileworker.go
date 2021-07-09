@@ -47,9 +47,9 @@ offsetInRam values and writing to the correct 4-byte location in the proof file.
 
 // shared state for the flat file worker methods
 type flatFileState struct {
-	offsets               []int64
+	heightOffsets         []int64
 	proofFile, offsetFile *os.File
-	currentHeight         int32
+	finishedHeight        int32
 	currentOffset         int64
 	fileWait              *sync.WaitGroup
 }
@@ -57,7 +57,7 @@ type flatFileState struct {
 // pFileWorker takes in blockproof and height information from the channel
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
-func flatFileWorker(
+func FlatFileWriter(
 	proofChan chan btcacc.UData,
 	ttlResultChan chan ttlResultBlock,
 	utreeDir utreeDir,
@@ -73,7 +73,7 @@ func flatFileWorker(
 	}
 
 	ff.proofFile, err = os.OpenFile(
-		utreeDir.ProofDir.pFile, os.O_CREATE|os.O_WRONLY, 0600)
+		utreeDir.ProofDir.pFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -108,7 +108,9 @@ func flatFileWorker(
 				panic(err)
 			}
 		case ttlRes := <-ttlResultChan:
-			for ttlRes.Height > ff.currentHeight {
+			// if we get a ttlRes before the ud, wait for & write ud first, then
+			// deal with the ttlRes
+			for ttlRes.destroyHeight > ff.finishedHeight {
 				ud := <-proofChan
 				err = ff.writeProofBlock(ud)
 				if err != nil {
@@ -138,22 +140,22 @@ func (ff *flatFileState) ffInit() error {
 	if offsetFileSize > 0 {
 		// offsetFile already exists so read the whole thing and send over the
 		// channel to the ttl worker.
-		maxHeight := int32(offsetFileSize / 8)
+		savedHeight := int32(offsetFileSize/8) - 1
+		// TODO I'm not really sure why theres a -1 there
 		// seek back to the file start / block "0"
 		_, err := ff.offsetFile.Seek(0, 0)
 		if err != nil {
 			return err
 		}
-		ff.offsets = make([]int64, maxHeight)
-		// run through the file, read everything and push into the channel
-		for ff.currentHeight < maxHeight {
+		ff.heightOffsets = make([]int64, savedHeight)
+		for ff.finishedHeight < savedHeight {
 			err = binary.Read(ff.offsetFile, binary.BigEndian, &ff.currentOffset)
 			if err != nil {
 				fmt.Printf("couldn't populate in-ram offsets on startup")
 				return err
 			}
-			ff.offsets[ff.currentHeight] = ff.currentOffset
-			ff.currentHeight++
+			ff.heightOffsets[ff.finishedHeight] = ff.currentOffset
+			ff.finishedHeight++
 		}
 
 		// set currentOffset to the end of the proof file
@@ -161,21 +163,24 @@ func (ff *flatFileState) ffInit() error {
 
 	} else { // first time startup
 		// there is no block 0 so leave that empty
-		fmt.Printf("setting h=1\n")
+		// fmt.Printf("setting h=1\n")
 		_, err = ff.offsetFile.Write(make([]byte, 8))
 		if err != nil {
 			return err
 		}
 		// do the same with the in-ram slice
-		ff.offsets = make([]int64, 1)
-		// start writing at block 1
-		ff.currentHeight = 1
+		ff.heightOffsets = make([]int64, 1)
+		// does nothing.  We're *finished* writing block 0
+		ff.finishedHeight = 0
 	}
 
 	return nil
 }
 
 func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
+	// fmt.Printf("udata height %d flat file height %d\n",
+	// ud.Height, ff.finishedHeight)
+
 	// get the new block proof
 	// put offset in ram
 	// write to offset file so we can resume; offset file is only
@@ -183,14 +188,14 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 
 	// pre-allocated the needed buffer
 	udSize := ud.SerializeSize()
-	buf := make([]byte, udSize)
+	lilBuf := make([]byte, udSize)
 
 	// write write the offset of the current proof to the offset file
-	buf = buf[:8]
-	ff.offsets = append(ff.offsets, ff.currentOffset)
+	lilBuf = lilBuf[:8]
+	ff.heightOffsets = append(ff.heightOffsets, ff.currentOffset)
 
-	binary.BigEndian.PutUint64(buf, uint64(ff.currentOffset))
-	_, err := ff.offsetFile.WriteAt(buf, int64(8*ud.Height))
+	binary.BigEndian.PutUint64(lilBuf, uint64(ff.currentOffset))
+	_, err := ff.offsetFile.WriteAt(lilBuf, int64(8*ud.Height))
 	if err != nil {
 		return err
 	}
@@ -202,56 +207,89 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	}
 
 	// prefix with size
-	buf = buf[:4]
-	binary.BigEndian.PutUint32(buf, uint32(udSize))
+	lilBuf = lilBuf[:4]
+	binary.BigEndian.PutUint32(lilBuf, uint32(udSize))
 	// +4 to account for the 4 magic bytes
-	_, err = ff.proofFile.WriteAt(buf, ff.currentOffset+4)
+	_, err = ff.proofFile.WriteAt(lilBuf, ff.currentOffset+4)
 	if err != nil {
 		return err
 	}
 
 	// Serialize proof
-	buf = buf[:0]
-	bytesBuf := bytes.NewBuffer(buf)
-	err = ud.Serialize(bytesBuf)
+	lilBuf = lilBuf[:0]
+	bigBuf := bytes.NewBuffer(lilBuf)
+	err = ud.Serialize(bigBuf)
 	if err != nil {
 		return err
 	}
 
 	// Write to the file
 	// +4 +4 to account for the 4 magic bytes and the 4 size bytes
-	_, err = ff.proofFile.WriteAt(bytesBuf.Bytes(), ff.currentOffset+4+4)
+	_, err = ff.proofFile.WriteAt(bigBuf.Bytes(), ff.currentOffset+4+4)
 	if err != nil {
 		return err
 	}
 
+	// if udSize > 20 {
+	// fmt.Printf("%x\n", bigBuf.Bytes())
+	// }
+
 	// 4B magic & 4B size comes first
 	ff.currentOffset += int64(ud.SerializeSize()) + 8
-	ff.currentHeight++
+	ff.finishedHeight++
+
+	if ud.Height != ff.finishedHeight {
+		fmt.Printf("WARNING udata height %d flat file height %d\n",
+			ud.Height, ff.finishedHeight)
+	}
 
 	ff.fileWait.Done()
-
 	return nil
 }
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
-	var ttlArr [4]byte
+	var ttlArr, readEmpty, expectedEmpty [4]byte
+
 	// for all the TTLs, seek and overwrite the empty values there
-	for _, c := range ttlRes.Created {
-		// seek to the location of that txo's ttl value in the proof file
+	for _, c := range ttlRes.results {
+		if c.createHeight >= int32(len(ff.heightOffsets)) {
+			return fmt.Errorf("utxo created h %d idx in block %d destroyed h %d"+
+				" but max h %d cur h %d", c.createHeight, c.indexWithinBlock,
+				ttlRes.destroyHeight, len(ff.heightOffsets), ff.finishedHeight)
+		}
 
 		binary.BigEndian.PutUint32(
-			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
+			ttlArr[:], uint32(ttlRes.destroyHeight-c.createHeight))
 
+		// calculate location of that txo's ttl value in the proof file:
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
 		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
-		_, err := ff.proofFile.WriteAt(ttlArr[:],
-			ff.offsets[c.createHeight]+16+int64(c.indexWithinBlock*4))
+		loc := ff.heightOffsets[c.createHeight] + 16 + int64(c.indexWithinBlock*4)
+
+		// first, read the data there to make sure it's empty.
+		// If there's something already there, we messed up & should panic.
+		// TODO once everything works great can remove this
+
+		_, err := ff.proofFile.ReadAt(readEmpty[:], loc)
 		if err != nil {
 			return err
 		}
+		// fmt.Printf("dest %d at loc %d = (heightOffset[%d] = %d) + 16 + (idx %d *4) \n",
+		// ttlRes.destroyHeight, loc, c.createHeight,
+		// ff.heightOffsets[c.createHeight], c.indexWithinBlock)
 
+		if readEmpty != expectedEmpty {
+			return fmt.Errorf("writeTTLs Wanted to overwrite byte %d with %x "+
+				"but %x was already there. desth %d createh %d blkidx %d",
+				loc, ttlArr, readEmpty, ttlRes.destroyHeight,
+				c.createHeight, c.indexWithinBlock)
+		}
+		// fmt.Printf("overwriting %x with %x\t", readEmpty, ttlArr)
+		_, err = ff.proofFile.WriteAt(ttlArr[:], loc)
+		if err != nil {
+			return err
+		}
 	}
 	ff.fileWait.Done()
 	return nil

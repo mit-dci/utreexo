@@ -222,7 +222,7 @@ func (bp *BatchProof) ToString() string {
 	}
 	s += fmt.Sprintf("\n%d proofs: ", len(bp.Proof))
 	for _, p := range bp.Proof {
-		s += fmt.Sprintf("%04x\t", p[:4])
+		s += fmt.Sprintf("%04x\t", p[:8])
 	}
 	s += "\n"
 	return s

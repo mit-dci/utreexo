@@ -74,7 +74,7 @@ func TestBuildOffsetFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bnrChan := make(chan BlockAndRev, 10)
+	bnrChan := make(chan blockAndRev, 10)
 
 	fmt.Println("checking the offestfile created...")
 

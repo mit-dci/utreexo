@@ -18,7 +18,8 @@ The bridgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
-  -forest                      select forest type to use (ram, cow, cache, disk). Defaults to disk
+  -forest                      select forest type to use (ram, cow, cache, disk). 
+  Defaults to disk
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path
   -datadir="path/to/directory" set a custom DATADIR.
@@ -41,14 +42,12 @@ var (
 		`Set a custom bridgenode datadir. Usage: "-bridgedir='path/to/directory"`)
 	forestTypeCmd = argCmd.String("forest", "disk",
 		`Set a forest type to use (cow, ram, disk, cache). Usage: "-forest=cow"`)
+	quitAfterCmd = argCmd.Int("quitafter", -1,
+		`quit generating proofs after the given block height. (meant for testing)`)
 	cowMaxCache = argCmd.Int("cowmaxcache", 4000,
 		`how much memory to use in MB for the copy-on-write forest`)
-	memTTLdb = argCmd.Bool("memttldb", false,
-		`keep a cache of the ttldb in memory.`)
-	allInMemTTLdb = argCmd.Bool("allttldbinmem", false,
-		`keeps the entire ttldb in memory. Uses up a lot of memory.`)
-	quitAtCmd = argCmd.Int("quitat", -1,
-		`quit generating proofs after the given block height. (meant for testing)`)
+	memTTL = argCmd.Bool("memttl", false,
+		`keep the ttls in memory instead of on disk. Uses lots of ram.`)
 	serve = argCmd.Bool("serve", false,
 		`immediately start server without building or checking proof data`)
 	noServeCmd = argCmd.Bool("noserve", false,
@@ -93,16 +92,17 @@ type utreeDir struct {
 	OffsetDir offsetDir
 	ProofDir  proofDir
 	ForestDir forestDir
-	Ttldb     string
+	TtlDir    string
 }
 
 // init an utreeDir with a selected basepath. Has all the names for the forest
 func initUtreeDir(basePath string) utreeDir {
 	offBase := filepath.Join(basePath, "offsetdata")
 	off := offsetDir{
-		base:                      offBase,
-		OffsetFile:                filepath.Join(offBase, "offsetfile.dat"),
-		lastIndexOffsetHeightFile: filepath.Join(offBase, "lastindexoffsetheightfile.dat"),
+		base:       offBase,
+		OffsetFile: filepath.Join(offBase, "offsetfile.dat"),
+		lastIndexOffsetHeightFile: filepath.Join(offBase,
+			"lastindexoffsetheightfile.dat"),
 	}
 
 	proofBase := filepath.Join(basePath, "proofdata")
@@ -116,21 +116,22 @@ func initUtreeDir(basePath string) utreeDir {
 	forestBase := filepath.Join(basePath, "forestdata")
 	cowDir := filepath.Join(forestBase, "cow")
 	forest := forestDir{
-		base:                            forestBase,
-		forestFile:                      filepath.Join(forestBase, "forestfile.dat"),
-		miscForestFile:                  filepath.Join(forestBase, "miscforestfile.dat"),
-		forestLastSyncedBlockHeightFile: filepath.Join(forestBase, "forestlastsyncedheight.dat"),
-		cowForestDir:                    cowDir,
-		cowForestCurFile:                filepath.Join(cowDir, "CURRENT"),
+		base:           forestBase,
+		forestFile:     filepath.Join(forestBase, "forestfile.dat"),
+		miscForestFile: filepath.Join(forestBase, "miscforestfile.dat"),
+		forestLastSyncedBlockHeightFile: filepath.Join(forestBase,
+			"forestlastsyncedheight.dat"),
+		cowForestDir:     cowDir,
+		cowForestCurFile: filepath.Join(cowDir, "CURRENT"),
 	}
 
-	ttldb := filepath.Join(basePath, "ttldb")
+	ttlpath := filepath.Join(basePath, "ttldata")
 
 	return utreeDir{
 		OffsetDir: off,
 		ProofDir:  proof,
 		ForestDir: forest,
-		Ttldb:     ttldb,
+		TtlDir:    ttlpath,
 	}
 }
 
@@ -149,6 +150,10 @@ func makePaths(dir utreeDir) error {
 		return fmt.Errorf("init makePaths error %s")
 	}
 	err = os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.TtlDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("init makePaths error %s")
 	}
@@ -188,16 +193,13 @@ type Config struct {
 	forestType forestType
 
 	// quitAfter syncing to this block height
-	quitAt int
+	quitAfter int32
 
 	// how much cache to allow for cowforest
 	cowMaxCache int
 
-	// keep the ttldb in memory
-	memTTLdb bool
-
-	// only keep the ttldb in memory
-	allInMemTTLdb bool
+	// keep ttls in memory
+	memTTL bool
 
 	// just immidiately start serving what you have on disk
 	serve bool
@@ -274,13 +276,7 @@ func Parse(args []string) (*Config, error) {
 	cfg.MemProf = *memProfCmd
 	cfg.TraceProf = *traceCmd
 	cfg.ProfServer = *profServerCmd
-	cfg.memTTLdb = *memTTLdb
-
-	// If allInMemTTLdb flag was given, the ttldb has to be kept in ram
-	if *allInMemTTLdb {
-		cfg.memTTLdb = true
-	}
-	cfg.allInMemTTLdb = *allInMemTTLdb
+	cfg.memTTL = *memTTL
 
 	switch *forestTypeCmd {
 	case "disk":
@@ -296,7 +292,7 @@ func Parse(args []string) (*Config, error) {
 		return nil, errWrongForestType(*forestTypeCmd)
 	}
 
-	cfg.quitAt = *quitAtCmd
+	cfg.quitAfter = int32(*quitAfterCmd)
 	cfg.noServe = *noServeCmd
 	cfg.serve = *serve
 
