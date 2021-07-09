@@ -58,7 +58,7 @@ func BNRTTLSpliter(
 		if !open {
 			break
 		}
-		var skippedTxoInBlock uint16
+		var txoInBlock uint16
 		var lub ttlLookupBlock
 		var wb ttlWriteBlock
 		var inskippos, outskippos, outputInBlock, inputInBlock uint32
@@ -78,11 +78,10 @@ func BNRTTLSpliter(
 		for txInBlock, tx := range transactions {
 			// add txid and skipped position in block
 			wb.mTxids[txInBlock].txid = tx.Hash()
-			wb.mTxids[txInBlock].startsAt = skippedTxoInBlock
-
+			wb.mTxids[txInBlock].startsAt = txoInBlock
 			// first add all the outputs in this tx, then range through the
 			// outputs and decrement them if they're on the skiplist
-			skippedTxoInBlock += uint16(len(tx.Txos()))
+			txoInBlock += uint16(len(tx.Txos()))
 			// look at number of txos; the txoinblock doesn't increment if
 			// it's on the outskiplist.
 			for _, _ = range tx.Txos() {
@@ -90,7 +89,7 @@ func BNRTTLSpliter(
 				// as it has already been added
 				if skipOutputs && bnr.outskip[outskippos] == outputInBlock {
 					outskippos++
-					skippedTxoInBlock--
+					txoInBlock--
 					skipOutputs = outskippos != outskipMax
 				}
 				outputInBlock++
@@ -149,7 +148,6 @@ func TxidSortWriterWorker(
 		startOffset += int64(len(wb.mTxids))
 		sortTxids(wb.mTxids)
 		for _, mt := range wb.mTxids {
-			// fmt.Printf("wrote txid %x p %d\n", mt.txid[:6], mt.startsAt)
 			err := mt.serialize(miniTxidFile)
 			if err != nil {
 				fmt.Printf("miniTx write error: %s\n", err.Error())
@@ -221,9 +219,9 @@ func TTLLookupWorker(
 				seekHeight = stxo.height
 			}
 			resultBlock.results[i].createHeight = stxo.height
-			fmt.Printf("search for create height %d %x:%d from %d range %d\n",
-				stxo.height, stxo.hashprefix, stxo.idx,
-				heightOffset, nextOffset-heightOffset)
+			// fmt.Printf("search for create height %d %x:%d from %d range %d\n",
+			// stxo.height, stxo.hashprefix, stxo.idx,
+			// heightOffset, nextOffset-heightOffset)
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
@@ -265,12 +263,12 @@ func binSearch(mi miniIn,
 		}
 	}
 
-	_, err := mtxFile.ReadAt(positionBytes[:], int64(pos*8)+6)
-	if err != nil {
+	n, err := mtxFile.ReadAt(positionBytes[:], int64((pos+int(bottom))*8)+6)
+	if err != nil || n != 2 {
 		panic(err)
 	}
-	fmt.Printf("%x got position %d width %d, read bytes %x\n",
-		mi.hashprefix, pos, width, positionBytes)
+	// fmt.Printf("%x got position %d width %d, read bytes %x from pos %d\n",
+	// mi.hashprefix, pos, width, positionBytes, (pos*8)+6)
 	// fmt.Printf("got match at position %d of %d\n", pos, width)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos

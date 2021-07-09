@@ -275,19 +275,17 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("dest %d at loc %d = (heightOffset[%d] = %d) + 16 + (idx %d *4) \n",
-			ttlRes.destroyHeight, loc, c.createHeight,
-			ff.heightOffsets[c.createHeight], c.indexWithinBlock)
+		// fmt.Printf("dest %d at loc %d = (heightOffset[%d] = %d) + 16 + (idx %d *4) \n",
+		// ttlRes.destroyHeight, loc, c.createHeight,
+		// ff.heightOffsets[c.createHeight], c.indexWithinBlock)
 
-		if readEmpty != expectedEmpty && false {
-
+		if readEmpty != expectedEmpty {
 			return fmt.Errorf("writeTTLs Wanted to overwrite byte %d with %x "+
 				"but %x was already there. desth %d createh %d blkidx %d",
 				loc, ttlArr, readEmpty, ttlRes.destroyHeight,
 				c.createHeight, c.indexWithinBlock)
 		}
 		// fmt.Printf("overwriting %x with %x\t", readEmpty, ttlArr)
-
 		_, err = ff.proofFile.WriteAt(ttlArr[:], loc)
 		if err != nil {
 			return err
