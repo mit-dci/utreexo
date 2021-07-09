@@ -61,8 +61,8 @@ type ttlLookupBlock struct {
 // 6 bytes of txid prefix, then 2 bytes of position.
 type miniIn struct {
 	hashprefix [6]byte // txid prefix of txo being consumed
-	idx        uint16  // index within creating tx of txo being consumed
-	height     int32   // creation height of the txo being consumed
+	idx        uint16  // outpoint index of txo being consumed
+	height     int32   // creation height of txo being consumed
 }
 
 // to int... which will turn into a float

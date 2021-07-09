@@ -221,10 +221,12 @@ func TTLLookupWorker(
 				seekHeight = stxo.height
 			}
 			resultBlock.results[i].createHeight = stxo.height
-			// fmt.Printf("search for %x from %d range %d\n",
-			// stxo.hashprefix, heightOffset, nextOffset-heightOffset)
+			fmt.Printf("search for create height %d %x:%d from %d range %d\n",
+				stxo.height, stxo.hashprefix, stxo.idx,
+				heightOffset, nextOffset-heightOffset)
 			resultBlock.results[i].indexWithinBlock =
-				binSearch(stxo, heightOffset, nextOffset, txidFile) + stxo.idx
+				binSearch(stxo, heightOffset, nextOffset, txidFile)
+
 			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d ttlidx %d\n",
 			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
 			// lub.destroyHeight-resultBlock.results[i].createHeight,
@@ -257,14 +259,18 @@ func binSearch(mi miniIn,
 	} else {
 		pos = sort.Search(
 			width, searchReaderFunc(int(bottom), mi.hashprefix, mtxFile))
-		if pos == width {
+		if pos >= width {
 			fmt.Printf("WARNING can't find %x\n", mi.hashprefix)
-			panic("not there")
+			panic("failed txid search")
 		}
 	}
 
-	_, _ = mtxFile.ReadAt(positionBytes[:], int64(pos*8)+6)
-
+	_, err := mtxFile.ReadAt(positionBytes[:], int64(pos*8)+6)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%x got position %d width %d, read bytes %x\n",
+		mi.hashprefix, pos, width, positionBytes)
 	// fmt.Printf("got match at position %d of %d\n", pos, width)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
@@ -276,7 +282,6 @@ func binSearch(mi miniIn,
 // because it's trying to find the lowest index or first instance of a target,
 // but in this case we know the hashes are unique so we don't have keep going
 // once we find it.
-
 func searchReaderFunc(
 	startPosition int, lookFor [6]byte, mtxFile io.ReaderAt) func(int) bool {
 	return func(pos int) bool {

@@ -189,10 +189,6 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	// pre-allocated the needed buffer
 	udSize := ud.SerializeSize()
 	lilBuf := make([]byte, udSize)
-	if udSize > 20 {
-		fmt.Printf("saving h %d to offset %d size %d ttls %v tgts %v\n",
-			ud.Height, ff.currentOffset, udSize, ud.TxoTTLs, ud.AccProof.Targets)
-	}
 
 	// write write the offset of the current proof to the offset file
 	lilBuf = lilBuf[:8]
@@ -271,11 +267,6 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
 		loc := ff.heightOffsets[c.createHeight] + 16 + int64(c.indexWithinBlock*4)
 
-		// if loc > 5420 && loc < 8548 {
-		// fmt.Printf("write ttl %d to byte location %d\n",
-		// ttlRes.destroyHeight-c.createHeight, loc)
-		// }
-
 		// first, read the data there to make sure it's empty.
 		// If there's something already there, we messed up & should panic.
 		// TODO once everything works great can remove this
@@ -284,9 +275,16 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if err != nil {
 			return err
 		}
-		if readEmpty != expectedEmpty {
+		fmt.Printf("dest %d at loc %d = (heightOffset[%d] = %d) + 16 + (idx %d *4) \n",
+			ttlRes.destroyHeight, loc, c.createHeight,
+			ff.heightOffsets[c.createHeight], c.indexWithinBlock)
+
+		if readEmpty != expectedEmpty && false {
+
 			return fmt.Errorf("writeTTLs Wanted to overwrite byte %d with %x "+
-				"but %x was already there", loc, ttlArr, readEmpty)
+				"but %x was already there. desth %d createh %d blkidx %d",
+				loc, ttlArr, readEmpty, ttlRes.destroyHeight,
+				c.createHeight, c.indexWithinBlock)
 		}
 		// fmt.Printf("overwriting %x with %x\t", readEmpty, ttlArr)
 
