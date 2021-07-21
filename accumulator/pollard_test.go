@@ -1,6 +1,8 @@
 package accumulator
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -210,6 +212,51 @@ func fixedPollard(leaves int32) error {
 
 	if !p.equalToForest(f) {
 		return fmt.Errorf("p != f (leaves)")
+	}
+
+	return nil
+}
+
+func PollardSerializeDeserialize() error {
+	var p Pollard
+
+	// generate slice of leaf
+	leaves := make([]Leaf, 10)
+
+	for i := 0; i < len(leaves); i++ {
+		leaves[i].Hash[0] = uint8(i + 1)
+	}
+
+	// add leaves to pollard
+	p.add(leaves)
+
+	// performing serialization
+
+	old_byte, err := p.Serialize()
+
+	if err != nil {
+		return err
+	}
+
+	// perform Deserialize
+
+	err = p.Deserialize(old_byte)
+	if err != nil {
+		return err
+	}
+
+	// Serialize again and compare bytes
+
+	new_byte, err := p.Serialize()
+
+	if err != nil {
+		return err
+	}
+
+	res := bytes.Compare(old_byte, new_byte)
+
+	if res != 0 {
+		return errors.New("Bytes Unequal")
 	}
 
 	return nil
