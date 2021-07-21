@@ -35,6 +35,15 @@ func TestPollardFixed(t *testing.T) {
 	}
 }
 
+func TestPollardSerializeDeserialize(t *testing.T) {
+	rand.Seed(2)
+
+	err := PollardSerializeDeserialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPollardSimpleIngest(t *testing.T) {
 	f := NewForest(nil, false, "", 0)
 	adds := make([]Leaf, 15)
@@ -255,6 +264,7 @@ func PollardSerializeDeserialize() error {
 
 	res := bytes.Compare(old_byte, new_byte)
 
+	// If comaprison unequal return error
 	if res != 0 {
 		return errors.New("Bytes Unequal")
 	}
