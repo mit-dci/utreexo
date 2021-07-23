@@ -149,17 +149,12 @@ func createForest(cfg *Config) (
 
 	switch cfg.forestType {
 	case ramForest:
-		forest = accumulator.NewForest(nil, false, "", 0)
+		forest = accumulator.RamForest.NewForest(nil, "", 0)
 		return
 	case cowForest:
-		forest = accumulator.NewForest(nil, false, cfg.UtreeDir.ForestDir.cowForestDir, cfg.cowMaxCache)
+		forest = accumulator.DiskForest.NewForest(nil, cfg.UtreeDir.ForestDir.cowForestDir, cfg.cowMaxCache)
 		return
 	default:
-		var cache bool
-		if cfg.forestType == cacheForest {
-			cache = true
-		}
-
 		// Where the forestfile exists
 		forestFile, err := os.OpenFile(
 			cfg.UtreeDir.ForestDir.forestFile, os.O_CREATE|os.O_RDWR, 0600)
@@ -168,7 +163,10 @@ func createForest(cfg *Config) (
 		}
 
 		// Restores all the forest data
-		forest = accumulator.NewForest(forestFile, cache, "", 0)
+		if cfg.forestType == cacheForest {
+			forest = accumulator.CacheForest.NewForest(forestFile, "", 0)
+		}
+		forest = accumulator.DiskForest.NewForest(forestFile, "", 0)
 	}
 
 	return

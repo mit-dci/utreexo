@@ -1,28 +1,25 @@
 A dynamic hash-based accumulator.
 
-Overview
---------
+## Overview
 
 Package accumulator provides a general purpose dynamic accumulator. There are two main structs: Forest and Pollard.
 
-The Forest contains the entire utreexo accumulator (all the nodes in the forest), and can be used to produce inclusion-proofs for Pollards to verify. Pollard contains a partially populated accumulator and can verify inclusion-proofs from the Forest. A Pollard *can* contain the entire accumulator. A Forest *must* contain everything.
+The Forest contains the entire utreexo accumulator (all the nodes in the forest), and can be used to produce inclusion-proofs for Pollards to verify. Pollard contains a partially populated accumulator and can verify inclusion-proofs from the Forest. A Pollard _can_ contain the entire accumulator. A Forest _must_ contain everything.
 
-Installation
-------------
+## Installation
 
 To install, just run the below command. Then the package will be ready to be linked in your Go code.
 
 `go get github.com/mit-dci/utreexo/accumulator`
 
-Usage
------
+## Usage
 
 To initialize a pollard or forest:
 
 ```
 	// inits a Forest in memory. Refer to the documentation for NewForest() for an in-detail explanation
         // of all the different forest types.
-	forest := accumulator.NewForest(nil, false, "", 0)
+	forest := accumulator.RamForest.NewForest(nil, "", 0)
 
 	// declare pollard. No init function for pollard
 	var pollard accumulator.Pollard
@@ -56,12 +53,10 @@ To verify the inclusion-proof (only implemented for pollard):
 	err := pollard.IngestBatchProof(proof)
 ```
 
-Documentation
--------------
+## Documentation
 
 You can read package documentation [here](https://pkg.go.dev/github.com/mit-dci/utreexo/accumulator).
 
-IRC
----
+## IRC
 
 We're on irc.libera.chat #utreexo.
