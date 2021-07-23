@@ -460,7 +460,7 @@ func (p *Pollard) grabPos(
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
 func (p *Pollard) toFull() (*Forest, error) {
-	ff := NewForest(nil, false, "", 0)
+	ff := NewForest(RamForest, nil, "", 0)
 	ff.rows = p.rows()
 	ff.numLeaves = p.numLeaves
 	ff.data = new(ramForestData)
