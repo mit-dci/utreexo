@@ -113,39 +113,40 @@ type Forest struct {
 //               forest types though (meaning there isn't functionality implemented
 //               to convert a CowForest to DiskForest and vise-versa). Pass a filepath
 //               and cowMaxCache(how much MB to use in ram) to create a CowForest.
-func NewForest(forestFile *os.File, cached bool,
-	cowPath string, cowMaxCache int) *Forest {
+
+type ForestName int
+
+const (
+	DiskForest ForestName = iota
+	RamForest
+	CacheForest
+	CowForest
+)
+
+func (fn ForestName) NewForest(forestFile *os.File, cowPath string, cowMaxCache int) *Forest {
 
 	f := new(Forest)
 	f.numLeaves = 0
 	f.rows = 0
 
-	if forestFile == nil {
-		if cowPath == "" {
-			// for in-ram
-			f.data = new(ramForestData)
-		} else {
-			// Init cowForest
-			d, err := initialize(cowPath, cowMaxCache)
-			if err != nil {
-				panic(err)
-			}
-			f.data = d
+	switch fn {
+	case DiskForest:
+		d := new(diskForestData)
+		d.file = forestFile
+		f.data = d
+	case RamForest:
+		f.data = new(ramForestData)
+	case CacheForest:
+		d := new(cacheForestData)
+		d.file = forestFile
+		d.cache = newDiskForestCache(20)
+		f.data = d
+	case CowForest:
+		d, err := initialize(cowPath, cowMaxCache)
+		if err != nil {
+			panic(err)
 		}
-
-	} else {
-		// forest on disk or cached
-		if cached {
-			d := new(cacheForestData)
-			d.file = forestFile
-			d.cache = newDiskForestCache(20)
-			f.data = d
-		} else {
-			// for on-disk
-			d := new(diskForestData)
-			d.file = forestFile
-			f.data = d
-		}
+		f.data = d
 	}
 
 	f.data.resize((2 << f.rows) - 1)
