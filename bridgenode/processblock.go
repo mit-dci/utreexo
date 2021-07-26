@@ -108,23 +108,24 @@ type txoStart struct {
 func blockToAddDel(bnr BlockAndRev) (
 	blockAdds []accumulator.Leaf, delLeaves []btcacc.LeafData, err error) {
 
-	inskip, outskip := bnr.Blk.DedupeBlock()
-	// fmt.Printf("inskip %v outskip %v\n", inskip, outskip)
-	delLeaves, err = blockNRevToDelLeaves(bnr, inskip)
+	inCount, outCount, inskip, outskip := util.DedupeBlock(bnr.Blk)
+	delLeaves, err = blockNRevToDelLeaves(bnr, inskip, inCount)
 	if err != nil {
 		return
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height)
+	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height, outCount)
 
 	return
 }
 
 // blockNRevToDelLeaves turns a block's inputs into delLeaves to be removed from the
 // accumulator
-func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32) (
+func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32, inCount int) (
 	delLeaves []btcacc.LeafData, err error) {
+
+	delLeaves = make([]btcacc.LeafData, 0, inCount-len(skiplist))
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions())-1 != len(bnr.Rev.Txs) {
@@ -189,7 +190,7 @@ func ParseBlockForDB(
 	// fmt.Printf("h %d inskip %v outskip %v\n", bnr.Height, inskip, outskip)
 	// }
 	transactions := bnr.Blk.Transactions()
-	inskip, outskip := bnr.Blk.DedupeBlock()
+	_, _, inskip, outskip := util.DedupeBlock(bnr.Blk)
 	// iterate through the transactions in a block
 	for txInBlock, tx := range transactions {
 		txid := tx.Hash()

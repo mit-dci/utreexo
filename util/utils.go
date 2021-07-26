@@ -70,15 +70,17 @@ func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
 // deleted.  All txinputs except for the coinbase input and utxos created
 // within the same block (on the skiplist)
 func BlockToDelOPs(
-	blk *btcutil.Block) (delOPs []wire.OutPoint) {
+	blk *btcutil.Block) []wire.OutPoint {
 
 	transactions := blk.Transactions()
-	inskip, _ := blk.DedupeBlock()
+	inCount, _, inskip, _ := DedupeBlock(blk)
+
+	delOPs := make([]wire.OutPoint, 0, inCount-len(inskip))
 
 	var blockInIdx uint32
 	for txinblock, tx := range transactions {
 		if txinblock == 0 {
-			blockInIdx++ // coinbase tx always has 1 input
+			blockInIdx += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
 			continue
 		}
 
@@ -96,7 +98,7 @@ func BlockToDelOPs(
 			blockInIdx++
 		}
 	}
-	return
+	return delOPs
 }
 
 // DedupeBlock takes a bitcoin block, and returns two int slices: the indexes of
@@ -104,47 +106,44 @@ func BlockToDelOPs(
 // within the block as a whole, even the coinbase tx.
 // So the coinbase tx in & output numbers affect the skip lists even though
 // the coinbase ins/outs can never be deduped.  it's simpler that way.
-func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
-
+func DedupeBlock(blk *btcutil.Block) (inCount, outCount int, inskip []uint32, outskip []uint32) {
 	var i uint32
 	// wire.Outpoints are comparable with == which is nice.
 	inmap := make(map[wire.OutPoint]uint32)
 
 	// go through txs then inputs building map
-	for cbif0, tx := range blk.Transactions {
-		if cbif0 == 0 { // coinbase tx can't be deduped
-			i++ // coinbase has 1 input
+	for coinbase, tx := range blk.Transactions() {
+		if coinbase == 0 { // coinbase tx can't be deduped
+			i += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
 			continue
 		}
-		for _, in := range tx.TxIn {
-			// fmt.Printf("%s into inmap\n", in.PreviousOutPoint.String())
+		for _, in := range tx.MsgTx().TxIn {
 			inmap[in.PreviousOutPoint] = i
 			i++
 		}
 	}
+	inCount = int(i)
 
 	i = 0
 	// start over, go through outputs finding skips
-	for cbif0, tx := range blk.Transactions {
-		if cbif0 == 0 { // coinbase tx can't be deduped
-			i += uint32(len(tx.TxOut)) // coinbase can have multiple inputs
+	for coinbase, tx := range blk.Transactions() {
+		txOut := tx.MsgTx().TxOut
+		if coinbase == 0 { // coinbase tx can't be deduped
+			i += uint32(len(txOut)) // coinbase can have multiple inputs
 			continue
 		}
-		txid := tx.TxHash()
 
-		for outidx, _ := range tx.TxOut {
-			op := wire.OutPoint{Hash: txid, Index: uint32(outidx)}
-			// fmt.Printf("%s check for inmap... ", op.String())
+		for outidx, _ := range txOut {
+			op := wire.OutPoint{Hash: *tx.Hash(), Index: uint32(outidx)}
 			inpos, exists := inmap[op]
 			if exists {
-				// fmt.Printf("hit")
 				inskip = append(inskip, inpos)
 				outskip = append(outskip, i)
 			}
-			// fmt.Printf("\n")
 			i++
 		}
 	}
+	outCount = int(i)
 	// sort inskip list, as it's built in order consumed not created
 	sortUint32s(inskip)
 	return
