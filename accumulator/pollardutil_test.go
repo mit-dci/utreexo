@@ -17,11 +17,6 @@ func TestPollardSerializeDeserialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// new pollard
-	err = q.add(leaves)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// performing serialization
 	old_byte, err := p.Serialize()
 	if err != nil {
