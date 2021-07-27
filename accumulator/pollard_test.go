@@ -32,7 +32,6 @@ func TestPollardFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
 func TestPollardSimpleIngest(t *testing.T) {
 	f := NewForest(nil, false, "", 0)
 	adds := make([]Leaf, 15)
