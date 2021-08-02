@@ -10,7 +10,7 @@ Logs for libera are [here](http://gnusha.org/utreexo/)
 
 ---
 ## Importing Utreexo
-The raw accumulator functions are in package accumulator. This is a general accumulator and is not bitcoin speicifc. For Bitcoin specific accumulator, look to the csn and bridgenode packages.
+The raw accumulator functions are in package accumulator. This is a general accumulator and is not bitcoin specific. For Bitcoin specific accumulator, look to the csn and bridgenode packages.
 
 ## Walkthrough for testing out Utreexo nodes
 
