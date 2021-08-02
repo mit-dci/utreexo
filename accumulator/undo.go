@@ -2,6 +2,9 @@ package accumulator
 
 import (
 	"fmt"
+	"io"
+
+	"github.com/btcsuite/btcd/wire"
 )
 
 /* we need to be able to undo blocks!  for bridge nodes at least.
@@ -13,14 +16,14 @@ although actually it can make sense for non-bridge nodes to undo as well...
 
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
-type undoBlock struct {
+type UndoBlock struct {
 	numAdds   uint32   // number of adds in the block
 	positions []uint64 // position of all deletions this block
 	hashes    []Hash   // hashes that were deleted
 }
 
 // ToString returns a string
-func (u *undoBlock) ToString() string {
+func (u *UndoBlock) ToString() string {
 	s := fmt.Sprintf("- uuuu undo block %d adds\t", u.numAdds)
 	s += fmt.Sprintf("%d dels:\t", len(u.positions))
 	if len(u.positions) != len(u.hashes) {
@@ -34,8 +37,109 @@ func (u *undoBlock) ToString() string {
 	return s
 }
 
+// SerializeSize returns how many bytes it would take to serialize this undoblock.
+func (u *UndoBlock) SerializeSize() int {
+	var size int
+	size += wire.VarIntSerializeSize(uint64(u.numAdds))
+	size += wire.VarIntSerializeSize(uint64(len(u.positions)))
+
+	for _, pos := range u.positions {
+		size += wire.VarIntSerializeSize(pos)
+	}
+
+	size += wire.VarIntSerializeSize(uint64(len(u.hashes)))
+	size += len(u.hashes) * 32
+
+	return size
+}
+
+// Serialize encodes the undoblock into the given writer.
+func (u *UndoBlock) Serialize(w io.Writer) error {
+	err := wire.WriteVarInt(w, 0, uint64(u.numAdds))
+	if err != nil {
+		return err
+	}
+
+	err = wire.WriteVarInt(w, 0, uint64(len(u.positions)))
+	if err != nil {
+		return err
+	}
+
+	for _, pos := range u.positions {
+		err := wire.WriteVarInt(w, 0, pos)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	err = wire.WriteVarInt(w, 0, uint64(len(u.hashes)))
+	if err != nil {
+		return err
+	}
+
+	for _, hash := range u.hashes {
+		n, err := w.Write(hash[:])
+		if err != nil {
+			return err
+		}
+
+		if n != 32 {
+			err := fmt.Errorf("UndoBlock Serialize supposed to write 32 bytes but wrote %d bytes", n)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Deserialize decodes an undoblock from the reader.
+func (u *UndoBlock) Deserialize(r io.Reader) error {
+	numAdds, err := wire.ReadVarInt(r, 0)
+	if err != nil {
+		return err
+	}
+	u.numAdds = uint32(numAdds)
+
+	posCount, err := wire.ReadVarInt(r, 0)
+	if err != nil {
+		return err
+	}
+
+	u.positions = make([]uint64, posCount)
+
+	for i := uint64(0); i < posCount; i++ {
+		pos, err := wire.ReadVarInt(r, 0)
+		if err != nil {
+			return err
+		}
+		u.positions[i] = pos
+	}
+
+	hashCount, err := wire.ReadVarInt(r, 0)
+	if err != nil {
+		return err
+	}
+
+	u.hashes = make([]Hash, hashCount)
+
+	for i := uint64(0); i < hashCount; i++ {
+		n, err := r.Read(u.hashes[i][:])
+		if err != nil {
+			return err
+		}
+
+		if n != 32 {
+			err := fmt.Errorf("UndoBlock Deserialize supposed to read 32 bytes but read %d bytes", n)
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Undo reverts a Modify() with the given undoBlock.
-func (f *Forest) Undo(ub undoBlock) error {
+func (f *Forest) Undo(ub UndoBlock) error {
 	prevAdds := uint64(ub.numAdds)
 	prevDels := uint64(len(ub.hashes))
 	// how many leaves were there at the last block?
@@ -104,8 +208,8 @@ func (f *Forest) Undo(ub undoBlock) error {
 }
 
 // BuildUndoData makes an undoBlock from the same data that you'd give to Modify
-func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
-	ub := new(undoBlock)
+func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *UndoBlock {
+	ub := new(UndoBlock)
 	ub.numAdds = uint32(numadds)
 
 	ub.positions = dels // the deletion positions, in sorted order

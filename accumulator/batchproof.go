@@ -2,9 +2,10 @@ package accumulator
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/btcsuite/btcd/wire"
 )
 
 // BatchProof is the inclusion-proof for multiple leaves.
@@ -41,20 +42,20 @@ func (bp *BatchProof) Serialize(w io.Writer) (err error) {
 	// []Hashes (32 bytes each)
 
 	// first write the number of targets (4 byte uint32)
-	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Targets)))
+	err = wire.WriteVarInt(w, 0, uint64(len(bp.Targets)))
 	if err != nil {
 		return err
 	}
+
 	// write out number of hashes in the proof
-	err = binary.Write(w, binary.BigEndian, uint32(len(bp.Proof)))
+	err = wire.WriteVarInt(w, 0, uint64(len(bp.Proof)))
 	if err != nil {
 		return
 	}
 
 	// write out each target
 	for _, t := range bp.Targets {
-		// there's no need for these to be 64 bit for the next few decades...
-		err = binary.Write(w, binary.BigEndian, uint64(t))
+		err = wire.WriteVarInt(w, 0, t)
 		if err != nil {
 			return
 		}
@@ -79,15 +80,23 @@ func (bp *BatchProof) SerializeBytes() ([]byte, error) {
 	buf := bytes.NewBuffer(b)
 
 	// first write the number of targets (4 byte uint32)
-	err := binary.Write(buf, binary.BigEndian, uint32(len(bp.Targets)))
+	err := wire.WriteVarInt(buf, 0, uint64(len(bp.Targets)))
 	if err != nil {
 		return nil, err
 	}
 
 	// write out number of hashes in the proof
-	err = binary.Write(buf, binary.BigEndian, uint32(len(bp.Proof)))
+	err = wire.WriteVarInt(buf, 0, uint64(len(bp.Proof)))
 	if err != nil {
 		return nil, err
+	}
+
+	// write out each target
+	for _, t := range bp.Targets {
+		err = wire.WriteVarInt(buf, 0, t)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// then the rest is just hashes
@@ -104,15 +113,21 @@ func (bp *BatchProof) SerializeBytes() ([]byte, error) {
 // SerializeSize returns the number of bytes it would take to serialize
 // the BatchProof.
 func (bp *BatchProof) SerializeSize() int {
-	// 8B for numTargets and numHashes, 8B per target, 32B per hash
-	// TODO: could make this more efficient by not encoding as much empty stuff
-	return 8 + (8 * (len(bp.Targets))) + (32 * (len(bp.Proof)))
+	var size int
+	size += wire.VarIntSerializeSize(uint64(len(bp.Targets)))
+	for _, t := range bp.Targets {
+		size += wire.VarIntSerializeSize(t)
+	}
+
+	size += wire.VarIntSerializeSize(uint64(len(bp.Proof)))
+	size += len(bp.Proof) * 32
+
+	return size
 }
 
 // Deserialize gives a BatchProof back from a reader.
 func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
-	var numTargets, numHashes uint32
-	err = binary.Read(r, binary.BigEndian, &numTargets)
+	numTargets, err := wire.ReadVarInt(r, 0)
 	if err != nil {
 		return
 	}
@@ -123,7 +138,7 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 	}
 
 	// read number of hashes
-	err = binary.Read(r, binary.BigEndian, &numHashes)
+	numHashes, err := wire.ReadVarInt(r, 0)
 	if err != nil {
 		fmt.Printf("bp deser err %s\n", err.Error())
 		return
@@ -135,7 +150,7 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 
 	bp.Targets = make([]uint64, numTargets)
 	for i, _ := range bp.Targets {
-		err = binary.Read(r, binary.BigEndian, &bp.Targets[i])
+		bp.Targets[i], err = wire.ReadVarInt(r, 0)
 		if err != nil {
 			fmt.Printf("bp deser err %s\n", err.Error())
 			return
@@ -160,11 +175,9 @@ func (bp *BatchProof) Deserialize(r io.Reader) (err error) {
 // deserialized batchproof. The deserialization is the same as Deserialize() method
 // on BatchProof
 func DeserializeBPFromBytes(serialized []byte) (*BatchProof, error) {
-	var numTargets, numHashes uint32
-
 	reader := bytes.NewReader(serialized)
 
-	err := binary.Read(reader, binary.BigEndian, &numTargets)
+	numTargets, err := wire.ReadVarInt(reader, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +188,7 @@ func DeserializeBPFromBytes(serialized []byte) (*BatchProof, error) {
 	}
 
 	// read number of hashes
-	err = binary.Read(reader, binary.BigEndian, &numHashes)
+	numHashes, err := wire.ReadVarInt(reader, 0)
 	if err != nil {
 		str := fmt.Errorf("bp deser err %s\n", err.Error())
 		return nil, str
@@ -190,7 +203,7 @@ func DeserializeBPFromBytes(serialized []byte) (*BatchProof, error) {
 
 	bp.Targets = make([]uint64, numTargets)
 	for i, _ := range bp.Targets {
-		err = binary.Read(reader, binary.BigEndian, &bp.Targets[i])
+		bp.Targets[i], err = wire.ReadVarInt(reader, 0)
 		if err != nil {
 			str := fmt.Errorf("bp deser err %s\n", err.Error())
 			return nil, str
