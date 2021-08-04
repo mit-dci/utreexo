@@ -18,6 +18,7 @@ The bridgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
+  -net=signet                 configure whether to use signet. Optional.
   -forest                      select forest type to use (ram, cow, cache, disk). Defaults to disk
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path
@@ -34,7 +35,7 @@ OPTIONS:
 var (
 	argCmd = flag.NewFlagSet("", flag.ExitOnError)
 	netCmd = argCmd.String("net", "testnet",
-		"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
+		"Target network. (testnet, signet, regtest, mainnet) Usage: '-net=regtest'")
 	dataDirCmd = argCmd.String("datadir", "",
 		`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 	bridgeDirCmd = argCmd.String("bridgedir", "",
@@ -261,6 +262,13 @@ func Parse(args []string) (*Config, error) {
 		cfg.params = chaincfg.MainNetParams
 		cfg.BlockDir = filepath.Join(dataDir, "blocks")
 		cfg.UtreeDir = initUtreeDir(bridgeDir)
+	} else if *netCmd == "signet" {
+		cfg.params = chaincfg.SigNetParams
+		cfg.BlockDir = filepath.Join(
+			filepath.Join(dataDir, chaincfg.SigNetParams.Name),
+			"blocks")
+		base := filepath.Join(bridgeDir, chaincfg.SigNetParams.Name)
+		cfg.UtreeDir = initUtreeDir(base)
 	} else {
 		return nil, errInvalidNetwork(*netCmd)
 	}
