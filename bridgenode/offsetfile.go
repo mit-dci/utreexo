@@ -224,7 +224,7 @@ func writeBlockOffset(
 		undoOffset := make([]byte, 4)
 		binary.BigEndian.PutUint32(undoOffset, b.UndoPos)
 
-		// write undoblock offset
+		// write UndoBlock offset
 		wr.Write(undoOffset)
 
 		// set the tip to current block's hash
@@ -247,7 +247,7 @@ func writeBlockOffset(
 			sUndoOffset := make([]byte, 4)
 			binary.BigEndian.PutUint32(sUndoOffset, stashedBlock.UndoPos)
 
-			// write undoblock offset
+			// write UndoBlock offset
 			wr.Write(sUndoOffset)
 
 			// set the tip to current block's hash

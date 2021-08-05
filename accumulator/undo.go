@@ -13,14 +13,14 @@ although actually it can make sense for non-bridge nodes to undo as well...
 
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
-type undoBlock struct {
+type UndoBlock struct {
 	numAdds   uint32   // number of adds in the block
 	positions []uint64 // position of all deletions this block
 	hashes    []Hash   // hashes that were deleted
 }
 
 // ToString returns a string
-func (u *undoBlock) ToString() string {
+func (u *UndoBlock) ToString() string {
 	s := fmt.Sprintf("- uuuu undo block %d adds\t", u.numAdds)
 	s += fmt.Sprintf("%d dels:\t", len(u.positions))
 	if len(u.positions) != len(u.hashes) {
@@ -34,8 +34,8 @@ func (u *undoBlock) ToString() string {
 	return s
 }
 
-// Undo reverts a Modify() with the given undoBlock.
-func (f *Forest) Undo(ub undoBlock) error {
+// Undo reverts a Modify() with the given UndoBlock.
+func (f *Forest) Undo(ub UndoBlock) error {
 	prevAdds := uint64(ub.numAdds)
 	prevDels := uint64(len(ub.hashes))
 	// how many leaves were there at the last block?
@@ -60,7 +60,7 @@ func (f *Forest) Undo(ub undoBlock) error {
 	// forest bounds to the right; they will be shuffled in to the left.
 	for i, h := range ub.hashes {
 		if h == empty {
-			return fmt.Errorf("hash %d in undoblock is empty", i)
+			return fmt.Errorf("hash %d in UndoBlock is empty", i)
 		}
 		f.data.write(f.numLeaves+uint64(i), h)
 		dirt = append(dirt, f.numLeaves+uint64(i))
@@ -103,9 +103,9 @@ func (f *Forest) Undo(ub undoBlock) error {
 	return nil
 }
 
-// BuildUndoData makes an undoBlock from the same data that you'd give to Modify
-func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *undoBlock {
-	ub := new(undoBlock)
+// BuildUndoData makes an UndoBlock from the same data that you'd give to Modify
+func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *UndoBlock {
+	ub := new(UndoBlock)
 	ub.numAdds = uint32(numadds)
 
 	ub.positions = dels // the deletion positions, in sorted order

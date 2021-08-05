@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -70,6 +71,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
 	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
+	undoChan := make(chan accumulator.UndoBlock, 10)
 
 	// sorta ugly as in one of these will just be sitting around
 	// doing nothing
@@ -109,7 +111,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, cfg.UtreeDir, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, undoChan, cfg.UtreeDir, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -156,12 +158,14 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
-		// TODO: Don't ignore undoblock
+		// TODO: Don't ignore UndoBlock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
+		undo, err = forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
+
+		undoChan <- undo
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)

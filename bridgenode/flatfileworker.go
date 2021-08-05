@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 )
 
@@ -60,6 +61,7 @@ type flatFileState struct {
 func flatFileWorker(
 	proofChan chan btcacc.UData,
 	ttlResultChan chan ttlResultBlock,
+	UndoBlockChan chan accumulator.UndoBlock,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
 
