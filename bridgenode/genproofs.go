@@ -160,12 +160,12 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 		// TODO: Don't ignore UndoBlock
 		// Modifies the forest with the given TXINs and TXOUTs
-		undo, err = forest.Modify(blockAdds, ud.AccProof.Targets)
+		undo, err := forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
 
-		undoChan <- undo
+		undoChan <- *undo
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
