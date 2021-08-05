@@ -1,6 +1,8 @@
 package accumulator
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 )
 
@@ -121,4 +123,40 @@ func (f *Forest) BuildUndoData(numadds uint64, dels []uint64) *UndoBlock {
 	}
 
 	return ub
+}
+
+// Serialization of UndoBlocks
+func (ud *UndoBlock) Serialize() ([]byte, error) {
+	// initialize size of buffer to be made
+	size := 8 + len(ud.positions) + len(ud.hashes)*32
+	serialized := make([]byte, 0, size)
+
+	buf := bytes.NewBuffer(serialized)
+
+	err := binary.Write(buf, binary.BigEndian, uint32(len(ud.positions)))
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Write(buf, binary.BigEndian, uint32(len(ud.hashes)))
+	if err != nil {
+		return nil, err
+	}
+
+	// write the undoblock positions of all deletions in the buffer
+	for _, pos := range ud.positions {
+		err = binary.Write(buf, binary.BigEndian, uint64(pos))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// write the hash of deletions in the buffer
+	for _, hash := range ud.hashes {
+		err = binary.Write(buf, binary.BigEndian, hash[:])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
 }
