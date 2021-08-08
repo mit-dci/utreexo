@@ -16,6 +16,7 @@ although actually it can make sense for non-bridge nodes to undo as well...
 // blockUndo is all the data needed to undo a block: number of adds,
 // and all the hashes that got deleted and where they were from
 type UndoBlock struct {
+	Height    int32    // height of block
 	numAdds   uint32   // number of adds in the block
 	positions []uint64 // position of all deletions this block
 	hashes    []Hash   // hashes that were deleted

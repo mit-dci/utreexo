@@ -88,11 +88,18 @@ type offsetDir struct {
 	lastIndexOffsetHeightFile string
 }
 
+type undoDir struct {
+	base       string
+	undoFile   string
+	offsetFile string
+}
+
 // All your utreexo bridgenode file paths in a nice and convinent struct
 type utreeDir struct {
 	OffsetDir offsetDir
 	ProofDir  proofDir
 	ForestDir forestDir
+	UndoDir   undoDir
 	Ttldb     string
 }
 
@@ -124,12 +131,20 @@ func initUtreeDir(basePath string) utreeDir {
 		cowForestCurFile:                filepath.Join(cowDir, "CURRENT"),
 	}
 
+	undoBase := filepath.Join(basePath, "undoblockdata")
+	undo := undoDir{
+		base:       undoBase,
+		undoFile:   filepath.Join(undoBase, "undo.dat"),
+		offsetFile: filepath.Join(undoBase, "offset.dat"),
+	}
+
 	ttldb := filepath.Join(basePath, "ttldb")
 
 	return utreeDir{
 		OffsetDir: off,
 		ProofDir:  proof,
 		ForestDir: forest,
+		UndoDir:   undo,
 		Ttldb:     ttldb,
 	}
 }
@@ -149,6 +164,10 @@ func makePaths(dir utreeDir) error {
 		return fmt.Errorf("init makePaths error %s")
 	}
 	err = os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.UndoDir.base, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("init makePaths error %s")
 	}

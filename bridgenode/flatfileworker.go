@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 )
 
@@ -60,6 +61,7 @@ type flatFileState struct {
 func flatFileWorker(
 	proofChan chan btcacc.UData,
 	ttlResultChan chan ttlResultBlock,
+	undoChan chan accumulator.UndoBlock,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
 
@@ -85,6 +87,26 @@ func flatFileWorker(
 		panic(err)
 	}
 
+	// for the undofiles
+	var uf flatFileState
+	uf.offsetFile, err = os.OpenFile(
+		utreeDir.UndoDir.offsetFile, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	uf.proofFile, err = os.OpenFile(
+		utreeDir.UndoDir.undoFile, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	uf.fileWait = fileWait
+
+	err = uf.ffInit()
+	if err != nil {
+		panic(err)
+	}
 	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
 	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
 	// it should keep both buffers about even.  If it keeps doing proofs and the ttl
@@ -117,6 +139,11 @@ func flatFileWorker(
 			}
 
 			err = ff.writeTTLs(ttlRes)
+			if err != nil {
+				panic(err)
+			}
+		case undo := <-undoChan:
+			err = uf.writeUndoBlock(undo)
 			if err != nil {
 				panic(err)
 			}
@@ -171,6 +198,55 @@ func (ff *flatFileState) ffInit() error {
 		// start writing at block 1
 		ff.currentHeight = 1
 	}
+
+	return nil
+}
+
+func (ff *flatFileState) writeUndoBlock(ub accumulator.UndoBlock) error {
+	undoSize := ub.SerializeSize()
+	buf := make([]byte, undoSize)
+
+	// write the offset of current of undo block to offset file
+	buf = buf[:8]
+	ff.offsets = append(ff.offsets, ff.currentOffset)
+
+	binary.BigEndian.PutUint64(buf, uint64(ff.currentOffset))
+	_, err := ff.offsetFile.WriteAt(buf, int64(8*ub.Height))
+	if err != nil {
+		return err
+	}
+
+	// write to undo file
+	_, err = ff.proofFile.WriteAt([]byte{0xaa, 0xff, 0xaa, 0xff}, ff.currentOffset)
+	if err != nil {
+		return err
+	}
+
+	//prefix with size of the undoblocks
+	buf = buf[:4]
+	binary.BigEndian.PutUint32(buf, uint32(undoSize))
+	_, err = ff.proofFile.WriteAt(buf, ff.currentOffset+4)
+	if err != nil {
+		return err
+	}
+
+	// Serialize UndoBlock
+	buf = buf[:0]
+	bytesBuf := bytes.NewBuffer(buf)
+	err = ub.Serialize(bytesBuf)
+	if err != nil {
+		return err
+	}
+
+	_, err = ff.proofFile.WriteAt(bytesBuf.Bytes(), ff.currentOffset+4+4)
+	if err != nil {
+		return err
+	}
+
+	ff.currentOffset = ff.currentOffset + int64(undoSize) + 8
+	ff.currentHeight++
+
+	ff.fileWait.Done()
 
 	return nil
 }
