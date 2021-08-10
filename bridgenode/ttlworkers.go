@@ -225,11 +225,11 @@ func TTLLookupWorker(
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
-			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d ttlidx %d\n",
-			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
-			// lub.destroyHeight-resultBlock.results[i].createHeight,
-			// stxo.height,
-			// resultBlock.results[i].indexWithinBlock)
+			fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
+				lub.destroyHeight, stxo.hashprefix, stxo.idx,
+				lub.destroyHeight-resultBlock.results[i].createHeight,
+				stxo.height,
+				resultBlock.results[i].indexWithinBlock)
 		}
 		ttlResultChan <- resultBlock
 	}
