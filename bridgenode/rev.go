@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/mit-dci/utreexo/util"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -70,7 +72,8 @@ func BlockAndRevReader(
 			blocksToRead = cfg.quitAfter - finishedHeight
 		}
 		blocks, revs, err :=
-			GetRawBlocksFromDisk(finishedHeight+1, blocksToRead, offsetFile, cfg.BlockDir)
+			GetRawBlocksFromDisk(
+				finishedHeight+1, blocksToRead, offsetFile, cfg.BlockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
@@ -83,6 +86,8 @@ func BlockAndRevReader(
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
+			bnr.inCount, bnr.outcount, bnr.inSkipList, bnr.outSkipList =
+				util.DedupeBlock(bnr.Blk)
 			wg.Add(2)
 			aChan <- bnr
 			bChan <- bnr
@@ -306,12 +311,13 @@ func GetBlockBytesFromFile(
 }
 
 // BlockAndRev is a regular block and a rev block stuck together
-// also contains the skiplists
+// also contains the skiplists, and number of non-skipped inputs and outputs
 type blockAndRev struct {
-	Height          int32
-	Rev             RevBlock
-	Blk             *btcutil.Block
-	inskip, outskip []uint32
+	Height                  int32
+	Rev                     RevBlock
+	Blk                     *btcutil.Block
+	inSkipList, outSkipList []uint32
+	inCount, outcount       int
 }
 
 /*

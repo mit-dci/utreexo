@@ -132,7 +132,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
-		blockAdds, delLeaves, err := blockToAddDel(bnr)
+		blockAdds, delLeaves, err := bnr.toAddDel()
 		if err != nil {
 			return err
 		}

@@ -106,7 +106,8 @@ func BlockToDelOPs(
 // within the block as a whole, even the coinbase tx.
 // So the coinbase tx in & output numbers affect the skip lists even though
 // the coinbase ins/outs can never be deduped.  it's simpler that way.
-func DedupeBlock(blk *btcutil.Block) (inCount, outCount int, inskip []uint32, outskip []uint32) {
+func DedupeBlock(
+	blk *btcutil.Block) (inCount, outCount int, inskip, outskip []uint32) {
 	var i uint32
 	// wire.Outpoints are comparable with == which is nice.
 	inmap := make(map[wire.OutPoint]uint32)

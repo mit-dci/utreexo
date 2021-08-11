@@ -9,7 +9,6 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/mit-dci/utreexo/btcacc"
-	"github.com/mit-dci/utreexo/util"
 	uwire "github.com/mit-dci/utreexo/wire"
 
 	"github.com/mit-dci/utreexo/accumulator"
@@ -127,28 +126,31 @@ type ttlResult struct {
 	indexWithinBlock uint16 // index in that block where the txo is created
 }
 
-// blockToAddDel turns a block into add leaves and del leaves
-func blockToAddDel(bnr blockAndRev) (
+func (bnr *blockAndRev) toAddDel() (
 	blockAdds []accumulator.Leaf, delLeaves []btcacc.LeafData, err error) {
 
-	inCount, outCount, inskip, outskip := util.DedupeBlock(bnr.Blk)
-	delLeaves, err = blockNRevToDelLeaves(bnr, inskip, inCount)
+	delLeaves, err = bnr.toDelLeaves()
 	if err != nil {
 		return
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height, outCount)
+	blockAdds = uwire.BlockToAddLeaves(
+		bnr.Blk, nil, bnr.outSkipList, bnr.Height, bnr.outcount)
 
 	return
+
 }
 
 // blockNRevToDelLeaves turns a block's inputs into delLeaves to be removed from the
 // accumulator
-func blockNRevToDelLeaves(bnr blockAndRev, skiplist []uint32, inCount int) (
+func (bnr *blockAndRev) toDelLeaves() (
 	delLeaves []btcacc.LeafData, err error) {
 
-	delLeaves = make([]btcacc.LeafData, 0, inCount-len(skiplist))
+	delLeaves = make([]btcacc.LeafData, 0, bnr.inCount)
+	inskip := bnr.inSkipList
+	// we never modify the contents of this slice
+	// only the borders of the slice, so this shouldn't change bnr.inSkipList
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions())-1 != len(bnr.Rev.Txs) {
@@ -173,10 +175,10 @@ func blockNRevToDelLeaves(bnr blockAndRev, skiplist []uint32, inCount int) (
 		}
 		// loop through inputs
 		for i, txin := range tx.MsgTx().TxIn {
-			// check if on skiplist.  If so, don't make leaf
-			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
+			// check if on inskip.  If so, don't make leaf
+			if len(inskip) > 0 && inskip[0] == blockInIdx {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
-				skiplist = skiplist[1:]
+				inskip = inskip[1:]
 				blockInIdx++
 				continue
 			}

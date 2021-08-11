@@ -67,9 +67,12 @@ func UblockNetworkReader(
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
 // uses remember slice up to number of txos, but doesn't check that it's the
 // right length.  Similar with skiplist, doesn't check it.
-func BlockToAddLeaves(blk *btcutil.Block,
-	remember []bool, skiplist []uint32,
-	height int32, outCount int) (leaves []accumulator.Leaf) {
+func BlockToAddLeaves(
+	blk *btcutil.Block,
+	remember []bool,
+	skiplist []uint32,
+	height int32,
+	outCount int) (leaves []accumulator.Leaf) {
 
 	leaves = make([]accumulator.Leaf, 0, outCount-len(skiplist))
 

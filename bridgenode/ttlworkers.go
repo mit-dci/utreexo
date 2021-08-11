@@ -63,8 +63,8 @@ func BNRTTLSpliter(
 		var wb ttlWriteBlock
 		var inskippos, outskippos, outputInBlock, inputInBlock uint32
 		var skipOutputs, skipInputs bool
-		inskipMax := uint32(len(bnr.inskip))
-		outskipMax := uint32(len(bnr.outskip))
+		inskipMax := uint32(len(bnr.inSkipList))
+		outskipMax := uint32(len(bnr.outSkipList))
 		lub.destroyHeight = bnr.Height
 		transactions := bnr.Blk.Transactions()
 
@@ -88,7 +88,7 @@ func BNRTTLSpliter(
 			for _, _ = range mtx.TxOut {
 				// if txo is on the out skiplist, decrement skippedTxoInBlock
 				// as it has already been added
-				if skipOutputs && bnr.outskip[outskippos] == outputInBlock {
+				if skipOutputs && bnr.outSkipList[outskippos] == outputInBlock {
 					outskippos++
 					txoInBlock--
 					skipOutputs = outskippos != outskipMax
@@ -103,7 +103,7 @@ func BNRTTLSpliter(
 					inputInBlock += uint32(len(tx.MsgTx().TxIn))
 					break // skip coinbase input
 				}
-				if skipInputs && bnr.inskip[inskippos] == inputInBlock {
+				if skipInputs && bnr.inSkipList[inskippos] == inputInBlock {
 					inskippos++
 					inputInBlock++
 					skipInputs = inskippos != inskipMax
