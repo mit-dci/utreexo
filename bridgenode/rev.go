@@ -83,7 +83,6 @@ func BlockAndRevReader(
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
-			bnr.inskip, bnr.outskip = bnr.Blk.DedupeBlock()
 			wg.Add(2)
 			aChan <- bnr
 			bChan <- bnr

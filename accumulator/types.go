@@ -63,11 +63,19 @@ type simLeaf struct {
 // parentHash gets you the merkle parent of two children hashes.
 func parentHash(l, r Hash) Hash {
 	// TODO So far no committing to height.
-	var empty Hash
 	if l == empty || r == empty {
 		panic("got an empty leaf here. ")
 	}
-	return sha512.Sum512_256(append(l[:], r[:]...))
+	h := sha512.New512_256()
+	h.Write(l[:])
+	h.Write(r[:])
+
+	// What h.Sum returns is always 32 bytes but since h.Sum is an interface that
+	// returns a slice of bytes, Go doesn't know this requires slice -> array
+	// copying.
+	rh := Hash{}
+	copy(rh[:], h.Sum(nil))
+	return rh
 }
 
 // simChain is for testing; it spits out "blocks" of adds and deletes

@@ -133,7 +133,7 @@ func createRandomHash(i int64) [32]byte {
 func TestCowForestWrite(t *testing.T) {
 	// keep only 1 treetable in memory to force flush and
 	// test the flushing/restoring as well
-	f := NewForest(nil, false, os.TempDir(), 1)
+	f := NewForest(CowForest, nil, os.TempDir(), 1)
 
 	numAdds := uint32(10)   // adds per block
 	sc := newSimChain(0x07) // A chain simulator

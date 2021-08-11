@@ -5,12 +5,9 @@ go 1.12
 require (
 	github.com/adiabat/bech32 v0.0.0-20170505011816-6289d404861d
 	github.com/btcsuite/btcd v0.21.0-beta.0.20201124191514-610bb55ae85c
-	github.com/btcsuite/btcutil v1.0.2
+	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/golang/snappy v0.0.1 // indirect
-	github.com/syndtr/goleveldb v1.0.0
-	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9 // indirect
-	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
+	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
 )
 
-replace github.com/btcsuite/btcd => /home/tx/go/src/github.com/mit-dci/utcd
-replace github.com/btcsuite/btcutil => github.com/mit-dci/utcutil v1.0.3-0.20210201144513-fb3ce8742498
+replace github.com/btcsuite/btcd => github.com/mit-dci/utcd v0.21.0-beta.0.20210716180138-e7464b93a1b7

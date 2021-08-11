@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
+	"github.com/mit-dci/utreexo/util"
 	uwire "github.com/mit-dci/utreexo/wire"
 )
 
@@ -148,7 +149,7 @@ func (c *Csn) putBlockInPollard(
 
 	nl, h := c.pollard.ReconstructStats()
 
-	_, outskip := ub.Block.DedupeBlock()
+	_, outCount, _, outskip := util.DedupeBlock(ub.Block)
 
 	err := ub.ProofSanity(nl, h)
 	if err != nil {
@@ -199,7 +200,7 @@ func (c *Csn) putBlockInPollard(
 
 	// get hashes to add into the accumulator
 	blockAdds := uwire.BlockToAddLeaves(
-		ub.Block, remember, outskip, ub.UtreexoData.Height)
+		ub.Block, remember, outskip, ub.UtreexoData.Height, outCount)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
 	// Utreexo tree modification. blockAdds are the added txos and

@@ -32,9 +32,8 @@ func TestPollardFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
 func TestPollardSimpleIngest(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	adds := make([]Leaf, 15)
 	for i := 0; i < len(adds); i++ {
 		adds[i].Hash[0] = uint8(i + 1)
@@ -64,7 +63,7 @@ func TestPollardSimpleIngest(t *testing.T) {
 }
 
 func pollardRandomRemember(blocks int32) error {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	var p Pollard
 
@@ -155,7 +154,7 @@ func pollardRandomRemember(blocks int32) error {
 // fixedPollard adds and removes things in a non-random way
 func fixedPollard(leaves int32) error {
 	fmt.Printf("\t\tpollard test add %d remove 1\n", leaves)
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	leafCounter := uint64(0)
 
@@ -220,7 +219,7 @@ func TestCache(t *testing.T) {
 	chain := newSimChain(7)
 	chain.lookahead = 8
 
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	var p Pollard
 
 	// this leaf map holds all the leaves at the current height and is used to check if the pollard

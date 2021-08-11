@@ -8,7 +8,7 @@ import (
 // TestIncompleteBatchProof tests that a incomplete (missing some hashes) batchproof does not pass verification.
 func TestIncompleteBatchProof(t *testing.T) {
 	// Create forest in memory
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	// last index to be deleted. Same as blockDels
 	lastIdx := uint64(7)
@@ -51,7 +51,7 @@ func TestIncompleteBatchProof(t *testing.T) {
 // Utreexo forest.
 func TestVerifyBatchProof(t *testing.T) {
 	// Create forest in memory
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	// last index to be deleted. Same as blockDels
 	lastIdx := uint64(7)
@@ -116,7 +116,7 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 	adds[0].Hash = Hash{1} // will be deleted
 	adds[1].Hash = Hash{2} // will be proven
 
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	_, err := f.Modify(adds, nil)
 	if err != nil {
 		t.Fatal(fmt.Errorf("Modify with initial adds: %v", err))

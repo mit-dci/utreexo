@@ -22,7 +22,7 @@ To initialize a pollard or forest:
 ```
 	// inits a Forest in memory. Refer to the documentation for NewForest() for an in-detail explanation
         // of all the different forest types.
-	forest := accumulator.NewForest(nil, false, "", 0)
+	forest := accumulator.NewForest(RamForest, nil, "", 0)
 
 	// declare pollard. No init function for pollard
 	var pollard accumulator.Pollard

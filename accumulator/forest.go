@@ -93,59 +93,57 @@ type Forest struct {
 	timeInVerify time.Duration
 }
 
+// ForestType defines the 4 type of forests:
+// DiskForest, RamForest, CacheForest, CowForest
+type ForestType int
+
+const (
+	// DiskForest  - keeps the entire forest on disk as a flat file. Is the slowest
+	//               of them all. Pass an os.File as forestFile to create a DiskForest.
+	DiskForest ForestType = iota
+	// RamForest   - keeps the entire forest on ram as a slice. Is the fastest but
+	//               takes up a lot of ram. Is compatible with DiskForest (as in you
+	//               can restart as RamForest even if you created a DiskForest. Pass
+	//               nil, as the forestFile to create a RamForest.
+	RamForest
+	// CacheForest - keeps the entire forest on disk but caches recent nodes. It's
+	//               faster than disk. Is compatible with the above two forest types.
+	//               Pass cached = true to create a cacheForest.
+	CacheForest
+	// CowForest   - A copy-on-write (really a redirect on write) forest. It strikes
+	//               a balance between ram usage and speed. Not compatible with other
+	//               forest types though (meaning there isn't functionality implemented
+	//               to convert a CowForest to DiskForest and vise-versa). Pass a filepath
+	//               and cowMaxCache(how much MB to use in ram) to create a CowForest.
+	CowForest
+)
+
 // NewForest initializes a Forest and returns it. The given arguments determine
-// what type of forest it will be. There are currently four types:
-//
-// DiskForest  - keeps the entire forest on disk as a flat file. Is the slowest
-//               of them all. Pass an os.File as forestFile to create a DiskForest.
-//
-// RamForest   - keeps the entire forest on ram as a slice. Is the fastest but
-//               takes up a lot of ram. Is compatible with DiskForest (as in you
-//               can restart as RamForest even if you created a DiskForest. Pass
-//               nil, as the forestFile to create a RamForest.
-//
-// CacheForest - keeps the entire forest on disk but caches recent nodes. It's
-//               faster than disk. Is compatible with the above two forest types.
-//               Pass cached = true to create a cacheForest.
-//
-// CowForest   - A copy-on-write (really a redirect on write) forest. It strikes
-//               a balance between ram usage and speed. Not compatible with other
-//               forest types though (meaning there isn't functionality implemented
-//               to convert a CowForest to DiskForest and vise-versa). Pass a filepath
-//               and cowMaxCache(how much MB to use in ram) to create a CowForest.
-func NewForest(forestFile *os.File, cached bool,
-	cowPath string, cowMaxCache int) *Forest {
+// what type of forest it will be.
+func NewForest(forestType ForestType, forestFile *os.File, cowPath string, cowMaxCache int) *Forest {
 
 	f := new(Forest)
 	f.numLeaves = 0
 	f.rows = 0
 
-	if forestFile == nil {
-		if cowPath == "" {
-			// for in-ram
-			f.data = new(ramForestData)
-		} else {
-			// Init cowForest
-			d, err := initialize(cowPath, cowMaxCache)
-			if err != nil {
-				panic(err)
-			}
-			f.data = d
+	switch forestType {
+	case DiskForest:
+		d := new(diskForestData)
+		d.file = forestFile
+		f.data = d
+	case RamForest:
+		f.data = new(ramForestData)
+	case CacheForest:
+		d := new(cacheForestData)
+		d.file = forestFile
+		d.cache = newDiskForestCache(20)
+		f.data = d
+	case CowForest:
+		d, err := initialize(cowPath, cowMaxCache)
+		if err != nil {
+			panic(err)
 		}
-
-	} else {
-		// forest on disk or cached
-		if cached {
-			d := new(cacheForestData)
-			d.file = forestFile
-			d.cache = newDiskForestCache(20)
-			f.data = d
-		} else {
-			// for on-disk
-			d := new(diskForestData)
-			d.file = forestFile
-			f.data = d
-		}
+		f.data = d
 	}
 
 	f.data.resize((2 << f.rows) - 1)
@@ -407,7 +405,7 @@ func (f *Forest) addv2(adds []Leaf) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
+func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 	numdels, numadds := len(delsUn), len(adds)
 	delta := int64(numadds - numdels) // watch 32/64 bit
 	if int64(f.numLeaves)+delta < 0 {
@@ -465,7 +463,9 @@ func (f *Forest) reMap(destRows uint8) error {
 		return fmt.Errorf("changing by more than 1 not programmed yet")
 	}
 
-	fmt.Printf("remap forest %d rows -> %d rows\n", f.rows, destRows)
+	if verbose {
+		fmt.Printf("remap forest %d rows -> %d rows\n", f.rows, destRows)
+	}
 
 	// for row reduction
 	if destRows < f.rows {

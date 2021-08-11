@@ -81,10 +81,11 @@ func BNRTTLSpliter(
 			wb.mTxids[txInBlock].startsAt = txoInBlock
 			// first add all the outputs in this tx, then range through the
 			// outputs and decrement them if they're on the skiplist
-			txoInBlock += uint16(len(tx.Txos()))
+			mtx := tx.MsgTx()
+			txoInBlock += uint16(len(mtx.TxOut))
 			// look at number of txos; the txoinblock doesn't increment if
 			// it's on the outskiplist.
-			for _, _ = range tx.Txos() {
+			for _, _ = range mtx.TxOut {
 				// if txo is on the out skiplist, decrement skippedTxoInBlock
 				// as it has already been added
 				if skipOutputs && bnr.outskip[outskippos] == outputInBlock {
