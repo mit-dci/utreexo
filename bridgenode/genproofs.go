@@ -60,9 +60,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	forest, height, knownTipHeight, err :=
 		InitBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
-		err := fmt.Errorf("initialization error.  If your .blk and .dat files are "+
-			"not in %s, specify alternate path with -datadir\n.", cfg.BlockDir)
-		return err
+		returnErr := fmt.Errorf("initialization error: %s.\nIf your .blk and .dat files are not in %s,"+
+			"specify alternate path with -datadir", err, cfg.BlockDir)
+		return returnErr
 	}
 
 	// async ttldb variables
