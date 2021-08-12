@@ -86,7 +86,7 @@ func BlockAndRevReader(
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
-			bnr.inCount, bnr.outcount, bnr.inSkipList, bnr.outSkipList =
+			bnr.inCount, bnr.outCount, bnr.inSkipList, bnr.outSkipList =
 				util.DedupeBlock(bnr.Blk)
 			wg.Add(2)
 			aChan <- bnr
@@ -317,7 +317,7 @@ type blockAndRev struct {
 	Rev                     RevBlock
 	Blk                     *btcutil.Block
 	inSkipList, outSkipList []uint32
-	inCount, outcount       int
+	inCount, outCount       int
 }
 
 /*

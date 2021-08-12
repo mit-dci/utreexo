@@ -113,8 +113,8 @@ func DedupeBlock(
 	inmap := make(map[wire.OutPoint]uint32)
 
 	// go through txs then inputs building map
-	for coinbase, tx := range blk.Transactions() {
-		if coinbase == 0 { // coinbase tx can't be deduped
+	for coinbaseIfZero, tx := range blk.Transactions() {
+		if coinbaseIfZero == 0 { // coinbase tx can't be deduped
 			i += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
 			continue
 		}
@@ -127,14 +127,15 @@ func DedupeBlock(
 
 	i = 0
 	// start over, go through outputs finding skips
-	for coinbase, tx := range blk.Transactions() {
-		txOut := tx.MsgTx().TxOut
-		if coinbase == 0 { // coinbase tx can't be deduped
-			i += uint32(len(txOut)) // coinbase can have multiple inputs
-			continue
-		}
+	for _, tx := range blk.Transactions() {
+		txOuts := tx.MsgTx().TxOut
+		for outidx, txOut := range txOuts {
+			if IsUnspendable(txOut) {
+				outskip = append(outskip, i)
+				i++
+				continue
+			}
 
-		for outidx, _ := range txOut {
 			op := wire.OutPoint{Hash: *tx.Hash(), Index: uint32(outidx)}
 			inpos, exists := inmap[op]
 			if exists {

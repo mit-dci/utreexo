@@ -136,7 +136,7 @@ func (bnr *blockAndRev) toAddDel() (
 
 	// this is bridgenode, so don't need to deal with memorable leaves
 	blockAdds = uwire.BlockToAddLeaves(
-		bnr.Blk, nil, bnr.outSkipList, bnr.Height, bnr.outcount)
+		bnr.Blk, nil, bnr.outSkipList, bnr.Height, bnr.outCount)
 
 	return
 
