@@ -147,8 +147,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		ud.TxoTTLs = make([]int32, len(blockAdds))
 
 		if bnr.outCount > 2 {
-			fmt.Printf("h %d has %d unskipped, %d skipped outputs\n",
-				bnr.Height, bnr.outCount, len(bnr.outSkipList))
+			fmt.Printf("h %d %d out %d skip %d in %d skip\n",
+				bnr.Height, bnr.outCount, len(bnr.outSkipList),
+				bnr.inCount, len(bnr.inSkipList))
 		}
 
 		// send proof udata to channel to be written to disk

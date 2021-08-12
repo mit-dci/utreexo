@@ -77,25 +77,20 @@ func BlockToDelOPs(
 
 	delOPs := make([]wire.OutPoint, 0, inCount-len(inskip))
 
-	var blockInIdx uint32
-	for txinblock, tx := range transactions {
-		if txinblock == 0 {
-			blockInIdx += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
-			continue
-		}
-
+	var inputInBlock uint32
+	for _, tx := range transactions {
 		// loop through inputs
 		for _, txin := range tx.MsgTx().TxIn {
 			// check if on skiplist.  If so, don't make leaf
-			if len(inskip) > 0 && inskip[0] == blockInIdx {
+			if len(inskip) > 0 && inskip[0] == inputInBlock {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
 				inskip = inskip[1:]
-				blockInIdx++
+				inputInBlock++
 				continue
 			}
 
 			delOPs = append(delOPs, txin.PreviousOutPoint)
-			blockInIdx++
+			inputInBlock++
 		}
 	}
 	return delOPs
@@ -115,7 +110,8 @@ func DedupeBlock(
 	// go through txs then inputs building map
 	for coinbaseIfZero, tx := range blk.Transactions() {
 		if coinbaseIfZero == 0 { // coinbase tx can't be deduped
-			i += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
+			inskip = []uint32{0}
+			i += uint32(len(tx.MsgTx().TxIn)) // coinbase must have 1 input (?)
 			continue
 		}
 		for _, in := range tx.MsgTx().TxIn {

@@ -311,13 +311,13 @@ func GetBlockBytesFromFile(
 }
 
 // BlockAndRev is a regular block and a rev block stuck together
-// also contains the skiplists, and number of non-skipped inputs and outputs
+// also contains the skiplists, and number of total inputs and outputs
 type blockAndRev struct {
 	Height                  int32
 	Rev                     RevBlock
 	Blk                     *btcutil.Block
 	inSkipList, outSkipList []uint32
-	inCount, outCount       int
+	inCount, outCount       int // includes skipped
 }
 
 /*

@@ -147,7 +147,12 @@ func (bnr *blockAndRev) toAddDel() (
 func (bnr *blockAndRev) toDelLeaves() (
 	delLeaves []btcacc.LeafData, err error) {
 
-	delLeaves = make([]btcacc.LeafData, 0, bnr.inCount)
+	// finish early if there's nothing to prove
+	if bnr.inCount-len(bnr.inSkipList) == 0 {
+		return
+	}
+
+	delLeaves = make([]btcacc.LeafData, 0, bnr.inCount-len(bnr.inSkipList))
 	inskip := bnr.inSkipList
 	// we never modify the contents of this slice
 	// only the borders of the slice, so this shouldn't change bnr.inSkipList
@@ -159,27 +164,35 @@ func (bnr *blockAndRev) toDelLeaves() (
 		return
 	}
 
-	var blockInIdx uint32
-	for txinblock, tx := range bnr.Blk.Transactions() {
-		if txinblock == 0 {
-			blockInIdx++ // coinbase tx always has 1 input
+	var inputInBlock uint32
+	for txInBlock, tx := range bnr.Blk.Transactions() {
+		if txInBlock == 0 {
+			// make sure input 0 in the block is skipped
+			if len(inskip) < 1 || inskip[0] != 0 {
+				err = fmt.Errorf("input 0 (coinbase) wasn't skipped")
+				return
+			}
+			inskip = inskip[1:]
+			inputInBlock++
 			continue
 		}
-		txinblock--
+
+		txInBlock--
 		// make sure there's the same number of txins
-		if len(tx.MsgTx().TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
-			err = fmt.Errorf("genDels block %d tx %d has %d inputs but %d rev entries",
-				bnr.Height, txinblock+1,
-				len(tx.MsgTx().TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
+		if len(tx.MsgTx().TxIn) != len(bnr.Rev.Txs[txInBlock].TxIn) {
+			err = fmt.Errorf("genDels h %d tx %d: %d inputs but %d rev entries",
+				bnr.Height, txInBlock,
+				len(tx.MsgTx().TxIn), len(bnr.Rev.Txs[txInBlock].TxIn))
 			return
 		}
+
 		// loop through inputs
 		for i, txin := range tx.MsgTx().TxIn {
 			// check if on inskip.  If so, don't make leaf
-			if len(inskip) > 0 && inskip[0] == blockInIdx {
+			if len(inskip) > 0 && inskip[0] == inputInBlock {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
 				inskip = inskip[1:]
-				blockInIdx++
+				inputInBlock++
 				continue
 			}
 
@@ -189,14 +202,14 @@ func (bnr *blockAndRev) toDelLeaves() (
 			l.TxHash = btcacc.Hash(txin.PreviousOutPoint.Hash)
 			l.Index = txin.PreviousOutPoint.Index
 
-			l.Height = bnr.Rev.Txs[txinblock].TxIn[i].Height
-			l.Coinbase = bnr.Rev.Txs[txinblock].TxIn[i].Coinbase
+			l.Height = bnr.Rev.Txs[txInBlock].TxIn[i].Height
+			l.Coinbase = bnr.Rev.Txs[txInBlock].TxIn[i].Coinbase
 			// TODO get blockhash from headers here -- empty for now
 			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
-			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
-			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
+			l.Amt = bnr.Rev.Txs[txInBlock].TxIn[i].Amount
+			l.PkScript = bnr.Rev.Txs[txInBlock].TxIn[i].PKScript
 			delLeaves = append(delLeaves, l)
-			blockInIdx++
+			inputInBlock++
 		}
 	}
 	return
