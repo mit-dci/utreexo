@@ -226,11 +226,11 @@ func TTLLookupWorker(
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
-			fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
-				lub.destroyHeight, stxo.hashprefix, stxo.idx,
-				lub.destroyHeight-resultBlock.results[i].createHeight,
-				stxo.height,
-				resultBlock.results[i].indexWithinBlock)
+			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
+			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
+			// lub.destroyHeight-resultBlock.results[i].createHeight,
+			// stxo.height,
+			// resultBlock.results[i].indexWithinBlock)
 		}
 		ttlResultChan <- resultBlock
 	}
@@ -270,7 +270,8 @@ func binSearch(mi miniIn,
 	}
 	// fmt.Printf("%x got position %d width %d, read bytes %x from pos %d\n",
 	// mi.hashprefix, pos, width, positionBytes, (pos*8)+6)
-	// fmt.Printf("got match at position %d of %d\n", pos, width)
+	fmt.Printf("got match at position %d of %d, posbytes %x\n",
+		pos, width, positionBytes)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
 	return binary.BigEndian.Uint16(positionBytes[:]) + mi.idx
@@ -286,8 +287,8 @@ func searchReaderFunc(
 	return func(pos int) bool {
 		var miniTxidBytes [6]byte
 		mtxFile.ReadAt(miniTxidBytes[:], int64(pos+startPosition)*8)
-		// fmt.Printf("looking for %x at pos %d idx %d byte position %d, found %x\n",
-		// lookFor, pos, pos+startPosition, int64(pos+startPosition)*8, miniTxidBytes)
+		fmt.Printf("looking for %x at pos %d idx %d byte position %d, found %x\n",
+			lookFor, pos, pos+startPosition, int64(pos+startPosition)*8, miniTxidBytes)
 		return miniBytesToUint64(miniTxidBytes) >= miniBytesToUint64(lookFor)
 	}
 }

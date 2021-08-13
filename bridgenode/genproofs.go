@@ -127,7 +127,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		}
 
 		if bnr.Blk == nil {
-			fmt.Print("h %d empty block ", bnr.Height)
+			fmt.Printf("h %d empty block ", bnr.Height)
 			panic("empty")
 		}
 		// Get the add and remove data needed from the block & undo block
@@ -146,11 +146,11 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// We don't know the TTL values, but know how many spots to allocate
 		ud.TxoTTLs = make([]int32, len(blockAdds))
 
-		if bnr.outCount > 2 {
-			fmt.Printf("h %d %d out %d skip %d in %d skip\n",
-				bnr.Height, bnr.outCount, len(bnr.outSkipList),
-				bnr.inCount, len(bnr.inSkipList))
-		}
+		// if bnr.outCount > 2 {
+		// fmt.Printf("h %d %d out %d skip %d in %d skip\n",
+		// bnr.Height, bnr.outCount, len(bnr.outSkipList),
+		// bnr.inCount, len(bnr.inSkipList))
+		// }
 
 		// send proof udata to channel to be written to disk
 		proofChan <- ud

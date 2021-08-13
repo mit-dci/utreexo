@@ -139,23 +139,23 @@ func initUtreeDir(basePath string) utreeDir {
 func makePaths(dir utreeDir) error {
 	err := os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("init makePaths error %s")
+		return fmt.Errorf("init makePaths error %s", err.Error())
 	}
 	err = os.MkdirAll(dir.ProofDir.base, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("init makePaths error %s")
+		return fmt.Errorf("init makePaths error %s", err.Error())
 	}
 	err = os.MkdirAll(dir.ForestDir.base, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("init makePaths error %s")
+		return fmt.Errorf("init makePaths error %s", err.Error())
 	}
 	err = os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("init makePaths error %s")
+		return fmt.Errorf("init makePaths error %s", err.Error())
 	}
 	err = os.MkdirAll(dir.TtlDir, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("init makePaths error %s")
+		return fmt.Errorf("init makePaths error %s", err.Error())
 	}
 	return nil
 }
