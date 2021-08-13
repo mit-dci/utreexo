@@ -146,11 +146,35 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// We don't know the TTL values, but know how many spots to allocate
 		ud.TxoTTLs = make([]int32, len(blockAdds))
 
-		// if bnr.outCount > 2 {
-		// fmt.Printf("h %d %d out %d skip %d in %d skip\n",
-		// bnr.Height, bnr.outCount, len(bnr.outSkipList),
-		// bnr.inCount, len(bnr.inSkipList))
-		// }
+		if bnr.Height == 108 {
+			fmt.Printf("h %d %d out skip %v %d in skip %v\n",
+				bnr.Height, bnr.outCount, bnr.outSkipList,
+				bnr.inCount, bnr.inSkipList)
+
+			block := bnr.Blk.MsgBlock()
+			for txnum, tx := range block.Transactions {
+				txid := tx.TxHash()
+				fmt.Printf("tx %d ------------------\n", txnum)
+				maxRow := len(tx.TxIn)
+				if len(tx.TxOut) > maxRow {
+					maxRow = len(tx.TxOut)
+				}
+				for rownum := 0; rownum < maxRow; rownum++ {
+					if rownum < len(tx.TxIn) {
+						fmt.Printf("in %x:%d\t",
+							tx.TxIn[rownum].PreviousOutPoint.Hash[:6],
+							tx.TxIn[rownum].PreviousOutPoint.Index&0xffff)
+					} else {
+						fmt.Printf("\t\t\t")
+					}
+					if rownum < len(tx.TxOut) {
+						fmt.Printf("out %x:%d\n", txid[:6], rownum)
+					} else {
+						fmt.Printf("\n")
+					}
+				}
+			}
+		}
 
 		// send proof udata to channel to be written to disk
 		proofChan <- ud

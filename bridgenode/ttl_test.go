@@ -33,7 +33,7 @@ func TestSearch(t *testing.T) {
 		}
 	}
 
-	fmt.Printf("%x\n", buf.Bytes())
+	// fmt.Printf("%x\n", buf.Bytes())
 	reader := bytes.NewReader(buf.Bytes())
 	// pick one to search for
 	searchMiniIn := miniIn{idx: 0, height: 0}
