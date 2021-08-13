@@ -37,6 +37,13 @@ var regTestGenHash = Hash{
 	0xc7, 0xb2, 0xb7, 0x3c, 0xf1, 0x88, 0x91, 0x0f,
 }
 
+var sigNetGenHash = Hash{
+	0xf6, 0x1e, 0xee, 0x3b, 0x63, 0xa3, 0x80, 0xa4,
+	0x77, 0xa0, 0x63, 0xaf, 0x32, 0xb2, 0xbb, 0xc9,
+	0x7c, 0x9f, 0xf9, 0xf0, 0x1f, 0x2c, 0x42, 0x25,
+	0xe9, 0x73, 0x98, 0x81, 0x08, 0x00, 0x00, 0x00,
+}
+
 // For a given BitcoinNet, yields the genesis hash
 // If the BitcoinNet is not supported, an error is
 // returned.
@@ -49,6 +56,8 @@ func GenHashForNet(p chaincfg.Params) (*Hash, error) {
 		return &mainNetGenHash, nil
 	case "regtest":
 		return &regTestGenHash, nil
+	case "signet":
+		return &sigNetGenHash, nil
 	}
 	return nil, fmt.Errorf("net not supported")
 }
@@ -182,7 +191,8 @@ func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
 func CheckMagicByte(bytesgiven []byte) bool {
 	if bytes.Compare(bytesgiven, []byte{0x0b, 0x11, 0x09, 0x07}) != 0 && //testnet
 		bytes.Compare(bytesgiven, []byte{0xf9, 0xbe, 0xb4, 0xd9}) != 0 && // mainnet
-		bytes.Compare(bytesgiven, []byte{0xfa, 0xbf, 0xb5, 0xda}) != 0 { // regtest
+		bytes.Compare(bytesgiven, []byte{0xfa, 0xbf, 0xb5, 0xda}) != 0 && // regtest
+		bytes.Compare(bytesgiven, []byte{0x0a, 0x03, 0xcf, 0x40}) != 0 { // signet
 		fmt.Printf("got non magic bytes %x, finishing\n", bytesgiven)
 		return false
 	}
