@@ -148,13 +148,13 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 	n := new(polNode)
 	n.data = add
-	if remember || p.positionMap != nil {
-		// flag this leaf as memorable via it's left pointer
-		n.niece[0] = n // points to itself (mind blown)
-	}
+	n.remember = remember
 
 	if p.positionMap != nil {
 		p.positionMap[add.Mini()] = p.numLeaves
+
+		// Always remember everything for full pollard.
+		n.remember = true
 	}
 
 	// if add is forgetable, forget all the new nodes made
@@ -162,9 +162,8 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	var h uint8
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
-		leftRoot := p.roots[len(p.roots)-1] // grab
-		p.roots = p.roots[:len(p.roots)-1]  // pop
-
+		leftRoot := p.roots[len(p.roots)-1]                        // grab
+		p.roots = p.roots[:len(p.roots)-1]                         // pop
 		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
 		nHash := parentHash(leftRoot.data, n.data)                 // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
@@ -207,6 +206,23 @@ func (p *Pollard) rem2(dels []uint64) error {
 		for _, delpos := range dels {
 			delete(p.positionMap, p.read(delpos).Mini())
 		}
+	}
+
+	// All the leaves to be deleted should be set to be not remembered.
+	// TODO there's probably a better way to do this than calling readPos
+	// a whole lot.
+	for _, del := range dels {
+		n, _, _, err := p.readPos(del)
+		if err != nil {
+			return err
+		}
+		if n.remember == true {
+			n.remember = false
+		}
+		// This likely does nothing since the leaf nieces are never set.
+		// Just putting it here since the cost of putting this in is
+		// basically nothing.
+		n.niece[0], n.niece[1] = nil, nil
 	}
 
 	// get all the swaps, then apply them all
