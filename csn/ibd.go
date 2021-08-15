@@ -192,8 +192,12 @@ func (c *Csn) putBlockInPollard(
 
 	remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
 	for i, ttl := range ub.UtreexoData.TxoTTLs {
-		// ttl-ub.Height is the number of blocks until the block is spend.
-		remember[i] = ttl < c.pollard.Lookahead
+		// 0 means that it's a UTXO. Don't remember.
+		if ttl == 0 {
+			remember[i] = false
+		} else {
+			remember[i] = ttl < c.pollard.Lookahead
+		}
 	}
 
 	// get hashes to add into the accumulator

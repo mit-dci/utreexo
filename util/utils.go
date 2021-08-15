@@ -138,7 +138,7 @@ func DedupeBlock(blk *btcutil.Block) (inCount, outCount int, inskip []uint32, ou
 	for coinbase, tx := range blk.Transactions() {
 		txOut := tx.MsgTx().TxOut
 		if coinbase == 0 { // coinbase tx can't be deduped
-			i += uint32(len(txOut)) // coinbase can have multiple inputs
+			i += uint32(len(txOut)) // coinbase can have multiple outputs
 			continue
 		}
 
