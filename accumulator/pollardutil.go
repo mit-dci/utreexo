@@ -71,6 +71,14 @@ func (n *polNode) prune() {
 	}
 }
 
+// getCount returns the count of all the nieces below it and itself.
+func getCount(n *polNode) int64 {
+	if n == nil {
+		return 0
+	}
+	return (getCount(n.niece[0]) + 1 + getCount(n.niece[1]))
+}
+
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
 // need their siblings so that the siblings' nieces can swap.
 // for a root, just say the root's sibling is itself and it should work.

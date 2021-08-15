@@ -250,10 +250,12 @@ func TestCache(t *testing.T) {
 
 		// remove deleted leaves from the leaf map
 		for _, del := range delHashes {
+			fmt.Printf("del %x\n", del.Mini())
 			delete(leaves, del)
 		}
 		// add new leaves to the leaf map
 		for _, leaf := range adds {
+			fmt.Printf("add %x rem:%v\n", leaf.Hash.Mini(), leaf.Remember)
 			leaves[leaf.Hash] = leaf
 		}
 
@@ -330,5 +332,6 @@ func TestCache(t *testing.T) {
 				}
 			}
 		}
+		fmt.Println(p.ToString())
 	}
 }

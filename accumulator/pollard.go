@@ -45,11 +45,12 @@ type Pollard struct {
 	// It is only used for fullPollard.
 	positionMap map[MiniHash]uint64
 
-	// these three are for keeping statistics.
+	// Below are for keeping statistics.
 	// hashesEver is all the hashes that have ever been performed.
 	// rememberEver is all the nodes that have ever been cached.
+	// currentRemember is all the nodes that are currently being cached.
 	// overWire is all the leaves that have been received over the network
-	hashesEver, rememberEver, overWire uint64
+	hashesEver, rememberEver, currentRemember, overWire uint64
 }
 
 // Modify deletes then adds elements to the accumulator.
@@ -73,9 +74,19 @@ func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
 
 // Stats returns the current pollard statistics as a string.
 func (p *Pollard) Stats() string {
-	s := fmt.Sprintf("pol nl %d roots %d he %d re %d ow %d \n",
-		p.numLeaves, len(p.roots), p.hashesEver, p.rememberEver, p.overWire)
+	s := fmt.Sprintf("pol nl %d roots %d he %d re %d ow %d cr %d count %d \n",
+		p.numLeaves, len(p.roots), p.hashesEver, p.rememberEver, p.overWire, p.currentRemember, p.GetTotalCount())
 	return s
+}
+
+// GetTotalCount returns the count of all the polNodes in the pollard.
+func (p *Pollard) GetTotalCount() int64 {
+	var size int64
+	for _, root := range p.roots {
+		size += getCount(root)
+	}
+
+	return size
 }
 
 // ReconstructStats returns numleaves and row so that batch proofs can be
@@ -103,6 +114,7 @@ func (p *Pollard) add(adds []Leaf) error {
 	for _, a := range adds {
 		if a.Remember {
 			p.rememberEver++
+			p.currentRemember++
 		}
 
 		err := p.addOne(a.Hash, a.Remember)
@@ -217,6 +229,7 @@ func (p *Pollard) rem2(dels []uint64) error {
 			return err
 		}
 		if n.remember == true {
+			p.currentRemember--
 			n.remember = false
 		}
 		// This likely does nothing since the leaf nieces are never set.
