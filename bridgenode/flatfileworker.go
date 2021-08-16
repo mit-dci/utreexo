@@ -285,9 +285,9 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 				loc, ttlArr, readEmpty, ttlRes.destroyHeight,
 				c.createHeight, c.indexWithinBlock)
 		}
-		fmt.Printf("  writeTTLs overwrite byte %d with %x "+
-			"desth %d createh %d idxinblk %d\n",
-			loc, ttlArr, ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock)
+		// fmt.Printf("  writeTTLs overwrite byte %d with %x "+
+		// "desth %d createh %d idxinblk %d\n",
+		// loc, ttlArr, ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock)
 
 		// fmt.Printf("overwriting %x with %x\t", readEmpty, ttlArr)
 		_, err = ff.proofFile.WriteAt(ttlArr[:], loc)

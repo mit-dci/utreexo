@@ -36,7 +36,7 @@ func TestSearch(t *testing.T) {
 	// fmt.Printf("%x\n", buf.Bytes())
 	reader := bytes.NewReader(buf.Bytes())
 	// pick one to search for
-	searchMiniIn := miniIn{idx: 0, height: 0}
+	searchMiniIn := miniIn{idx: 0, createHeight: 0}
 	copy(searchMiniIn.hashprefix[:], miniTxs[rand.Intn(searchSize)].txid[:6])
 
 	result := binSearch(searchMiniIn, 0, int64(searchSize), reader)

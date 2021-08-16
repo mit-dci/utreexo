@@ -58,64 +58,60 @@ func BNRTTLSpliter(
 		if !open {
 			break
 		}
-		var txoInBlock uint16
+		// fmt.Printf(bnr.toString())
+
+		// var txoInBlock uint16
 		var lub ttlLookupBlock
 		var wb ttlWriteBlock
-		var inskippos, outskippos, outputInBlock, inputInBlock uint32
-		var skipOutputs, skipInputs bool
+		var inskippos, inputInBlock uint32
+		var outputInBlock uint16
+		var keepSkippingInputs bool
 		inskipMax := uint32(len(bnr.inSkipList))
-		outskipMax := uint32(len(bnr.outSkipList))
+
 		lub.destroyHeight = bnr.Height
 		transactions := bnr.Blk.Transactions()
 
 		wb.createHeight = bnr.Height
 		wb.mTxids = make([]miniTx, len(transactions))
-
-		skipInputs = inskipMax > 0
-		skipOutputs = outskipMax > 0
+		// fmt.Printf("h %d inskip %v\n", bnr.Height, bnr.inSkipList)
+		keepSkippingInputs = inskipMax > 0 // if none to skip, don't check
 
 		// iterate through the transactions in a block
 		for txInBlock, tx := range transactions {
 			// add txid and skipped position in block
 			wb.mTxids[txInBlock].txid = tx.Hash()
-			wb.mTxids[txInBlock].startsAt = txoInBlock
+			wb.mTxids[txInBlock].startsAt = outputInBlock
 			// first add all the outputs in this tx, then range through the
 			// outputs and decrement them if they're on the skiplist
 			mtx := tx.MsgTx()
-			txoInBlock += uint16(len(mtx.TxOut))
-			// look at number of txos; the txoinblock doesn't increment if
-			// it's on the outskiplist.
-			for _, _ = range mtx.TxOut {
-				// if txo is on the out skiplist, decrement skippedTxoInBlock
-				// as it has already been added
-				if skipOutputs && bnr.outSkipList[outskippos] == outputInBlock {
-					outskippos++
-					txoInBlock--
-					skipOutputs = outskippos != outskipMax
-				}
-				outputInBlock++
-			}
+			outputInBlock += uint16(len(mtx.TxOut))
 
 			// for all the txins, throw that into the work as well; just a bunch of
 			// outpoints
 			for inputInTx, in := range tx.MsgTx().TxIn {
+				// fmt.Printf("input in block %d ks %v sl %v isp %d\n",
+				// inputInBlock, keepSkippingInputs, bnr.inSkipList, inskippos)
 				if txInBlock == 0 {
-					inputInBlock += uint32(len(tx.MsgTx().TxIn))
+					inputInBlock++
+					inskippos++
+					keepSkippingInputs = inskippos != inskipMax
 					break // skip coinbase input
 				}
-				if skipInputs && bnr.inSkipList[inskippos] == inputInBlock {
+				if keepSkippingInputs && bnr.inSkipList[inskippos] == inputInBlock {
+					// fmt.Printf(" skipping tx %d input %d (%d in block)\n",
+					// txInBlock, inputInTx, inputInBlock)
 					inskippos++
+					keepSkippingInputs = inskippos != inskipMax
 					inputInBlock++
-					skipInputs = inskippos != inskipMax
 					continue
 				}
-				inputInBlock++
 				//make new miniIn
 				mI := miniIn{idx: uint16(in.PreviousOutPoint.Index),
-					height: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height}
+					createHeight: bnr.Rev.Txs[txInBlock-1].TxIn[inputInTx].Height}
 				copy(mI.hashprefix[:], in.PreviousOutPoint.Hash[:6])
 				// append outpoint to slice
 				lub.spentTxos = append(lub.spentTxos, mI)
+				inputInBlock++
 			}
 		}
 		// done with block, send out split data to the two workers
@@ -189,13 +185,13 @@ func TTLLookupWorker(
 		sortMiniIns(lub.spentTxos)
 		for i, stxo := range lub.spentTxos {
 			// fmt.Printf("need txid %x from height %d\n", stxo.hashprefix, stxo.height)
-			if stxo.height != seekHeight { // height change, get byte offsets
+			if stxo.createHeight != seekHeight { // height change, get byte offsets
 				// subtract 1 from stxo height because this file starts at height 1
 				_, err := txidOffsetFile.ReadAt(
-					startOffsetBytes[:], int64(stxo.height-1)*8)
+					startOffsetBytes[:], int64(stxo.createHeight-1)*8)
 				if err != nil {
 					fmt.Printf("tried to read at txidoffset file byte %d  ",
-						(stxo.height-1)*8)
+						(stxo.createHeight-1)*8)
 					panic(err)
 				}
 
@@ -205,21 +201,29 @@ func TTLLookupWorker(
 				// block after the one we're seeking this will not error.
 
 				_, err = txidOffsetFile.ReadAt(
-					nextOffsetBytes[:], int64(stxo.height)*8)
+					nextOffsetBytes[:], int64(stxo.createHeight)*8)
 				if err != nil {
-					fmt.Printf("tried to read next at %d  ", stxo.height*8)
+					fmt.Printf("tried to read next at %d  ", stxo.createHeight*8)
 					panic(err)
 				}
 				nextOffset = int64(binary.BigEndian.Uint64(nextOffsetBytes[:]))
 				// if nextOffset==heightOffset{}
 				if nextOffset < heightOffset {
 					fmt.Printf("nextOffset %d < start %d byte %d\n",
-						nextOffset, heightOffset, stxo.height*8)
+						nextOffset, heightOffset, stxo.createHeight*8)
 					panic("bad offset")
 				}
-				seekHeight = stxo.height
+				seekHeight = stxo.createHeight
 			}
-			resultBlock.results[i].createHeight = stxo.height
+			if stxo.createHeight == resultBlock.destroyHeight {
+				fmt.Printf("\tXXXXh %d stxo %d trying to write 0 TTL %x:%d.\n",
+					resultBlock.destroyHeight, i, stxo.hashprefix, stxo.idx)
+				if stxo.createHeight > 108 {
+					panic("0 ttl")
+				}
+			}
+
+			resultBlock.results[i].createHeight = stxo.createHeight
 			// fmt.Printf("search for create height %d %x:%d from %d range %d\n",
 			// stxo.height, stxo.hashprefix, stxo.idx,
 			// heightOffset, nextOffset-heightOffset)
@@ -229,7 +233,7 @@ func TTLLookupWorker(
 			fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
 				lub.destroyHeight, stxo.hashprefix, stxo.idx,
 				lub.destroyHeight-resultBlock.results[i].createHeight,
-				stxo.height,
+				stxo.createHeight,
 				resultBlock.results[i].indexWithinBlock)
 		}
 		ttlResultChan <- resultBlock

@@ -60,9 +60,9 @@ type ttlLookupBlock struct {
 // miniIn are miniature outpoints, for the spent side of the block.
 // 6 bytes of txid prefix, then 2 bytes of position.
 type miniIn struct {
-	hashprefix [6]byte // txid prefix of txo being consumed
-	idx        uint16  // outpoint index of txo being consumed
-	height     int32   // creation height of txo being consumed
+	hashprefix   [6]byte // txid prefix of txo being consumed
+	idx          uint16  // outpoint index of txo being consumed
+	createHeight int32   // creation height of txo being consumed
 }
 
 // to int... which will turn into a float
@@ -80,7 +80,10 @@ func miniBytesToUint64(b [6]byte) uint64 {
 
 type miniTx struct {
 	txid     *chainhash.Hash
-	startsAt uint16
+	startsAt uint16 // the 0th output in this tx is the _th input in the block
+	// note that there COULD BE more than 65K outputs in a block and
+	// this should probably deal with that.  They'd be "silly" outputs though
+	// TODO move to 32 bits, or really 17 would be plenty
 }
 
 // miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
@@ -106,7 +109,7 @@ func sortTxids(s []miniTx) {
 }
 
 func sortMiniIns(s []miniIn) {
-	sort.Slice(s, func(a, b int) bool { return s[a].height < s[b].height })
+	sort.Slice(s, func(a, b int) bool { return s[a].createHeight < s[b].createHeight })
 }
 
 // a TTLResult is the TTL data we learn once a txo is spent & it's lifetime
@@ -213,4 +216,66 @@ func (bnr *blockAndRev) toDelLeaves() (
 		}
 	}
 	return
+}
+
+func (bnr *blockAndRev) toString() string {
+	s := fmt.Sprintf("h %d %d out skip %v %d in skip %v\n",
+		bnr.Height, bnr.outCount, bnr.outSkipList,
+		bnr.inCount, bnr.inSkipList)
+	outskipped := 0
+	txoInBlock := 0
+	txinInBlock := 0
+	inSkipPos, outSkipPos := 0, 0
+
+	shouldoutskip := len(bnr.outSkipList)
+	block := bnr.Blk.MsgBlock()
+	for txnum, tx := range block.Transactions {
+		txid := tx.TxHash()
+		s += fmt.Sprintf("tx %d ------------------\n", txnum)
+
+		maxRow := len(tx.TxIn)
+		if len(tx.TxOut) > maxRow {
+			maxRow = len(tx.TxOut)
+		}
+		for rowInTx := 0; rowInTx < maxRow; rowInTx++ {
+			// s += fmt.Sprintf("txinnum %d txonum %d inskip %v outskip %v\n",
+			// txinInBlock, txoInBlock, bnr.inSkipList, bnr.outSkipList)
+			if rowInTx < len(tx.TxIn) {
+				if len(bnr.inSkipList) > inSkipPos &&
+					uint32(txinInBlock) == bnr.inSkipList[inSkipPos] {
+					s += fmt.Sprintf("SKIP ")
+					inSkipPos++
+				} else {
+					s += fmt.Sprintf("     ")
+				}
+				s += fmt.Sprintf("in %x:%d\t",
+					tx.TxIn[rowInTx].PreviousOutPoint.Hash[:6],
+					tx.TxIn[rowInTx].PreviousOutPoint.Index&0xffff)
+				txinInBlock++
+			} else {
+				s += fmt.Sprintf("\t\t\t")
+			}
+			if rowInTx < len(tx.TxOut) {
+				if len(bnr.outSkipList) > outSkipPos &&
+					uint32(txoInBlock) == bnr.outSkipList[outSkipPos] {
+					s += fmt.Sprintf("SKIP ")
+					outskipped++
+					outSkipPos++
+				} else {
+					s += fmt.Sprintf("     ")
+				}
+				s += fmt.Sprintf("out %x:%d\n", txid[:6], rowInTx)
+				txoInBlock++
+			} else {
+				s += fmt.Sprintf("\n")
+			}
+		}
+	}
+	if outskipped != shouldoutskip {
+		s += fmt.Sprintf("h %d skipped %d but supposed to skip %d\n",
+			bnr.Height, outskipped, shouldoutskip)
+		fmt.Printf(s)
+		panic("bad skip")
+	}
+	return s
 }
