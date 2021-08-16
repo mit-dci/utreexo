@@ -71,6 +71,8 @@ func BlockToAddLeaves(blk *btcutil.Block,
 	remember []bool, skiplist []uint32,
 	height int32, outCount int) (leaves []accumulator.Leaf) {
 
+	// We're overallocating a little bit since all the unspendables
+	// won't be appended. It's ok though for the pre-allocation savings.
 	leaves = make([]accumulator.Leaf, 0, outCount-len(skiplist))
 
 	var txonum uint32
