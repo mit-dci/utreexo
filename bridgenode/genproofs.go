@@ -144,7 +144,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 		// We don't know the TTL values, but know how many spots to allocate
-		ud.TxoTTLs = make([]int32, len(blockAdds))
+		ud.TxoTTLs = make([]int32, bnr.outCount)
 
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
