@@ -58,8 +58,9 @@ func BNRTTLSpliter(
 		if !open {
 			break
 		}
-		// fmt.Printf(bnr.toString())
-
+		if bnr.Height == 206421 || bnr.Height == 205955 {
+			fmt.Printf(bnr.toString())
+		}
 		// var txoInBlock uint16
 		var lub ttlLookupBlock
 		var wb ttlWriteBlock
@@ -230,11 +231,11 @@ func TTLLookupWorker(
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
-			fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
-				lub.destroyHeight, stxo.hashprefix, stxo.idx,
-				lub.destroyHeight-resultBlock.results[i].createHeight,
-				stxo.createHeight,
-				resultBlock.results[i].indexWithinBlock)
+			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
+			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
+			// lub.destroyHeight-resultBlock.results[i].createHeight,
+			// stxo.createHeight,
+			// resultBlock.results[i].indexWithinBlock)
 		}
 		ttlResultChan <- resultBlock
 	}
@@ -274,8 +275,8 @@ func binSearch(mi miniIn,
 	}
 	// fmt.Printf("%x got position %d width %d, read bytes %x from pos %d\n",
 	// mi.hashprefix, pos, width, positionBytes, (pos*8)+6)
-	fmt.Printf("found %x at pos %d, read %x\n",
-		mi.hashprefix, pos+int(bottom), positionBytes)
+	// fmt.Printf("found %x at pos %d, read %x\n",
+	// mi.hashprefix, pos+int(bottom), positionBytes)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
 	return binary.BigEndian.Uint16(positionBytes[:]) + mi.idx

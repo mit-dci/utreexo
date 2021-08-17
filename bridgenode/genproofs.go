@@ -232,7 +232,9 @@ func stopBuildProofs(
 func VerifyProofs(cfg *Config) error {
 
 	for h := int32(1); h < cfg.quitAfter; h++ {
-		fmt.Printf("verify h %d\n", h)
+		if h%100 == 0 {
+			fmt.Printf("verify h %d\n", h)
+		}
 		udb, err := GetUDataBytesFromFile(cfg.UtreeDir.ProofDir, h)
 		if err != nil {
 			return fmt.Errorf("GetUDataBytesFromFile %s\n", err.Error())
@@ -248,9 +250,9 @@ func VerifyProofs(cfg *Config) error {
 			fmt.Printf("udb: %x\n", udb)
 			return err
 		}
-		if len(ud.AccProof.Targets) != 0 {
-			fmt.Printf("h %d has proofs\n", h)
-		}
+		// if len(ud.AccProof.Targets) != 0 {
+		// fmt.Printf("h %d has %d targets\n", h, len(ud.AccProof.Targets))
+		// }
 	}
 	return nil
 }
