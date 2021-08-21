@@ -107,6 +107,27 @@ func flatFileWorker(
 	if err != nil {
 		panic(err)
 	}
+	// ttl data saving initialization
+	var tf flatFileState
+
+	tf.offsetFile, err = os.OpenFile(
+		utreeDir.TtlDir.OffsetFile, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	tf.proofFile, err = os.OpenFile(
+		utreeDir.TtlDir.ttlsetFile, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
+	}
+	tf.fileWait = fileWait
+
+	err = tf.ffInit()
+	if err != nil {
+		panic(err)
+	}
+
 	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
 	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
 	// it should keep both buffers about even.  If it keeps doing proofs and the ttl
@@ -138,7 +159,7 @@ func flatFileWorker(
 				}
 			}
 
-			err = ff.writeTTLs(ttlRes)
+			err = tf.writeTTLs(ttlRes)
 			if err != nil {
 				panic(err)
 			}
