@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -67,9 +68,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	// async ttldb variables
 	var dbwg sync.WaitGroup
-	dbWriteChan := make(chan ttlRawBlock, 10)      // from block processing to db worker
-	ttlResultChan := make(chan ttlResultBlock, 10) // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)       // from proof processing to proof writer
+	dbWriteChan := make(chan ttlRawBlock, 10)        // from block processing to db worker
+	ttlResultChan := make(chan ttlResultBlock, 10)   // from db worker to flat ttl writer
+	proofChan := make(chan btcacc.UData, 10)         // from proof processing to proof writer
+	undoChan := make(chan accumulator.UndoBlock, 10) // from undoblocks to undoblock writer
 
 	// sorta ugly as in one of these will just be sitting around
 	// doing nothing
@@ -109,7 +111,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, cfg.UtreeDir, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, undoChan, cfg.UtreeDir, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -131,7 +133,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// start waitgroups, beyond this point we have to finish all the
 		// disk writes for this iteration of the loop
 		dbwg.Add(1)     // DbWorker calls Done()
-		fileWait.Add(2) // flatFileWorker calls Done() when done writing ttls and proof.
+		fileWait.Add(3) // flatFileWorker calls Done() when done writing ttls and proof and undoBlocks.
 
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
@@ -158,10 +160,14 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
+		// return the undoBlock Data
+		undoblock, err := forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
+		undoblock.Height = bnr.Height // set undoBlocks Height
+		// send undoBlock data to undo channel to be written to the disk
+		undoChan <- *undoblock
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
