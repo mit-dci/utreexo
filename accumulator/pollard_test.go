@@ -250,11 +250,12 @@ func TestCache(t *testing.T) {
 
 		// remove deleted leaves from the leaf map
 		for _, del := range delHashes {
+			fmt.Printf("del %x\n", del.Mini())
 			delete(leaves, del)
 		}
 		// add new leaves to the leaf map
 		for _, leaf := range adds {
-			fmt.Println("add", leaf)
+			fmt.Printf("add %x rem:%v\n", leaf.Hash.Mini(), leaf.Remember)
 			leaves[leaf.Hash] = leaf
 		}
 
@@ -265,25 +266,72 @@ func TestCache(t *testing.T) {
 			}
 			pos := leafProof.Targets[0]
 
-			fmt.Println(pos, l)
-			_, nsib, _, err := p.readPos(pos)
+			n, nsib, _, err := p.readPos(pos)
+			if err != nil {
+				t.Fatal("could not read leaf pos at", pos)
+			}
 
 			if pos == p.numLeaves-1 {
 				// roots are always cached
 				continue
 			}
 
-			siblingDoesNotExists := nsib == nil || nsib.data == empty || err != nil
-			if l.Remember && siblingDoesNotExists {
+			// If the leaf wasn't marked to be remembered, check if the sibling is remembered.
+			// If the sibling is supposed to be remembered, it's ok to remember this leaf as it
+			// is the proof for the sibling.
+			if !l.Remember && n != nil {
+				// If the sibling exists, check if the sibling leaf was supposed to be remembered.
+				if nsib != nil {
+					sibling := leaves[nsib.data]
+					if !sibling.Remember || nsib.data == empty {
+						fmt.Println(p.ToString())
+
+						err := fmt.Errorf("leaf at position %d exists but it was added with "+
+							"remember=%v and its sibilng with remember=%v. "+
+							"polnode remember=%v, polnode sibling remember=%v",
+							pos, l.Remember, sibling.Remember, n.remember, nsib.remember)
+						t.Fatal(err)
+					}
+				} else {
+					// If the sibling does not exist, fail as this leaf should not be
+					// remembered.
+					fmt.Println(p.ToString())
+
+					err := fmt.Errorf("leaf at position %d exists but it was added with "+
+						"remember=%v and its sibilng is nil. "+
+						"polnode remember=%v",
+						pos, l.Remember, n.remember)
+					t.Fatal(err)
+				}
+			}
+
+			siblingDoesNotExist := nsib == nil || nsib.data == empty
+			if l.Remember && siblingDoesNotExist {
 				// the proof for l is not cached even though it should have been because it
 				// was added with remember=true.
-				t.Fatal("proof for leaf at", pos, "does not exist but it was added with remember=true")
-			} else if !l.Remember && !siblingDoesNotExists {
-				// the proof for l was cached even though it should not have been because it
-				// was added with remember = false.
 				fmt.Println(p.ToString())
-				t.Fatal("proof for leaf at", pos, "does exist but it was added with remember=false")
+				err := fmt.Errorf("leaf at position %d exists but it was added with "+
+					"remember=%v and its sibilng does not exist. "+
+					"polnode remember=%v",
+					pos, l.Remember, n.remember)
+				t.Fatal(err)
+			} else if !l.Remember && !siblingDoesNotExist {
+				sibling := leaves[nsib.data]
+
+				// If the sibling exists but it wasn't supposed to be remembered, something's wrong.
+				if !sibling.Remember {
+					// the proof for l was cached even though it should not have been because it
+					// was added with remember = false.
+					fmt.Println(p.ToString())
+
+					err := fmt.Errorf("leaf at position %d exists but it was added with "+
+						"remember=%v and its sibilng with remember=%v. "+
+						"polnode remember=%v, polnode sibling remember=%v",
+						pos, l.Remember, sibling.Remember, n.remember, nsib.remember)
+					t.Fatal(err)
+				}
 			}
 		}
+		fmt.Println(p.ToString())
 	}
 }
