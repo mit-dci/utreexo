@@ -288,7 +288,7 @@ func populateOne(tree miniTree, node *polNode) int {
 // that we'll be populating into. Length of polNodes MUST match all the nodes that will be populated.
 //
 // populate returns how many polNodes have been populated.
-func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree) int { //, polNodes []*polNode) int {
+func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree) int {
 	// If there's nothing to populate, return early
 	if len(*trees) <= 0 {
 		return 0
