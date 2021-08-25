@@ -151,14 +151,6 @@ func flatFileWorker(
 				panic(err)
 			}
 		case ttlRes := <-ttlResultChan:
-			for ttlRes.Height > ff.currentHeight {
-				ud := <-proofChan
-				err = ff.writeProofBlock(ud)
-				if err != nil {
-					panic(err)
-				}
-			}
-
 			err = tf.writeTTLs(ttlRes)
 			if err != nil {
 				panic(err)
