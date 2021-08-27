@@ -58,9 +58,10 @@ func BNRTTLSpliter(
 		if !open {
 			break
 		}
-		if bnr.Height == 206421 || bnr.Height == 205955 {
-			fmt.Printf(bnr.toString())
-		}
+		// these are the blocks where testnet messes up
+		// if bnr.Height == 206421 || bnr.Height == 205955 {
+		// fmt.Printf(bnr.toString())
+		// }
 		// var txoInBlock uint16
 		var lub ttlLookupBlock
 		var wb ttlWriteBlock
@@ -231,12 +232,29 @@ func TTLLookupWorker(
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
-			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
-			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
-			// lub.destroyHeight-resultBlock.results[i].createHeight,
-			// stxo.createHeight,
-			// resultBlock.results[i].indexWithinBlock)
+				// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
+				// lub.destroyHeight, stxo.hashprefix, stxo.idx,
+				// lub.destroyHeight-resultBlock.results[i].createHeight,
+				// stxo.createHeight,
+				// resultBlock.results[i].indexWithinBlock)
+			// if stxo.createHeight == 205955 &&
+			if resultBlock.results[i].indexWithinBlock == 18180 {
+				fmt.Printf("tx %x:%d from height %d spends from height %d idxinblock %d\n",
+					stxo.hashprefix, stxo.idx, lub.destroyHeight,
+					stxo.createHeight, resultBlock.results[i].indexWithinBlock)
+			}
+
 		}
+		if resultBlock.destroyHeight == 206413 || resultBlock.destroyHeight == 206421 {
+			fmt.Printf("destoy height %d\n", resultBlock.destroyHeight)
+			for _, res := range resultBlock.results {
+				if res.createHeight == 205955 {
+					fmt.Printf("created height %d index in block %d\n",
+						res.createHeight, res.indexWithinBlock)
+				}
+			}
+		}
+
 		ttlResultChan <- resultBlock
 	}
 

@@ -159,7 +159,10 @@ func (ff *flatFileState) ffInit() error {
 		}
 
 		// set currentOffset to the end of the proof file
-		ff.currentOffset, _ = ff.proofFile.Seek(0, 2)
+		ff.currentOffset, err = ff.proofFile.Seek(0, 2)
+		if err != nil {
+			return err
+		}
 
 	} else { // first time startup
 		// there is no block 0 so leave that empty
@@ -230,10 +233,6 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 		return err
 	}
 
-	// if udSize > 20 {
-	// fmt.Printf("%x\n", bigBuf.Bytes())
-	// }
-
 	// 4B magic & 4B size comes first
 	ff.currentOffset += int64(ud.SerializeSize()) + 8
 	ff.finishedHeight++
@@ -265,11 +264,16 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
 		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
-		loc := ff.heightOffsets[c.createHeight] + 16 + int64(c.indexWithinBlock*4)
+		loc := ff.heightOffsets[c.createHeight] + 16 + int64(c.indexWithinBlock)*4
 
 		// first, read the data there to make sure it's empty.
 		// If there's something already there, we messed up & should panic.
 		// TODO once everything works great can remove this
+
+		if loc == 297548271 {
+			fmt.Printf("loc %d destroyHeight %d c.createHeight %d c.indexWithinBlock %d\n",
+				loc, ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock)
+		}
 
 		_, err := ff.proofFile.ReadAt(readEmpty[:], loc)
 		if err != nil {
@@ -285,6 +289,7 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 				loc, ttlArr, readEmpty, ttlRes.destroyHeight,
 				c.createHeight, c.indexWithinBlock)
 		}
+
 		// fmt.Printf("  writeTTLs overwrite byte %d with %x "+
 		// "desth %d createh %d idxinblk %d\n",
 		// loc, ttlArr, ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock)

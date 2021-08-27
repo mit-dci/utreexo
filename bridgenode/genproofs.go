@@ -160,6 +160,12 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			fmt.Printf("Finished block %d of max %d\n",
 				finishedHeight, cfg.quitAfter)
 		}
+
+		if len(bnr.inSkipList) > 999 || len(bnr.outSkipList) > 999 {
+			fmt.Printf("h %d skip %d/%d, %d/%d\n",
+				bnr.Height, len(bnr.inSkipList), bnr.inCount,
+				len(bnr.outSkipList), bnr.outCount)
+		}
 	}
 
 	// Wait for the file workers to finish
