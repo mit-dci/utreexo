@@ -9,7 +9,7 @@ import (
 func (p *Pollard) IngestBatchProof(toProve []Hash, bp BatchProof) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesForward()
-	ok, trees, roots := verifyBatchProof(toProve, bp, rootHashes, p.numLeaves,
+	trees, roots, err := verifyBatchProof(toProve, bp, rootHashes, p.numLeaves,
 		// pass a closure that checks the pollard for cached nodes.
 		// returns true and the hash value of the node if it exists.
 		// returns false if the node does not exist or the hash value is empty.
@@ -24,8 +24,10 @@ func (p *Pollard) IngestBatchProof(toProve []Hash, bp BatchProof) error {
 
 			return false, empty
 		})
-	if !ok {
-		return fmt.Errorf("block proof mismatch")
+	if err != nil {
+		retErr := fmt.Errorf("Pollard.IngestBatchProof: BatchProof verify failed. %s",
+			err.Error())
+		return retErr
 	}
 
 	// rootIdx and rootIdxBackwards is needed because p.populate()
