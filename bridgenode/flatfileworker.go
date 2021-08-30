@@ -325,23 +325,45 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
+	var buffer [8]byte
+
+	// write offset of current TTL to offset file
+	ff.offsets = append(ff.offsets, ff.currentOffset)
+
+	// write ttl offset to offsetfile
+	binary.BigEndian.PutUint64(buffer[:], uint64(ff.currentOffset))
+	_, err := ff.offsetFile.WriteAt(buffer[:], int64(8*ttlRes.Height))
+	if err != nil {
+		return err
+	}
+
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.Created {
 		// seek to the location of that txo's ttl value in the proof file
 
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
-
-		// write it's lifespan as a 4 byte int32 (bit of a waste as
-		// 2 or 3 bytes would work)
-		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
-		_, err := ff.proofFile.WriteAt(ttlArr[:],
-			ff.offsets[c.createHeight]+16+int64(c.indexWithinBlock*4))
+		// for each iteration of  append 0x00
+		_, err := ff.proofFile.WriteAt([]byte{0x00, 0x00, 0x00, 0x00}, ff.currentOffset)
 		if err != nil {
 			return err
 		}
 
+		// increment value of offset after before write operation by 4
+		ff.currentOffset = ff.currentOffset + 4
+
+		// write it's lifespan as a 4 byte int32 (bit of a waste as
+		// 2 or 3 bytes would work)
+		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
+		_, err = ff.proofFile.WriteAt(ttlArr[:],
+			ff.offsets[c.createHeight]+int64(c.indexWithinBlock*4))
+		if err != nil {
+			return err
+		}
 	}
+
+	// increment height by 1
+	ff.currentHeight = ff.currentHeight + 1
 	ff.fileWait.Done()
 	return nil
 }
