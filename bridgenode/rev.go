@@ -88,7 +88,7 @@ func BlockAndRevReader(
 			}
 			bnr.inCount, bnr.outCount, bnr.inSkipList, bnr.outSkipList =
 				util.DedupeBlock(bnr.Blk)
-			wg.Add(2)
+			wg.Add(3)
 			aChan <- bnr
 			bChan <- bnr
 			finishedHeight++

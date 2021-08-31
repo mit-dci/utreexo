@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
 )
 
@@ -92,21 +93,8 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
 	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)           // from processing to flat writer
+	undoChan := make(chan accumulator.UndoBlock, 10)   // from undoblocks to undoblock writer
 	fileWait := new(sync.WaitGroup)
-
-	// Start memTTL worker if configured
-	/*
-		if cfg.memTTL {
-			err = memTTLdb.InitMemDB(cfg.UtreeDir.Ttldb,
-				cfg.allInMemTTLdb, &o)
-			if err != nil {
-				return err
-			}
-			go MemDbWorker(ttlResultChan, memTTLdb, &dbwg)
-		} else {
-			go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
-		}
-	*/
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
@@ -114,12 +102,13 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		blockAndRevProofChan, blockAndRevTTLChan,
 		haltRequest, fileWait, cfg, finishedHeight)
 
-	go FlatFileWriter(proofChan, ttlResultChan, cfg.UtreeDir, fileWait)
+	go FlatFileWriter(proofChan, ttlResultChan, undoChan, cfg.UtreeDir, fileWait)
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
 	fmt.Println("Building Proofs and ttls...")
 
 	for {
+		// fmt.Printf("block on blockAndRevProofChan read?\n")
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr, open := <-blockAndRevProofChan
 		if !open { // channel is closed by BlockAndRevReader & empty, we're done
@@ -146,26 +135,28 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// We don't know the TTL values, but know how many spots to allocate
 		ud.TxoTTLs = make([]int32, bnr.outCount)
 
+		// fmt.Printf("block on proofchan?\n")
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
-		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
+		// return the undoBlock Data
+		undoblock, err := forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
+		undoblock.Height = bnr.Height // set undoBlocks Height
+		// send undoBlock data to undo channel to be written to the disk
+		// fmt.Printf("block on undochan?\n")
+		undoChan <- *undoblock
+
 		finishedHeight = bnr.Height
 		if finishedHeight%1000 == 0 {
 			fmt.Printf("Finished block %d of max %d\n",
 				finishedHeight, cfg.quitAfter)
 		}
 
-		if len(bnr.inSkipList) > 999 || len(bnr.outSkipList) > 999 {
-			fmt.Printf("h %d skip %d/%d, %d/%d\n",
-				bnr.Height, len(bnr.inSkipList), bnr.inCount,
-				len(bnr.outSkipList), bnr.outCount)
-		}
 	}
 
 	// Wait for the file workers to finish

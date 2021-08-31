@@ -45,11 +45,12 @@ type Pollard struct {
 	// It is only used for fullPollard.
 	positionMap map[MiniHash]uint64
 
-	// these three are for keeping statistics.
+	// Below are for keeping statistics.
 	// hashesEver is all the hashes that have ever been performed.
 	// rememberEver is all the nodes that have ever been cached.
+	// currentRemember is all the nodes that are currently being cached.
 	// overWire is all the leaves that have been received over the network
-	hashesEver, rememberEver, overWire uint64
+	hashesEver, rememberEver, currentRemember, overWire uint64
 }
 
 // Modify deletes then adds elements to the accumulator.
@@ -73,9 +74,19 @@ func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
 
 // Stats returns the current pollard statistics as a string.
 func (p *Pollard) Stats() string {
-	s := fmt.Sprintf("pol nl %d roots %d he %d re %d ow %d \n",
-		p.numLeaves, len(p.roots), p.hashesEver, p.rememberEver, p.overWire)
+	s := fmt.Sprintf("pol nl %d roots %d he %d re %d ow %d cr %d count %d \n",
+		p.numLeaves, len(p.roots), p.hashesEver, p.rememberEver, p.overWire, p.currentRemember, p.GetTotalCount())
 	return s
+}
+
+// GetTotalCount returns the count of all the polNodes in the pollard.
+func (p *Pollard) GetTotalCount() int64 {
+	var size int64
+	for _, root := range p.roots {
+		size += getCount(root)
+	}
+
+	return size
 }
 
 // ReconstructStats returns numleaves and row so that batch proofs can be
@@ -103,6 +114,7 @@ func (p *Pollard) add(adds []Leaf) error {
 	for _, a := range adds {
 		if a.Remember {
 			p.rememberEver++
+			p.currentRemember++
 		}
 
 		err := p.addOne(a.Hash, a.Remember)
@@ -148,13 +160,13 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 	n := new(polNode)
 	n.data = add
-	if remember || p.positionMap != nil {
-		// flag this leaf as memorable via it's left pointer
-		n.niece[0] = n // points to itself (mind blown)
-	}
+	n.remember = remember
 
 	if p.positionMap != nil {
 		p.positionMap[add.Mini()] = p.numLeaves
+
+		// Always remember everything for full pollard.
+		n.remember = true
 	}
 
 	// if add is forgetable, forget all the new nodes made
@@ -162,9 +174,8 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	var h uint8
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
-		leftRoot := p.roots[len(p.roots)-1] // grab
-		p.roots = p.roots[:len(p.roots)-1]  // pop
-
+		leftRoot := p.roots[len(p.roots)-1]                        // grab
+		p.roots = p.roots[:len(p.roots)-1]                         // pop
 		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
 		nHash := parentHash(leftRoot.data, n.data)                 // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
@@ -207,6 +218,24 @@ func (p *Pollard) rem2(dels []uint64) error {
 		for _, delpos := range dels {
 			delete(p.positionMap, p.read(delpos).Mini())
 		}
+	}
+
+	// All the leaves to be deleted should be set to be not remembered.
+	// TODO there's probably a better way to do this than calling readPos
+	// a whole lot.
+	for _, del := range dels {
+		n, _, _, err := p.readPos(del)
+		if err != nil {
+			return err
+		}
+		if n.remember == true {
+			p.currentRemember--
+			n.remember = false
+		}
+		// This likely does nothing since the leaf nieces are never set.
+		// Just putting it here since the cost of putting this in is
+		// basically nothing.
+		n.niece[0], n.niece[1] = nil, nil
 	}
 
 	// get all the swaps, then apply them all

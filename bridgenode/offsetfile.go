@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -208,6 +209,10 @@ func writeBlockOffset(
 	util.Hash, int32, error) {
 
 	wr.Reset(offsetFile)
+
+	if len(blockHeaders) == 0 {
+		return tip, tipnum, errBuildProofs(errors.New("no block headers found"))
+	}
 
 	for _, b := range blockHeaders {
 		if len(nextMap) > 10000 { //Just a random big number

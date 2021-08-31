@@ -18,8 +18,13 @@ The bridgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
+<<<<<<< HEAD
   -forest                      select forest type to use (ram, cow, cache, disk). 
   Defaults to disk
+=======
+  -net=signet                 configure whether to use signet. Optional.
+  -forest                      select forest type to use (ram, cow, cache, disk). Defaults to disk
+>>>>>>> master
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path
   -datadir="path/to/directory" set a custom DATADIR.
@@ -35,7 +40,7 @@ OPTIONS:
 var (
 	argCmd = flag.NewFlagSet("", flag.ExitOnError)
 	netCmd = argCmd.String("net", "testnet",
-		"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
+		"Target network. (testnet, signet, regtest, mainnet) Usage: '-net=regtest'")
 	dataDirCmd = argCmd.String("datadir", "",
 		`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 	bridgeDirCmd = argCmd.String("bridgedir", "",
@@ -87,12 +92,19 @@ type offsetDir struct {
 	lastIndexOffsetHeightFile string
 }
 
+type undoDir struct {
+	base       string
+	undoFile   string
+	offsetFile string
+}
+
 // All your utreexo bridgenode file paths in a nice and convinent struct
 type utreeDir struct {
 	OffsetDir offsetDir
 	ProofDir  proofDir
 	ForestDir forestDir
 	TtlDir    string
+	UndoDir   undoDir
 }
 
 // init an utreeDir with a selected basepath. Has all the names for the forest
@@ -126,12 +138,19 @@ func initUtreeDir(basePath string) utreeDir {
 	}
 
 	ttlpath := filepath.Join(basePath, "ttldata")
+	undoBase := filepath.Join(basePath, "undoblockdata")
+	undo := undoDir{
+		base:       undoBase,
+		undoFile:   filepath.Join(undoBase, "undo.dat"),
+		offsetFile: filepath.Join(undoBase, "offset.dat"),
+	}
 
 	return utreeDir{
 		OffsetDir: off,
 		ProofDir:  proof,
 		ForestDir: forest,
 		TtlDir:    ttlpath,
+		UndoDir:   undo,
 	}
 }
 
@@ -156,6 +175,10 @@ func makePaths(dir utreeDir) error {
 	err = os.MkdirAll(dir.TtlDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("init makePaths error %s", err.Error())
+	}
+	err = os.MkdirAll(dir.UndoDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
 	}
 	return nil
 }
@@ -263,6 +286,13 @@ func Parse(args []string) (*Config, error) {
 		cfg.params = chaincfg.MainNetParams
 		cfg.BlockDir = filepath.Join(dataDir, "blocks")
 		cfg.UtreeDir = initUtreeDir(bridgeDir)
+	} else if *netCmd == "signet" {
+		cfg.params = chaincfg.SigNetParams
+		cfg.BlockDir = filepath.Join(
+			filepath.Join(dataDir, chaincfg.SigNetParams.Name),
+			"blocks")
+		base := filepath.Join(bridgeDir, chaincfg.SigNetParams.Name)
+		cfg.UtreeDir = initUtreeDir(base)
 	} else {
 		return nil, errInvalidNetwork(*netCmd)
 	}
