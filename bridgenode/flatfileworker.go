@@ -62,6 +62,7 @@ func flatFileWorker(
 	proofChan chan btcacc.UData,
 	ttlResultChan chan ttlResultBlock,
 	undoChan chan accumulator.UndoBlock,
+	leafblockChan chan int,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
 
@@ -117,7 +118,7 @@ func flatFileWorker(
 	}
 
 	tf.proofFile, err = os.OpenFile(
-		utreeDir.TtlDir.ttlsetFile, os.O_CREATE|os.O_WRONLY, 0600)
+		utreeDir.TtlDir.ttlsetFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -157,6 +158,12 @@ func flatFileWorker(
 			}
 		case undo := <-undoChan:
 			err = uf.writeUndoBlock(undo)
+			if err != nil {
+				panic(err)
+			}
+		case size := <-leafblockChan:
+			bytesTtlWrite := make([]byte, size)
+			_, err := tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
 			if err != nil {
 				panic(err)
 			}
@@ -343,18 +350,9 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 
 		binary.BigEndian.PutUint32(
 			ttlArr[:], uint32(ttlRes.Height-c.createHeight))
-		// for each iteration of  append 0x00
-		_, err := ff.proofFile.WriteAt([]byte{0x00, 0x00, 0x00, 0x00}, ff.currentOffset)
-		if err != nil {
-			return err
-		}
-
-		// increment value of offset after before write operation by 4
-		ff.currentOffset = ff.currentOffset + 4
 
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
-		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
 		_, err = ff.proofFile.WriteAt(ttlArr[:],
 			ff.offsets[c.createHeight]+int64(c.indexWithinBlock*4))
 		if err != nil {
@@ -362,6 +360,8 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		}
 	}
 
+	// increment value of offset 4 bytes of each ttlRes Created
+	ff.currentOffset = ff.currentOffset + int64(len(ttlRes.Created)*4)
 	// increment height by 1
 	ff.currentHeight = ff.currentHeight + 1
 	ff.fileWait.Done()

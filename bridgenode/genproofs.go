@@ -72,6 +72,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	ttlResultChan := make(chan ttlResultBlock, 10)   // from db worker to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)         // from proof processing to proof writer
 	undoChan := make(chan accumulator.UndoBlock, 10) // from undoblocks to undoblock writer
+	leafblockChan := make(chan int, 10)              // from blocksadd to ttl writer
 
 	// sorta ugly as in one of these will just be sitting around
 	// doing nothing
@@ -111,7 +112,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, undoChan, cfg.UtreeDir, &fileWait)
+	go flatFileWorker(proofChan, ttlResultChan, undoChan, leafblockChan, cfg.UtreeDir, &fileWait)
 
 	fmt.Println("Building Proofs and ttldb...")
 
@@ -133,7 +134,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// start waitgroups, beyond this point we have to finish all the
 		// disk writes for this iteration of the loop
 		dbwg.Add(1)     // DbWorker calls Done()
-		fileWait.Add(3) // flatFileWorker calls Done() when done writing ttls and proof and undoBlocks.
+		fileWait.Add(4) // flatFileWorker calls Done() when done writing ttls and proof and undoBlocks and also blockadds for leafs.
 
 		// Writes the new txos to leveldb,
 		// and generates TTL for txos spent in the block
@@ -146,6 +147,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if err != nil {
 			return err
 		}
+		leafblockChan <- len(blockAdds) // send size of 0s needed to be added to disk
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
