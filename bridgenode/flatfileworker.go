@@ -164,6 +164,7 @@ func flatFileWorker(
 		case size := <-leafblockChan:
 			bytesTtlWrite := make([]byte, size)
 			_, err := tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
+			tf.fileWait.Done()
 			if err != nil {
 				panic(err)
 			}
