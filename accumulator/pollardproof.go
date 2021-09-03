@@ -4,8 +4,39 @@ import (
 	"fmt"
 )
 
+// VerifyBatchProof verifies the hash and the proof passed in. It does not
+// make any modifications to the pollard.
+//
+// NOTE: The order in which the hashes are given matter (aka permutation matters).
+// The hashes being verified should be in the same order as they were
+// proven.
+func (p *Pollard) VerifyBatchProof(toProve []Hash, bp BatchProof) error {
+	// verify the batch proof.
+	rootHashes := p.rootHashesForward()
+	_, _, err := verifyBatchProof(toProve, bp, rootHashes, p.numLeaves,
+		// pass a closure that checks the pollard for cached nodes.
+		// returns true and the hash value of the node if it exists.
+		// returns false if the node does not exist or the hash value is empty.
+		func(pos uint64) (bool, Hash) {
+			n, _, _, err := p.readPos(pos)
+			if err != nil {
+				return false, empty
+			}
+			if n != nil && n.data != empty {
+				return true, n.data
+			}
+
+			return false, empty
+		})
+	return err
+}
+
 // IngestBatchProof populates the Pollard with all needed data to delete the
-// targets in the block proof
+// targets in the block proof.
+//
+// NOTE: The order in which the hashes are given matter (aka permutation matters).
+// The hashes being verified should be in the same order as they were
+// proven.
 func (p *Pollard) IngestBatchProof(toProve []Hash, bp BatchProof) error {
 	// verify the batch proof.
 	rootHashes := p.rootHashesForward()
