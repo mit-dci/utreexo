@@ -21,10 +21,12 @@ func (pl *PositionList) Free() {
 	positionListFree.Put(pl)
 }
 
+// Make a pool of uint64s
 var positionListFree = sync.Pool{
 	New: func() interface{} { return new(PositionList) },
 }
 
+// NewPositionList returns a slice of uint64 from the pool
 func NewPositionList() *PositionList {
 	p := positionListFree.Get().(*PositionList)
 
@@ -509,6 +511,10 @@ func sortNodeSlice(s []node) {
 	sort.Slice(s, func(a, b int) bool { return s[a].Pos < s[b].Pos })
 }
 
+func sortTargPos(s []targPos) {
+	sort.Slice(s, func(a, b int) bool { return s[a].pos < s[b].pos })
+}
+
 // checkSortedNoDupes returns true for strictly increasing slices
 func checkSortedNoDupes(s []uint64) bool {
 	for i, _ := range s {
@@ -522,26 +528,21 @@ func checkSortedNoDupes(s []uint64) bool {
 	return true
 }
 
-// TODO is there really no way to just... reverse any slice?  Like with
-// interface or something?  it's just pointers and never touches the actual
-// type...
-
-// reverseArrowSlice does what it says.  Maybe can get rid of if we return
-// the slice top-down instead of bottom-up
+// reverses a slice of arrows
 func reverseArrowSlice(a []arrow) {
 	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
 		a[i], a[j] = a[j], a[i]
 	}
 }
 
-// exact same code twice, couldn't you have a reverse *any* slice func...?
-// but maybe that's generics or something
+// reverses a slice of uint64s
 func reverseUint64Slice(a []uint64) {
 	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
 		a[i], a[j] = a[j], a[i]
 	}
 }
 
+// reverses a slice of polNodes
 func reversePolNodeSlice(a []*polNode) {
 	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
 		a[i], a[j] = a[j], a[i]
@@ -629,8 +630,8 @@ func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
 	return c
 }
 
-// BinString prints out the whole thing.  Only viable for small forests
-func BinString(leaves uint64) string {
+// binString prints out the whole thing.  Only viable for small forests
+func binString(leaves uint64) string {
 	fh := treeRows(leaves)
 
 	// tree rows should be 6 or less

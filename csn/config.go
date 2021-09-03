@@ -18,6 +18,7 @@ You can give a bech32 address to watch during IBD.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
+  -net=signet                 configure whether to use signet. Optional.
 
   -cpuprof                     configure whether to use use cpu profiling
   -memprof                     configure whether to use use heap profiling
@@ -31,7 +32,7 @@ OPTIONS:
 var (
 	argCmd = flag.NewFlagSet("", flag.ExitOnError)
 	netCmd = argCmd.String("net", "testnet",
-		"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
+		"Target network. (testnet, signet, regtest, mainnet) Usage: '-net=regtest'")
 	cpuProfCmd = argCmd.String("cpuprof", "",
 		`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 	memProfCmd = argCmd.String("memprof", "",
@@ -49,6 +50,8 @@ var (
 		`size of the look-ahead cache in blocks`)
 	quitafter = argCmd.Int("quitafter", -1,
 		`quit ibd after n blocks. (for testing)`)
+	profServerCmd = argCmd.String("profserver", "",
+		`Enable pprof server. Usage: 'profserver='port'`)
 )
 
 type Config struct {
@@ -77,6 +80,9 @@ type Config struct {
 
 	// enable memory profiling
 	MemProf string
+
+	// enable profiling http server
+	ProfServer string
 }
 
 func Parse(args []string) (*Config, error) {
@@ -90,6 +96,8 @@ func Parse(args []string) (*Config, error) {
 		cfg.params = chaincfg.RegressionNetParams
 	} else if *netCmd == "mainnet" {
 		cfg.params = chaincfg.MainNetParams
+	} else if *netCmd == "signet" {
+		cfg.params = chaincfg.SigNetParams
 	} else {
 		return nil, errInvalidNetwork(*netCmd)
 	}
@@ -113,6 +121,7 @@ func Parse(args []string) (*Config, error) {
 	cfg.CpuProf = *cpuProfCmd
 	cfg.MemProf = *memProfCmd
 	cfg.TraceProf = *traceCmd
+	cfg.ProfServer = *profServerCmd
 
 	return &cfg, nil
 }

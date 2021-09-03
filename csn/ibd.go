@@ -6,13 +6,15 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
+	"github.com/mit-dci/utreexo/util"
 	uwire "github.com/mit-dci/utreexo/wire"
 )
 
 // run IBD from block proof data
 // we get the new utxo info from the same txos text file
-func (c *Csn) IBDThread(sig chan bool, quitafter int) {
+func (c *Csn) IBDThread(cfg Config, sig chan bool) {
 	// Channel to alert the main loop to break when receiving a quit signal from
 	// the OS
 	haltRequest := make(chan bool, 1)
@@ -21,7 +23,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 	// Makes it wait for flushing to disk
 	haltAccept := make(chan bool, 1)
 
-	go stopRunIBD(sig, haltRequest, haltAccept)
+	go stopRunIBD(cfg, sig, haltRequest, haltAccept)
 
 	// caching parameter. Keeps txos that are spent before than this many blocks
 	lookahead := int32(1000)
@@ -72,7 +74,7 @@ func (c *Csn) IBDThread(sig chan bool, quitafter int) {
 
 		// quit after `quitafter` blocks if the -quitafter option is set
 		blockCount++
-		if quitafter > -1 && blockCount >= quitafter {
+		if cfg.quitafter > -1 && blockCount >= cfg.quitafter {
 			fmt.Println("quit after", quitafter, "blocks")
 			sig <- true
 			stop = true
@@ -147,12 +149,19 @@ func (c *Csn) putBlockInPollard(
 
 	nl, h := c.pollard.ReconstructStats()
 
-	_, outskip := ub.Block.DedupeBlock()
+	_, outCount, _, outskip := util.DedupeBlock(ub.Block)
 
 	err := ub.ProofSanity(nl, h)
 	if err != nil {
 		return fmt.Errorf(
 			"uData missing utxo data for block %d err: %e", ub.UtreexoData.Height, err)
+	}
+
+	// make slice of hashes from leafdata. These are the hash commitments
+	// to be proven.
+	delHashes := make([]accumulator.Hash, len(ub.UtreexoData.Stxos))
+	for i, _ := range ub.UtreexoData.Stxos {
+		delHashes[i] = ub.UtreexoData.Stxos[i].LeafHash()
 	}
 
 	*totalDels += len(ub.UtreexoData.AccProof.Targets) // for benchmarking
@@ -175,7 +184,7 @@ func (c *Csn) putBlockInPollard(
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err = c.pollard.IngestBatchProof(ub.UtreexoData.AccProof)
+	err = c.pollard.IngestBatchProof(delHashes, ub.UtreexoData.AccProof)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
 		return err
@@ -183,22 +192,21 @@ func (c *Csn) putBlockInPollard(
 
 	remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
 	for i, ttl := range ub.UtreexoData.TxoTTLs {
-		// ttl-ub.Height is the number of blocks until the block is spend.
-		remember[i] = ttl < c.pollard.Lookahead
+		// 0 means that it's a UTXO. Don't remember.
+		if ttl == 0 {
+			remember[i] = false
+		} else {
+			remember[i] = ttl < c.pollard.Lookahead
+		}
 	}
 
 	// get hashes to add into the accumulator
 	blockAdds := uwire.BlockToAddLeaves(
-		ub.Block, remember, outskip, ub.UtreexoData.Height)
+		ub.Block, remember, outskip, ub.UtreexoData.Height, outCount)
 	*totalTXOAdded += len(blockAdds) // for benchmarking
 
-	// for i, leaf := range blockAdds {
-	// fmt.Printf("\th %d add leaf %d %x\n", ub.UtreexoData.Height, i, leaf.Hash)
-	// }
-
 	// Utreexo tree modification. blockAdds are the added txos and
-	// bp.Targets are the positions of the leaves to delete
-
+	// AccProof.Targets are the positions of the leaves to delete
 	err = c.pollard.Modify(blockAdds, ub.UtreexoData.AccProof.Targets)
 	if err != nil {
 

@@ -37,6 +37,13 @@ var regTestGenHash = Hash{
 	0xc7, 0xb2, 0xb7, 0x3c, 0xf1, 0x88, 0x91, 0x0f,
 }
 
+var sigNetGenHash = Hash{
+	0xf6, 0x1e, 0xee, 0x3b, 0x63, 0xa3, 0x80, 0xa4,
+	0x77, 0xa0, 0x63, 0xaf, 0x32, 0xb2, 0xbb, 0xc9,
+	0x7c, 0x9f, 0xf9, 0xf0, 0x1f, 0x2c, 0x42, 0x25,
+	0xe9, 0x73, 0x98, 0x81, 0x08, 0x00, 0x00, 0x00,
+}
+
 // For a given BitcoinNet, yields the genesis hash
 // If the BitcoinNet is not supported, an error is
 // returned.
@@ -49,6 +56,8 @@ func GenHashForNet(p chaincfg.Params) (*Hash, error) {
 		return &mainNetGenHash, nil
 	case "regtest":
 		return &regTestGenHash, nil
+	case "signet":
+		return &sigNetGenHash, nil
 	}
 	return nil, fmt.Errorf("net not supported")
 }
@@ -70,15 +79,17 @@ func OutpointToBytes(op *wire.OutPoint) (b [36]byte) {
 // deleted.  All txinputs except for the coinbase input and utxos created
 // within the same block (on the skiplist)
 func BlockToDelOPs(
-	blk *btcutil.Block) (delOPs []wire.OutPoint) {
+	blk *btcutil.Block) []wire.OutPoint {
 
 	transactions := blk.Transactions()
-	inskip, _ := blk.DedupeBlock()
+	inCount, _, inskip, _ := DedupeBlock(blk)
+
+	delOPs := make([]wire.OutPoint, 0, inCount-len(inskip))
 
 	var blockInIdx uint32
 	for txinblock, tx := range transactions {
 		if txinblock == 0 {
-			blockInIdx++ // coinbase tx always has 1 input
+			blockInIdx += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
 			continue
 		}
 
@@ -96,7 +107,7 @@ func BlockToDelOPs(
 			blockInIdx++
 		}
 	}
-	return
+	return delOPs
 }
 
 // DedupeBlock takes a bitcoin block, and returns two int slices: the indexes of
@@ -104,47 +115,44 @@ func BlockToDelOPs(
 // within the block as a whole, even the coinbase tx.
 // So the coinbase tx in & output numbers affect the skip lists even though
 // the coinbase ins/outs can never be deduped.  it's simpler that way.
-func DedupeBlock(blk *wire.MsgBlock) (inskip []uint32, outskip []uint32) {
-
+func DedupeBlock(blk *btcutil.Block) (inCount, outCount int, inskip []uint32, outskip []uint32) {
 	var i uint32
 	// wire.Outpoints are comparable with == which is nice.
 	inmap := make(map[wire.OutPoint]uint32)
 
 	// go through txs then inputs building map
-	for cbif0, tx := range blk.Transactions {
-		if cbif0 == 0 { // coinbase tx can't be deduped
-			i++ // coinbase has 1 input
+	for coinbase, tx := range blk.Transactions() {
+		if coinbase == 0 { // coinbase tx can't be deduped
+			i += uint32(len(tx.MsgTx().TxIn)) // coinbase can have many inputs
 			continue
 		}
-		for _, in := range tx.TxIn {
-			// fmt.Printf("%s into inmap\n", in.PreviousOutPoint.String())
+		for _, in := range tx.MsgTx().TxIn {
 			inmap[in.PreviousOutPoint] = i
 			i++
 		}
 	}
+	inCount = int(i)
 
 	i = 0
 	// start over, go through outputs finding skips
-	for cbif0, tx := range blk.Transactions {
-		if cbif0 == 0 { // coinbase tx can't be deduped
-			i += uint32(len(tx.TxOut)) // coinbase can have multiple inputs
+	for coinbase, tx := range blk.Transactions() {
+		txOut := tx.MsgTx().TxOut
+		if coinbase == 0 { // coinbase tx can't be deduped
+			i += uint32(len(txOut)) // coinbase can have multiple outputs
 			continue
 		}
-		txid := tx.TxHash()
 
-		for outidx, _ := range tx.TxOut {
-			op := wire.OutPoint{Hash: txid, Index: uint32(outidx)}
-			// fmt.Printf("%s check for inmap... ", op.String())
+		for outidx, _ := range txOut {
+			op := wire.OutPoint{Hash: *tx.Hash(), Index: uint32(outidx)}
 			inpos, exists := inmap[op]
 			if exists {
-				// fmt.Printf("hit")
 				inskip = append(inskip, inpos)
 				outskip = append(outskip, i)
 			}
-			// fmt.Printf("\n")
 			i++
 		}
 	}
+	outCount = int(i)
 	// sort inskip list, as it's built in order consumed not created
 	sortUint32s(inskip)
 	return
@@ -183,7 +191,8 @@ func PopPrefixLen16(b []byte) ([]byte, []byte, error) {
 func CheckMagicByte(bytesgiven []byte) bool {
 	if bytes.Compare(bytesgiven, []byte{0x0b, 0x11, 0x09, 0x07}) != 0 && //testnet
 		bytes.Compare(bytesgiven, []byte{0xf9, 0xbe, 0xb4, 0xd9}) != 0 && // mainnet
-		bytes.Compare(bytesgiven, []byte{0xfa, 0xbf, 0xb5, 0xda}) != 0 { // regtest
+		bytes.Compare(bytesgiven, []byte{0xfa, 0xbf, 0xb5, 0xda}) != 0 && // regtest
+		bytes.Compare(bytesgiven, []byte{0x0a, 0x03, 0xcf, 0x40}) != 0 { // signet
 		fmt.Printf("got non magic bytes %x, finishing\n", bytesgiven)
 		return false
 	}

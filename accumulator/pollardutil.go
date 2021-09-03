@@ -9,8 +9,9 @@ import (
 
 // PolNode is a node in the pollard forest
 type polNode struct {
-	data  Hash
-	niece [2]*polNode
+	data     Hash
+	niece    [2]*polNode
+	remember bool
 }
 
 // auntOp returns the hash of a nodes nieces. crashes if you call on nil nieces.
@@ -23,7 +24,7 @@ func (n *polNode) auntable() bool {
 	return n.niece[0] != nil && n.niece[1] != nil
 }
 
-// deadEnd returns true if both nieces are nill
+// deadEnd returns true if both nieces are nil
 // could also return true if n itself is nil! (maybe a bad idea?)
 func (n *polNode) deadEnd() bool {
 	// if n == nil {
@@ -61,12 +62,21 @@ func (n *polNode) printout() {
 // prune prunes deadend children.
 // don't prune at the bottom; use leaf prune instead at row 1
 func (n *polNode) prune() {
-	if n.niece[0].deadEnd() {
+	remember := n.niece[0].remember || n.niece[1].remember
+	if n.niece[0].deadEnd() && !remember {
 		n.niece[0] = nil
 	}
-	if n.niece[1].deadEnd() {
+	if n.niece[1].deadEnd() && !remember {
 		n.niece[1] = nil
 	}
+}
+
+// getCount returns the count of all the nieces below it and itself.
+func getCount(n *polNode) int64 {
+	if n == nil {
+		return 0
+	}
+	return (getCount(n.niece[0]) + 1 + getCount(n.niece[1]))
 }
 
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
@@ -78,6 +88,7 @@ func polSwap(a, asib, b, bsib *polNode) error {
 	}
 	a.data, b.data = b.data, a.data
 	asib.niece, bsib.niece = bsib.niece, asib.niece
+	a.remember, b.remember = b.remember, a.remember
 	return nil
 }
 func (p *Pollard) rows() uint8 { return treeRows(p.numLeaves) }

@@ -58,7 +58,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	}
 
 	donetime := time.Now()
-	f.TimeInProve += donetime.Sub(starttime)
+	f.timeInProve += donetime.Sub(starttime)
 	return pr, nil
 }
 
@@ -132,8 +132,9 @@ func (f *Forest) VerifyMany(ps []Proof) bool {
 // ProveBatch gets proofs (in the form of a node slice) for a bunch of leaves
 // The ordering of Targets is the same as the ordering of hashes given as
 // argument.
-// NOTE However targets will need to be sorted before using the proof!
-// TODO the elements to be proven should not be included in the proof.
+//
+// NOTE: The order in which the hashes are given matter when verifying
+// (aka permutation matters).
 func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	starttime := time.Now()
 	var bp BatchProof
@@ -151,7 +152,6 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	bp.Targets = make([]uint64, len(hs))
 
 	for i, wanted := range hs {
-
 		pos, ok := f.positionMap[wanted.Mini()]
 		if !ok {
 			fmt.Print(f.ToString())
@@ -177,14 +177,14 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	copy(sortedTargets, bp.Targets)
 	sortUint64s(sortedTargets)
 
-	positionList := NewPositionList()
-	defer positionList.Free()
+	proofPositions := NewPositionList()
+	defer proofPositions.Free()
 
-	ProofPositions(sortedTargets, f.numLeaves, f.rows, &positionList.list)
-	targetsAndProof := mergeSortedSlices(positionList.list, sortedTargets)
+	// Get the positions of all the hashes that are needed to prove the targets
+	ProofPositions(sortedTargets, f.numLeaves, f.rows, &proofPositions.list)
 
-	bp.Proof = make([]Hash, len(targetsAndProof))
-	for i, proofPos := range targetsAndProof {
+	bp.Proof = make([]Hash, len(proofPositions.list))
+	for i, proofPos := range proofPositions.list {
 		bp.Proof[i] = f.data.read(proofPos)
 	}
 
@@ -193,12 +193,12 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	}
 
 	donetime := time.Now()
-	f.TimeInProve += donetime.Sub(starttime)
+	f.timeInProve += donetime.Sub(starttime)
 	return bp, nil
 }
 
-// VerifyBatchProof :
-func (f *Forest) VerifyBatchProof(bp BatchProof) bool {
-	ok, _, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, nil)
+// VerifyBatchProof is just a wrapper around verifyBatchProof
+func (f *Forest) VerifyBatchProof(toProve []Hash, bp BatchProof) bool {
+	ok, _, _ := verifyBatchProof(toProve, bp, f.getRoots(), f.numLeaves, nil)
 	return ok
 }

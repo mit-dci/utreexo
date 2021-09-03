@@ -31,7 +31,7 @@ func pollardFullRandomRemember(blocks int32) error {
 
 	// p.Minleaves = 0
 
-	sn := NewSimChain(0x07)
+	sn := newSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
 		adds, _, delHashes := sn.NextBlock(rand.Uint32() & 0x03)
@@ -46,7 +46,7 @@ func pollardFullRandomRemember(blocks int32) error {
 		}
 
 		// verify proofs on rad node
-		err = p.IngestBatchProof(bp)
+		err = p.IngestBatchProof(delHashes, bp)
 		if err != nil {
 			return err
 		}

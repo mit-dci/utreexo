@@ -32,9 +32,8 @@ func TestPollardFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
 func TestPollardSimpleIngest(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	adds := make([]Leaf, 15)
 	for i := 0; i < len(adds); i++ {
 		adds[i].Hash[0] = uint8(i + 1)
@@ -53,19 +52,22 @@ func TestPollardSimpleIngest(t *testing.T) {
 	var p Pollard
 	p.Modify(adds, nil)
 	// Modify the proof so that the verification should fail.
-	bp.Proof[0][0] = 0xFF
-	err := p.IngestBatchProof(bp)
+	if len(bp.Proof) <= 0 {
+		bp.Proof = make([]Hash, 1)
+		bp.Proof[0][0] = 0xFF
+	}
+	err := p.IngestBatchProof(hashes, bp)
 	if err == nil {
 		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
 	}
 }
 
 func pollardRandomRemember(blocks int32) error {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	var p Pollard
 
-	sn := NewSimChain(0x07)
+	sn := newSimChain(0x07)
 	sn.lookahead = 400
 	for b := int32(0); b < blocks; b++ {
 		adds, _, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
@@ -78,12 +80,12 @@ func pollardRandomRemember(blocks int32) error {
 		if err != nil {
 			return err
 		}
+
 		// verify proofs on rad node
-		err = p.IngestBatchProof(bp)
+		err = p.IngestBatchProof(delHashes, bp)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("deletions: %v\n", bp.Targets)
 
 		// apply adds and deletes to the bridge node (could do this whenever)
 		_, err = f.Modify(adds, bp.Targets)
@@ -152,7 +154,7 @@ func pollardRandomRemember(blocks int32) error {
 // fixedPollard adds and removes things in a non-random way
 func fixedPollard(leaves int32) error {
 	fmt.Printf("\t\tpollard test add %d remove 1\n", leaves)
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	leafCounter := uint64(0)
 
@@ -214,10 +216,10 @@ func fixedPollard(leaves int32) error {
 
 func TestCache(t *testing.T) {
 	// simulate blocks with simchain
-	chain := NewSimChain(7)
+	chain := newSimChain(7)
 	chain.lookahead = 8
 
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	var p Pollard
 
 	// this leaf map holds all the leaves at the current height and is used to check if the pollard
@@ -230,12 +232,13 @@ func TestCache(t *testing.T) {
 		if err != nil {
 			t.Fatal("ProveBatch failed", err)
 		}
+
 		_, err = f.Modify(adds, proof.Targets)
 		if err != nil {
 			t.Fatal("Modify failed", err)
 		}
 
-		err = p.IngestBatchProof(proof)
+		err = p.IngestBatchProof(delHashes, proof)
 		if err != nil {
 			t.Fatal("IngestBatchProof failed", err)
 		}
@@ -247,11 +250,12 @@ func TestCache(t *testing.T) {
 
 		// remove deleted leaves from the leaf map
 		for _, del := range delHashes {
+			fmt.Printf("del %x\n", del.Mini())
 			delete(leaves, del)
 		}
 		// add new leaves to the leaf map
 		for _, leaf := range adds {
-			fmt.Println("add", leaf)
+			fmt.Printf("add %x rem:%v\n", leaf.Hash.Mini(), leaf.Remember)
 			leaves[leaf.Hash] = leaf
 		}
 
@@ -262,25 +266,72 @@ func TestCache(t *testing.T) {
 			}
 			pos := leafProof.Targets[0]
 
-			fmt.Println(pos, l)
-			_, nsib, _, err := p.readPos(pos)
+			n, nsib, _, err := p.readPos(pos)
+			if err != nil {
+				t.Fatal("could not read leaf pos at", pos)
+			}
 
 			if pos == p.numLeaves-1 {
 				// roots are always cached
 				continue
 			}
 
-			siblingDoesNotExists := nsib == nil || nsib.data == empty || err != nil
-			if l.Remember && siblingDoesNotExists {
+			// If the leaf wasn't marked to be remembered, check if the sibling is remembered.
+			// If the sibling is supposed to be remembered, it's ok to remember this leaf as it
+			// is the proof for the sibling.
+			if !l.Remember && n != nil {
+				// If the sibling exists, check if the sibling leaf was supposed to be remembered.
+				if nsib != nil {
+					sibling := leaves[nsib.data]
+					if !sibling.Remember || nsib.data == empty {
+						fmt.Println(p.ToString())
+
+						err := fmt.Errorf("leaf at position %d exists but it was added with "+
+							"remember=%v and its sibilng with remember=%v. "+
+							"polnode remember=%v, polnode sibling remember=%v",
+							pos, l.Remember, sibling.Remember, n.remember, nsib.remember)
+						t.Fatal(err)
+					}
+				} else {
+					// If the sibling does not exist, fail as this leaf should not be
+					// remembered.
+					fmt.Println(p.ToString())
+
+					err := fmt.Errorf("leaf at position %d exists but it was added with "+
+						"remember=%v and its sibilng is nil. "+
+						"polnode remember=%v",
+						pos, l.Remember, n.remember)
+					t.Fatal(err)
+				}
+			}
+
+			siblingDoesNotExist := nsib == nil || nsib.data == empty
+			if l.Remember && siblingDoesNotExist {
 				// the proof for l is not cached even though it should have been because it
 				// was added with remember=true.
-				t.Fatal("proof for leaf at", pos, "does not exist but it was added with remember=true")
-			} else if !l.Remember && !siblingDoesNotExists {
-				// the proof for l was cached even though it should not have been because it
-				// was added with remember = false.
 				fmt.Println(p.ToString())
-				t.Fatal("proof for leaf at", pos, "does exist but it was added with remember=false")
+				err := fmt.Errorf("leaf at position %d exists but it was added with "+
+					"remember=%v and its sibilng does not exist. "+
+					"polnode remember=%v",
+					pos, l.Remember, n.remember)
+				t.Fatal(err)
+			} else if !l.Remember && !siblingDoesNotExist {
+				sibling := leaves[nsib.data]
+
+				// If the sibling exists but it wasn't supposed to be remembered, something's wrong.
+				if !sibling.Remember {
+					// the proof for l was cached even though it should not have been because it
+					// was added with remember = false.
+					fmt.Println(p.ToString())
+
+					err := fmt.Errorf("leaf at position %d exists but it was added with "+
+						"remember=%v and its sibilng with remember=%v. "+
+						"polnode remember=%v, polnode sibling remember=%v",
+						pos, l.Remember, sibling.Remember, n.remember, nsib.remember)
+					t.Fatal(err)
+				}
 			}
 		}
+		fmt.Println(p.ToString())
 	}
 }

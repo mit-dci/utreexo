@@ -2,6 +2,7 @@ package bridgenode
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -17,6 +18,7 @@ The bridgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
+  -net=signet                 configure whether to use signet. Optional.
   -forest                      select forest type to use (ram, cow, cache, disk). Defaults to disk
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path
@@ -33,7 +35,7 @@ OPTIONS:
 var (
 	argCmd = flag.NewFlagSet("", flag.ExitOnError)
 	netCmd = argCmd.String("net", "testnet",
-		"Target network. (testnet, regtest, mainnet) Usage: '-net=regtest'")
+		"Target network. (testnet, signet, regtest, mainnet) Usage: '-net=regtest'")
 	dataDirCmd = argCmd.String("datadir", "",
 		`Set a custom datadir. Usage: "-datadir='path/to/directory'"`)
 	bridgeDirCmd = argCmd.String("bridgedir", "",
@@ -87,11 +89,18 @@ type offsetDir struct {
 	lastIndexOffsetHeightFile string
 }
 
+type undoDir struct {
+	base       string
+	undoFile   string
+	offsetFile string
+}
+
 // All your utreexo bridgenode file paths in a nice and convinent struct
 type utreeDir struct {
 	OffsetDir offsetDir
 	ProofDir  proofDir
 	ForestDir forestDir
+	UndoDir   undoDir
 	Ttldb     string
 }
 
@@ -123,22 +132,47 @@ func initUtreeDir(basePath string) utreeDir {
 		cowForestCurFile:                filepath.Join(cowDir, "CURRENT"),
 	}
 
+	undoBase := filepath.Join(basePath, "undoblockdata")
+	undo := undoDir{
+		base:       undoBase,
+		undoFile:   filepath.Join(undoBase, "undo.dat"),
+		offsetFile: filepath.Join(undoBase, "offset.dat"),
+	}
+
 	ttldb := filepath.Join(basePath, "ttldb")
 
 	return utreeDir{
 		OffsetDir: off,
 		ProofDir:  proof,
 		ForestDir: forest,
+		UndoDir:   undo,
 		Ttldb:     ttldb,
 	}
 }
 
 // MakePaths makes the necessary paths for all files in a given network
-func makePaths(dir utreeDir) {
-	os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
-	os.MkdirAll(dir.ProofDir.base, os.ModePerm)
-	os.MkdirAll(dir.ForestDir.base, os.ModePerm)
-	os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
+func makePaths(dir utreeDir) error {
+	err := os.MkdirAll(dir.OffsetDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.ProofDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.ForestDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.ForestDir.cowForestDir, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.UndoDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	return nil
 }
 
 type forestType int
@@ -247,18 +281,32 @@ func Parse(args []string) (*Config, error) {
 		cfg.params = chaincfg.MainNetParams
 		cfg.BlockDir = filepath.Join(dataDir, "blocks")
 		cfg.UtreeDir = initUtreeDir(bridgeDir)
+	} else if *netCmd == "signet" {
+		cfg.params = chaincfg.SigNetParams
+		cfg.BlockDir = filepath.Join(
+			filepath.Join(dataDir, chaincfg.SigNetParams.Name),
+			"blocks")
+		base := filepath.Join(bridgeDir, chaincfg.SigNetParams.Name)
+		cfg.UtreeDir = initUtreeDir(base)
 	} else {
 		return nil, errInvalidNetwork(*netCmd)
 	}
 
-	makePaths(cfg.UtreeDir)
-
+	err := makePaths(cfg.UtreeDir)
+	if err != nil {
+		return nil, err
+	}
 	// set profiling
 	cfg.CpuProf = *cpuProfCmd
 	cfg.MemProf = *memProfCmd
 	cfg.TraceProf = *traceCmd
 	cfg.ProfServer = *profServerCmd
 	cfg.memTTLdb = *memTTLdb
+
+	// If allInMemTTLdb flag was given, the ttldb has to be kept in ram
+	if *allInMemTTLdb {
+		cfg.memTTLdb = true
+	}
 	cfg.allInMemTTLdb = *allInMemTTLdb
 
 	switch *forestTypeCmd {

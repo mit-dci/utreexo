@@ -69,10 +69,13 @@ func UblockNetworkReader(
 // right length.  Similar with skiplist, doesn't check it.
 func BlockToAddLeaves(blk *btcutil.Block,
 	remember []bool, skiplist []uint32,
-	height int32) (leaves []accumulator.Leaf) {
+	height int32, outCount int) (leaves []accumulator.Leaf) {
+
+	// We're overallocating a little bit since all the unspendables
+	// won't be appended. It's ok though for the pre-allocation savings.
+	leaves = make([]accumulator.Leaf, 0, outCount-len(skiplist))
 
 	var txonum uint32
-	// bh := bl.Blockhash
 	for coinbaseif0, tx := range blk.Transactions() {
 		// cache txid aka txhash
 		txid := tx.Hash()
@@ -105,8 +108,6 @@ func BlockToAddLeaves(blk *btcutil.Block,
 				uleaf.Remember = remember[txonum]
 			}
 			leaves = append(leaves, uleaf)
-			// fmt.Printf("add %s\n", l.ToString())
-			// fmt.Printf("add %s -> %x\n", l.Outpoint.String(), l.LeafHash())
 			txonum++
 		}
 	}

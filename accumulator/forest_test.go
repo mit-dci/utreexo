@@ -11,7 +11,7 @@ import (
 )
 
 func TestDeleteReverseOrder(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	leaf1 := Leaf{Hash: Hash{1}}
 	leaf2 := Leaf{Hash: Hash{2}}
 	_, err := f.Modify([]Leaf{leaf1, leaf2}, nil)
@@ -45,9 +45,9 @@ func TestSwaplessPromote(t *testing.T) {
 func TestForestAddDel(t *testing.T) {
 	numAdds := uint32(10)
 
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
-	sc := NewSimChain(0x07)
+	sc := newSimChain(0x07)
 
 	for b := 0; b < 1000; b++ {
 
@@ -70,10 +70,10 @@ func TestCowForestAddDelComp(t *testing.T) {
 	numAdds := uint32(1000)
 
 	tmpDir := os.TempDir()
-	cowF := NewForest(nil, false, tmpDir, 2500)
-	memF := NewForest(nil, false, "", 0)
+	cowF := NewForest(CowForest, nil, tmpDir, 2500)
+	memF := NewForest(RamForest, nil, "", 0)
 
-	sc := NewSimChain(0x07)
+	sc := newSimChain(0x07)
 	sc.lookahead = 400
 
 	for b := 0; b <= 1000; b++ {
@@ -190,9 +190,9 @@ func TestCowForestAddDel(t *testing.T) {
 	numAdds := uint32(10)
 
 	tmpDir := os.TempDir()
-	cowF := NewForest(nil, false, tmpDir, 500)
+	cowF := NewForest(CowForest, nil, tmpDir, 500)
 
-	sc := NewSimChain(0x07)
+	sc := newSimChain(0x07)
 	sc.lookahead = 400
 
 	for b := 0; b < 1000; b++ {
@@ -213,7 +213,7 @@ func TestCowForestAddDel(t *testing.T) {
 }
 
 func TestForestFixed(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	numadds := 5
 	numdels := 3
 	adds := make([]Leaf, numadds)
@@ -244,7 +244,7 @@ func TestForestFixed(t *testing.T) {
 
 // Add 2. delete 1.  Repeat.
 func Test2Fwd1Back(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	var absidx uint32
 	adds := make([]Leaf, 2)
 
@@ -323,7 +323,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 		return fmt.Errorf("too many deletes")
 	}
 
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	adds := make([]Leaf, nAdds)
 
 	for j, _ := range adds {
@@ -342,13 +342,15 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 		addHashes[i] = h.Hash
 	}
 
+	leavesToProve := addHashes[:nDels]
+
 	// get block proof
-	bp, err := f.ProveBatch(addHashes[:nDels])
+	bp, err := f.ProveBatch(leavesToProve)
 	if err != nil {
 		return err
 	}
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
-	worked, _, _ := verifyBatchProof(bp, f.getRoots(), f.numLeaves, nil)
+	worked, _, _ := verifyBatchProof(leavesToProve, bp, f.getRoots(), f.numLeaves, nil)
 	//	worked := f.VerifyBatchProof(bp)
 
 	if !worked {
@@ -359,7 +361,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 }
 
 func TestDeleteNonExisting(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 	deletions := []uint64{0}
 	_, err := f.Modify(nil, deletions)
 	if err == nil {
@@ -373,7 +375,7 @@ func TestSmallRandomForests(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		// The forest instance to test in this iteration of the loop
-		f := NewForest(nil, false, "", 0)
+		f := NewForest(RamForest, nil, "", 0)
 
 		// We use 'quick' to generate testing data:
 		// we interpret the keys as leaf hashes and the values
@@ -457,7 +459,7 @@ func TestSmallRandomForests(t *testing.T) {
 				t.Fatalf("proveblock failed proving existing leaf: %v", err)
 			}
 
-			if !(f.VerifyBatchProof(blockProof)) {
+			if !(f.VerifyBatchProof([]Hash{chosenUndeletedLeaf.Hash}, blockProof)) {
 				t.Fatal("verifyblockproof failed verifying proof for existing leaf")
 			}
 		}

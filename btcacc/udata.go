@@ -19,14 +19,6 @@ type UData struct {
 // Verify checks the consistency of uData: that the utxos are proven in the
 // batchproof
 func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
-	// this is really ugly and basically copies the whole thing to avoid
-	// destroying it while verifying...
-	mp, err := ud.AccProof.Reconstruct(nl, h)
-	if err != nil {
-		fmt.Printf("Reconstruct failed %s\n", err.Error())
-		return false
-	}
-
 	// make sure the udata is consistent, with the same number of leafDatas
 	// as targets in the accumulator batch proof
 	if len(ud.AccProof.Targets) != len(ud.Stxos) {
@@ -34,26 +26,6 @@ func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
 			len(ud.AccProof.Targets), len(ud.Stxos))
 	}
 
-	for i, pos := range ud.AccProof.Targets {
-		hashInProof, exists := mp[pos]
-		if !exists {
-			fmt.Printf("Verify failed: Target %d not in map\n", pos)
-			return false
-		}
-		// check if leafdata hashes to the hash in the proof at the target
-		if ud.Stxos[i].LeafHash() != hashInProof {
-			fmt.Printf("Verify failed: txhash %x index %d pos %d leafdata %x in proof %x\n",
-				ud.Stxos[i].TxHash, ud.Stxos[i].Index, pos,
-				ud.Stxos[i].LeafHash(), hashInProof)
-			sib, exists := mp[pos^1]
-			if exists {
-				fmt.Printf("sib exists, %x\n", sib)
-			}
-			return false
-		}
-	}
-	// return to presorted target list
-	// ud.AccProof.Targets = presort
 	return true
 }
 
@@ -105,23 +77,16 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 	return
 }
 
-//
+// SerializeSize outputs the size of the udata when it is serialized
 func (ud *UData) SerializeSize() int {
 	var ldsize int
 	var b bytes.Buffer
 
-	// TODO this is slow, can remove double checking once it works reliably
+	// Grab the size of all the stxos
 	for _, l := range ud.Stxos {
 		ldsize += l.SerializeSize()
-		b.Reset()
-		l.Serialize(&b)
-		if b.Len() != l.SerializeSize() {
-			fmt.Printf(" b.Len() %d, l.SerializeSize() %d\n",
-				b.Len(), l.SerializeSize())
-		}
 	}
 
-	b.Reset()
 	ud.AccProof.Serialize(&b)
 	if b.Len() != ud.AccProof.SerializeSize() {
 		fmt.Printf(" b.Len() %d, AccProof.SerializeSize() %d\n",

@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+const (
+	bridgeVerbose = false
+)
+
 // A FullForest is the entire accumulator of the UTXO set. This is
 // what the bridge node stores.  Everything is always full.
 
@@ -55,83 +59,91 @@ type Forest struct {
 	// hashes.  There's ram based and disk based for now, maybe if one
 	// is clearly better can go back to non-interface.
 	data ForestData
-	// moving to slice based forest.  more efficient, can be moved to
-	// an on-disk file more easily (the subtree stuff should be changed
-	// at that point to do runs of i/o).  Not sure about "deleting" as it
-	// might not be needed at all with a slice.
 
-	positionMap map[MiniHash]uint64 // map from hashes to positions.
-	// Inverse of forestMap for leaves.
+	// map from hashes to positions.
+	positionMap map[MiniHash]uint64
 
 	/*
 	 * below are just for testing / benchmarking
 	 */
 
-	// HistoricHashes represents how many hashes this forest has computed
-	//
-	// Meant for testing / benchmarking
-	HistoricHashes uint64
+	// historicHashes represents how many hashes this forest has computed.
+	// Meant for testing / benchmarking.
+	historicHashes uint64
 
-	// TimeRem represents how long Remove() function took
-	//
-	// Meant for testing / benchmarking
-	TimeRem time.Duration
+	// timeRem represents how long Remove() function took.
+	// Meant for testing / benchmarking.
+	timeRem time.Duration
 
-	// TimeMST represents how long the moveSubTree() function took
-	//
-	// Meant for testing / benchmarking
-	TimeMST time.Duration
+	// timeMST represents how long the moveSubTree() function took.
+	// Meant for testing / benchmarking.
+	timeMST time.Duration
 
-	// TimeInHash represents how long the hash operations (reHash) took
-	//
-	// Meant for testing / benchmarking
-	TimeInHash time.Duration
+	// timeInHash represents how long the hash operations (reHash) took.
+	// Meant for testing / benchmarking.
+	timeInHash time.Duration
 
-	// TimeInProve represents how long the Prove operations took
-	//
-	// Meant for testing / benchmarking
-	TimeInProve time.Duration
+	// timeInProve represents how long the Prove operations took.
+	// Meant for testing / benchmarking.
+	timeInProve time.Duration
 
-	// TimeInVerify represents how long the verify operations took
-	//
-	// Meant for testing / benchmarking
-	TimeInVerify time.Duration
+	// timeInVerify represents how long the verify operations took.
+	// Meant for testing / benchmarking.
+	timeInVerify time.Duration
 }
 
-// NewForest : use ram if not given a file
+// ForestType defines the 4 type of forests:
+// DiskForest, RamForest, CacheForest, CowForest
+type ForestType int
+
+const (
+	// DiskForest  - keeps the entire forest on disk as a flat file. Is the slowest
+	//               of them all. Pass an os.File as forestFile to create a DiskForest.
+	DiskForest ForestType = iota
+	// RamForest   - keeps the entire forest on ram as a slice. Is the fastest but
+	//               takes up a lot of ram. Is compatible with DiskForest (as in you
+	//               can restart as RamForest even if you created a DiskForest. Pass
+	//               nil, as the forestFile to create a RamForest.
+	RamForest
+	// CacheForest - keeps the entire forest on disk but caches recent nodes. It's
+	//               faster than disk. Is compatible with the above two forest types.
+	//               Pass cached = true to create a cacheForest.
+	CacheForest
+	// CowForest   - A copy-on-write (really a redirect on write) forest. It strikes
+	//               a balance between ram usage and speed. Not compatible with other
+	//               forest types though (meaning there isn't functionality implemented
+	//               to convert a CowForest to DiskForest and vise-versa). Pass a filepath
+	//               and cowMaxCache(how much MB to use in ram) to create a CowForest.
+	CowForest
+)
+
+// NewForest initializes a Forest and returns it. The given arguments determine
+// what type of forest it will be.
 func NewForest(
-	forestFile *os.File, cached bool, cowPath string, cowMaxCache int) *Forest {
+	forestType ForestType, forestFile *os.File, cowPath string, cowMaxCache int) *Forest {
 
 	f := new(Forest)
 	f.numLeaves = 0
 	f.rows = 0
 
-	if forestFile == nil {
-		if cowPath == "" {
-			// for in-ram
-			f.data = new(ramForestData)
-		} else {
-			// Init cowForest
-			d, err := initialize(cowPath, cowMaxCache)
-			if err != nil {
-				panic(err)
-			}
-			f.data = d
+	switch forestType {
+	case DiskForest:
+		d := new(diskForestData)
+		d.file = forestFile
+		f.data = d
+	case RamForest:
+		f.data = new(ramForestData)
+	case CacheForest:
+		d := new(cacheForestData)
+		d.file = forestFile
+		d.cache = newDiskForestCache(20)
+		f.data = d
+	case CowForest:
+		d, err := initialize(cowPath, cowMaxCache)
+		if err != nil {
+			panic(err)
 		}
-
-	} else {
-		// forest on disk or cached
-		if cached {
-			d := new(cacheForestData)
-			d.file = forestFile
-			d.cache = newDiskForestCache(20)
-			f.data = d
-		} else {
-			// for on-disk
-			d := new(diskForestData)
-			d.file = forestFile
-			f.data = d
-		}
+		f.data = d
 	}
 
 	f.data.resize((2 << f.rows) - 1)
@@ -143,15 +155,6 @@ func NewForest(
 func (f *Forest) ReconstructStats() (uint64, uint8) {
 	return f.numLeaves, f.rows
 }
-
-const sibSwap = false
-const bridgeVerbose = false
-
-// empty is needed for detection (to find errors) but I'm not sure it's needed
-// for deletion.  I think you can just leave garbage around, as it'll either
-// get immediately overwritten, or it'll be out to the right, beyond the edge
-// of the forest
-var empty [32]byte
 
 // removev5 swapless
 func (f *Forest) removev5(dels []uint64) error {
@@ -183,7 +186,6 @@ func (f *Forest) removev5(dels []uint64) error {
 	return nil
 }
 
-// rnew -- emove v4 with swapHashRange
 func (f *Forest) removev4(dels []uint64) error {
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 	// check that all dels are there
@@ -194,13 +196,10 @@ func (f *Forest) removev4(dels []uint64) error {
 		}
 	}
 	var hashDirt []uint64
-	// fmt.Printf("call rem2 nl %d rem %v\n", f.numLeaves, dels)
 
 	swapRows := remTrans2(dels, f.numLeaves, f.rows)
-	// fmt.Printf("got swaps %v\n", swapRows)
-	// loop taken from pollard rem2.  maybe pollard and forest can both
-	// satisfy the same interface..?  maybe?  that could work...
-	// TODO try that ^^^^^^
+	// loop taken from pollard rem2.
+	// TODO Maybe pollard and forest can both satisfy the same interface..?
 	for r := uint8(0); r < f.rows; r++ {
 		hashDirt = updateDirt(hashDirt, swapRows[r], f.numLeaves, f.rows)
 
@@ -266,6 +265,7 @@ func (f *Forest) promote(p uint64) uint64 {
 	parentPos := parent(p, f.rows)
 	f.data.write(parentPos, f.data.read(p))
 	return parentPos
+
 }
 
 // reHash hashes new data in the forest based on dirty positions.
@@ -345,13 +345,11 @@ func (f *Forest) reHash(dirt []uint64) error {
 			left := right ^ 1
 			parpos := parent(left, f.rows)
 
-			//				fmt.Printf("bridge hash %d %04x, %d %04x -> %d\n",
-			//					left, leftHash[:4], right, rightHash[:4], parpos)
 			if f.data.read(left) == empty || f.data.read(right) == empty {
 				f.data.write(parpos, empty)
 			} else {
 				par := parentHash(f.data.read(left), f.data.read(right))
-				f.HistoricHashes++
+				f.historicHashes++
 				f.data.write(parpos, par)
 			}
 			nextRow = append(nextRow, parpos)
@@ -405,7 +403,7 @@ func (f *Forest) addv2(adds []Leaf) {
 // Note that this does not modify in place!  All deletes occur simultaneous with
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
-func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
+func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 	numdels, numadds := len(delsUn), len(adds)
 	delta := int64(numadds - numdels) // watch 32/64 bit
 	if int64(f.numLeaves)+delta < 0 {
@@ -425,7 +423,6 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
 	}
 	// remap to expand the forest if needed
 	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
-		// fmt.Printf("current cap %d need %d\n",
 		// 1<<f.rows, f.numLeaves+delta)
 		err := f.reMap(f.rows + 1)
 		if err != nil {
@@ -448,13 +445,6 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*undoBlock, error) {
 
 	f.addv2(adds)
 
-	// fmt.Printf("done modifying block, added %d\n", len(adds))
-	// fmt.Printf("post add %s\n", f.ToString())
-	// for m, p := range f.positionMap {
-	// 	fmt.Printf("%x @%d\t", m[:4], p)
-	// }
-	// fmt.Printf("\n")
-
 	return ub, err
 }
 
@@ -470,7 +460,9 @@ func (f *Forest) reMap(destRows uint8) error {
 		return fmt.Errorf("changing by more than 1 not programmed yet")
 	}
 
-	fmt.Printf("remap forest %d rows -> %d rows\n", f.rows, destRows)
+	if verbose {
+		fmt.Printf("remap forest %d rows -> %d rows\n", f.rows, destRows)
+	}
 
 	// for row reduction
 	if destRows < f.rows {
@@ -478,10 +470,8 @@ func (f *Forest) reMap(destRows uint8) error {
 	}
 	// I don't think you ever need to remap down.  It really doesn't
 	// matter.  Something to program someday if you feel like it for fun.
-	// fmt.Printf("size is %d\n", f.data.size())
 	// rows increase
 	f.data.resize((2 << destRows) - 1)
-	// fmt.Printf("size is %d\n", f.data.size())
 	pos := uint64(1 << destRows) // leftmost position of row 1
 	reach := pos >> 1            // how much to next row up
 	// start on row 1, row 0 doesn't move
@@ -565,7 +555,6 @@ func RestoreForest(
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Forest leaves:", f.numLeaves)
 	// Restore number of rows
 	// TODO optimize away "rows" and only save in minimzed form
 	// (this requires code to shrink the forest
@@ -573,7 +562,6 @@ func RestoreForest(
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Forest rows:", f.rows)
 
 	if cow != "" {
 		cowData, err := loadCowForest(cow, cowMaxCache)
@@ -590,7 +578,6 @@ func RestoreForest(
 		if toRAM {
 			// for in-ram
 			ramData := new(ramForestData)
-			fmt.Printf("%d rows resize to %d\n", f.rows, (2<<f.rows - 1))
 			ramData.resize((2 << f.rows) - 1)
 
 			// Can't read all at once!  There's a (secret? at least not well
@@ -602,18 +589,9 @@ func RestoreForest(
 					return nil, err
 				}
 				bytesRead += n
-				fmt.Printf("read %d bytes of forest file into ram\n", bytesRead)
 			}
 
 			f.data = ramData
-
-			// for i := uint64(0); i < f.data.size(); i++ {
-			// f.data.write(i, diskData.read(i))
-			// if i%100000 == 0 && i != 0 {
-			// fmt.Printf("read %d nodes from disk\n", i)
-			// }
-			// }
-
 		} else {
 			if cached {
 				// on disk, with cache
@@ -631,15 +609,12 @@ func RestoreForest(
 
 	// Restore positionMap by rebuilding from all leaves
 	f.positionMap = make(map[MiniHash]uint64)
-	fmt.Printf("%d leaves for position map\n", f.numLeaves)
 	for i := uint64(0); i < f.numLeaves; i++ {
 		f.positionMap[f.data.read(i).Mini()] = i
 	}
 	if f.positionMap == nil {
 		return nil, fmt.Errorf("Generated positionMap is nil")
 	}
-
-	fmt.Println("Done restoring forest")
 
 	// for cacheForestData the `hashCount` field gets
 	// set throught the size() call.
@@ -660,9 +635,6 @@ func (f *Forest) PrintPositionMap() string {
 
 // WriteMiscData writes the numLeaves and rows to miscForestFile
 func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
-	fmt.Println("numLeaves=", f.numLeaves)
-	fmt.Println("f.rows=", f.rows)
-
 	err := binary.Write(miscForestFile, binary.BigEndian, f.numLeaves)
 	if err != nil {
 		return err
@@ -682,7 +654,7 @@ func (f *Forest) WriteMiscData(miscForestFile *os.File) error {
 // this only makes sense to do if the forest is in ram.  So it'll return
 // an error if it's not a ramForestData
 func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
-
+	// Only the RamForest needs to be written.
 	if ram {
 		ramForest, ok := f.data.(*ramForestData)
 		if !ok {
@@ -696,13 +668,6 @@ func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 		if err != nil {
 			return fmt.Errorf("WriteForest write %s", err.Error())
 		}
-	}
-
-	if cow {
-		//fmt.Println("F.DATA.CLOSE ON COW")
-		//fmt.Println("TYPE:")
-		//fmt.Printf("%T\n", f.data)
-		//f.data.close()
 	}
 
 	return nil
@@ -728,10 +693,10 @@ func (f *Forest) getRoots() []Hash {
 // and the size of the forest
 func (f *Forest) Stats() string {
 	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
-		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
+		f.numLeaves, f.historicHashes, len(f.positionMap), f.data.size())
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
-		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
-		f.TimeInProve.Seconds())
+		f.timeInHash.Seconds(), f.timeRem.Seconds(), f.timeMST.Seconds(),
+		f.timeInProve.Seconds())
 
 	return s
 }
@@ -765,7 +730,6 @@ func (f *Forest) ToString() string {
 				output[h*2] += "        "
 			}
 			if h > 0 {
-				//				if x%2 == 0 {
 				output[(h*2)-1] += "|-------"
 				for q := uint8(0); q < ((1<<h)-1)/2; q++ {
 					output[(h*2)-1] += "--------"
@@ -774,8 +738,6 @@ func (f *Forest) ToString() string {
 				for q := uint8(0); q < ((1<<h)-1)/2; q++ {
 					output[(h*2)-1] += "        "
 				}
-
-				//				}
 
 				for q := uint8(0); q < (1<<h)-1; q++ {
 					output[h*2] += "        "
