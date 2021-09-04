@@ -58,11 +58,9 @@ type flatFileState struct {
 // pFileWorker takes in blockproof and height information from the channel
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
-func flatFileWorker(
+
+func flatFileWorkerProofBlocks(
 	proofChan chan btcacc.UData,
-	ttlResultChan chan ttlResultBlock,
-	undoChan chan accumulator.UndoBlock,
-	leafblockChan chan int,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
 
@@ -88,8 +86,21 @@ func flatFileWorker(
 		panic(err)
 	}
 
-	// for the undofiles
+	ud := <-proofChan
+	err = ff.writeProofBlock(ud)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func flatFileWorkerUndoBlocks(
+	undoChan chan accumulator.UndoBlock,
+	utreeDir utreeDir,
+	fileWait *sync.WaitGroup) {
+
 	var uf flatFileState
+	var err error
+
 	uf.offsetFile, err = os.OpenFile(
 		utreeDir.UndoDir.offsetFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
@@ -108,8 +119,22 @@ func flatFileWorker(
 	if err != nil {
 		panic(err)
 	}
-	// ttl data saving initialization
+
+	undo := <-undoChan
+	err = uf.writeUndoBlock(undo)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func flatFileWorkerTTlBlocks(
+	ttlResultChan chan ttlResultBlock,
+	leafblockChan chan int,
+	utreeDir utreeDir,
+	fileWait *sync.WaitGroup) {
+
 	var tf flatFileState
+	var err error
 
 	tf.offsetFile, err = os.OpenFile(
 		utreeDir.TtlDir.OffsetFile, os.O_CREATE|os.O_RDWR, 0600)
@@ -129,46 +154,19 @@ func flatFileWorker(
 		panic(err)
 	}
 
-	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
-	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
-	// it should keep both buffers about even.  If it keeps doing proofs and the ttl
-	// buffer fills, then eventually it'll block...?
-	// Also, is it OK to have 2 different workers here?  It probably is, with the
-	// ttl side having read access to the proof writing side's last written proof.
-	// then the TTL side can do concurrent writes.  Also the TTL writes might be
-	// slow since they're all over the place.  Also the offsets should definitely
-	// be in ram since they'll be accessed a lot.
+	size := <-leafblockChan
+	bytesTtlWrite := make([]byte, size)
+	_, err = tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
+	tf.fileWait.Done()
+	if err != nil {
+		panic(err)
+	}
+	tf.currentOffset = tf.currentOffset + int64(size)
 
-	// TODO ^^^^^^ all that stuff.
-
-	// main selector - Write block proofs whenever you get them
-	// if you get TTLs, write them only if they're not too high
-	// if they are too high, keep writing proof blocks until they're not
-	for {
-		select {
-		case ud := <-proofChan:
-			err = ff.writeProofBlock(ud)
-			if err != nil {
-				panic(err)
-			}
-		case ttlRes := <-ttlResultChan:
-			err = tf.writeTTLs(ttlRes)
-			if err != nil {
-				panic(err)
-			}
-		case undo := <-undoChan:
-			err = uf.writeUndoBlock(undo)
-			if err != nil {
-				panic(err)
-			}
-		case size := <-leafblockChan:
-			bytesTtlWrite := make([]byte, size)
-			_, err := tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
-			tf.fileWait.Done()
-			if err != nil {
-				panic(err)
-			}
-		}
+	ttlRes := <-ttlResultChan
+	err = tf.writeTTLs(ttlRes)
+	if err != nil {
+		panic(err)
 	}
 }
 

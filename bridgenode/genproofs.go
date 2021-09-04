@@ -112,7 +112,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	var fileWait sync.WaitGroup
 
-	go flatFileWorker(proofChan, ttlResultChan, undoChan, leafblockChan, cfg.UtreeDir, &fileWait)
+	go flatFileWorkerProofBlocks(proofChan, cfg.UtreeDir, &fileWait)                  // flat file worker for proof blocks
+	go flatFileWorkerUndoBlocks(undoChan, cfg.UtreeDir, &fileWait)                    // flat file worker for the undo blocks
+	go flatFileWorkerTTlBlocks(ttlResultChan, leafblockChan, cfg.UtreeDir, &fileWait) // flat file worker for the ttl blocks
 
 	fmt.Println("Building Proofs and ttldb...")
 
