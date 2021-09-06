@@ -86,10 +86,12 @@ func flatFileWorkerProofBlocks(
 		panic(err)
 	}
 
-	ud := <-proofChan
-	err = ff.writeProofBlock(ud)
-	if err != nil {
-		panic(err)
+	for {
+		ud := <-proofChan
+		err = ff.writeProofBlock(ud)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -119,12 +121,15 @@ func flatFileWorkerUndoBlocks(
 	if err != nil {
 		panic(err)
 	}
+	for {
+		undo := <-undoChan
+		err = uf.writeUndoBlock(undo)
+		if err != nil {
+			panic(err)
+		}
 
-	undo := <-undoChan
-	err = uf.writeUndoBlock(undo)
-	if err != nil {
-		panic(err)
 	}
+
 }
 
 func flatFileWorkerTTlBlocks(
@@ -154,20 +159,24 @@ func flatFileWorkerTTlBlocks(
 		panic(err)
 	}
 
-	size := <-leafblockChan
-	bytesTtlWrite := make([]byte, size)
-	_, err = tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
-	tf.fileWait.Done()
-	if err != nil {
-		panic(err)
+	for {
+		size := <-leafblockChan
+		bytesTtlWrite := make([]byte, size*4)
+		_, err = tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
+		tf.fileWait.Done()
+		if err != nil {
+			panic(err)
+		}
+		ttlRes := <-ttlResultChan
+		err = tf.writeTTLs(ttlRes)
+		if err != nil {
+			panic(err)
+		}
+		tf.currentOffset = tf.currentOffset + int64(size*4)
+		// append tf offsets after writing ttl data
+		tf.offsets = append(tf.offsets, tf.currentOffset)
 	}
-	tf.currentOffset = tf.currentOffset + int64(size)
 
-	ttlRes := <-ttlResultChan
-	err = tf.writeTTLs(ttlRes)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func (ff *flatFileState) ffInit() error {
@@ -332,9 +341,6 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
 	var buffer [8]byte
-
-	// write offset of current TTL to offset file
-	ff.offsets = append(ff.offsets, ff.currentOffset)
 
 	// write ttl offset to offsetfile
 	binary.BigEndian.PutUint64(buffer[:], uint64(ff.currentOffset))
