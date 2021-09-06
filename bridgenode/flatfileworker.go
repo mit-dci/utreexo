@@ -58,10 +58,9 @@ type flatFileState struct {
 // pFileWorker takes in blockproof and height information from the channel
 // and writes to disk. MUST NOT have more than one worker as the proofs need to be
 // in order
-func flatFileWorker(
+
+func flatFileWorkerProofBlocks(
 	proofChan chan btcacc.UData,
-	ttlResultChan chan ttlResultBlock,
-	undoChan chan accumulator.UndoBlock,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
 
@@ -87,8 +86,23 @@ func flatFileWorker(
 		panic(err)
 	}
 
-	// for the undofiles
+	for {
+		ud := <-proofChan
+		err = ff.writeProofBlock(ud)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func flatFileWorkerUndoBlocks(
+	undoChan chan accumulator.UndoBlock,
+	utreeDir utreeDir,
+	fileWait *sync.WaitGroup) {
+
 	var uf flatFileState
+	var err error
+
 	uf.offsetFile, err = os.OpenFile(
 		utreeDir.UndoDir.offsetFile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
@@ -107,48 +121,63 @@ func flatFileWorker(
 	if err != nil {
 		panic(err)
 	}
-	// Grab either proof bytes and write em to offset / proof file, OR, get a TTL result
-	// and write that.  Will this lock up if it keeps doing proofs and ignores ttls?
-	// it should keep both buffers about even.  If it keeps doing proofs and the ttl
-	// buffer fills, then eventually it'll block...?
-	// Also, is it OK to have 2 different workers here?  It probably is, with the
-	// ttl side having read access to the proof writing side's last written proof.
-	// then the TTL side can do concurrent writes.  Also the TTL writes might be
-	// slow since they're all over the place.  Also the offsets should definitely
-	// be in ram since they'll be accessed a lot.
-
-	// TODO ^^^^^^ all that stuff.
-
-	// main selector - Write block proofs whenever you get them
-	// if you get TTLs, write them only if they're not too high
-	// if they are too high, keep writing proof blocks until they're not
 	for {
-		select {
-		case ud := <-proofChan:
-			err = ff.writeProofBlock(ud)
-			if err != nil {
-				panic(err)
-			}
-		case ttlRes := <-ttlResultChan:
-			for ttlRes.Height > ff.currentHeight {
-				ud := <-proofChan
-				err = ff.writeProofBlock(ud)
-				if err != nil {
-					panic(err)
-				}
-			}
-
-			err = ff.writeTTLs(ttlRes)
-			if err != nil {
-				panic(err)
-			}
-		case undo := <-undoChan:
-			err = uf.writeUndoBlock(undo)
-			if err != nil {
-				panic(err)
-			}
+		undo := <-undoChan
+		err = uf.writeUndoBlock(undo)
+		if err != nil {
+			panic(err)
 		}
+
 	}
+
+}
+
+func flatFileWorkerTTlBlocks(
+	ttlResultChan chan ttlResultBlock,
+	leafblockChan chan int,
+	utreeDir utreeDir,
+	fileWait *sync.WaitGroup) {
+
+	var tf flatFileState
+	var err error
+
+	tf.offsetFile, err = os.OpenFile(
+		utreeDir.TtlDir.OffsetFile, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	tf.proofFile, err = os.OpenFile(
+		utreeDir.TtlDir.ttlsetFile, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+	tf.fileWait = fileWait
+
+	err = tf.ffInit()
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		size := <-leafblockChan
+		bytesTtlWrite := make([]byte, size*4)
+		_, err = tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
+		tf.fileWait.Done()
+		if err != nil {
+			panic(err)
+		}
+		ttlRes := <-ttlResultChan
+		err = tf.writeTTLs(ttlRes)
+		if err != nil {
+			panic(err)
+		}
+		// append tf offsets after writing ttl data
+		tf.offsets = append(tf.offsets, tf.currentOffset)
+		// increment currentoffset value
+		tf.currentOffset = tf.currentOffset + int64(size*4)
+	}
+
 }
 
 func (ff *flatFileState) ffInit() error {
@@ -312,6 +341,15 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 	var ttlArr [4]byte
+	var buffer [8]byte
+
+	// write ttl offset to offsetfile
+	binary.BigEndian.PutUint64(buffer[:], uint64(ff.currentOffset))
+	_, err := ff.offsetFile.WriteAt(buffer[:], int64(8*ttlRes.Height))
+	if err != nil {
+		return err
+	}
+
 	// for all the TTLs, seek and overwrite the empty values there
 	for _, c := range ttlRes.Created {
 		// seek to the location of that txo's ttl value in the proof file
@@ -321,14 +359,17 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
-		// add 16: 4 for magic, 4 for size, 4 for height, 4 numTTL, then ttls start
-		_, err := ff.proofFile.WriteAt(ttlArr[:],
-			ff.offsets[c.createHeight]+16+int64(c.indexWithinBlock*4))
+		_, err = ff.proofFile.WriteAt(ttlArr[:],
+			ff.offsets[c.createHeight]+int64(c.indexWithinBlock*4))
 		if err != nil {
 			return err
 		}
-
 	}
+
+	// increment value of offset 4 bytes of each ttlRes Created
+	ff.currentOffset = ff.currentOffset + int64(len(ttlRes.Created)*4)
+	// increment height by 1
+	ff.currentHeight = ff.currentHeight + 1
 	ff.fileWait.Done()
 	return nil
 }
