@@ -172,9 +172,10 @@ func flatFileWorkerTTlBlocks(
 		if err != nil {
 			panic(err)
 		}
-		tf.currentOffset = tf.currentOffset + int64(size*4)
 		// append tf offsets after writing ttl data
 		tf.offsets = append(tf.offsets, tf.currentOffset)
+		// increment currentoffset value
+		tf.currentOffset = tf.currentOffset + int64(size*4)
 	}
 
 }
