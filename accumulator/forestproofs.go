@@ -198,7 +198,7 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 }
 
 // VerifyBatchProof is just a wrapper around verifyBatchProof
-func (f *Forest) VerifyBatchProof(toProve []Hash, bp BatchProof) bool {
-	ok, _, _ := verifyBatchProof(toProve, bp, f.getRoots(), f.numLeaves, nil)
-	return ok
+func (f *Forest) VerifyBatchProof(toProve []Hash, bp BatchProof) error {
+	_, _, err := verifyBatchProof(toProve, bp, f.getRoots(), f.numLeaves, nil)
+	return err
 }
