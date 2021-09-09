@@ -4,7 +4,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
 
     - name: setup directory
@@ -53,7 +53,13 @@ jobs:
       shell: bash
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
-        go test -v ./accumulator
+        go test -v ./accumulator -race -covermode atomic -coverprofile=covprofile
+
+    - name: Send coverage
+      uses: shogo82148/actions-goveralls@v1
+      with:
+        path-to-profile: "covprofile"
+        working-directory: "${{ github.workspace }}/go/src/github.com/${{ github.repository }}"
 
     - name: Run integration tests
       shell: bash
