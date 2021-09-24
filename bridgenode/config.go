@@ -18,13 +18,11 @@ The bridgenode server generates proofs and serves to the CSN node.
 OPTIONS:
   -net=mainnet                 configure whether to use mainnet. Optional.
   -net=regtest                 configure whether to use regtest. Optional.
-<<<<<<< HEAD
   -forest                      select forest type to use (ram, cow, cache, disk). 
   Defaults to disk
-=======
   -net=signet                 configure whether to use signet. Optional.
   -forest                      select forest type to use (ram, cow, cache, disk). Defaults to disk
->>>>>>> master
+
   -datadir="path/to/directory" set a custom DATADIR.
                                Defaults to the Bitcoin Core DATADIR path
   -datadir="path/to/directory" set a custom DATADIR.
@@ -97,7 +95,6 @@ type undoDir struct {
 	undoFile   string
 	offsetFile string
 }
-
 type ttlDir struct {
 	base       string
 	ttlsetFile string
@@ -187,6 +184,10 @@ func makePaths(dir utreeDir) error {
 		return fmt.Errorf("init makePaths error %s")
 	}
 	err = os.MkdirAll(dir.UndoDir.base, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("init makePaths error %s")
+	}
+	err = os.MkdirAll(dir.TtlDir.base, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("init makePaths error %s")
 	}

@@ -34,14 +34,13 @@ func TestIncompleteBatchProof(t *testing.T) {
 
 	// create blockProof based on the last add in the slice
 	blockProof, err := f.ProveBatch(leavesToProve)
-
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blockProof.Proof = blockProof.Proof[:len(blockProof.Proof)-1]
-	shouldBeFalse := f.VerifyBatchProof(leavesToProve, blockProof)
-	if shouldBeFalse != false {
+	err = f.VerifyBatchProof(leavesToProve, blockProof)
+	if err == nil {
 		t.Fail()
 		t.Logf("Incomplete proof passes verification")
 	}
@@ -77,16 +76,15 @@ func TestVerifyBatchProof(t *testing.T) {
 
 	// create blockProof based on the last add in the slice
 	blockProof, err := f.ProveBatch(leavesToProve)
-
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Confirm that verify block proof works
-	shouldBetrue := f.VerifyBatchProof(leavesToProve, blockProof)
-	if shouldBetrue != true {
+	err = f.VerifyBatchProof(leavesToProve, blockProof)
+	if err != nil {
 		t.Fail()
-		t.Logf("Block failed to verify")
+		t.Logf("Block failed to verify. Error: %s", err.Error())
 	}
 
 	// delete last leaf and add a new leaf
@@ -98,8 +96,8 @@ func TestVerifyBatchProof(t *testing.T) {
 	}
 
 	// Attempt to verify block proof with deleted element
-	shouldBeFalse := f.VerifyBatchProof(leavesToProve, blockProof)
-	if shouldBeFalse != false {
+	err = f.VerifyBatchProof(leavesToProve, blockProof)
+	if err == nil {
 		t.Fail()
 		t.Logf("Block verified with old proof. Double spending allowed.")
 	}
@@ -130,11 +128,10 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 		t.Fatal(fmt.Errorf("ProveBlock of existing values: %v", err))
 	}
 
-	if !f.VerifyBatchProof([]Hash{adds[proofIndex].Hash}, batchProof) {
-		t.Fatal(
-			fmt.Errorf(
-				"proof of %d didn't verify (before deletion)",
-				proofIndex))
+	err = f.VerifyBatchProof([]Hash{adds[proofIndex].Hash}, batchProof)
+	if err != nil {
+		t.Fatal(fmt.Errorf("proof of %d didn't verify (before deletion)",
+			proofIndex))
 	}
 
 	_, err = f.Modify(nil, []uint64{0})
@@ -142,10 +139,9 @@ func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 		t.Fatal(fmt.Errorf("Modify with deletions: %v", err))
 	}
 
-	if f.VerifyBatchProof([]Hash{adds[proofIndex].Hash}, batchProof) {
-		t.Fatal(
-			fmt.Errorf(
-				"proof of %d is still valid (after deletion)",
-				proofIndex))
+	err = f.VerifyBatchProof([]Hash{adds[proofIndex].Hash}, batchProof)
+	if err == nil {
+		t.Fatal(fmt.Errorf("proof of %d is still valid (after deletion)",
+			proofIndex))
 	}
 }

@@ -100,6 +100,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
+
 	go BlockAndRevReader(
 		blockAndRevProofChan, blockAndRevTTLChan,
 		haltRequest, fileWait, cfg, finishedHeight)
@@ -130,7 +131,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if err != nil {
 			return err
 		}
+
 		numLeavesChan <- len(blockAdds)
+
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
 		ud, err := btcacc.GenUData(delLeaves, forest, bnr.Height)

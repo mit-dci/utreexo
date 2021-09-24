@@ -346,6 +346,7 @@ func (ff *flatFileState) writeProofBlock(ud btcacc.UData) error {
 }
 
 func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
+
 	var ttlArr, readEmpty, expectedEmpty [4]byte
 
 	// for all the TTLs, seek and overwrite the empty values there
@@ -398,7 +399,13 @@ func (ff *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if err != nil {
 			return err
 		}
+
 	}
+
+	// increment value of offset 4 bytes of each ttlRes Created
+	ff.currentOffset = ff.currentOffset + int64(len(ttlRes.results)*4)
+	// increment height by 1
+	ff.finishedHeight = ff.finishedHeight + 1
 	ff.fileWait.Done()
 	return nil
 }
