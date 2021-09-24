@@ -17,14 +17,14 @@ func BNRTTLSpliter(
 	utdir utreeDir) {
 
 	txidFile, err := os.OpenFile(
-		filepath.Join(utdir.TtlDir, "txidFile"),
+		filepath.Join(utdir.TtlDir.base, "txidFile"),
 		os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)
 	}
 
 	txidOffsetFile, err := os.OpenFile(
-		filepath.Join(utdir.TtlDir, "txidOffsetFile"),
+		filepath.Join(utdir.TtlDir.base, "txidOffsetFile"),
 		os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err)

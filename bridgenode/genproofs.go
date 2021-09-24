@@ -91,9 +91,11 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	// BlockAndRevReader will push blocks into here
 	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
 	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
-	ttlResultChan := make(chan ttlResultBlock, 10)     // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)           // from processing to flat writer
-	undoChan := make(chan accumulator.UndoBlock, 10)   // from undoblocks to undoblock writer
+	ttlResultChan := make(chan ttlResultBlock, 10)     // from lookup to flat ttl writer
+	proofChan := make(chan btcacc.UData, 10)           // to flat writer
+	undoChan := make(chan accumulator.UndoBlock, 10)   // to undoblock writer
+	numLeavesChan := make(chan int, 10)                // empty leaves for TTLs
+
 	fileWait := new(sync.WaitGroup)
 
 	// Reads block asynchronously from .dat files
@@ -102,7 +104,10 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		blockAndRevProofChan, blockAndRevTTLChan,
 		haltRequest, fileWait, cfg, finishedHeight)
 
-	go FlatFileWriter(proofChan, ttlResultChan, undoChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerProof(proofChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerUndo(undoChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerTTl(ttlResultChan, numLeavesChan, cfg.UtreeDir, fileWait)
+
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
 	fmt.Println("Building Proofs and ttls...")
@@ -125,7 +130,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		if err != nil {
 			return err
 		}
-
+		numLeavesChan <- len(blockAdds)
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
 		ud, err := btcacc.GenUData(delLeaves, forest, bnr.Height)
@@ -139,9 +144,6 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
-		// TODO: Don't ignore undoblock
-		// Modifies the forest with the given TXINs and TXOUTs
-		// return the undoBlock Data
 		undoblock, err := forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
