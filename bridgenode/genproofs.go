@@ -107,7 +107,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	go flatFileWorkerProof(proofChan, cfg.UtreeDir, fileWait)
 	go flatFileWorkerUndo(undoChan, cfg.UtreeDir, fileWait)
-	go flatFileWorkerTTl(ttlResultChan, numLeavesChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerTTL(ttlResultChan, numLeavesChan, cfg.UtreeDir, fileWait)
 
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
