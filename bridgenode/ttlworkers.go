@@ -146,11 +146,9 @@ func TxidSortWriterWorker(
 		}
 		startOffset += int64(len(wb.mTxids))
 		sortTxids(wb.mTxids)
-		for _, mt := range wb.mTxids {
-			err := mt.serialize(miniTxidFile)
-			if err != nil {
-				fmt.Printf("miniTx write error: %s\n", err.Error())
-			}
+		err = wb.serialize(miniTxidFile)
+		if err != nil {
+			fmt.Printf("TTLWriteBlock write error: %s\n", err.Error())
 		}
 		goChan <- true // tell the TTLLookupWorker to start on the block just done
 	}
@@ -226,9 +224,10 @@ func TTLLookupWorker(
 			}
 
 			resultBlock.results[i].createHeight = stxo.createHeight
-			// fmt.Printf("search for create height %d %x:%d from %d range %d\n",
-			// stxo.height, stxo.hashprefix, stxo.idx,
-			// heightOffset, nextOffset-heightOffset)
+			fmt.Printf("search for create height %d %x:%d from %d range %d\n",
+				stxo.createHeight, stxo.hashprefix, stxo.idx,
+				heightOffset, nextOffset-heightOffset)
+
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
@@ -259,7 +258,7 @@ func binSearch(mi miniIn,
 	// fmt.Printf("looking for %x blkstart/end %d/%d\n", mi.hashprefix, blkStart, blkEnd)
 
 	var positionBytes [2]byte
-	var pos int
+	var pos int // position in transactions
 	width := int(top - bottom)
 	if width == 0 {
 		pos = int(bottom)
@@ -271,7 +270,7 @@ func binSearch(mi miniIn,
 			panic("failed txid search")
 		}
 	}
-
+	// read positionBytes which tells utxo position from tx position
 	n, err := mtxFile.ReadAt(positionBytes[:], int64((pos+int(bottom))*8)+6)
 	if err != nil || n != 2 {
 		panic(err)

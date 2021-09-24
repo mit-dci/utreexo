@@ -378,6 +378,9 @@ func (tf *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		if n != 4 && err != nil {
 			fmt.Printf("ttl destroyH %d createH %d idxinblock %d\n",
 				ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock)
+			fmt.Printf("want to read byte %d = hO[%d]=%d + %d * 4\n",
+				loc, c.createHeight,
+				tf.heightOffsets[c.createHeight], c.indexWithinBlock)
 			s, _ := tf.proofFile.Stat()
 			return fmt.Errorf("proofFile.ReadAt %d size %d %s",
 				loc, s.Size(), err.Error())

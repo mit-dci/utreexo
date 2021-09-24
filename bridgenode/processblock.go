@@ -89,6 +89,28 @@ type miniTx struct {
 // miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
 // TODO there are probably no 6 byte prefix collisions in any block.
 // But there could be someday, so deal with that...
+func (wb *ttlWriteBlock) serialize(w io.Writer) error {
+
+	s := fmt.Sprintf("ttl wb h %d %d txs\n", wb.createHeight, len(wb.mTxids))
+	for _, mt := range wb.mTxids {
+		_, err := w.Write(mt.txid[:6])
+		if err != nil {
+			return err
+		}
+
+		err = binary.Write(w, binary.BigEndian, mt.startsAt)
+		if err != nil {
+			return err
+		}
+		s += fmt.Sprintf("tx %x starts at idxinblock %d\n", mt.txid[:6], mt.startsAt)
+	}
+	fmt.Printf(s)
+	return nil
+}
+
+// miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
+// TODO there are probably no 6 byte prefix collisions in any block.
+// But there could be someday, so deal with that...
 func (mt *miniTx) serialize(w io.Writer) error {
 	_, err := w.Write(mt.txid[:6])
 	if err != nil {
