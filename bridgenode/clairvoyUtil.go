@@ -1,8 +1,11 @@
 package bridgenode
 
 import (
+	"bytes"
 	"os"
 	"sort"
+
+	"github.com/mit-dci/utreexo/btcacc"
 )
 
 type txoEnd struct {
@@ -31,6 +34,34 @@ func (s sortableTxoSlice) Less(i, j int) bool {
 func (s *sortableTxoSlice) MergeSort(a sortableTxoSlice) {
 	*s = append(*s, a...)
 	sort.Sort(s)
+}
+
+func getCBlocks(cfg *Config, start int32, count int32) ([]cBlock, error) {
+	// build cblock slice to return
+	cblocks := make([]cBlock, count)
+	var proofdir = cfg.UtreeDir.ProofDir
+
+	// grab utreexo data and populate cblocks
+	for i, _ := range cblocks {
+		udataBytes, err := GetUDataBytesFromFile(
+			proofdir, start+int32(i))
+		if err != nil {
+			return nil, err
+		}
+		udbuf := bytes.NewBuffer(udataBytes)
+		var udata btcacc.UData
+		udata.Deserialize(udbuf)
+		// put together the cblock
+		// height & ttls we can get right away in the format we need from udata
+		cblocks[i].blockHeight = udata.Height
+		cblocks[i].ttls = udata.TxoTTLs
+		for j, ttl := range cblocks[i].ttls {
+			if ttl == 0 {
+				cblocks[i].ttls[j] = 2147483600
+			}
+		}
+	}
+	return cblocks, nil
 }
 
 // assumes a sorted slice.  Splits on a "end" value, returns the low slice and

@@ -10,6 +10,7 @@ var (
 	ErrWrongForestType = errors.New("Invalid forest type of")
 	ErrInvalidNetwork  = errors.New("Invalid/not supported net flag given")
 	ErrBuildProofs     = errors.New("BuildProofs error")
+	ErrBuildClairvoy   = errors.New("BuildClairvoy error")
 	ErrArchiveServer   = errors.New("ArchiveServer error")
 )
 
@@ -28,6 +29,10 @@ func errInvalidNetwork(nType string) error {
 
 func errBuildProofs(s error) error {
 	return fmt.Errorf("%s: %s", ErrBuildProofs, s)
+}
+
+func errBuildClairvoy(s error) error {
+	return fmt.Errorf("%s: %s", ErrBuildClairvoy, s)
 }
 
 func errArchiveServer(s error) error {
