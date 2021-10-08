@@ -48,6 +48,11 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 	}
 
+	err := BuildClairvoyantSchedule(cfg, sig)
+	if err != nil {
+		return errBuildProofs(err)
+	}
+
 	if !cfg.noServe {
 		// serve when finished
 		err := ArchiveServer(cfg, sig)
