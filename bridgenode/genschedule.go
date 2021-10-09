@@ -1,6 +1,8 @@
 package bridgenode
 
 import (
+	"encoding/binary"
+	"fmt"
 	"os"
 )
 
@@ -22,8 +24,45 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 	// an int64.  Then seek to that location within the TTL file for the
 	// series of 4-byte TTL values of block 100.
 
-	ttlOffsetFile.Read(nil)
-	ttlFile.Read(nil)
+	// example: read block 208 and report the ttls
+	height := int32(208)
+
+	// offset is the position in the ttlFile where block starts
+	var offset int64
+	// seek to the right place in the offset file
+	_, err = ttlOffsetFile.Seek(int64(height)*8, 0)
+	if err != nil {
+		return err
+	}
+
+	// read the offset data
+	err = binary.Read(ttlOffsetFile, binary.BigEndian, &offset)
+	if err != nil {
+		return err
+	}
+
+	// seek to the block start in the ttl file
+	_, err = ttlFile.Seek(offset, 0)
+	if err != nil {
+		return err
+	}
+
+	// read number of ttls
+	var ttlsInBlock int32
+	err = binary.Read(ttlFile, binary.BigEndian, &ttlsInBlock)
+	if err != nil {
+		return err
+	}
+
+	ttls := make([]int32, ttlsInBlock)
+	for i, _ := range ttls {
+		binary.Read(ttlFile, binary.BigEndian, &ttls[i])
+	}
+
+	// print out those ttls
+	for i, t := range ttls {
+		fmt.Printf("height %d ttl %d = %d\n", height, i, t)
+	}
 
 	return nil
 }
