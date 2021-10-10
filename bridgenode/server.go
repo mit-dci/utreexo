@@ -49,6 +49,11 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 	}
 
+	err := BuildClairvoyantSchedule(cfg, sig)
+	if err != nil {
+		return errBuildProofs(err)
+	}
+
 	if !cfg.noServe {
 		fmt.Println("starting to build clairvoy")
 		err := BuildClairvoy(cfg, sig)

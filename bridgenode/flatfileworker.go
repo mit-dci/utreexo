@@ -161,7 +161,9 @@ func flatFileWorkerTTlBlocks(
 
 	for {
 		size := <-leafblockChan
-		bytesTtlWrite := make([]byte, size*4)
+		// 1 extra byte for numTTLs in the beginning
+		bytesTtlWrite := make([]byte, (size+1)*4)
+		binary.BigEndian.PutUint32(bytesTtlWrite[:4], uint32(size))
 		_, err = tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
 		tf.fileWait.Done()
 		if err != nil {
@@ -175,7 +177,7 @@ func flatFileWorkerTTlBlocks(
 		// append tf offsets after writing ttl data
 		tf.offsets = append(tf.offsets, tf.currentOffset)
 		// increment currentoffset value
-		tf.currentOffset = tf.currentOffset + int64(size*4)
+		tf.currentOffset += int64(size+1) * 4
 	}
 
 }

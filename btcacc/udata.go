@@ -40,6 +40,8 @@ func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
 // batch proof
 // Bunch of LeafDatas
 
+// TODO: need to remove TTL values from here; it's stored in the ttl file
+
 func (ud *UData) Serialize(w io.Writer) (err error) {
 	err = binary.Write(w, binary.BigEndian, ud.Height)
 	if err != nil { // ^ 4B block height
