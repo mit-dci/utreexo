@@ -89,6 +89,8 @@ func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
 		return err
 	}
 	b[0] = b[0] | 1<<(7-(txoIdx%8))
+	//fmt.Println("number: " + fmt.Sprint(b[0]))
+	//fmt.Println("offset: " + fmt.Sprint(offset))
 	_, err = scheduleFile.WriteAt(b, offset)
 	return err
 }
