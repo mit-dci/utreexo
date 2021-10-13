@@ -104,7 +104,7 @@ func (wb *ttlWriteBlock) serialize(w io.Writer) error {
 		}
 		s += fmt.Sprintf("tx %x starts at idxinblock %d\n", mt.txid[:6], mt.startsAt)
 	}
-	fmt.Printf(s)
+	// fmt.Printf(s)
 	return nil
 }
 

@@ -158,13 +158,14 @@ func flatFileWorkerTTL(
 	for {
 		// expand TTL file by 4 byte for every utxo in this block
 		size := <-numLeavesChan
+		fmt.Printf("h %d %d utxos truncating from %d to %d\n",
+			len(tf.heightOffsets), size,
+			tf.currentOffset, tf.currentOffset+int64(size*4))
+
 		err = tf.proofFile.Truncate(tf.currentOffset + int64(size*4))
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("h %d %d utxos truncated from %d to %d\n",
-			len(tf.heightOffsets), size,
-			tf.currentOffset, tf.currentOffset+int64(size*4))
 
 		// get the TTL resutls for this block and write to previously
 		// allocated locations
@@ -370,6 +371,11 @@ func (tf *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// 2 or 3 bytes would work)
 		loc := tf.heightOffsets[c.createHeight] + int64(c.indexWithinBlock)*4
 
+		if loc == 2560 {
+			fmt.Printf("dest h %d create h %d idxinblox %d write loc %d\n",
+				ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock, loc)
+		}
+
 		// first, read the data there to make sure it's empty.
 		// If there's something already there, we messed up & should panic.
 		// TODO once everything works great can remove this
@@ -405,8 +411,6 @@ func (tf *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 
 	}
 
-	// increment value of offset 4 bytes of each ttlRes Created
-	tf.currentOffset = tf.currentOffset + int64(len(ttlRes.results)*4)
 	// increment height by 1
 	tf.finishedHeight = tf.finishedHeight + 1
 	tf.fileWait.Done()

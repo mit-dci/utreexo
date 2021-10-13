@@ -224,18 +224,18 @@ func TTLLookupWorker(
 			}
 
 			resultBlock.results[i].createHeight = stxo.createHeight
-			fmt.Printf("search for create height %d %x:%d from %d range %d\n",
-				stxo.createHeight, stxo.hashprefix, stxo.idx,
-				heightOffset, nextOffset-heightOffset)
+			// fmt.Printf("search for create height %d %x:%d from %d range %d\n",
+			// stxo.createHeight, stxo.hashprefix, stxo.idx,
+			// heightOffset, nextOffset-heightOffset)
 
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
-			fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
-				lub.destroyHeight, stxo.hashprefix, stxo.idx,
-				lub.destroyHeight-resultBlock.results[i].createHeight,
-				stxo.createHeight,
-				resultBlock.results[i].indexWithinBlock)
+			// fmt.Printf("h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
+			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
+			// lub.destroyHeight-resultBlock.results[i].createHeight,
+			// stxo.createHeight,
+			// resultBlock.results[i].indexWithinBlock)
 
 		}
 
