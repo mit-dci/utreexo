@@ -163,6 +163,9 @@ func (bnr *blockAndRev) toAddDel() (
 	blockAdds = uwire.BlockToAddLeaves(
 		bnr.Blk, nil, bnr.outSkipList, bnr.Height, bnr.outCount)
 
+	// if bnr.Height == 106 {
+	fmt.Printf("h %d outskip %v\n", bnr.Height, bnr.outSkipList)
+	// }
 	return
 
 }

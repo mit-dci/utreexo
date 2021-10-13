@@ -371,7 +371,7 @@ func (tf *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// 2 or 3 bytes would work)
 		loc := tf.heightOffsets[c.createHeight] + int64(c.indexWithinBlock)*4
 
-		if loc == 2560 {
+		if loc == 924 {
 			fmt.Printf("dest h %d create h %d idxinblox %d write loc %d\n",
 				ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock, loc)
 		}
