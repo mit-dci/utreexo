@@ -48,11 +48,11 @@ offsetInRam values and writing to the correct 4-byte location in the proof file.
 
 // shared state for the flat file worker methods
 type flatFileState struct {
-	offsets               []int64
-	proofFile, offsetFile *os.File
-	currentHeight         int32
-	currentOffset         int64
-	fileWait              *sync.WaitGroup
+	offsets                             []int64
+	proofFile, offsetFile, ClairvoyFile *os.File
+	currentHeight                       int32
+	currentOffset                       int64
+	fileWait                            *sync.WaitGroup
 }
 
 // pFileWorker takes in blockproof and height information from the channel
@@ -152,6 +152,13 @@ func flatFileWorkerTTlBlocks(
 	if err != nil {
 		panic(err)
 	}
+
+	tf.ClairvoyFile, err = os.OpenFile(
+		utreeDir.TtlDir.ClairvoyFile, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
 	tf.fileWait = fileWait
 
 	err = tf.ffInit()
@@ -161,7 +168,9 @@ func flatFileWorkerTTlBlocks(
 
 	for {
 		size := <-leafblockChan
-		bytesTtlWrite := make([]byte, size*4)
+		// 1 extra byte for numTTLs in the beginning
+		bytesTtlWrite := make([]byte, (size+1)*4)
+		binary.BigEndian.PutUint32(bytesTtlWrite[:4], uint32(size))
 		_, err = tf.proofFile.WriteAt(bytesTtlWrite, tf.currentOffset)
 		tf.fileWait.Done()
 		if err != nil {
@@ -175,7 +184,7 @@ func flatFileWorkerTTlBlocks(
 		// append tf offsets after writing ttl data
 		tf.offsets = append(tf.offsets, tf.currentOffset)
 		// increment currentoffset value
-		tf.currentOffset = tf.currentOffset + int64(size*4)
+		tf.currentOffset += int64(size+1) * 4
 	}
 
 }

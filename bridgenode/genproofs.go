@@ -173,9 +173,9 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 		// send undoBlock data to undo channel to be written to the disk
 		undoChan <- *undoblock
 
-		if bnr.Height%100 == 0 {
-			fmt.Println("On block :", bnr.Height+1)
-		}
+		//if bnr.Height%100 == 0 {
+		fmt.Println("On block :", bnr.Height+1)
+		//}
 
 		// Check if stopSig is no longer false
 		// stop = true makes the loop exit

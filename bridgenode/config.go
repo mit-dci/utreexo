@@ -95,9 +95,10 @@ type undoDir struct {
 	offsetFile string
 }
 type ttlDir struct {
-	base       string
-	ttlsetFile string
-	OffsetFile string
+	base         string
+	ttlsetFile   string
+	OffsetFile   string
+	ClairvoyFile string
 }
 
 // All your utreexo bridgenode file paths in a nice and convinent struct
@@ -147,9 +148,10 @@ func initUtreeDir(basePath string) utreeDir {
 
 	ttlBase := filepath.Join(basePath, "ttldata")
 	ttl := ttlDir{
-		base:       ttlBase,
-		ttlsetFile: filepath.Join(ttlBase, "ttldata.dat"),
-		OffsetFile: filepath.Join(ttlBase, "offsetfile.dat"),
+		base:         ttlBase,
+		ttlsetFile:   filepath.Join(ttlBase, "ttldata.dat"),
+		OffsetFile:   filepath.Join(ttlBase, "offsetfile.dat"),
+		ClairvoyFile: filepath.Join(ttlBase, "clairvoy.dat"),
 	}
 	ttldb := filepath.Join(basePath, "ttldb")
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
+	"sort"
 	"time"
 
 	"github.com/mit-dci/utreexo/util"
@@ -48,6 +49,21 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 	}
 
+	err := BuildClairvoyantSchedule(cfg, sig)
+	if err != nil {
+		return errBuildClairvoy(err)
+	}
+
+	/*if !cfg.noServe {
+		fmt.Println("starting to build clairvoy")
+		err := BuildClairvoy(cfg, sig)
+		if err != nil {
+			return errBuildClairvoy(err)
+		}
+	}*/
+
+	fmt.Println("Done with Clairvoy!!")
+
 	if !cfg.noServe {
 		// serve when finished
 		err := ArchiveServer(cfg, sig)
@@ -56,6 +72,69 @@ func Start(cfg *Config, sig chan bool) error {
 		}
 	}
 
+	return nil
+}
+
+func BuildClairvoy(cfg *Config, sig chan bool) error {
+	allCBlocks, err := getCBlocks(cfg, 0, 400)
+	if err != nil {
+		return err
+	}
+	maxmems := []int{5000000}
+	//f, err := os.Create(cfg.UtreeDir.TtlDir.ClairvoyFile)
+	f, err := os.OpenFile(
+		cfg.UtreeDir.TtlDir.ClairvoyFile, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	clairSlices := make([][]txoEnd, len(maxmems))
+	var utxoCounter uint32 = 0
+	var allCounts uint32 = 0
+	//numRemembers := make([]int, len(maxmems))
+	for i := 0; i < len(allCBlocks); i++ {
+		var blockEnds []txoEnd
+		if i%100 == 0 {
+			fmt.Println("On block: ", i)
+		}
+
+		//another for loop going through ttls. utxocounter increment for ttls not blocks
+		for j := 0; j < len(allCBlocks[i].ttls); j++ {
+			if allCBlocks[i].ttls[j] >= 2147483600 {
+				//invalid output, so skip and don't count
+				continue
+			}
+			allCounts += 1
+			var e txoEnd = txoEnd{
+				txoIdx: utxoCounter,
+				end:    allCBlocks[i].blockHeight + allCBlocks[i].ttls[j],
+			}
+			utxoCounter++
+			blockEnds = append(blockEnds, e)
+		}
+		sort.SliceStable(blockEnds, func(i, j int) bool {
+			return blockEnds[i].end < blockEnds[j].end
+		})
+		for j := 0; j < len(maxmems); j++ {
+			clairSlices[j] = mergeSortedSlices(clairSlices[j], blockEnds)
+			var remembers []txoEnd
+			remembers, clairSlices[j] =
+				SplitAfter(clairSlices[j], allCBlocks[i].blockHeight)
+
+			for k := 0; k < len(remembers); k++ {
+				currTxo := remembers[k]
+				ind := currTxo.txoIdx
+				//_, err2 := f.WriteAt([]byte{0x01}, int64(ind))
+				assertBitInFile(ind, f)
+			}
+			if len(clairSlices[j]) > maxmems[j] {
+				clairSlices[j] = clairSlices[j][:maxmems[j]]
+			}
+		}
+	}
+	//fmt.Println("total number of remembers for CLAIRVOY:", numRemembers)
+	//fmt.Println("all Blocks: ", allCounts)
+	//return allCounts, numRemembers, nil
 	return nil
 }
 
