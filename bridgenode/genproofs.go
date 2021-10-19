@@ -94,7 +94,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	ttlResultChan := make(chan ttlResultBlock, 10)     // from lookup to flat ttl writer
 	proofChan := make(chan btcacc.UData, 10)           // to flat writer
 	undoChan := make(chan accumulator.UndoBlock, 10)   // to undoblock writer
-	numLeavesChan := make(chan int, 10)                // empty leaves for TTLs
+	skipChan := make(chan allocNSkipTTL, 10)           // empty leaves for TTLs
 
 	fileWait := new(sync.WaitGroup)
 
@@ -107,7 +107,7 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 
 	go flatFileWorkerProof(proofChan, cfg.UtreeDir, fileWait)
 	go flatFileWorkerUndo(undoChan, cfg.UtreeDir, fileWait)
-	go flatFileWorkerTTL(ttlResultChan, numLeavesChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerTTL(ttlResultChan, skipChan, cfg.UtreeDir, fileWait)
 
 	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
@@ -125,14 +125,16 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			fmt.Printf("h %d empty block ", bnr.Height)
 			panic("empty")
 		}
+
+		// send number of outputs, including skipped, to allocate TTL space
+		skipChan <- allocNSkipTTL{bnr.outCount, bnr.outSkipList}
+
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
 		blockAdds, delLeaves, err := bnr.toAddDel()
 		if err != nil {
 			return err
 		}
-
-		numLeavesChan <- len(blockAdds)
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block

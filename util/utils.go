@@ -84,7 +84,7 @@ func BlockToDelOPs(
 	transactions := blk.Transactions()
 	inCount, _, inskip, _ := DedupeBlock(blk)
 
-	delOPs := make([]wire.OutPoint, 0, inCount-len(inskip))
+	delOPs := make([]wire.OutPoint, 0, inCount-uint32(len(inskip)))
 
 	var inputInBlock uint32
 	for _, tx := range transactions {
@@ -111,7 +111,7 @@ func BlockToDelOPs(
 // So the coinbase tx in & output numbers affect the skip lists even though
 // the coinbase ins/outs can never be deduped.  it's simpler that way.
 func DedupeBlock(
-	blk *btcutil.Block) (inCount, outCount int, inskip, outskip []uint32) {
+	blk *btcutil.Block) (inCount, outCount uint32, inskip, outskip []uint32) {
 	var i uint32
 	// wire.Outpoints are comparable with == which is nice.
 	inmap := make(map[wire.OutPoint]uint32)
@@ -128,7 +128,7 @@ func DedupeBlock(
 			i++
 		}
 	}
-	inCount = int(i)
+	inCount = i
 
 	i = 0
 	// start over, go through outputs finding skips
@@ -149,7 +149,7 @@ func DedupeBlock(
 			i++
 		}
 	}
-	outCount = int(i)
+	outCount = i
 	// sort inskip list, as it's built in order consumed not created
 	sortUint32s(inskip)
 	return

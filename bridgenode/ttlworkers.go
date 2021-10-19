@@ -62,15 +62,12 @@ func BNRTTLSpliter(
 		// if bnr.Height == 206421 || bnr.Height == 205955 {
 		// fmt.Printf(bnr.toString())
 		// }
-		// var txoInBlock uint16
 		var lub ttlLookupBlock
 		var wb ttlWriteBlock
 		var inskippos, inputInBlock uint32
-		var outskippos uint32
 		var outputInBlock uint16
-		var keepSkippingInputs, keepSkippingOutputs bool
+		var keepSkippingInputs bool
 		inskipMax := uint32(len(bnr.inSkipList))
-		outskipMax := uint32(len(bnr.outSkipList))
 
 		lub.destroyHeight = bnr.Height
 		transactions := bnr.Blk.Transactions()
@@ -79,7 +76,6 @@ func BNRTTLSpliter(
 		wb.mTxids = make([]miniTx, len(transactions))
 		// fmt.Printf("h %d inskip %v\n", bnr.Height, bnr.inSkipList)
 		keepSkippingInputs = inskipMax > 0 // if none to skip, don't check
-		keepSkippingOutputs = outskipMax > 0
 
 		// iterate through the transactions in a block
 		for txInBlock, tx := range transactions {
@@ -89,25 +85,11 @@ func BNRTTLSpliter(
 			// first add all the outputs in this tx, then range through the
 			// outputs and decrement them if they're on the skiplist
 			mtx := tx.MsgTx()
-			txOutputMaxIdx := outputInBlock + uint16(len(mtx.TxOut))
-			txRecordedOutputs := uint16(len(mtx.TxOut))
-			// outputInBlock += uint16(len(mtx.TxOut))
-			for keepSkippingOutputs &&
-				bnr.outSkipList[outskippos] < uint32(txOutputMaxIdx) {
-				// if bnr.Height == 106 {
-				fmt.Printf("-- h %d tx %d skip txo %d\n",
-					bnr.Height, txInBlock, bnr.outSkipList[outskippos])
-				// }
-
-				outskippos++
-				keepSkippingOutputs = outskippos != outskipMax
-				txRecordedOutputs--
-			}
-			outputInBlock += txRecordedOutputs
+			outputInBlock += uint16(len(mtx.TxOut))
 
 			// for all the txins, throw that into the work as well; just a bunch of
 			// outpoints
-			for inputInTx, in := range tx.MsgTx().TxIn {
+			for inputInTx, in := range mtx.TxIn {
 				// fmt.Printf("input in block %d ks %v sl %v isp %d\n",
 				// inputInBlock, keepSkippingInputs, bnr.inSkipList, inskippos)
 				if txInBlock == 0 {
@@ -248,13 +230,13 @@ func TTLLookupWorker(
 			resultBlock.results[i].indexWithinBlock =
 				binSearch(stxo, heightOffset, nextOffset, txidFile)
 
-			if resultBlock.results[i].indexWithinBlock == 116 {
-				fmt.Printf("# h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
-					lub.destroyHeight, stxo.hashprefix, stxo.idx,
-					lub.destroyHeight-resultBlock.results[i].createHeight,
-					stxo.createHeight,
-					resultBlock.results[i].indexWithinBlock)
-			}
+			// if resultBlock.results[i].indexWithinBlock == 116 {
+			// fmt.Printf("# h %d stxo %x:%d writes ttl value %d to h %d idxinblk %d\n",
+			// lub.destroyHeight, stxo.hashprefix, stxo.idx,
+			// lub.destroyHeight-resultBlock.results[i].createHeight,
+			// stxo.createHeight,
+			// resultBlock.results[i].indexWithinBlock)
+			// }
 
 		}
 
@@ -296,8 +278,8 @@ func binSearch(mi miniIn,
 	}
 	// fmt.Printf("%x got position %d width %d, read bytes %x from pos %d\n",
 	// mi.hashprefix, pos, width, positionBytes, (pos*8)+6)
-	fmt.Printf("found %x at pos %d, read %x\n",
-		mi.hashprefix, pos+int(bottom), positionBytes)
+	// fmt.Printf("found %x at pos %d, read %x\n",
+	// mi.hashprefix, pos+int(bottom), positionBytes)
 	// add to the index of the outpoint to get the position of the txo among
 	// all the block's txos
 	return binary.BigEndian.Uint16(positionBytes[:]) + mi.idx

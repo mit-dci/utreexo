@@ -130,7 +130,7 @@ func flatFileWorkerUndo(
 
 func flatFileWorkerTTL(
 	ttlResultChan chan ttlResultBlock,
-	numLeavesChan chan int,
+	numOutputsChan chan allocNSkipTTL,
 	utreeDir utreeDir,
 	fileWait *sync.WaitGroup) {
 
@@ -157,16 +157,22 @@ func flatFileWorkerTTL(
 
 	for {
 		// expand TTL file by 4 byte for every utxo in this block
-		size := <-numLeavesChan
-		fmt.Printf("h %d %d utxos truncating from %d to %d\n",
-			len(tf.heightOffsets), size,
-			tf.currentOffset, tf.currentOffset+int64(size*4))
+		allocNSkip := <-numOutputsChan
+		numOutputs := allocNSkip.totalOut
+		// fmt.Printf("h %d %d utxos truncating from %d to %d\n",
+		// len(tf.heightOffsets), size,
+		// tf.currentOffset, tf.currentOffset+int64(size*4))
 
-		err = tf.proofFile.Truncate(tf.currentOffset + int64(size*4))
+		err = tf.proofFile.Truncate(tf.currentOffset + int64(numOutputs*4))
 		if err != nil {
 			panic(err)
 		}
 
+		// mark the TTLs which are unspendable.  Much easier than skipping them.
+		err = tf.writeSkipped(tf.currentOffset, allocNSkip.outskip)
+		if err != nil {
+			panic(err)
+		}
 		// get the TTL resutls for this block and write to previously
 		// allocated locations
 		ttlRes := <-ttlResultChan
@@ -177,7 +183,12 @@ func flatFileWorkerTTL(
 		// append tf offsets after writing ttl data
 		tf.heightOffsets = append(tf.heightOffsets, tf.currentOffset)
 		// increment currentoffset value
-		tf.currentOffset = tf.currentOffset + int64(size*4)
+		tf.currentOffset = tf.currentOffset + int64(numOutputs*4)
+
+		err = binary.Write(tf.offsetFile, binary.BigEndian, tf.currentOffset)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 }
@@ -351,6 +362,30 @@ func (pf *flatFileState) writeProofBlock(ud btcacc.UData) error {
 	return nil
 }
 
+type allocNSkipTTL struct {
+	totalOut uint32
+	outskip  []uint32
+}
+
+// write a fixed "invalid" value to indicate all the TTLs which are skipped,
+// due to being unspendable, like op_returns, or from being spent in the same
+// block as they're created.  Anything using this TTL data knows that these
+// outputs can be skipped.
+func (tf *flatFileState) writeSkipped(
+	startOffset int64, outskip []uint32) error {
+
+	skipBytes := [4]byte{0x7f, 0xff, 0xff, 0xff}
+
+	for _, idxInBlock := range outskip {
+		_, err := tf.proofFile.WriteAt(
+			skipBytes[:], startOffset+(int64(idxInBlock)*4))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (tf *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 
 	var ttlArr, readEmpty, expectedEmpty [4]byte
@@ -370,11 +405,6 @@ func (tf *flatFileState) writeTTLs(ttlRes ttlResultBlock) error {
 		// write it's lifespan as a 4 byte int32 (bit of a waste as
 		// 2 or 3 bytes would work)
 		loc := tf.heightOffsets[c.createHeight] + int64(c.indexWithinBlock)*4
-
-		if loc == 924 {
-			fmt.Printf("dest h %d create h %d idxinblox %d write loc %d\n",
-				ttlRes.destroyHeight, c.createHeight, c.indexWithinBlock, loc)
-		}
 
 		// first, read the data there to make sure it's empty.
 		// If there's something already there, we messed up & should panic.

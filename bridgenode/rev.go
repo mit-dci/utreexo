@@ -317,7 +317,7 @@ type blockAndRev struct {
 	Rev                     RevBlock
 	Blk                     *btcutil.Block
 	inSkipList, outSkipList []uint32
-	inCount, outCount       int // includes skipped
+	inCount, outCount       uint32 // includes skipped
 }
 
 /*

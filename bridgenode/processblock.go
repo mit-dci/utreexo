@@ -164,7 +164,7 @@ func (bnr *blockAndRev) toAddDel() (
 		bnr.Blk, nil, bnr.outSkipList, bnr.Height, bnr.outCount)
 
 	// if bnr.Height == 106 {
-	fmt.Printf("h %d outskip %v\n", bnr.Height, bnr.outSkipList)
+	// fmt.Printf("h %d outskip %v\n", bnr.Height, bnr.outSkipList)
 	// }
 	return
 
@@ -176,11 +176,11 @@ func (bnr *blockAndRev) toDelLeaves() (
 	delLeaves []btcacc.LeafData, err error) {
 
 	// finish early if there's nothing to prove
-	if bnr.inCount-len(bnr.inSkipList) == 0 {
+	if bnr.inCount-uint32(len(bnr.inSkipList)) == 0 {
 		return
 	}
 
-	delLeaves = make([]btcacc.LeafData, 0, bnr.inCount-len(bnr.inSkipList))
+	delLeaves = make([]btcacc.LeafData, 0, bnr.inCount-uint32(len(bnr.inSkipList)))
 	inskip := bnr.inSkipList
 	// we never modify the contents of this slice
 	// only the borders of the slice, so this shouldn't change bnr.inSkipList
