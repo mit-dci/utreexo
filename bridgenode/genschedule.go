@@ -152,28 +152,3 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 	fmt.Println("done with genschedule")
 	return nil
 }
-
-func CheckClairvoySchedule(cfg *Config, sig chan bool) error {
-	ClairvoyFile, err := os.Open(cfg.UtreeDir.TtlDir.ClairvoyFile)
-	if err != nil {
-		return err
-	}
-	numCBlocks := 200
-	for height := 0; height < numCBlocks; height++ {
-		// offset is the position in the ttlFile where block starts
-		var offset int64
-		fmt.Println("height:" + fmt.Sprint(height))
-		// seek to the right place in the offset file
-		_, err = ClairvoyFile.Seek(int64(height)*8, 0)
-		if err != nil {
-			return err
-		}
-
-		// read the offset data
-		err = binary.Read(ClairvoyFile, binary.BigEndian, &offset)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
