@@ -2,6 +2,7 @@ package accumulator
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"sort"
@@ -763,4 +764,102 @@ func (f *Forest) ToString() string {
 func (f *Forest) FindLeaf(leaf Hash) bool {
 	_, found := f.positionMap[leaf.Mini()]
 	return found
+}
+
+// AssertEqual compares the two forests. Returns an error if the forests are not equal.
+// The data meant for statics are not checked and the function will return true
+// if all other fields are equal.
+func (f *Forest) AssertEqual(compareForest *Forest) error {
+	// Return if the number of leaves are not equal.
+	if f.numLeaves != compareForest.numLeaves {
+		err := fmt.Errorf("number of leaves aren't equal"+
+			"forest: %d, compared forest : %d\n", f.numLeaves,
+			compareForest.numLeaves)
+		return err
+	}
+
+	// Preliminary check of the position map element count before looping
+	// through all the elements in the map.
+	if len(f.positionMap) != len(compareForest.positionMap) {
+		err := fmt.Errorf("position maps sizes aren't equal"+
+			"forest: %d, compared forest : %d\n", len(f.positionMap),
+			len(compareForest.positionMap))
+		return err
+	}
+
+	// Make sure that the two maps are equal.
+	for key, val := range f.positionMap {
+		compVal, ok := compareForest.positionMap[key]
+		if !ok {
+			err := fmt.Errorf("miniHash %s doesn't exist in the the compared forest",
+				hex.EncodeToString(key[:]))
+			return err
+		}
+
+		if val != compVal {
+			err := fmt.Errorf("miniHash %s returned position %d for "+
+				"forest but %d for the compared forest", hex.EncodeToString(key[:]),
+				val, compVal)
+			return err
+		}
+	}
+
+	// Each forest needs its own position tracking as they may differ in the
+	// actual forest rows allocated.
+	var fPos, compPos uint64
+
+	// Grab the logical rows as we're only interested in if the forests are
+	// logically the same.
+	logicalRows := logicalTreeRows(f.numLeaves)
+
+	// Iterate through all the rows in the forest. The idea is that we'll
+	// keep moving up, and compare all the nodes.
+	for h := uint8(0); h <= logicalRows; h++ {
+		// We need to re-calculate the offset as we move up each row.
+		// This is because we allow the forest to allocate more space
+		// than what is actually needed.
+		//
+		// Example: In the below tree, positions that have garbage values
+		// are marked with '*'. This means that once we're at position 5,
+		// we need to go to position 8 next. This is where the need to
+		// re-calculate the offset comes from.
+		//
+		// 14*
+		// |---------------\
+		// 12              13*
+		// |-------\       |-------\
+		// 08      09      10      11*
+		// |---\   |---\   |---\   |---\
+		// 00  01  02  03  04  05  06* 07*
+		//
+		// Grab the parent of 0 for each row that we're currently on. For
+		// row 1, we'll grab 08 in the above example. For row 2, we'll grab
+		// 12.
+		fPos = parentMany(0, h, f.rows)
+		compPos = parentMany(0, h, compareForest.rows)
+
+		// Calculate element count in the current row.
+		elementCountAtRow := uint8(f.numLeaves >> h)
+
+		// Loop through all the elements in the current row.
+		for i := uint8(0); i < elementCountAtRow; i++ {
+			// Read the hashes at the position from each of the forests.
+			hash := f.data.read(uint64(fPos))
+			compareHash := compareForest.data.read(uint64(compPos))
+
+			// If the read hashes are not the same, return error.
+			if hash != compareHash {
+				err := fmt.Errorf("hashes aren't equal at forest position: %d "+
+					"and compared forest position %d. "+
+					"forest hash: %s compared forest hash: %s\n",
+					fPos, compPos, hex.EncodeToString(hash[:]),
+					hex.EncodeToString(compareHash[:]))
+				return err
+			}
+			fPos++
+			compPos++
+		}
+	}
+
+	return nil
 }

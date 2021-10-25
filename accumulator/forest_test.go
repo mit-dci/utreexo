@@ -50,11 +50,23 @@ func TestForestAddDel(t *testing.T) {
 }
 
 func TestCowForestAddDelComp(t *testing.T) {
-	numAdds := uint32(1000)
+	// Function for writing logs.
+	writeLog := func(cowF, memF *Forest) {
+		cowstring := fmt.Sprintf("cowForest: nl %d %s\n",
+			cowF.numLeaves, cowF.ToString())
+		fmt.Println(cowstring)
+
+		memstring := fmt.Sprintf("memForest: nl %d %s\n",
+			memF.numLeaves, memF.ToString())
+		fmt.Println(memstring)
+	}
 
 	tmpDir := os.TempDir()
+	defer os.RemoveAll(tmpDir)
+
 	cowF := NewForest(CowForest, nil, tmpDir, 2500)
 	memF := NewForest(RamForest, nil, "", 0)
+	numAdds := uint32(1000)
 
 	sc := newSimChain(0x07)
 	sc.lookahead = 400
@@ -80,93 +92,19 @@ func TestCowForestAddDelComp(t *testing.T) {
 			t.Fatal(err)
 		}
 		if b%100 == 0 {
-			equal, wrongPos, wrongPosH := checkIfEqual(cowF, memF)
-			if !equal {
-				cowFile, err := os.OpenFile("cowlog",
-					os.O_CREATE|os.O_RDWR, 666)
-				if err != nil {
-					panic(err)
-				}
-				cowstring := fmt.Sprintf("nl %d %s\n", cowF.numLeaves, cowF.ToString())
-				cowFile.WriteString(cowstring)
-
-				memFile, err := os.OpenFile("memlog",
-					os.O_CREATE|os.O_RDWR, 666)
-				if err != nil {
-					panic(err)
-				}
-
-				memstring := fmt.Sprintf("nl %d %s\n", memF.numLeaves, memF.ToString())
-				memFile.WriteString(memstring)
-				s := fmt.Sprintf("forests are not equal\n")
-				s += fmt.Sprintf("forestRows in f: %d\n: ", cowF.rows)
-				s += fmt.Sprintf("wrongPos: %x\n", wrongPos)
-				s += fmt.Sprintf("wrongPosH %x\n", wrongPosH)
-				t.Fatal(s)
+			err := cowF.AssertEqual(memF)
+			if err != nil {
+				writeLog(cowF, memF)
+				t.Fatal(err)
 			}
 		}
 	}
-	equal, wrongPos, wrongPosH := checkIfEqual(cowF, memF)
-	if !equal {
-		cowFile, err := os.OpenFile("cowlog",
-			os.O_CREATE|os.O_RDWR, 666)
-		if err != nil {
-			panic(err)
-		}
-		cowstring := fmt.Sprintf("nl %d %s\n", cowF.numLeaves, cowF.ToString())
-		cowFile.WriteString(cowstring)
 
-		memFile, err := os.OpenFile("memlog",
-			os.O_CREATE|os.O_RDWR, 666)
-		if err != nil {
-			panic(err)
-		}
-
-		memstring := fmt.Sprintf("nl %d %s\n", memF.numLeaves, memF.ToString())
-		memFile.WriteString(memstring)
-		s := fmt.Sprintf("forests are not equal\n")
-		s += fmt.Sprintf("forestRows in f: %d\n: ", cowF.rows)
-		s += fmt.Sprintf("wrongPos: %x\n", wrongPos)
-		s += fmt.Sprintf("wrongPosH %x\n", wrongPosH)
-		t.Fatal(s)
+	err := cowF.AssertEqual(memF)
+	if err != nil {
+		writeLog(cowF, memF)
+		t.Fatal(err)
 	}
-}
-
-// checkIfEqual checks if the forest differ returns true for equal and if not, returns
-// the positions and the hashes
-func checkIfEqual(cowF, memF *Forest) (bool, []uint64, []Hash) {
-	cowFH := cowF.rows
-	memFH := memF.rows
-
-	if cowFH != memFH {
-		panic("forestRows don't equal")
-	}
-
-	var pos uint8
-	for h := uint8(0); h <= memFH; h++ {
-		rowlen := uint8(1 << (memFH - h))
-
-		for j := uint8(0); j < rowlen; j++ {
-			if cowF.data.size() != memF.data.size() {
-				s := fmt.Sprintf("sizes don't equal"+
-					"cow: %d, mem: %d\n", cowF.data.size(), memF.data.size())
-				panic(s)
-			}
-			ok := memF.data.size() >= uint64(pos)
-			if ok {
-				memH := memF.data.read(uint64(pos))
-				cowH := cowF.data.read(uint64(pos))
-				if memH != cowH {
-					s := fmt.Sprintf("hashes aren't equal at gpos: %d "+"mem: %x cow: %x\n", pos, memH, cowH)
-					panic(s)
-				}
-			}
-			pos++
-		}
-
-	}
-
-	return true, []uint64{}, []Hash{}
 }
 
 func TestCowForestAddDel(t *testing.T) {
