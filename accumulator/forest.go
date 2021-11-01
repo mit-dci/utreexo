@@ -156,6 +156,8 @@ func NewForest(forestType ForestType, forestFile *os.File, cowPath string, cowMa
 // so maybe they can both satisfy an interface.  In the case of remove, the only
 // specific calls are HnFromPos and swapNodes
 
+var hashrowTime time.Duration
+
 func (f *Forest) removev4(dels []uint64) error {
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 	// check that all dels are there
@@ -175,7 +177,10 @@ func (f *Forest) removev4(dels []uint64) error {
 			f.swapNodes(swap, r)
 		}
 		// do all the hashes at once at the end
+		t := time.Now()
 		err := f.hashRow(hashDirt)
+		hashrowTime += time.Since(t)
+
 		if err != nil {
 			return err
 		}
@@ -378,6 +383,8 @@ func (f *Forest) addv2(adds []Leaf) {
 	positionList := NewPositionList()
 	defer positionList.Free()
 
+	var nextRow []uint64
+
 	for _, add := range adds {
 		// reset positionList
 		positionList.list = positionList.list[:0]
@@ -389,15 +396,26 @@ func (f *Forest) addv2(adds []Leaf) {
 		f.data.write(pos, n)
 		add.Hash = empty
 
-		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
-			rootPos := len(positionList.list) - int(h+1)
-			// grab, pop, swap, hash, new
-			root := f.data.read(positionList.list[rootPos]) // grab
-			n = parentHash(root, n)                         // hash
-			pos = parent(pos, f.rows)                       // rise
-			f.data.write(pos, n)                            // write
+		// check if number of leaves being added is odd
+		// if odd add as is, if even, chop off the last element in slice
+		if f.numLeaves&1 == 1 {
+			nextRow = append(nextRow, parent(f.numLeaves, f.rows))
+			f.data.write(f.numLeaves, )
+			// rootPos := len(positionList.list) - int(h+1)
+			// // grab, pop, swap, hash, new
+			// root := f.data.read(positionList.list[rootPos]) // grab
+			// n = parentHash(root, n)                         // hash
+			// pos = parent(pos, f.rows)                       // rise
+			// f.data.write(pos, n)                            // write
+		} else {
+			// nextRow = append(nextRow, parent(f.numLeaves, f.rows))
 		}
+		f.data.writeRow(f.numLeaves, nextRow)
 		f.numLeaves++
+	}
+
+	for nextRow != nil {
+		nextRow = f.hashRow(nextRow)
 	}
 }
 
@@ -447,6 +465,8 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 	ub := f.BuildUndoData(uint64(numadds), dels)
 
 	f.addv2(adds)
+
+	fmt.Println("Time taken by hashrow", hashrowTime)
 
 	return ub, err
 }

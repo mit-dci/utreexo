@@ -30,6 +30,9 @@ type ForestData interface {
 	// writes the given hash at the given position
 	write(pos uint64, h Hash)
 
+	// writes the given slice of hashes to an entire row starting at the given position
+	writeRow(pos uint64, hashes []uint64)
+
 	// for the given two positions, swap the hash values
 	swapHash(a, b uint64)
 
@@ -71,6 +74,15 @@ func (r *ramForestData) write(pos uint64, h Hash) {
 	// }
 	pos <<= 5
 	copy(r.m[pos:pos+leafSize], h[:])
+}
+
+func (r *ramForestData) writeRow(pos uint64, hashes []uint64) {
+	pos <<= 5
+
+	// not sure if this reduces the number of times the write operation is called
+	for _, h := range hashes {
+		copy(r.m[pos:pos+leafSize], h[:])
+	}
 }
 
 // TODO there's lots of empty writes as well, mostly in resize?  Anyway could

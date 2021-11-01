@@ -49,8 +49,27 @@ func TestForestAddDel(t *testing.T) {
 	}
 }
 
+// hashRow benchmark
+func BenchmarkHashRow(b *testing.B) {
+	numAdds := uint32(10000)
+
+	f := NewForest(RamForest, nil, "", 0)
+
+	sc := newSimChain(0x07)
+
+	for n := 0; n < 50; n++ {
+		adds, _, delHashes := sc.NextBlock(numAdds)
+
+		bp, _ := f.ProveBatch(delHashes)
+
+		f.Modify(adds, bp.Targets)
+
+		// fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+	}
+}
+
 func TestCowForestAddDelComp(t *testing.T) {
-	numAdds := uint32(1000)
+	numAdds := uint32(100000)
 
 	tmpDir := os.TempDir()
 	cowF := NewForest(CowForest, nil, tmpDir, 2500)
