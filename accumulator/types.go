@@ -85,6 +85,7 @@ type simChain struct {
 	leafCounter  uint64
 	durationMask uint32
 	lookahead    int32
+	rnd          *rand.Rand
 }
 
 // newSimChain initializes and returns a simchain
@@ -93,6 +94,17 @@ func newSimChain(duration uint32) *simChain {
 	s.blockHeight = -1
 	s.durationMask = duration
 	s.ttlSlices = make([][]Hash, s.durationMask+1)
+	s.rnd = rand.New(rand.NewSource(0))
+	return &s
+}
+
+// newSimChainWithSeed initializes and returns a simchain, with an externally supplied seed
+func newSimChainWithSeed(duration uint32, seed int64) *simChain {
+	var s simChain
+	s.blockHeight = -1
+	s.durationMask = duration
+	s.ttlSlices = make([][]Hash, s.durationMask+1)
+	s.rnd = rand.New(rand.NewSource(seed))
 	return &s
 }
 
@@ -165,7 +177,7 @@ func (s *simChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
 		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
 
-		durations[j] = int32(rand.Uint32() & s.durationMask)
+		durations[j] = int32(s.rnd.Uint32() & s.durationMask)
 
 		// with "+1", the duration is 1 to 256, so the forest never gets
 		// big or tall.  Without the +1, the duration is sometimes 0,
