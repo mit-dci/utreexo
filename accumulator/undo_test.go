@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 )
 
@@ -149,21 +150,27 @@ func undoOnceRandom(blocks int32) error {
 
 		adds, durations, delHashes := sc.NextBlock(rand.Uint32() & 0x03)
 
-		fmt.Printf("\t\tblock %d del %d add %d - %s\n",
-			sc.blockHeight, len(delHashes), len(adds), f.Stats())
+		if verbose {
+			fmt.Printf("\t\tblock %d del %d add %d - %s\n",
+				sc.blockHeight, len(delHashes), len(adds), f.Stats())
+		}
 
 		bp, err := f.ProveBatch(delHashes)
 		if err != nil {
 			return err
 		}
+		beforeRoot := f.getRoots()
 		ub, err := f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
 		}
-		fmt.Print(f.ToString())
-		fmt.Print(sc.ttlString())
-		for h, p := range f.positionMap {
-			fmt.Printf("%x@%d ", h[:4], p)
+		if verbose {
+			fmt.Print(f.ToString())
+			fmt.Print(sc.ttlString())
+
+			for h, p := range f.positionMap {
+				fmt.Printf("%x@%d ", h[:4], p)
+			}
 		}
 		err = f.PosMapSanity()
 		if err != nil {
@@ -172,18 +179,29 @@ func undoOnceRandom(blocks int32) error {
 
 		//undo every 3rd block
 		if b%3 == 2 {
-			fmt.Print(ub.ToString())
+			if verbose {
+				fmt.Print(ub.ToString())
+			}
 			err := f.Undo(*ub)
 			if err != nil {
 				return err
 			}
-			fmt.Print("\n post undo map: ")
-			for h, p := range f.positionMap {
-				fmt.Printf("%x@%d ", h[:4], p)
+			if verbose {
+				fmt.Print("\n post undo map: ")
+				for h, p := range f.positionMap {
+					fmt.Printf("%x@%d ", h[:4], p)
+				}
 			}
 			sc.BackOne(adds, durations, delHashes)
+			afterRoot := f.getRoots()
+			if !reflect.DeepEqual(beforeRoot, afterRoot) {
+				return fmt.Errorf("undo mismatch")
+			}
 		}
 
+	}
+	if verbose {
+		fmt.Printf("\n")
 	}
 	return nil
 }

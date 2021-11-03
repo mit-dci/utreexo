@@ -108,11 +108,13 @@ func (s *simChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 		if durations[i] == 0 {
 			continue
 		}
-		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
-		// everything should be in order, right?
-		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.ttlSlices[durations[i]][len(s.ttlSlices[durations[i]])-1][:4],
-			durations[i])
+		if verbose {
+			fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
+			// everything should be in order, right?
+			fmt.Printf("remove %x from end of ttl slice %d\n",
+				s.ttlSlices[durations[i]][len(s.ttlSlices[durations[i]])-1][:4],
+				durations[i])
+		}
 		s.ttlSlices[durations[i]] =
 			s.ttlSlices[durations[i]][:len(s.ttlSlices[durations[i]])-1]
 	}
@@ -137,7 +139,10 @@ func (s *simChain) ttlString() string {
 // to be outputed
 func (s *simChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	s.blockHeight++
-	fmt.Printf("blockHeight %d\n", s.blockHeight)
+	if verbose {
+		fmt.Printf(
+			"blockHeight %d\n", s.blockHeight)
+	}
 
 	if s.blockHeight == 0 && numAdds == 0 {
 		numAdds = 1
