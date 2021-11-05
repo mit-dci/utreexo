@@ -3,6 +3,7 @@ package bridgenode
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 )
@@ -37,7 +38,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 	s, _ := ttlFile.Stat()
 	size := int64(s.Size())
 	//size is stat size of ttlfile divide by 4 divide by 8
-	err = f.Truncate(size)
+	err = f.Truncate((size/4)/8 + 100)
 	if err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 	ttlOffsets, _ := ttlOffsetFile.Stat()
 	numCBlocks = int(ttlOffsets.Size() / 8)
 	var utxoCounter uint32 = 0
-	maxmems := []int{5000}
+	maxmems := []int{50}
 	clairSlices := make([][]txoEnd, len(maxmems))
 	for height := 0; height < numCBlocks; height++ {
 		//goes through all blocks
@@ -66,7 +67,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 		}
 
 		// read the offset data
-		err = binary.Read(ttlOffsetFile, binary.BigEndian, &offset)
+		/*err = binary.Read(ttlOffsetFile, binary.BigEndian, &offset)
 		if err != nil {
 			return err
 		}
@@ -75,7 +76,27 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 		err = binary.Read(ttlOffsetFile, binary.BigEndian, &nextOffset)
 		if err != nil {
 			return err
+		}*/
+		// read the offset data                                                                                             │·······································
+		err = binary.Read(ttlOffsetFile, binary.BigEndian, &offset)
+		if err != nil {
+			return fmt.Errorf("ttlOffsetFile read at byte %d %s",
+				int64(height)*8, err.Error())
 		}
+		var nextOffset int64
+		// read the offset data
+		err = binary.Read(ttlOffsetFile, binary.BigEndian, &nextOffset)
+		if err != nil {
+			if err == io.EOF {
+				//at end
+				nextOffset = size
+			} else {
+				return fmt.Errorf("ttlOffsetFile read at byte %d %s",
+					int64(height+1)*8, err.Error())
+			}
+		}
+		//ADD TO DETECT EOF ERROR ON NEXT OFFSET
+		//IF SO, THEN WE HAVE NO NEXT OFFSET SO READ UNTIL END
 
 		// seek to the block start in the ttl file
 		_, err = ttlFile.Seek(offset, 0)
@@ -93,6 +114,9 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 		ttls := make([]int32, ttlsInBlock)
 		for i, _ := range ttls {
 			binary.Read(ttlFile, binary.BigEndian, &ttls[i])
+			if err != nil {
+				return err
+			}
 		}
 
 		// print out those ttls
@@ -110,6 +134,9 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 			if ttls[j] >= 2147483600 {
 				//invalid output, so skip and don't count
 				continue
+			}
+			if ttls[j] == 0 {
+				ttls[j] = 1 << 20
 			}
 			//allCounts += 1
 			var e txoEnd = txoEnd{
@@ -135,7 +162,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 			for k := 0; k < len(remembers); k++ {
 				currTxo := remembers[k]
 				ind := currTxo.txoIdx
-				//fmt.Println("We remembered txo; asserting in file : " + fmt.Sprint(ind))
+				fmt.Println("We remembered txo; asserting in file : " + fmt.Sprint(ind))
 				err := assertBitInFile(ind, f)
 				if err != nil {
 					//fmt.Println("error")
