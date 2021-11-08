@@ -31,7 +31,7 @@ type ForestData interface {
 	write(pos uint64, h Hash)
 
 	// writes the given slice of hashes to an entire row starting at the given position
-	writeRow(pos uint64, hashes []uint64)
+	writeRow(pos uint64, hashes []Hash)
 
 	// for the given two positions, swap the hash values
 	swapHash(a, b uint64)
@@ -76,12 +76,13 @@ func (r *ramForestData) write(pos uint64, h Hash) {
 	copy(r.m[pos:pos+leafSize], h[:])
 }
 
-func (r *ramForestData) writeRow(pos uint64, hashes []uint64) {
+func (r *ramForestData) writeRow(pos uint64, hashes []Hash) {
 	pos <<= 5
 
 	// not sure if this reduces the number of times the write operation is called
 	for _, h := range hashes {
 		copy(r.m[pos:pos+leafSize], h[:])
+		pos += leafSize
 	}
 }
 
@@ -891,6 +892,10 @@ func (cow *cowForest) write(pos uint64, h Hash) {
 	}
 }
 
+func (cow *cowForest) writeRow(pos uint64, hashes []Hash) {
+
+}
+
 // swapHash takes in two hashes and atomically swaps them.
 // NOTE The treeBlocks on disk are not changed. commit must be called for that
 func (cow *cowForest) swapHash(a, b uint64) {
@@ -1203,6 +1208,11 @@ func (d *diskForestData) write(pos uint64, h Hash) {
 	if err != nil {
 		fmt.Printf("\tWARNING!! write pos %d %s\n", pos, err.Error())
 	}
+}
+
+// writeRow to implement ForestData interface
+func (d *diskForestData) writeRow(pos uint64, hashes []Hash) {
+	
 }
 
 // swapHash swaps 2 hashes.  Don't go out of bounds.
