@@ -11,7 +11,7 @@ type hashableNode struct {
 }
 
 // hashRow calculates new hashes for all the positions passed in
-func (f *Forest) hashRow(dirtpositions []uint64) []uint64 {
+func (f *Forest) hashRow(dirtpositions []uint64) error {
 
 	// make wg
 	var wg sync.WaitGroup
