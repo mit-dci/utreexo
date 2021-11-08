@@ -51,7 +51,7 @@ func TestForestAddDel(t *testing.T) {
 
 // hashRow benchmark
 func BenchmarkHashRow(b *testing.B) {
-	numAdds := uint32(10000)
+	numAdds := uint32(10)
 
 	f := NewForest(RamForest, nil, "", 0)
 
@@ -64,7 +64,7 @@ func BenchmarkHashRow(b *testing.B) {
 
 		f.Modify(adds, bp.Targets)
 
-		// fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
 	}
 }
 

@@ -164,7 +164,7 @@ func (f *Forest) removev4(dels []uint64) error {
 	for _, dpos := range dels {
 		if dpos > f.numLeaves {
 			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
+				"trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
 		}
 	}
 	var hashDirt []uint64
@@ -384,7 +384,7 @@ func (f *Forest) addv2(adds []Leaf) {
 	defer positionList.Free()
 
 	var nextRow []Hash
-	
+	// do we have to reset position list?
 	// if we have an odd number of leaves, make a row with an additional empty leaf
 	if f.numLeaves&1 == 1 {
 		nextRow = make([]Hash, len(adds)+1)
@@ -406,6 +406,28 @@ func (f *Forest) addv2(adds []Leaf) {
 		pos =  parent(pos, f.rows)
 	}
 	f.numLeaves += uint64(len(adds))
+
+	// for _, add := range adds {
+	// 	// reset positionList
+	// 	positionList.list = positionList.list[:0]
+
+	// 	f.positionMap[add.Mini()] = f.numLeaves
+	// 	getRootsForwards(f.numLeaves, f.rows, &positionList.list)
+	// 	pos := f.numLeaves
+	// 	n := add.Hash
+	// 	f.data.write(pos, n)
+	// 	add.Hash = empty
+
+	// 	for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
+	// 		rootPos := len(positionList.list) - int(h+1)
+	// 		// grab, pop, swap, hash, new
+	// 		root := f.data.read(positionList.list[rootPos]) // grab
+	// 		n = parentHash(root, n)                         // hash
+	// 		pos = parent(pos, f.rows)                       // rise
+	// 		f.data.write(pos, n)                            // write
+	// 	}
+	// 	f.numLeaves++
+	// }
 }
 
 func hashContinuousRow(hashes []Hash) []Hash {
