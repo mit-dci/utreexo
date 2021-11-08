@@ -67,13 +67,16 @@ func UblockNetworkReader(
 // BlockToAdds turns all the new utxos in a msgblock into leafTxos
 // uses remember slice up to number of txos, but doesn't check that it's the
 // right length.  Similar with skiplist, doesn't check it.
-func BlockToAddLeaves(blk *btcutil.Block,
-	remember []bool, skiplist []uint32,
-	height int32, outCount int) (leaves []accumulator.Leaf) {
+func BlockToAddLeaves(
+	blk *btcutil.Block,
+	remember []bool,
+	skiplist []uint32,
+	height int32,
+	outCount uint32) (leaves []accumulator.Leaf) {
 
 	// We're overallocating a little bit since all the unspendables
 	// won't be appended. It's ok though for the pre-allocation savings.
-	leaves = make([]accumulator.Leaf, 0, outCount-len(skiplist))
+	leaves = make([]accumulator.Leaf, 0, outCount-uint32(len(skiplist)))
 
 	var txonum uint32
 	for coinbaseif0, tx := range blk.Transactions() {

@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"runtime/pprof"
@@ -10,35 +11,54 @@ import (
 
 	"github.com/mit-dci/utreexo/accumulator"
 	"github.com/mit-dci/utreexo/btcacc"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 /*
 The pipeline:
 
-The tricky part is that we read blocks, but that block data goes to 2 places.
-It goes to the accumulator to generate a proof, and it goes to the DB to
-get the TTL data.  The proof then gets written to a flat file,
+DATA INFLOW:
+Block & Rev data comes in from BlockAndRevReader, which duplicates the block
+data and sends it to both the proof path and the TTL path.
 
-BlockAndRevReader reads from bitcoind flat files
--> blockAndRevReadQueue -> read by main loop, sent to 2 places
+PROOF PATH:
+The proof path is in the main for loop right now and not in its own worker
+thread.  This path converts the block & rev data into accumulator adds & dels
+with blockToAddDel(), then calls GenUData() to generate a proof for the
+deletions, which it sends via proofChan to the FlatFileWriter() which writes
+the proof to disk.  Then it calls Modify() on the accumulator, removing the
+deleted hashes and adding new ones.
 
+TTL PATH:
+The block & rev data is first sent to BNRTTLSpliter(), which spawns 2 new
+threads: TxidSortWriterWorker() and TTLLookupWorker().  BNRTTLSpliter() splits
+the block up into inputs and outputs; inputs go to the TTLLookupWorker() and
+outputs go to the TxidSortWriterWorker() (barely even outputs; just TXIDs and
+number of outputs)
 
-  \--> genUData --------> forest.Modify()
-   \               \-----> proofchan -> flatFileBlockWorker -> offsets
-    \
-     \-> ParseBlockForDB -> dbWriteChan -> dbWorker -> ttlResultChan
+TxidSortWriterWorker() builds a flat file of per-block sorted, truncated TXIDs.
+TTLLookupWorker() looks up inputs in this sorted TXID file, and obtains position
+data for the TTL value of a UTXO.  We already have the TTL data for the UTXO
+from the current block height and the rev data which tells the utxo creation
+height.  We want to write the TTL into the TTL area of the proof block, but
+we need to look up where in the block this UTXO was created, and that's what
+TTLLookupWorker() gets us.  Once we have the full TTL result, we send that
+via ttlResultChan to FlatFileWriter()
 
-then flatFileTTLWorker needs both the offsets from the flatFileBlockWorker
-and the TTL data from the dbWorker.
+FLAT FILE:
+FlatFileWriter() takes in proof data as well as TTL data.  When it gets a
+proof block it appends that to the end of the proof file, allocating a bunch
+of empty space in the beginning for TTL values.
+When it gets a TTL result block, it writes the TTL values to various previous
+blocks, overwriting the allocated empty (zero) data in the TTL region of the
+proof block.
 
+*/
 
-this all stays in order, so the flatFileTTLWorker grabs from the offset channel,
-and then only if the offset channel is empty will it grab from ttlResultChan.
-This ensures that it's always got the offset data first.
-if restoring, initially it gets a flood of offset data, so this works OK because
-it grabs all that before trying to look for TTL data.
+/* Problem : BlockAndRevReader keeps going after the stop signal happens.
+So it fills up buffers with ~10 blocks, and will keep going forever;
+need to tell BlockAndRevReader to stop, and then let everything else
+(including the main loop with Modify() I guess) keep running until that
+buffer clears out.
 
 */
 
@@ -58,98 +78,63 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 	go stopBuildProofs(cfg, sig, offsetFinished, haltRequest, haltAccept)
 
 	// Init forest and variables. Resumes if the data directory exists
-	forest, height, knownTipHeight, err :=
-		InitBridgeNodeState(cfg, offsetFinished)
+	forest, finishedHeight, err := InitBridgeNodeState(cfg, offsetFinished)
 	if err != nil {
-		returnErr := fmt.Errorf("initialization error: %s.\nIf your .blk and .dat files are not in %s,"+
-			"specify alternate path with -datadir", err, cfg.BlockDir)
-		return returnErr
+		err := fmt.Errorf("initialization error: %s.  If your .blk and .dat "+
+			"files are not in %s, specify alternate path with -datadir\n.",
+			err.Error(), cfg.BlockDir)
+		return err
 	}
 
-	// async ttldb variables
-	var dbwg sync.WaitGroup
-	dbWriteChan := make(chan ttlRawBlock, 10)        // from block processing to db worker
-	ttlResultChan := make(chan ttlResultBlock, 10)   // from db worker to flat ttl writer
-	proofChan := make(chan btcacc.UData, 10)         // from proof processing to proof writer
-	undoChan := make(chan accumulator.UndoBlock, 10) // from undoblocks to undoblock writer
-	leafblockChan := make(chan int, 10)              // from blocksadd to ttl writer
+	fmt.Printf("Starting forest: %s\n", forest.ToString())
 
-	// sorta ugly as in one of these will just be sitting around
-	// doing nothing
-	memTTLdb := NewMemTTLdb()
-	var lvdb *leveldb.DB
+	// BlockAndRevReader will push blocks into here
+	blockAndRevProofChan := make(chan blockAndRev, 10) // blocks for accumulator
+	blockAndRevTTLChan := make(chan blockAndRev, 10)   // same thing, but for TTL
+	ttlResultChan := make(chan ttlResultBlock, 10)     // from lookup to flat ttl writer
+	proofChan := make(chan btcacc.UData, 10)           // to flat writer
+	undoChan := make(chan accumulator.UndoBlock, 10)   // to undoblock writer
+	skipChan := make(chan allocNSkipTTL, 10)           // empty leaves for TTLs
 
-	// leveldb option used by both
-	o := opt.Options{
-		CompactionTableSizeMultiplier: 8,
-		Compression:                   opt.NoCompression,
-	}
-
-	// Start ttldb worker
-	if cfg.memTTLdb {
-		err = memTTLdb.InitMemDB(cfg.UtreeDir.Ttldb,
-			cfg.allInMemTTLdb, &o)
-		if err != nil {
-			return err
-		}
-		go MemDbWorker(dbWriteChan, ttlResultChan, memTTLdb, &dbwg)
-	} else {
-
-		// init ttldb
-		lvdb, err = leveldb.OpenFile(cfg.UtreeDir.Ttldb, &o)
-		if err != nil {
-			return err
-		}
-		go DbWorker(dbWriteChan, ttlResultChan, lvdb, &dbwg)
-	}
-
-	// To send/receive blocks from blockreader()
-	blockAndRevReadQueue := make(chan BlockAndRev, 10) // blocks from disk to processing
+	fileWait := new(sync.WaitGroup)
 
 	// Reads block asynchronously from .dat files
 	// Reads util the lastIndexOffsetHeight
-	go BlockAndRevReader(blockAndRevReadQueue, cfg, knownTipHeight, height)
 
-	var fileWait sync.WaitGroup
+	go BlockAndRevReader(
+		blockAndRevProofChan, blockAndRevTTLChan,
+		haltRequest, fileWait, cfg, finishedHeight)
 
-	go flatFileWorkerProofBlocks(proofChan, cfg.UtreeDir, &fileWait)                  // flat file worker for proof blocks
-	go flatFileWorkerUndoBlocks(undoChan, cfg.UtreeDir, &fileWait)                    // flat file worker for the undo blocks
-	go flatFileWorkerTTlBlocks(ttlResultChan, leafblockChan, cfg.UtreeDir, &fileWait) // flat file worker for the ttl blocks
+	go flatFileWorkerProof(proofChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerUndo(undoChan, cfg.UtreeDir, fileWait)
+	go flatFileWorkerTTL(ttlResultChan, skipChan, cfg.UtreeDir, fileWait)
 
-	fmt.Println("Building Proofs and ttldb...")
+	go BNRTTLSpliter(blockAndRevTTLChan, ttlResultChan, cfg.UtreeDir)
 
-	var stop bool // bool for stopping the main loop
+	fmt.Println("Building Proofs and ttls...")
 
-	for ; height != knownTipHeight && !stop; height++ {
-		if cfg.quitAt != -1 && int(height) == cfg.quitAt {
-			fmt.Println("quitAfter value reached. Quitting...")
-
-			// TODO this is ugly, have an actually quitter. Need to refactor
-			// a bunch of things..
-			trace.Stop()
-			pprof.StopCPUProfile()
+	for {
+		// fmt.Printf("block on blockAndRevProofChan read?\n")
+		// Receive txs from the asynchronous blk*.dat reader
+		bnr, open := <-blockAndRevProofChan
+		if !open { // channel is closed by BlockAndRevReader & empty, we're done
 			break
 		}
-		// Receive txs from the asynchronous blk*.dat reader
-		bnr := <-blockAndRevReadQueue
 
-		// start waitgroups, beyond this point we have to finish all the
-		// disk writes for this iteration of the loop
-		dbwg.Add(1)     // DbWorker calls Done()
-		fileWait.Add(4) // flatFileWorker calls Done() when done writing ttls and proof and undoBlocks and also blockadds for leafs.
+		if bnr.Blk == nil {
+			fmt.Printf("h %d empty block ", bnr.Height)
+			panic("empty")
+		}
 
-		// Writes the new txos to leveldb,
-		// and generates TTL for txos spent in the block
-		// also wants the skiplist to omit 0-ttl txos
-		dbWriteChan <- ParseBlockForDB(bnr)
+		// send number of outputs, including skipped, to allocate TTL space
+		skipChan <- allocNSkipTTL{bnr.outCount, bnr.outSkipList}
 
 		// Get the add and remove data needed from the block & undo block
 		// wants the skiplist to omit proofs
-		blockAdds, delLeaves, err := blockToAddDel(bnr)
+		blockAdds, delLeaves, err := bnr.toAddDel()
 		if err != nil {
 			return err
 		}
-		leafblockChan <- len(blockAdds) // send size of 0s needed to be added to disk
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
@@ -158,59 +143,40 @@ func BuildProofs(cfg *Config, sig chan bool) error {
 			return err
 		}
 		// We don't know the TTL values, but know how many spots to allocate
-		ud.TxoTTLs = make([]int32, len(blockAdds))
+		ud.TxoTTLs = make([]int32, bnr.outCount)
+
+		// fmt.Printf("block on proofchan?\n")
 		// send proof udata to channel to be written to disk
 		proofChan <- ud
 
-		// TODO: Don't ignore undoblock
-		// Modifies the forest with the given TXINs and TXOUTs
-		// return the undoBlock Data
 		undoblock, err := forest.Modify(blockAdds, ud.AccProof.Targets)
 		if err != nil {
 			return err
 		}
 		undoblock.Height = bnr.Height // set undoBlocks Height
 		// send undoBlock data to undo channel to be written to the disk
+		// fmt.Printf("block on undochan?\n")
 		undoChan <- *undoblock
 
-		if bnr.Height%100 == 0 {
-			fmt.Println("On block :", bnr.Height+1)
-		}
-
-		// Check if stopSig is no longer false
-		// stop = true makes the loop exit
-		select {
-		case stop = <-haltRequest: // receives true from stopBuildProofs()
-		default:
+		finishedHeight = bnr.Height
+		if finishedHeight%1000 == 0 {
+			fmt.Printf("Finished block %d of max %d\n",
+				finishedHeight, cfg.quitAfter)
 		}
 
 	}
 
-	// wait until dbWorker() has written to the ttldb file
-	// allows leveldb to close gracefully
-	dbwg.Wait()
-
-	// Close ttldb
-	if cfg.memTTLdb {
-		err := memTTLdb.Close()
-		if err != nil {
-			return err
-		}
-	} else {
-		lvdb.Close()
-	}
-
-	fmt.Printf("blocked on fileWait\n")
 	// Wait for the file workers to finish
 	fileWait.Wait()
 
 	// Save the current state so genproofs can be resumed
-	err = saveBridgeNodeData(forest, height, cfg)
+	err = saveBridgeNodeData(forest, finishedHeight, cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Done writing")
+	fmt.Printf("Done writing. Height %d Forest: %s",
+		finishedHeight, forest.ToString())
 
 	// Tell stopBuildProofs that it's ok to exit
 	haltAccept <- true
@@ -264,4 +230,33 @@ func stopBuildProofs(
 	// Wait until BuildProofs() or buildOffsetFile() says it's ok to exit
 	<-haltAccept
 	os.Exit(0)
+}
+
+// go through all the proofs and just try to deserialize them
+func VerifyProofs(cfg *Config) error {
+
+	for h := int32(1); h < cfg.quitAfter; h++ {
+		if h%100 == 0 {
+			fmt.Printf("verify h %d\n", h)
+		}
+		udb, err := GetUDataBytesFromFile(cfg.UtreeDir.ProofDir, h)
+		if err != nil {
+			return fmt.Errorf("GetUDataBytesFromFile %s\n", err.Error())
+		}
+		// fmt.Printf("got udb %d bytes:\n%x\n", len(udb), udb)
+		buf := bytes.NewBuffer(udb)
+		// deserialize to find errors
+		var ud btcacc.UData
+		err = ud.Deserialize(buf)
+		if err != nil {
+			fmt.Printf("serveBlocksWorker h %d deser error %s\n", h, err.Error())
+			fmt.Printf("ttls: %v targets %s\n", ud.TxoTTLs, ud.AccProof.ToString())
+			fmt.Printf("udb: %x\n", udb)
+			return err
+		}
+		// if len(ud.AccProof.Targets) != 0 {
+		// fmt.Printf("h %d has %d targets\n", h, len(ud.AccProof.Targets))
+		// }
+	}
+	return nil
 }

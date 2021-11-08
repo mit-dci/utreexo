@@ -8,6 +8,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
+
+	"github.com/mit-dci/utreexo/util"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -50,35 +53,54 @@ type RawHeaderData struct {
 // It also puts in the proofs.  This will run on the archive server, and the
 // data will be sent over the network to the CSN.
 func BlockAndRevReader(
-	blockChan chan BlockAndRev, cfg *Config,
-	maxHeight, curHeight int32) {
+	aChan, bChan chan blockAndRev, haltRequest chan bool, wg *sync.WaitGroup,
+	cfg *Config, finishedHeight int32) {
+
+	// finishedHeight is the height we're finsihed reading & sending out.
 
 	var offsetFilePath = cfg.UtreeDir.OffsetDir.OffsetFile
-
+	stop := false
 	offsetFile, err := os.Open(offsetFilePath)
 	if err != nil {
 		panic(err)
 	}
 	defer offsetFile.Close() // file always closes
 
-	for curHeight < maxHeight {
-		blocks, revs, err := GetRawBlocksFromDisk(curHeight, 100000, offsetFile, cfg.BlockDir)
+	for finishedHeight < cfg.quitAfter && !stop {
+		blocksToRead := int32(1000)
+		if finishedHeight+blocksToRead >= cfg.quitAfter {
+			blocksToRead = cfg.quitAfter - finishedHeight
+		}
+		blocks, revs, err :=
+			GetRawBlocksFromDisk(
+				finishedHeight+1, blocksToRead, offsetFile, cfg.BlockDir)
 		if err != nil {
 			fmt.Printf(err.Error())
 			// close(blockChan)
 			return
 		}
 
-		for i := 0; i < len(blocks); i++ {
-			bnr := BlockAndRev{
-				Height: curHeight,
+		for i := 0; i < len(blocks) && !stop; i++ {
+			bnr := blockAndRev{
+				Height: finishedHeight + 1,
 				Blk:    btcutil.NewBlock(&blocks[i]),
 				Rev:    revs[i],
 			}
-			blockChan <- bnr
-			curHeight++
+			bnr.inCount, bnr.outCount, bnr.inSkipList, bnr.outSkipList =
+				util.DedupeBlock(bnr.Blk)
+			wg.Add(3) // Undo, TTL, Proof
+			aChan <- bnr
+			bChan <- bnr
+			finishedHeight++
+			select {
+			case stop = <-haltRequest: // receives true from stopBuildProofs()
+			default:
+			}
 		}
 	}
+	fmt.Printf("finished reading blocks, last height %d\n", finishedHeight)
+	close(aChan)
+	close(bChan)
 }
 
 // GetRawBlocksFromDisk retrives multiple consecutive blocks starting at height `startAt`.
@@ -87,7 +109,7 @@ func BlockAndRevReader(
 func GetRawBlocksFromDisk(startAt int32, count int32, offsetFile *os.File,
 	blockDir string) (blocks []wire.MsgBlock, revs []RevBlock, err error) {
 	if startAt == 0 {
-		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		err = fmt.Errorf("GetRawBlocksFromDisk: Block 0 is not not a thing")
 		return
 	}
 	startAt--
@@ -227,7 +249,7 @@ func FetchBlockHeightFromBufDB(header [32]byte, db map[[32]byte]int32) (int32, e
 func GetBlockBytesFromFile(
 	height int32, offsetFileName string, blockDir string) (b []byte, err error) {
 	if height == 0 {
-		err = fmt.Errorf("Block 0 is not in blk files or utxo set")
+		err = fmt.Errorf("GetBlockBytesFromFile: Block 0 is not not a thing")
 		return
 	}
 	height--
@@ -289,10 +311,13 @@ func GetBlockBytesFromFile(
 }
 
 // BlockAndRev is a regular block and a rev block stuck together
-type BlockAndRev struct {
-	Height int32
-	Rev    RevBlock
-	Blk    *btcutil.Block
+// also contains the skiplists, and number of total inputs and outputs
+type blockAndRev struct {
+	Height                  int32
+	Rev                     RevBlock
+	Blk                     *btcutil.Block
+	inSkipList, outSkipList []uint32
+	inCount, outCount       uint32 // includes skipped
 }
 
 /*

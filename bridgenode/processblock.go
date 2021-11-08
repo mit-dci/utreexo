@@ -1,90 +1,137 @@
 package bridgenode
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
+	"sort"
 
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/mit-dci/utreexo/btcacc"
 	uwire "github.com/mit-dci/utreexo/wire"
 
 	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/util"
 )
 
 /*
-Here's what it *did*:   (can delete after this is old)
+New setup:  all flat files, no db.
 
-genproof:
+block & rev comes in.  From it, get a list of txs with # outputs each,
+and a list of spent outpoints.
 
-Get a block at current height
-Look through txins
-get utxo identifier (outpoint) and current block height
-write outpoint: deathheight to db (current height is deathheight)
+For the output side, we take every txid and associated # of outputs.
+Sort the txids, then write the sorted txid/numout tuples to a flat file.
+Make a little index file to keep track of this flat file.
 
-serve:
+For the input side, we know the TTL for every outpoint, we just need to know
+where to write it.  Seek into the txid flatfile to the creating block.
+Do an interpolation search for the txid, then you'll know where that txid
+starts in the block, and add that to the index of your outpoint to get the
+total in-block output index.  Seek to the TTL file, and write it there.
 
-Get a block at current height
-look through all the outputs and calculate outpoint
-lookup outpoints in DB and get deathheight
-subtract deathheight from current height, get duration for the new utxo
+There is a search, but it's interpolation over TXIDs.  I know there's something
+like 6K outputs per block and 2500 txs per block, so the search only needs to
+go through 2500 elements.  Binary search, log(n) would be around 11 searches,
+interpolation search is log(log(n)) so 3 to 4.
 
-That's bad!  Because you're doing lots o fDB lookups when serving which is slow,
-and you're keepting a big DB of every txo ever.
+Is the 3-4 nearby seeks per lookup (maybe 15-20K seeks per block) faster than
+levelDB?  We'll find out.
 
---------------------------------------------------
-
-Here's what it *does* now:
-
-genproof:
-
-Get a block at current height:
-
-look through txouts, put those in DB.  Also put their place in the block
-db key: outpoint db value: txoinblock index (4 bytes)
-
-also look through txins.  for each of them, look them up in the db,
-getting the birthheight and which txo it is within that block.
-lookup the block offset where the txo was created, seek to that block,
-then seek the the 4 byte location where its duration is stored (starts as
-unknown / 0 / -1 whatever) and overwrite it.
-
-Also delete the db entry for the txin.
-And yeah this is a utxo db so if we put more data here, then we don't
-need the rev files... and if the rev files told which txout in the block it
-was... we wouldn't need a db at all.
-
-serve:
-
-Get a block at current height
-all the ttl values are right there in the block, nothing to do
-
-That's better, do more work in genproofs since that only happens once and
-serving can happen lots of times.
+It sounds bad for spinning disks, and it might be, but these seeks are very
+close to each other.  The sorted txid block is like 40K, and we could bring that
+down further if needed.
 
 */
 
-/*
-general ttl flow here: block n rev read from disk.  Sent to block processing, which
-turns it into a ttlRawBlock.  That gets sent to the DB worker, which does db io, and
-turns the ttlRawBlock into a TtlResultBlock.  The TtlResultBlock then gets sent to the
-flatfile worker which writes the ttl data to the right places within the flat file.
-(the flat file worker is also getting proof data from the other processing which
-has the accumulator, and it should only write ttl result blocks after it has already
-processed the proof block.
+// ttlWriteBlock is data about the creation of txids (& their position) in a block
+type ttlWriteBlock struct {
+	createHeight int32    // height of this block, creating txos
+	mTxids       []miniTx // one for tx
+}
 
-Hopefully there are no timing / concurrency conflicts due to these things happening
-on different threads.  I think as long as the flat file worker holds off on any
-ttl blocks that come in too soon it should be OK; the db worker and everything else is
-going sequentially and has buffers
-*/
+// ttlLookupBlock is the data from a block about txo creation and deletion
+// needed for TTL calculations
+type ttlLookupBlock struct {
+	destroyHeight int32    // height of this block, destroying the txos
+	spentTxos     []miniIn // one for every input
+}
 
-// the data from a block about txo creation and deletion for TTL calculation
-// this will be sent to the DB
-type ttlRawBlock struct {
-	blockHeight       int32      // height of this block in the chain
-	newTxos           [][36]byte // serialized outpoint for every output
-	spentTxos         [][36]byte // serialized outpoint for every input
-	spentStartHeights []int32    // tied 1:1 to spentTxos
+// miniIn are miniature outpoints, for the spent side of the block.
+// 6 bytes of txid prefix, then 2 bytes of position.
+type miniIn struct {
+	hashprefix   [6]byte // txid prefix of txo being consumed
+	idx          uint16  // outpoint index of txo being consumed
+	createHeight int32   // creation height of txo being consumed
+}
+
+// to int... which will turn into a float
+func (mt *miniIn) hashToUint64() uint64 {
+	// welll this is ugly but probably the fastest way
+	return uint64(mt.hashprefix[5]) | uint64(mt.hashprefix[4])<<8 |
+		uint64(mt.hashprefix[3])<<16 | uint64(mt.hashprefix[2])<<24 |
+		uint64(mt.hashprefix[1])<<32 | uint64(mt.hashprefix[0])<<40
+}
+
+func miniBytesToUint64(b [6]byte) uint64 {
+	return uint64(b[5]) | uint64(b[4])<<8 | uint64(b[3])<<16 |
+		uint64(b[2])<<24 | uint64(b[1])<<32 | uint64(b[0])<<40
+}
+
+type miniTx struct {
+	txid     *chainhash.Hash
+	startsAt uint16 // the 0th output in this tx is the _th input in the block
+	// note that there COULD BE more than 65K outputs in a block and
+	// this should probably deal with that.  They'd be "silly" outputs though
+	// TODO move to 32 bits, or really 17 would be plenty
+}
+
+// miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
+// TODO there are probably no 6 byte prefix collisions in any block.
+// But there could be someday, so deal with that...
+func (wb *ttlWriteBlock) serialize(w io.Writer) error {
+
+	s := fmt.Sprintf("ttl wb h %d %d txs\n", wb.createHeight, len(wb.mTxids))
+	for _, mt := range wb.mTxids {
+		_, err := w.Write(mt.txid[:6])
+		if err != nil {
+			return err
+		}
+
+		err = binary.Write(w, binary.BigEndian, mt.startsAt)
+		if err != nil {
+			return err
+		}
+		s += fmt.Sprintf("tx %x starts at idxinblock %d\n", mt.txid[:6], mt.startsAt)
+	}
+	// fmt.Printf(s)
+	return nil
+}
+
+// miniTx serialization is 6 bytes of the txid, then 2 bytes for a uint16
+// TODO there are probably no 6 byte prefix collisions in any block.
+// But there could be someday, so deal with that...
+func (mt *miniTx) serialize(w io.Writer) error {
+	_, err := w.Write(mt.txid[:6])
+	if err != nil {
+		return err
+	}
+
+	err = binary.Write(w, binary.BigEndian, mt.startsAt)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func sortTxids(s []miniTx) {
+	sort.Slice(s, func(a, b int) bool {
+		return bytes.Compare(s[a].txid[:], s[b].txid[:]) < 0
+	})
+}
+
+func sortMiniIns(s []miniIn) {
+	sort.Slice(s, func(a, b int) bool { return s[a].createHeight < s[b].createHeight })
 }
 
 // a TTLResult is the TTL data we learn once a txo is spent & it's lifetime
@@ -95,37 +142,48 @@ type ttlRawBlock struct {
 // all the ttl result data from a block, after checking with the DB
 // to be written to the flat file
 type ttlResultBlock struct {
-	Height  int32      // height of the block that consumed all the utxos
-	Created []txoStart // slice of txo creation info
+	destroyHeight int32       // height of the block that consumed all the utxos
+	results       []ttlResult // slice of txo creation info
 }
 
-type txoStart struct {
+type ttlResult struct {
 	createHeight     int32  // what block created the txo
-	indexWithinBlock uint32 // index in that block where the txo is created
+	indexWithinBlock uint16 // index in that block where the txo is created
 }
 
-// blockToAddDel turns a block into add leaves and del leaves
-func blockToAddDel(bnr BlockAndRev) (
+func (bnr *blockAndRev) toAddDel() (
 	blockAdds []accumulator.Leaf, delLeaves []btcacc.LeafData, err error) {
 
-	inCount, outCount, inskip, outskip := util.DedupeBlock(bnr.Blk)
-	delLeaves, err = blockNRevToDelLeaves(bnr, inskip, inCount)
+	delLeaves, err = bnr.toDelLeaves()
 	if err != nil {
 		return
 	}
 
 	// this is bridgenode, so don't need to deal with memorable leaves
-	blockAdds = uwire.BlockToAddLeaves(bnr.Blk, nil, outskip, bnr.Height, outCount)
+	blockAdds = uwire.BlockToAddLeaves(
+		bnr.Blk, nil, bnr.outSkipList, bnr.Height, bnr.outCount)
 
+	// if bnr.Height == 106 {
+	// fmt.Printf("h %d outskip %v\n", bnr.Height, bnr.outSkipList)
+	// }
 	return
+
 }
 
 // blockNRevToDelLeaves turns a block's inputs into delLeaves to be removed from the
 // accumulator
-func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32, inCount int) (
+func (bnr *blockAndRev) toDelLeaves() (
 	delLeaves []btcacc.LeafData, err error) {
 
-	delLeaves = make([]btcacc.LeafData, 0, inCount-len(skiplist))
+	// finish early if there's nothing to prove
+	if bnr.inCount-uint32(len(bnr.inSkipList)) == 0 {
+		return
+	}
+
+	delLeaves = make([]btcacc.LeafData, 0, bnr.inCount-uint32(len(bnr.inSkipList)))
+	inskip := bnr.inSkipList
+	// we never modify the contents of this slice
+	// only the borders of the slice, so this shouldn't change bnr.inSkipList
 
 	// make sure same number of txs and rev txs (minus coinbase)
 	if len(bnr.Blk.Transactions())-1 != len(bnr.Rev.Txs) {
@@ -134,27 +192,35 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32, inCount int) (
 		return
 	}
 
-	var blockInIdx uint32
-	for txinblock, tx := range bnr.Blk.Transactions() {
-		if txinblock == 0 {
-			blockInIdx++ // coinbase tx always has 1 input
+	var inputInBlock uint32
+	for txInBlock, tx := range bnr.Blk.Transactions() {
+		if txInBlock == 0 {
+			// make sure input 0 in the block is skipped
+			if len(inskip) < 1 || inskip[0] != 0 {
+				err = fmt.Errorf("input 0 (coinbase) wasn't skipped")
+				return
+			}
+			inskip = inskip[1:]
+			inputInBlock++
 			continue
 		}
-		txinblock--
+
+		txInBlock--
 		// make sure there's the same number of txins
-		if len(tx.MsgTx().TxIn) != len(bnr.Rev.Txs[txinblock].TxIn) {
-			err = fmt.Errorf("genDels block %d tx %d has %d inputs but %d rev entries",
-				bnr.Height, txinblock+1,
-				len(tx.MsgTx().TxIn), len(bnr.Rev.Txs[txinblock].TxIn))
+		if len(tx.MsgTx().TxIn) != len(bnr.Rev.Txs[txInBlock].TxIn) {
+			err = fmt.Errorf("genDels h %d tx %d: %d inputs but %d rev entries",
+				bnr.Height, txInBlock,
+				len(tx.MsgTx().TxIn), len(bnr.Rev.Txs[txInBlock].TxIn))
 			return
 		}
+
 		// loop through inputs
 		for i, txin := range tx.MsgTx().TxIn {
-			// check if on skiplist.  If so, don't make leaf
-			if len(skiplist) > 0 && skiplist[0] == blockInIdx {
+			// check if on inskip.  If so, don't make leaf
+			if len(inskip) > 0 && inskip[0] == inputInBlock {
 				// fmt.Printf("skip %s\n", txin.PreviousOutPoint.String())
-				skiplist = skiplist[1:]
-				blockInIdx++
+				inskip = inskip[1:]
+				inputInBlock++
 				continue
 			}
 
@@ -164,81 +230,77 @@ func blockNRevToDelLeaves(bnr BlockAndRev, skiplist []uint32, inCount int) (
 			l.TxHash = btcacc.Hash(txin.PreviousOutPoint.Hash)
 			l.Index = txin.PreviousOutPoint.Index
 
-			l.Height = bnr.Rev.Txs[txinblock].TxIn[i].Height
-			l.Coinbase = bnr.Rev.Txs[txinblock].TxIn[i].Coinbase
+			l.Height = bnr.Rev.Txs[txInBlock].TxIn[i].Height
+			l.Coinbase = bnr.Rev.Txs[txInBlock].TxIn[i].Coinbase
 			// TODO get blockhash from headers here -- empty for now
 			// l.BlockHash = getBlockHashByHeight(l.CbHeight >> 1)
-			l.Amt = bnr.Rev.Txs[txinblock].TxIn[i].Amount
-			l.PkScript = bnr.Rev.Txs[txinblock].TxIn[i].PKScript
+			l.Amt = bnr.Rev.Txs[txInBlock].TxIn[i].Amount
+			l.PkScript = bnr.Rev.Txs[txInBlock].TxIn[i].PKScript
 			delLeaves = append(delLeaves, l)
-			blockInIdx++
+			inputInBlock++
 		}
 	}
 	return
 }
 
-// ParseBlockForDB gets a block and creates a ttlRawBlock to send to the DB worker
-func ParseBlockForDB(
-	bnr BlockAndRev) ttlRawBlock {
+func (bnr *blockAndRev) toString() string {
+	s := fmt.Sprintf("h %d %d out skip %v %d in skip %v\n",
+		bnr.Height, bnr.outCount, bnr.outSkipList,
+		bnr.inCount, bnr.inSkipList)
+	outskipped := 0
+	txoInBlock := 0
+	txinInBlock := 0
+	inSkipPos, outSkipPos := 0, 0
 
-	var trb ttlRawBlock
-	trb.blockHeight = bnr.Height
+	shouldoutskip := len(bnr.outSkipList)
+	block := bnr.Blk.MsgBlock()
+	for txnum, tx := range block.Transactions {
+		txid := tx.TxHash()
+		s += fmt.Sprintf("tx %d ------------------\n", txnum)
 
-	var txoInBlock, txinInBlock uint32
-
-	// if len(inskip) != 0 || len(outskip) != 0 {
-	// fmt.Printf("h %d inskip %v outskip %v\n", bnr.Height, inskip, outskip)
-	// }
-	transactions := bnr.Blk.Transactions()
-	_, _, inskip, outskip := util.DedupeBlock(bnr.Blk)
-	// iterate through the transactions in a block
-	for txInBlock, tx := range transactions {
-		txid := tx.Hash()
-
-		// for all the txouts, get their outpoint & index and throw that into
-		// a db batch
-		for txoInTx, txo := range tx.MsgTx().TxOut {
-			if len(outskip) > 0 && txoInBlock == outskip[0] {
-				// skip inputs in the txin skiplist
-				// fmt.Printf("skipping output %s:%d\n", txid.String(), txoInTx)
-				outskip = outskip[1:]
-				txoInBlock++
-				continue
-			}
-			if util.IsUnspendable(txo) {
-				txoInBlock++
-				continue
-			}
-
-			trb.newTxos = append(trb.newTxos,
-				util.OutpointToBytes(wire.NewOutPoint(txid, uint32(txoInTx))))
-			txoInBlock++
+		maxRow := len(tx.TxIn)
+		if len(tx.TxOut) > maxRow {
+			maxRow = len(tx.TxOut)
 		}
-
-		// for all the txins, throw that into the work as well; just a bunch of
-		// outpoints
-		for txinInTx, in := range tx.MsgTx().TxIn { // bit of a tounge twister
-			if txInBlock == 0 {
-				txinInBlock += uint32(len(tx.MsgTx().TxIn))
-				break // skip coinbase input
-			}
-			if len(inskip) > 0 && txinInBlock == inskip[0] {
-				// skip inputs in the txin skiplist
-				// fmt.Printf("skipping input %s\n", in.PreviousOutPoint.String())
-				inskip = inskip[1:]
+		for rowInTx := 0; rowInTx < maxRow; rowInTx++ {
+			// s += fmt.Sprintf("txinnum %d txonum %d inskip %v outskip %v\n",
+			// txinInBlock, txoInBlock, bnr.inSkipList, bnr.outSkipList)
+			if rowInTx < len(tx.TxIn) {
+				if len(bnr.inSkipList) > inSkipPos &&
+					uint32(txinInBlock) == bnr.inSkipList[inSkipPos] {
+					s += fmt.Sprintf("SKIP ")
+					inSkipPos++
+				} else {
+					s += fmt.Sprintf("     ")
+				}
+				s += fmt.Sprintf("in %x:%d\t",
+					tx.TxIn[rowInTx].PreviousOutPoint.Hash[:6],
+					tx.TxIn[rowInTx].PreviousOutPoint.Index&0xffff)
 				txinInBlock++
-				continue
+			} else {
+				s += fmt.Sprintf("\t\t\t")
 			}
-			// append outpoint to slice
-			trb.spentTxos = append(trb.spentTxos,
-				util.OutpointToBytes(&in.PreviousOutPoint))
-			// append start height to slice (get from rev data)
-			trb.spentStartHeights = append(trb.spentStartHeights,
-				bnr.Rev.Txs[txInBlock-1].TxIn[txinInTx].Height)
-
-			txinInBlock++
+			if rowInTx < len(tx.TxOut) {
+				if len(bnr.outSkipList) > outSkipPos &&
+					uint32(txoInBlock) == bnr.outSkipList[outSkipPos] {
+					s += fmt.Sprintf("SKIP ")
+					outskipped++
+					outSkipPos++
+				} else {
+					s += fmt.Sprintf("     ")
+				}
+				s += fmt.Sprintf("out %x:%d\n", txid[:6], rowInTx)
+				txoInBlock++
+			} else {
+				s += fmt.Sprintf("\n")
+			}
 		}
 	}
-
-	return trb
+	if outskipped != shouldoutskip {
+		s += fmt.Sprintf("h %d skipped %d but supposed to skip %d\n",
+			bnr.Height, outskipped, shouldoutskip)
+		fmt.Printf(s)
+		panic("bad skip")
+	}
+	return s
 }

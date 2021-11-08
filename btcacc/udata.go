@@ -31,7 +31,7 @@ func (ud *UData) ProofSanity(nl uint64, h uint8) bool {
 
 // on disk
 // aaff aaff 0000 0014 0000 0001 0000 0001 0000 0000 0000 0000 0000 0000
-//  magic   |   size  |  height | numttls |   ttl0  | numTgts | ????
+//  magic   |   size  |  height | numttls |   ttl0  | numTgts | (proof)
 
 // ToBytes serializes UData into bytes.
 // First, height, 4 bytes.
@@ -197,7 +197,8 @@ func GenUData(delLeaves []LeafData, forest *accumulator.Forest, height int32) (
 			len(ud.AccProof.Targets), len(delLeaves))
 		return
 	}
-
+	// if len(delLeaves) > 0 {
 	// fmt.Printf(ud.AccProof.ToString())
+	// }
 	return
 }

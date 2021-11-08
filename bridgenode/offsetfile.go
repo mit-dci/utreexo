@@ -34,7 +34,8 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 	// If not, then use the custom one given
 	if cOffsetFile == "" {
 		var err error
-		offsetFile, err = os.OpenFile(cfg.UtreeDir.OffsetDir.OffsetFile, os.O_CREATE|os.O_WRONLY, 0600)
+		offsetFile, err = os.OpenFile(
+			cfg.UtreeDir.OffsetDir.OffsetFile, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
@@ -74,7 +75,8 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 			break
 		}
 		// grab headers from the .dat file as RawHeaderData type
-		rawheaders, err := readRawHeadersFromFile(bufReader, filePath, uint32(fileNum), bufDB)
+		rawheaders, err :=
+			readRawHeadersFromFile(bufReader, filePath, uint32(fileNum), bufDB)
 		if err != nil {
 			panic(err)
 		}
@@ -91,13 +93,15 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 		var err error
 		// write the last height of the offsetfile
 		// needed info for the main genproofs processes
-		LastIndexOffsetHeightFile, err := os.OpenFile(cfg.UtreeDir.OffsetDir.lastIndexOffsetHeightFile, os.O_CREATE|os.O_WRONLY, 0600)
+		LastIndexOffsetHeightFile, err := os.OpenFile(
+			cfg.UtreeDir.OffsetDir.lastIndexOffsetHeightFile, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			panic(err)
 		}
 		defer LastIndexOffsetHeightFile.Close()
 		// write to the file
-		err = binary.Write(LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
+		err = binary.Write(
+			LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
 		if err != nil {
 			panic(err)
 		}
@@ -112,7 +116,8 @@ func buildOffsetFile(cfg *Config, tip util.Hash,
 		}
 		defer LastIndexOffsetHeightFile.Close()
 		// write to the file
-		err = binary.Write(LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
+		err = binary.Write(
+			LastIndexOffsetHeightFile, binary.BigEndian, lastOffsetHeight)
 		if err != nil {
 			panic(err)
 		}
@@ -179,8 +184,10 @@ func readRawHeadersFromFile(
 		var ok bool
 		b.UndoPos, ok = bufMap[b.CurrentHeaderHash]
 		if !ok {
-			fmt.Printf("WARNING: block in blk file with header: %x\nexists without"+
-				" a corresponding rev block. May be wasting disk space\n", b.CurrentHeaderHash)
+			fmt.Printf(
+				"WARNING: block in blk file with header: %x\nexists without"+
+					" a corresponding rev block. May be wasting disk space\n",
+				b.CurrentHeaderHash)
 			// skip block headers that don't have undo data
 			continue
 		}
