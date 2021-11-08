@@ -383,40 +383,37 @@ func (f *Forest) addv2(adds []Leaf) {
 	positionList := NewPositionList()
 	defer positionList.Free()
 
-	var nextRow []uint64
-
-	for _, add := range adds {
-		// reset positionList
-		positionList.list = positionList.list[:0]
-
-		f.positionMap[add.Mini()] = f.numLeaves
-		getRootsForwards(f.numLeaves, f.rows, &positionList.list)
-		pos := f.numLeaves
-		n := add.Hash
-		f.data.write(pos, n)
-		add.Hash = empty
-
-		// check if number of leaves being added is odd
-		// if odd add as is, if even, chop off the last element in slice
-		if f.numLeaves&1 == 1 {
-			nextRow = append(nextRow, parent(f.numLeaves, f.rows))
-			f.data.write(f.numLeaves, )
-			// rootPos := len(positionList.list) - int(h+1)
-			// // grab, pop, swap, hash, new
-			// root := f.data.read(positionList.list[rootPos]) // grab
-			// n = parentHash(root, n)                         // hash
-			// pos = parent(pos, f.rows)                       // rise
-			// f.data.write(pos, n)                            // write
-		} else {
-			// nextRow = append(nextRow, parent(f.numLeaves, f.rows))
+	var nextRow []Hash
+	
+	// if we have an odd number of leaves, make a row with an additional empty leaf
+	if f.numLeaves&1 == 1 {
+		nextRow = make([]Hash, len(adds)+1)
+		nextRow[0] = f.data.read(f.numLeaves-1) // fill first leaf with last hash?
+		for i, _ := range nextRow {
+			nextRow[i+1] = adds[i].Hash
 		}
-		f.data.writeRow(f.numLeaves, nextRow)
-		f.numLeaves++
+	} else {
+		nextRow = make([]Hash, len(adds)) // if we have even number of leaves, create row with exact number of adds
+		for i, _ := range nextRow {
+			nextRow[i] = adds[i].Hash
+		}
 	}
 
+	pos := f.numLeaves
 	for nextRow != nil {
-		nextRow = f.hashRow(nextRow)
+		f.data.writeRow(pos, nextRow)
+		nextRow = hashContinuousRow(nextRow)
+		pos =  parent(pos, f.rows)
 	}
+	f.numLeaves += uint64(len(adds))
+}
+
+func hashContinuousRow(hashes []Hash) []Hash {
+	var nextRow []Hash
+	for i := 0; i < len(hashes); i+= 2 {
+		nextRow = append(nextRow, parentHash(hashes[i], hashes[i+1]))
+	}
+	return nextRow
 }
 
 // Modify changes the forest, adding and deleting leaves and updating internal nodes.
