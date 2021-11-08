@@ -432,9 +432,13 @@ func (f *Forest) addv2(adds []Leaf) {
 
 func hashContinuousRow(hashes []Hash) []Hash {
 	var nextRow []Hash
-	for i := 0; i < len(hashes); i+= 2 {
-		nextRow = append(nextRow, parentHash(hashes[i], hashes[i+1]))
+	// if number of hashes is odd, chop off last element
+	if len(hashes)%2 != 0{
+		hashes = hashes[:len(hashes) - 1]
 	}
+		for i := 0; i < len(hashes); i+= 2 {
+			nextRow = append(nextRow, parentHash(hashes[i], hashes[i+1]))
+		}
 	return nextRow
 }
 
