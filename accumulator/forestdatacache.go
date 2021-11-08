@@ -285,6 +285,11 @@ func (d *cacheForestData) write(pos uint64, h Hash) {
 	}
 }
 
+// writeRow to implement ForestData interface
+func (d *cacheForestData) writeRow(pos uint64, hashes []Hash) {
+	
+}
+
 // swapHash swaps 2 hashes.  Don't go out of bounds.
 func (d *cacheForestData) swapHash(a, b uint64) {
 	ha := d.read(a)
