@@ -2,6 +2,8 @@ package bridgenode
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"sort"
 
@@ -93,6 +95,25 @@ func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
 	//fmt.Println("offset: " + fmt.Sprint(offset))
 	_, err = scheduleFile.WriteAt(b, offset)
 	return err
+}
+
+func scheduleFileToBoolArray(scheduleFile *os.File) (ans []bool, err error) {
+	s, _ := scheduleFile.Stat()
+	size := int64(s.Size())
+	ans = make([]bool, size)
+	for i := 0; i < len(ans); i++ {
+		ind := i / 8
+		curr := make([]byte, 1)
+		_, err := scheduleFile.ReadAt(curr, int64(ind))
+		if err != nil {
+			fmt.Println("schedule file err")
+			if err == io.EOF {
+				break
+			}
+		}
+		ans[i] = (curr[0]&(1<<(7-(uint32(i)%8))) > 0)
+	}
+	return ans, err
 }
 
 // flips a bit to 1.  Crashes if you're out of range.

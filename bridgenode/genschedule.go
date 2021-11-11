@@ -39,7 +39,9 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 	size := int64(s.Size())
 	//size is stat size of ttlfile divide by 4 divide by 8
 	err = f.Truncate((size/4)/8 + 100)
+	boolArr := make([]bool, ((size/4)/8+100)*8)
 	if err != nil {
+		fmt.Println("truncate schedule file error")
 		return err
 	}
 	/*fmt.Println("Done seeking")
@@ -63,6 +65,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 		// seek to the right place in the offset file
 		_, err = ttlOffsetFile.Seek(int64(height)*8, 0)
 		if err != nil {
+			fmt.Println("ttl offset file seek error")
 			return err
 		}
 
@@ -95,12 +98,11 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 					int64(height+1)*8, err.Error())
 			}
 		}
-		//ADD TO DETECT EOF ERROR ON NEXT OFFSET
-		//IF SO, THEN WE HAVE NO NEXT OFFSET SO READ UNTIL END
 
 		// seek to the block start in the ttl file
 		_, err = ttlFile.Seek(offset, 0)
 		if err != nil {
+			fmt.Println("ttlFile seek error")
 			return err
 		}
 
@@ -115,6 +117,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 		for i, _ := range ttls {
 			binary.Read(ttlFile, binary.BigEndian, &ttls[i])
 			if err != nil {
+				fmt.Println("generating ttls error")
 				return err
 			}
 		}
@@ -162,10 +165,11 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 			for k := 0; k < len(remembers); k++ {
 				currTxo := remembers[k]
 				ind := currTxo.txoIdx
-				fmt.Println("We remembered txo; asserting in file : " + fmt.Sprint(ind))
+				//fmt.Println("We remembered txo; asserting in file : " + fmt.Sprint(ind))
 				err := assertBitInFile(ind, f)
+				boolArr[ind] = true
 				if err != nil {
-					//fmt.Println("error")
+					fmt.Println("error")
 					return err
 				}
 				//fmt.Println("done")
@@ -175,6 +179,22 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 			}
 		}
 		//}
+	}
+	fmt.Println("Done generating; checking bool array")
+	calculatedBoolArr, err := scheduleFileToBoolArray(f)
+	if err != nil {
+		fmt.Println("file to bool error")
+		return err
+	}
+	allCorrect := true
+	for i := 0; i < len(calculatedBoolArr); i++ {
+		if calculatedBoolArr[i] != boolArr[i] {
+			fmt.Println("calulated remember for index ", i, " is ", calculatedBoolArr[i], " ; actual should be ", boolArr[i])
+			allCorrect = false
+		}
+	}
+	if allCorrect {
+		fmt.Println("bool arrays matched")
 	}
 	fmt.Println("done with genschedule")
 	return nil
