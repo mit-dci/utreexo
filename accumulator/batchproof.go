@@ -222,7 +222,7 @@ func (bp *BatchProof) ToString() string {
 	}
 	s += fmt.Sprintf("\n%d proofs: ", len(bp.Proof))
 	for _, p := range bp.Proof {
-		s += fmt.Sprintf("%04x\t", p[:4])
+		s += fmt.Sprintf("%04x\t", p[:8])
 	}
 	s += "\n"
 	return s
@@ -260,15 +260,17 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 	// cached should be a function that fetches nodes from the pollard and
 	// indicates whether they exist or not, this is only useful for the pollard
 	// and nil should be passed for the forest.
-	cached func(pos uint64) (bool, Hash)) (bool, [][]miniTree, []node) {
+	cached func(pos uint64) (bool, Hash)) ([][]miniTree, []node, error) {
 
 	// If there is nothing to prove, return true
 	if len(bp.Targets) == 0 {
-		return true, nil, nil
+		return nil, nil, nil
 	}
 	// There should be a hash for each of the targets being proven
 	if len(bp.Targets) != len(targetHashes) {
-		return false, nil, nil
+		err := fmt.Errorf("verifyBatchProof: %d BatchProof.Targets but have %d targetHashes."+
+			" Should have same amount for each", len(bp.Targets), len(targetHashes))
+		return nil, nil, err
 	}
 
 	tPos := make([]targPos, len(bp.Targets))
@@ -302,7 +304,9 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 
 	// The proof should have as many hashes as there are proof positions.
 	if len(proofPositions.list) != len(bp.Proof) {
-		return false, nil, nil
+		err := fmt.Errorf("verifyBatchProof: %d bp.Proofs but calculated %d proof positions."+
+			" Should have same amount for each", len(bp.Proof), len(proofPositions.list))
+		return nil, nil, err
 	}
 
 	// targetNodes holds nodes that are known, on the bottom row those
@@ -350,7 +354,9 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 		// hashes or less than 2 targets left the proof is invalid because
 		// there is a target without matching proof.
 		if len(targetHashes) < 2 || len(targets) < 2 {
-			return false, nil, nil
+			err := fmt.Errorf("verifyBatchProof: target to prove is without its sibling." +
+				" Cannot verify proof")
+			return nil, nil, err
 		}
 
 		targetNodes = append(targetNodes,
@@ -380,7 +386,9 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 			// target should have its sibling in targetNodes
 			if len(targetNodes) == 1 {
 				// sibling not found
-				return false, nil, nil
+				err := fmt.Errorf("verifyBatchProof: target to prove is without its sibling." +
+					" Verify failed")
+				return nil, nil, err
 			}
 
 			proof = targetNodes[1]
@@ -412,13 +420,20 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 				} else {
 					// The left and right did not match the cached
 					// left and right.
-					return false, nil, nil
+					err := fmt.Errorf("verifyBatchProof: cached hash doesn't match with the"+
+						" calculated hash. Left calculated %x, left cached %x. Right calculated"+
+						" %x, right cached %x",
+						left.Val, cachedLeft, right.Val, cachedRight)
+					return nil, nil, err
 				}
 			} else {
 				hash = parentHash(left.Val, right.Val)
 				if hash != cachedParent {
 					// The calculated hash did not match the cached parent.
-					return false, nil, nil
+					err := fmt.Errorf("verifyBatchProof: calculated parent hash of %x doesn't"+
+						" match with the cached hash of %x.",
+						hash, cachedParent)
+					return nil, nil, err
 				}
 			}
 		} else {
@@ -447,7 +462,9 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 
 	if len(rootCandidates) == 0 {
 		// no roots to verify
-		return false, nil, nil
+		err := fmt.Errorf("verifyBatchProof: no roots were calculated to" +
+			"match with the stored roots")
+		return nil, nil, err
 	}
 
 	// `roots` is ordered, therefore to verify that `rootCandidates`
@@ -463,10 +480,12 @@ func verifyBatchProof(targetHashes []Hash, bp BatchProof, roots []Hash, numLeave
 	if len(rootCandidates) != rootMatches {
 		// the proof is invalid because some root candidates were not
 		// included in `roots`.
-		return false, nil, nil
+		err := fmt.Errorf("verifyBatchProof: generated %d roots but only"+
+			"matched %d roots", len(rootCandidates), rootMatches)
+		return nil, nil, err
 	}
 
-	return true, trees, rootCandidates
+	return trees, rootCandidates, nil
 }
 
 // Reconstruct takes a number of leaves and rows, and turns a block proof back

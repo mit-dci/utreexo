@@ -41,7 +41,7 @@ $ ./utreexoclient
 If you pause the client it will create the `pollardFile` which holds the accumulator roots. As an experiment you can copy this file to a different machine and resume the client at the height it was paused.
 
 ### Server
-To try utreexo you do not need to run a server as we have a server set up for testing purposes which the client connects to by default. If you want to run your own server you can, see instructions below.
+To try utreexo you must run the utreexo server. The instructions to run the server are given below.
 
 #### Build from source
 ```

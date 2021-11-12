@@ -350,11 +350,9 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 		return err
 	}
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
-	worked, _, _ := verifyBatchProof(leavesToProve, bp, f.getRoots(), f.numLeaves, nil)
-	//	worked := f.VerifyBatchProof(bp)
-
-	if !worked {
-		return fmt.Errorf("VerifyBatchProof failed")
+	_, _, err = verifyBatchProof(leavesToProve, bp, f.getRoots(), f.numLeaves, nil)
+	if err != nil {
+		return fmt.Errorf("VerifyBatchProof failed. Error: %s", err.Error())
 	}
 	fmt.Printf("VerifyBatchProof worked\n")
 	return nil
@@ -459,8 +457,11 @@ func TestSmallRandomForests(t *testing.T) {
 				t.Fatalf("proveblock failed proving existing leaf: %v", err)
 			}
 
-			if !(f.VerifyBatchProof([]Hash{chosenUndeletedLeaf.Hash}, blockProof)) {
-				t.Fatal("verifyblockproof failed verifying proof for existing leaf")
+			err = f.VerifyBatchProof([]Hash{chosenUndeletedLeaf.Hash}, blockProof)
+			if err != nil {
+				retErr := fmt.Errorf("verifyblockproof failed verifying proof for existing leaf."+
+					" Error: %s", err.Error())
+				t.Fatal(retErr)
 			}
 		}
 	}
