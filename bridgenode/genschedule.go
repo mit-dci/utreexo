@@ -181,7 +181,7 @@ func BuildClairvoyantSchedule(cfg *Config, sig chan bool) error {
 		//}
 	}
 	fmt.Println("Done generating; checking bool array")
-	calculatedBoolArr, err := scheduleFileToBoolArray(f)
+	calculatedBoolArr, err := ScheduleFileToBoolArray(f, 0, int64(len(boolArr)))
 	if err != nil {
 		fmt.Println("file to bool error")
 		return err

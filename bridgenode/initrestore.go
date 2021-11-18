@@ -255,8 +255,8 @@ func restoreLastIndexOffsetHeight(offsetDir offsetDir, offsetFinished chan bool)
 		return 0, err
 	}
 	fmt.Println("First one passed")
-	fmt.Println(lastIndexOffsetHeight)
-	fmt.Println(&lastIndexOffsetHeight)
+	//fmt.Println(lastIndexOffsetHeight)
+	//fmt.Println(&lastIndexOffsetHeight)
 	// grab the last block height from currentoffsetheight
 	// currentoffsetheight saves the last height from the offsetfile
 	err = binary.Read(f, binary.BigEndian, &lastIndexOffsetHeight)

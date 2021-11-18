@@ -332,9 +332,14 @@ func serveBlocksWorker(UtreeDir utreeDir,
 			fmt.Printf("pushBlocks GetRawBlockFromFile %s\n", err.Error())
 			break
 		}
-
+		//get schedule file bytes and append as well
+		scheduleFile, err := os.OpenFile(UtreeDir.TtlDir.ClairvoyFile, os.O_RDONLY, 0600)
+		if err != nil {
+			return
+		}
+		schedule, err := ScheduleFileToByteArray(scheduleFile, int64(curHeight), 1)
 		// send
-		_, err = c.Write(append(blkbytes, udb...))
+		_, err = c.Write(append(append(blkbytes, udb...), schedule...))
 		if err != nil {
 			fmt.Printf("pushBlocks blkbytes write %s\n", err.Error())
 			break

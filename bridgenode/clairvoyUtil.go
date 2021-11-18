@@ -97,21 +97,46 @@ func assertBitInFile(txoIdx uint32, scheduleFile *os.File) error {
 	return err
 }
 
-func scheduleFileToBoolArray(scheduleFile *os.File) (ans []bool, err error) {
-	s, _ := scheduleFile.Stat()
-	size := int64(s.Size())
-	ans = make([]bool, size)
-	for i := 0; i < len(ans); i++ {
-		ind := i / 8
+func ScheduleFileToBoolArray(scheduleFile *os.File, startBitOffset int64, numberOfBits int64) (ans []bool, err error) {
+	//s, _ := scheduleFile.Stat()
+	//size := int64(s.Size())
+	fmt.Println("schedule file called: start :", startBitOffset, " number of bits: ", numberOfBits)
+	/*Make sure arguments are correct(nonnegative)*/
+	ans = make([]bool, numberOfBits)
+	for i := startBitOffset; i < startBitOffset+numberOfBits; i++ {
+		//i is bit within file
+		byteOffset := i / 8
 		curr := make([]byte, 1)
-		_, err := scheduleFile.ReadAt(curr, int64(ind))
+		_, err := scheduleFile.ReadAt(curr, int64(byteOffset))
 		if err != nil {
-			fmt.Println("schedule file err")
+			fmt.Println("schedule file err: ", err.Error())
 			if err == io.EOF {
 				break
 			}
+		} else {
+			fmt.Println("no error; read bit ", i, " : ", curr[0])
 		}
-		ans[i] = (curr[0]&(1<<(7-(uint32(i)%8))) > 0)
+		ans[i-startBitOffset] = (curr[0]&(1<<(7-(uint32(i)%8))) > 0)
+	}
+	return ans, err
+}
+
+func ScheduleFileToByteArray(scheduleFile *os.File, startBitOffset int64, numberOfBits int64) (ans []byte, err error) {
+	//s, _ := scheduleFile.Stat()
+	//size := int64(s.Size())
+	fmt.Println("schedule file called: start :", startBitOffset, " number of bits: ", numberOfBits)
+	/*Make sure arguments are correct(nonnegative)*/
+	ans = make([]byte, numberOfBits)
+	for i := startBitOffset; i < startBitOffset+numberOfBits; i++ {
+		//i is bit within file
+		//byteOffset := i / 8
+		curr := make([]byte, 1)
+		_, err := scheduleFile.ReadAt(curr, int64(i))
+		if err != nil && err != io.EOF {
+			break
+		}
+		ans[i] = curr[0]
+		//ans[i-startBitOffset] = (curr[0]&(1<<(7-(uint32(i)%8))) > 0)
 	}
 	return ans, err
 }

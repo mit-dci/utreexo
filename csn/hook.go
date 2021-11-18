@@ -39,6 +39,7 @@ a separate unconfirmed TX channel if there's interest in that...e
 // It keeps track of what block its on and what transactions it's looking for
 type Csn struct {
 	CurrentHeight int32
+	CurrentTxo    int64
 	pollard       accumulator.Pollard
 
 	WatchOPs  map[wire.OutPoint]bool

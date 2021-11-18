@@ -2,11 +2,13 @@ package csn
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/mit-dci/utreexo/accumulator"
+	"github.com/mit-dci/utreexo/bridgenode"
 	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
 	uwire "github.com/mit-dci/utreexo/wire"
@@ -47,6 +49,10 @@ func (c *Csn) IBDThread(cfg Config, sig chan bool) {
 	// bool for stopping the below for loop
 	var stop bool
 	var blockCount int
+	scheduleFile, err := os.Open("clairvoy.dat")
+	if err != nil {
+		return
+	}
 	for ; !stop; c.CurrentHeight++ {
 
 		blocknproof, open := <-ublockQueue
@@ -55,8 +61,14 @@ func (c *Csn) IBDThread(cfg Config, sig chan bool) {
 			sig <- true
 			break
 		}
-
-		err := c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime)
+		//tx := blocknproof.Block.Transactions()
+		//for every index in tx get txout and add
+		//allOutputs := tx[0].MsgTx().TxOut
+		remember, err := bridgenode.ScheduleFileToBoolArray(scheduleFile, int64(totalTXOAdded), int64(len(blocknproof.UtreexoData.TxoTTLs)))
+		if err != nil {
+			return
+		}
+		err = c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime, remember)
 		if err != nil {
 			// crash if there's a bad proof or signature, OK for testing
 			panic(err)
@@ -71,6 +83,7 @@ func (c *Csn) IBDThread(cfg Config, sig chan bool) {
 				c.CurrentHeight, totalTXOAdded, totalDels, c.pollard.Stats(),
 				plustime.Seconds(), time.Since(starttime).Seconds())
 		}
+		//save txo added somewhere
 
 		// quit after `quitafter` blocks if the -quitafter option is set
 		blockCount++
@@ -143,7 +156,7 @@ func (c *Csn) ScanBlock(b *btcutil.Block) {
 // All the inputs are saved as 32byte sha256 hashes.
 // All the outputs are saved as Leaf type.
 func (c *Csn) putBlockInPollard(
-	ub uwire.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration) error {
+	ub uwire.UBlock, totalTXOAdded, totalDels *int, plustime time.Duration, remember []bool) error {
 
 	plusstart := time.Now()
 
@@ -190,15 +203,17 @@ func (c *Csn) putBlockInPollard(
 		return err
 	}
 
-	remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
-	for i, ttl := range ub.UtreexoData.TxoTTLs {
+	//remember := make([]bool, len(ub.UtreexoData.TxoTTLs))
+	//remember := scheduleFileToBoolArray(,c.CurrentTxo,len(ub.UtreexoData.TxoTTLs))
+	//look up in clairvoy file
+	/*for i, ttl := range ub.UtreexoData.TxoTTLs {
 		// 0 means that it's a UTXO. Don't remember.
 		if ttl == 0 {
 			remember[i] = false
 		} else {
 			remember[i] = ttl < c.pollard.Lookahead
 		}
-	}
+	}*/
 
 	// get hashes to add into the accumulator
 	blockAdds := uwire.BlockToAddLeaves(
