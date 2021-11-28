@@ -8,6 +8,7 @@ import (
 	"sort"
 	"testing"
 	"testing/quick"
+	"runtime/pprof"
 )
 
 func TestDeleteReverseOrder(t *testing.T) {
@@ -46,6 +47,34 @@ func TestForestAddDel(t *testing.T) {
 		}
 
 		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+	}
+}
+
+// generate cpu pprof
+func TestGeneratePProf(t *testing.T) {
+	// create pprof file
+	file, err := os.Create("cpu.pprof")
+	if err != nil {
+		t.Error(err)
+	}
+	pprof.StartCPUProfile(file)
+	defer pprof.StopCPUProfile()
+
+	numAdds := uint32(10000)
+	f := NewForest(RamForest, nil, "", 0)
+	sc := newSimChain(0x07)
+
+	for i := 0; i < 50; i++ {
+		adds, _, delHashes := sc.NextBlock(numAdds)
+
+		bp, err := f.ProveBatch(delHashes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.Modify(adds, bp.Targets)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
