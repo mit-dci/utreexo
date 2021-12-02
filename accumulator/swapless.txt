@@ -1,0 +1,162 @@
+Swapless design
+
+The general idea of the swapless design is simple enough: to delete, promote the sibling to parent.  It's the edge cases that make it more complex.  
+Also additions are the same; add on the bottom right, making the largest trees you can.
+
+= = = = = = = = = = = = = = = = = = = = = = 
+
+1 deletion example.  Start with 8 leaves in 1 tree.
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Delete 03.
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  XX  04  05  06  07
+
+Promote 02 to the position of 09
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      02      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Recompute 12 and 14
+
+14*
+|---------------\
+12*             13
+|-------\       |-------\
+08      02      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Done.  Note that we don't have to actually delete 02 *or 03* from the physical tree.  As long as 02 has moved up, and 12 recomputed as the parent of 08 and 02, 03 can no longer be proven and so is logically deleted.
+
+= = = = = = = = = = = = = = = = = = = = = = 
+
+Delete a subtree, moving entire subtrees up. 
+
+Start with 8 leaves.
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Delete 00 through 03
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+XX  XX  XX  XX  04  05  06  07
+
+... which really just means deleting 12, ( delToRaise(0,1,2,3) will return 12 up 1.)  So we can look at it as deleting 12
+
+14
+|---------------\
+XX              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+That means raising 13 up, as well as the entire 13 subtree.  This is best acheived top down, first writing 13 to 14, then 10,11 to 12,13, then 04...07 to 08...11
+
+13
+|---------------\
+10              11
+|-------\       |-------\
+04      05      06      07
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+In this case no hashing needs to happen.  The top hash that got promoted (13) became a root, so there's nothing to hash above it.  Again we can leave junk data on the bottom row as it will never be read from.
+
+= = = = = = = = = = = = = = = = = = = = = = 
+
+Tricky cases: delete a whole subtree, then add.  Start with 13 leaves in this configuration:
+
+28
+|---------------\
+24              25              26
+|-------\       |-------\       |-------\
+16      17      18      19      20      21      22
+|---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  --  --  --  --  12  13  14
+
+Delete 20 and 21.
+ 
+28
+|---------------\
+24              25              --
+|-------\       |-------\       |-------\
+16      17      18      19      --      --      22
+|---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  --  --  --  --  12  13  14
+
+The 26 tree remains, with 26 as a dummy root.  Now add leaf 15.
+
+30
+|-------------------------------\
+28                              29
+|---------------\               |---------------\
+24              25              --              27
+|-------\       |-------\       |-------\       |-------\
+16      17      18      19      --      --      22      23
+|---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  --  --  --  --  12  13  14  15
+
+When we add 15, 23 and 27 are computed.  When we get to 29, we can't compute 29 as the left child is empty as it was a dummy root.  Instead 27 is promoted to 29 as if 26 had just been deleted.  Deferred deletion is another way to think about dummy roots.
+
+30
+|-------------------------------\
+28                              27
+|---------------\               |---------------\
+24              25              22              23
+|-------\       |-------\       |-------\       |-------\
+16      17      18      19      12      13      14      15
+|---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  --  --  --  --  12  13  14  15
+
+= = = = = = = = = = = = = = = = = = = = = = 
+
+Addressing.  When we insert leaves into the accumulator, we also commit to their leaf number, which stays stuck in the leaf data until it is deleted.  Before any deletions, there's a nice onitial property where the leaf number tells you how to get to the leaf.  For example, in the tree with 16 leaves:
+
+30
+|-------------------------------\
+28                              29
+|---------------\               |---------------\
+24              25              26              27
+|-------\       |-------\       |-------\       |-------\
+16      17      18      19      20      21      22      23
+|---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15
+
+If we want to go to 00, it's left left left left, or 0000.  To get to 15 it's right right right right, or 1111.  We can enforce this property to make things are where they're supposed to be as this gives some additional security against hash collisions.  But how much?  In the above tree, where can leaf 00 go?
+
+00 can only move up, to 16, 24, 28, and 30.  Likewise here 15 seems to only be able to move up to 23, 27, 29, 30.
+
+But in the middle a lot of things can happen.  5 can go all over the place.  With 1 deletion, 05 can get to 18 (delete 04), 19 (delete 19), 17 (24) or 21 (29).  From there it can get to all of row 2 (24...27).  So maybe the leaf position doesn't tell much at all.  Next step: quantify exactly how many possible places things can move to. 
+
+It seems that 15 is only restricted to the 23->27->29 edge because that's the edge of the tree.  If it were a tree with 32 leaves, 15 could move up to 39 (parent) or 47 (15 right on row 1 which starts at 32).  With a large leftmost tree, things may be able to move around a lot.  They probably saturate at higher rows, but what's the branching factor at lower rows?
