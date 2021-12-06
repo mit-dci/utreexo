@@ -103,10 +103,14 @@ func ScheduleFileToBoolArray(scheduleFile *os.File, startBitOffset int64, number
 	fmt.Println("schedule file called: start :", startBitOffset, " number of bits: ", numberOfBits)
 	/*Make sure arguments are correct(nonnegative)*/
 	ans = make([]bool, numberOfBits)
-	for i := startBitOffset; i < startBitOffset+numberOfBits; i++ {
+	for i := startBitOffset; i < startBitOffset+numberOfBits; i += 1 {
 		//i is bit within file
 		byteOffset := i / 8
+		//TO-DO DON'T READ SAME BYTE 8 times
 		curr := make([]byte, 1)
+		/*for j := 0; j < 8; j++{
+			if byteoffset + j < startBitOffset || i*8 +j >= startbitoffset+numberOfBits
+		}*/
 		_, err := scheduleFile.ReadAt(curr, int64(byteOffset))
 		if err != nil {
 			fmt.Println("schedule file err: ", err.Error())
@@ -124,8 +128,7 @@ func ScheduleFileToBoolArray(scheduleFile *os.File, startBitOffset int64, number
 func ScheduleFileToByteArray(scheduleFile *os.File, startBitOffset int64, numberOfBits int64) (ans []byte, err error) {
 	//s, _ := scheduleFile.Stat()
 	//size := int64(s.Size())
-	fmt.Println("schedule file called: start :", startBitOffset, " number of bits: ", numberOfBits)
-	/*Make sure arguments are correct(nonnegative)*/
+	/*fmt.Println("schedule file called: start :", startBitOffset, " number of bits: ", numberOfBits)
 	ans = make([]byte, numberOfBits)
 	for i := startBitOffset; i < startBitOffset+numberOfBits; i++ {
 		//i is bit within file
@@ -137,7 +140,20 @@ func ScheduleFileToByteArray(scheduleFile *os.File, startBitOffset int64, number
 		}
 		ans[i] = curr[0]
 		//ans[i-startBitOffset] = (curr[0]&(1<<(7-(uint32(i)%8))) > 0)
+	}*/
+	boolArr, err := ScheduleFileToBoolArray(scheduleFile, startBitOffset, numberOfBits)
+	fmt.Println("number of bits: ", numberOfBits)
+	byteLen := numberOfBits / 8
+	if numberOfBits%8 > 0 {
+		byteLen = byteLen + 1
 	}
+	ans = make([]byte, byteLen)
+	for i, currBool := range boolArr {
+		if currBool {
+			ans[i/8] |= 1 << (7 - (uint32(i) % 8))
+		}
+	}
+	fmt.Println(byteLen)
 	return ans, err
 }
 

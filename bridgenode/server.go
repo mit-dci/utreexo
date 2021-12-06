@@ -1,6 +1,7 @@
 package bridgenode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/mit-dci/utreexo/btcacc"
 	"github.com/mit-dci/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -311,6 +313,11 @@ func serveBlocksWorker(UtreeDir utreeDir,
 		return
 	}
 
+	scheduleFile, err := os.OpenFile(UtreeDir.TtlDir.ClairvoyFile, os.O_RDONLY, 0600)
+	if err != nil {
+		return
+	}
+
 	for curHeight := fromHeight; ; curHeight += direction {
 		if direction == 1 && curHeight > toHeight {
 			// forwards request of height above toHeight
@@ -325,6 +332,9 @@ func serveBlocksWorker(UtreeDir utreeDir,
 			fmt.Printf("pushBlocks GetUDataBytesFromFile %s\n", err.Error())
 			break
 		}
+		var ud btcacc.UData
+		buf := bytes.NewBuffer(udb)
+		ud.Deserialize(buf)
 
 		blkbytes, err := GetBlockBytesFromFile(
 			curHeight, UtreeDir.OffsetDir.OffsetFile, blockDir)
@@ -333,11 +343,8 @@ func serveBlocksWorker(UtreeDir utreeDir,
 			break
 		}
 		//get schedule file bytes and append as well
-		scheduleFile, err := os.OpenFile(UtreeDir.TtlDir.ClairvoyFile, os.O_RDONLY, 0600)
-		if err != nil {
-			return
-		}
-		schedule, err := ScheduleFileToByteArray(scheduleFile, int64(curHeight), 1)
+
+		schedule, err := ScheduleFileToByteArray(scheduleFile, int64(curHeight), int64(len(ud.TxoTTLs)))
 		// send
 		_, err = c.Write(append(append(blkbytes, udb...), schedule...))
 		if err != nil {

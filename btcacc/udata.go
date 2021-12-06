@@ -10,10 +10,11 @@ import (
 )
 
 type UData struct {
-	Height   int32
-	AccProof accumulator.BatchProof
-	Stxos    []LeafData
-	TxoTTLs  []int32
+	Height           int32
+	AccProof         accumulator.BatchProof
+	Stxos            []LeafData
+	TxoTTLs          []int32
+	ClairvoySchedule []bool
 }
 
 // Verify checks the consistency of uData: that the utxos are proven in the
@@ -57,7 +58,9 @@ func (ud *UData) Serialize(w io.Writer) (err error) {
 			return
 		}
 	}
-
+	//uint16(len(schedule))
+	//just write the byte slice. no need to range
+	//Make sure to write schedule at the end(b/c in server.go appended at end)
 	err = ud.AccProof.Serialize(w)
 	if err != nil { // ^ batch proof with lengths internal
 		return
@@ -101,6 +104,7 @@ func (ud *UData) SerializeSize() int {
 	return guess
 }
 
+//ADD CLAIRVOY HERE//
 func (ud *UData) Deserialize(r io.Reader) (err error) {
 
 	err = binary.Read(r, binary.BigEndian, &ud.Height)
@@ -118,6 +122,8 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 	}
 	// fmt.Printf("read ttls %d\n", numTTLs)
 	// fmt.Printf("UData deser read h %d - %d ttls ", ud.Height, numTTLs)
+
+	//num ttls is number of bytes in clairvoy
 
 	ud.TxoTTLs = make([]int32, numTTLs)
 	for i, _ := range ud.TxoTTLs { // write all ttls
@@ -151,7 +157,22 @@ func (ud *UData) Deserialize(r io.Reader) (err error) {
 		// ud.Height, i, ud.Stxos[i].Outpoint.String(), len(ud.Stxos[i].PkScript))
 
 	}
+	//allocate numTTLs
+	ud.ClairvoySchedule = make([]bool, numTTLs)
 
+	bytesToRead := numTTLs / 8
+	if numTTLs%8 != 0 {
+		bytesToRead++
+	}
+
+	buf := make([]byte, bytesToRead)
+	_, err = r.Read(buf)
+	if err != nil {
+		return
+	}
+	for boolInd, _ := range ud.ClairvoySchedule {
+		ud.ClairvoySchedule[boolInd] = (buf[boolInd/8]&(1<<(7-(uint32(boolInd)%8))) > 0)
+	}
 	return
 }
 

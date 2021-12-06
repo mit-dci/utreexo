@@ -61,12 +61,25 @@ func (c *Csn) IBDThread(cfg Config, sig chan bool) {
 			sig <- true
 			break
 		}
+		fmt.Println(blocknproof.UtreexoData.ClairvoySchedule)
 		//tx := blocknproof.Block.Transactions()
 		//for every index in tx get txout and add
 		//allOutputs := tx[0].MsgTx().TxOut
 		remember, err := bridgenode.ScheduleFileToBoolArray(scheduleFile, int64(totalTXOAdded), int64(len(blocknproof.UtreexoData.TxoTTLs)))
 		if err != nil {
 			return
+		}
+		clairvoySent := blocknproof.UtreexoData.ClairvoySchedule
+		if len(remember) != len(clairvoySent) {
+			panic("error because lengths aren't the same between rememebers and udata")
+		}
+		fmt.Println(clairvoySent[0:50])
+		fmt.Println(remember[0:50])
+		for i, currBool := range remember {
+			if clairvoySent[i] != currBool {
+				fmt.Println(i)
+				panic("bools didn't match for index")
+			}
 		}
 		err = c.putBlockInPollard(blocknproof, &totalTXOAdded, &totalDels, plustime, remember)
 		if err != nil {
