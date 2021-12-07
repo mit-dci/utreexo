@@ -5,10 +5,10 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"runtime/pprof"
 	"sort"
 	"testing"
 	"testing/quick"
-	"runtime/pprof"
 )
 
 func TestDeleteReverseOrder(t *testing.T) {
@@ -42,6 +42,39 @@ func TestForestAddDel(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = f.Modify(adds, bp.Targets)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+	}
+}
+
+func TestForestAddv2v3(t *testing.T) {
+	numAdds := uint32(10)
+
+	f := NewForest(RamForest, nil, "", 0)
+	// f2 := NewForest(RamForest, nil, "", 0)
+
+	sc := newSimChain(0x07)
+
+	for b := 0; b < 1000; b++ {
+		adds, _, delHashes := sc.NextBlock(numAdds)
+		bp, err := f.ProveBatch(delHashes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.Modify(adds, bp.Targets) // v2
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// top v2 bottom v3, should be the same thing
+		bp, err = f.ProveBatch(delHashes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.Modify2(adds, bp.Targets) //v3
 		if err != nil {
 			t.Fatal(err)
 		}

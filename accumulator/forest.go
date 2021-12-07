@@ -481,9 +481,54 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 	// the right place when it's swapped in reverse
 	ub := f.BuildUndoData(uint64(numadds), dels)
 
-	t := time.Now()
 	f.addv2(adds)
-	fmt.Println("time taken:", time.Since(t))
+
+	return ub, err
+}
+
+// Modify2 does the same thing as Modify but uses addv3
+func (f *Forest) Modify2(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
+	numdels, numadds := len(delsUn), len(adds)
+	delta := int64(numadds - numdels) // watch 32/64 bit
+	if int64(f.numLeaves)+delta < 0 {
+		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
+			len(delsUn), f.numLeaves)
+	}
+
+	// TODO for now just sort
+	dels := make([]uint64, len(delsUn))
+	copy(dels, delsUn)
+	sortUint64s(dels)
+
+	for _, a := range adds { // check for empty leaves
+		if a.Hash == empty {
+			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")
+		}
+	}
+	// remap to expand the forest if needed
+	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
+		// 1<<f.rows, f.numLeaves+delta)
+		err := f.reMap(f.rows + 1)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// v3 should do the exact same thing as v2 now
+	err := f.removev4(dels)
+	if err != nil {
+		return nil, err
+	}
+	f.cleanup(uint64(numdels))
+
+	// save the leaves past the edge for undo
+	// dels hasn't been mangled by remove up above, right?
+	// BuildUndoData takes all the stuff swapped to the right by removev3
+	// and saves it in the order it's in, which should make it go back to
+	// the right place when it's swapped in reverse
+	ub := f.BuildUndoData(uint64(numadds), dels)
+
+	f.addv3(adds)
 
 	return ub, err
 }
