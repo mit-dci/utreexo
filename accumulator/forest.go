@@ -392,7 +392,7 @@ func (f *Forest) addv2(adds []Leaf) {
 		pos := f.numLeaves
 		n := add.Hash
 		f.data.write(pos, n)
-		add.Hash = empty
+		// add.Hash = empty
 
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
 			rootPos := len(positionList.list) - int(h+1)
@@ -410,6 +410,7 @@ func (f *Forest) addv3(adds []Leaf) {
 	nextRow := make([]Hash, len(adds))
 	for i, _ := range nextRow {
 		nextRow[i] = adds[i].Hash
+		f.positionMap[adds[i].Hash.Mini()] = f.numLeaves + uint64(i)
 	}
 	pos := f.numLeaves
 	for h := uint8(0); h < f.rows; h++ { // go through every row
@@ -420,6 +421,14 @@ func (f *Forest) addv3(adds []Leaf) {
 		}
 		pos = parent(pos, f.rows)
 		nextRow = hashContinuousRow(nextRow) // this happens either way,. even or odd
+		for _, outputHash := range nextRow {
+			if outputHash == empty {
+				fmt.Printf("addv3 created 0 hash\n")
+			}
+		}
+	}
+	if len(nextRow) > 0 {
+		f.data.writeRow(pos, nextRow)
 	}
 	f.numLeaves += uint64(len(adds))
 }

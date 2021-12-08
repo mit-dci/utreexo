@@ -54,12 +54,13 @@ func TestForestAddv2v3(t *testing.T) {
 	numAdds := uint32(10)
 
 	f := NewForest(RamForest, nil, "", 0)
-	// f2 := NewForest(RamForest, nil, "", 0)
+	f2 := NewForest(RamForest, nil, "", 0)
 
 	sc := newSimChain(0x07)
 
 	for b := 0; b < 1000; b++ {
 		adds, _, delHashes := sc.NextBlock(numAdds)
+
 		bp, err := f.ProveBatch(delHashes)
 		if err != nil {
 			t.Fatal(err)
@@ -70,16 +71,31 @@ func TestForestAddv2v3(t *testing.T) {
 		}
 
 		// top v2 bottom v3, should be the same thing
-		bp, err = f.ProveBatch(delHashes)
+		bp, err = f2.ProveBatch(delHashes)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = f.Modify2(adds, bp.Targets) //v3
+		_, err = f2.Modify2(adds, bp.Targets) //v3
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+		if f.numLeaves != f2.numLeaves {
+			t.Fatalf("f has %d leaves but f2 has %d leaves\n", f.numLeaves, f2.numLeaves)
+		}
+
+		h1 := f.getRoots()
+		h2 := f2.getRoots()
+		if len(h1) != len(h2) {
+			t.Fatalf("f has %d roots but f2 has %d roots\n", len(h1), len(h2))
+		}
+		for i, _ := range h1 {
+			if h1[i] != h2[i] {
+				t.Fatalf("block %d hash %d of f is %x on f2 it's %x\n", b, i, h1[i], h2[i])
+			}
+		}
+
+		// fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
 	}
 }
 
