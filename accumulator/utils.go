@@ -307,6 +307,14 @@ func inForest(pos, numLeaves uint64, forestRows uint8) bool {
 }
 
 // treeRows returns the number of rows given n leaves.
+// Example: The below tree will return 2 as the forest will allocate enough for
+// 4 leaves.
+//
+// row 2:
+//        |-------\
+// row 1: 04
+//        |---\   |---\
+// row 0: 00  01  02
 func treeRows(n uint64) uint8 {
 	// treeRows works by:
 	// 1. Find the next power of 2 from the given n leaves.
@@ -336,6 +344,20 @@ func treeRows(n uint64) uint8 {
 	// we clear the 6th bit to return 0 in that case.
 	return uint8(bits.TrailingZeros64(n) & ^int(64))
 
+}
+
+// logicalTreeRows returns the number of
+//
+// Example: The below tree will return 1 as the logical number of rows is 1 for this
+// forest.
+//
+// row 2:
+//        |-------\
+// row 1: 04
+//        |---\   |---\
+// row 0: 00  01  02
+func logicalTreeRows(n uint64) uint8 {
+	return uint8(bits.Len64(n) - 1)
 }
 
 // numRoots returns the number of 1 bits in n.
