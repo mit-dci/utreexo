@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -8,8 +9,6 @@ import (
 
 func TestPollardRand(t *testing.T) {
 	for z := 0; z < 30; z++ {
-		// z := 11221
-		// z := 55
 		rand.Seed(int64(z))
 		fmt.Printf("randseed %d\n", z)
 		err := pollardRandomRemember(20)
@@ -22,11 +21,6 @@ func TestPollardRand(t *testing.T) {
 
 func TestPollardFixed(t *testing.T) {
 	rand.Seed(2)
-	//	err := pollardMiscTest()
-	//	if err != nil {
-	//		t.Fatal(err)
-	//	}
-	//	for i := 6; i < 100; i++ {
 	err := fixedPollard(7)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +50,7 @@ func TestPollardSimpleIngest(t *testing.T) {
 		bp.Proof = make([]Hash, 1)
 		bp.Proof[0][0] = 0xFF
 	}
-	err := p.IngestBatchProof(hashes, bp)
+	err := p.IngestBatchProof(hashes, bp, false)
 	if err == nil {
 		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
 	}
@@ -82,7 +76,7 @@ func pollardRandomRemember(blocks int32) error {
 		}
 
 		// verify proofs on rad node
-		err = p.IngestBatchProof(delHashes, bp)
+		err = p.IngestBatchProof(delHashes, bp, false)
 		if err != nil {
 			return err
 		}
@@ -149,6 +143,160 @@ func pollardRandomRemember(blocks int32) error {
 	}
 
 	return nil
+}
+
+// TestPollardIngestMultiBlockProof tests that a pollard is able to ingest a
+// proof for a range of blocks and then be able to verify all the deletions
+// that happen later.
+func TestPollardIngestMultiBlockProof(t *testing.T) {
+	var (
+		p Pollard
+
+		// Where the previous blocks' adds and dels will be stored.
+		prevAdds [][]Leaf
+		prevDels [][]Hash
+
+		// Interval in which proof will be generated. If the interval is 3,
+		// then proofs will be generated at blocks 3, 6, 9, 12...
+		proofGenerationInterVal int32 = 4
+
+		// Total amount of blocks the test will generate and process.
+		blocks int32 = 4000
+	)
+
+	f := NewForest(RamForest, nil, "", 0)
+
+	// When generating proofs in intervals of blocks, the addtions that
+	// get created in-between an interval will not be proven.
+	doNotProveMap := make(map[Hash]struct{})
+
+	// Create the chain to interate over.
+	sn := newSimChain(0x07)
+
+	// Remember all the leaves within an interval as the multi-block proof will
+	// not contain proofs for those.
+	sn.lookahead = proofGenerationInterVal
+	for b := int32(0); b < blocks; b++ {
+		adds, _, delHashes := sn.NextBlock(3)
+
+		// All adds get added to the map so that they will not be attempted
+		// to be proven. Not doing so will result in an error for forest because
+		// it can't prove these.
+		for _, add := range adds {
+			doNotProveMap[add.Hash] = struct{}{}
+		}
+
+		// If we're NOT on the genesis block and are not on the interval
+		// where proofs should be generated, just append the adds and dels
+		// and move onto the next block.
+		//
+		// If we are on the interval where proofs should be generated, append
+		// the current block's additions and deletions and then generate proofs.
+		if b == 0 || b%proofGenerationInterVal != 0 {
+			prevAdds = append(prevAdds, adds)
+			prevDels = append(prevDels, delHashes)
+
+			continue
+		} else {
+			prevAdds = append(prevAdds, adds)
+			prevDels = append(prevDels, delHashes)
+		}
+
+		// Create a single array of all the deletions to be proven.
+		var delsToProve []Hash
+		for _, dels := range prevDels {
+			for _, del := range dels {
+				// Add to the array to be proven only if this deletion
+				// is not in the doNotProveMap.
+				_, found := doNotProveMap[del]
+				if !found {
+					delsToProve = append(delsToProve, del)
+				}
+			}
+		}
+
+		multiBlockBP, err := f.ProveBatch(delsToProve)
+		if err != nil {
+			t.Fatal(fmt.Errorf("Couldn't prove the multi-block deletions. Error: %s",
+				err.Error()))
+		}
+
+		// IngestBatchProof with rememberAll as true as all the proof here will be
+		// needed with later blocks.
+		err = p.IngestBatchProof(delsToProve, multiBlockBP, true)
+		if err != nil {
+			t.Fatal(fmt.Errorf("Couldn't ingest the multi-block proof. Error: %s",
+				err.Error()))
+		}
+
+		// Go through all the previous addtions and deletions that happened at
+		// each block and replay them.
+		for i, prevDel := range prevDels {
+			bp, err := f.ProveBatch(prevDel)
+			if err != nil {
+				t.Fatal(fmt.Errorf("Couldn't prove deletions. Error: %s",
+					err.Error()))
+			}
+
+			err = f.sanity()
+			if err != nil {
+				t.Fatal(fmt.Errorf("Forest sanity failed. Error: %s", err.Error()))
+			}
+
+			err = f.PosMapSanity()
+			if err != nil {
+				t.Fatal(fmt.Errorf("Forest position map sanity failed. Error: %s",
+					err.Error()))
+			}
+
+			loopAdd := prevAdds[i]
+
+			_, err = f.Modify(loopAdd, bp.Targets)
+			if err != nil {
+				t.Fatal(fmt.Errorf("Forest modify failed. Error: %s",
+					err.Error()))
+			}
+
+			// Apply adds and dels to the pollard.
+			err = p.Modify(loopAdd, bp.Targets)
+			if err != nil {
+				t.Fatal(fmt.Errorf("Pollard modify failed. Error: %s",
+					err.Error()))
+			}
+
+			// Check all leaves match with the forest.
+			if !p.equalToForestIfThere(f) {
+				t.Fatal(fmt.Errorf("Pollard and forest leaves differ"))
+			}
+
+			forestRoots := f.getRoots()
+			pollardRoots := p.rootHashesForward()
+
+			// Check that roots match.
+			if len(forestRoots) != len(pollardRoots) {
+				t.Fatal(fmt.Errorf("Pollard has %d roots but forest has %d roots at block %d",
+					len(pollardRoots), len(forestRoots), sn.blockHeight))
+			}
+
+			for i, pollardRoot := range pollardRoots {
+				forestRoot := forestRoots[i]
+				if pollardRoot != forestRoot {
+					t.Fatal(fmt.Errorf("Root mismatch. Pollard root is %s "+
+						"but forest root is %s at block %d",
+						hex.EncodeToString(pollardRoot[:]),
+						hex.EncodeToString(forestRoot[:]),
+						sn.blockHeight))
+				}
+			}
+		}
+
+		// Reset all the previous blocks' additions and deletions
+		prevAdds = prevAdds[:0]
+		prevDels = prevDels[:0]
+
+		// Reset the map as well.
+		doNotProveMap = make(map[Hash]struct{})
+	}
 }
 
 // fixedPollard adds and removes things in a non-random way
@@ -238,7 +386,7 @@ func TestCache(t *testing.T) {
 			t.Fatal("Modify failed", err)
 		}
 
-		err = p.IngestBatchProof(delHashes, proof)
+		err = p.IngestBatchProof(delHashes, proof, false)
 		if err != nil {
 			t.Fatal("IngestBatchProof failed", err)
 		}

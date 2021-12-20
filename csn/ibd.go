@@ -185,7 +185,7 @@ func (c *Csn) putBlockInPollard(
 	}
 
 	// Fills in the empty(nil) nieces for verification && deletion
-	err = c.pollard.IngestBatchProof(delHashes, ub.UtreexoData.AccProof)
+	err = c.pollard.IngestBatchProof(delHashes, ub.UtreexoData.AccProof, false)
 	if err != nil {
 		fmt.Printf("height %d ingest error\n", ub.UtreexoData.Height)
 		fmt.Printf("proof %s\n", ub.UtreexoData.AccProof.ToString())
