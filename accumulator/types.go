@@ -85,6 +85,7 @@ type simChain struct {
 	leafCounter  uint64
 	durationMask uint32
 	lookahead    int32
+	rnd          *rand.Rand
 }
 
 // newSimChain initializes and returns a simchain
@@ -93,6 +94,17 @@ func newSimChain(duration uint32) *simChain {
 	s.blockHeight = -1
 	s.durationMask = duration
 	s.ttlSlices = make([][]Hash, s.durationMask+1)
+	s.rnd = rand.New(rand.NewSource(0))
+	return &s
+}
+
+// newSimChainWithSeed initializes and returns a simchain, with an externally supplied seed
+func newSimChainWithSeed(duration uint32, seed int64) *simChain {
+	var s simChain
+	s.blockHeight = -1
+	s.durationMask = duration
+	s.ttlSlices = make([][]Hash, s.durationMask+1)
+	s.rnd = rand.New(rand.NewSource(seed))
 	return &s
 }
 
@@ -108,11 +120,13 @@ func (s *simChain) BackOne(leaves []Leaf, durations []int32, dels []Hash) {
 		if durations[i] == 0 {
 			continue
 		}
-		fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
-		// everything should be in order, right?
-		fmt.Printf("remove %x from end of ttl slice %d\n",
-			s.ttlSlices[durations[i]][len(s.ttlSlices[durations[i]])-1][:4],
-			durations[i])
+		if verbose {
+			fmt.Printf("removing %x at end of row %d\n", l.Hash[:4], durations[i])
+			// everything should be in order, right?
+			fmt.Printf("remove %x from end of ttl slice %d\n",
+				s.ttlSlices[durations[i]][len(s.ttlSlices[durations[i]])-1][:4],
+				durations[i])
+		}
 		s.ttlSlices[durations[i]] =
 			s.ttlSlices[durations[i]][:len(s.ttlSlices[durations[i]])-1]
 	}
@@ -137,7 +151,10 @@ func (s *simChain) ttlString() string {
 // to be outputed
 func (s *simChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	s.blockHeight++
-	fmt.Printf("blockHeight %d\n", s.blockHeight)
+	if verbose {
+		fmt.Printf(
+			"blockHeight %d\n", s.blockHeight)
+	}
 
 	if s.blockHeight == 0 && numAdds == 0 {
 		numAdds = 1
@@ -160,7 +177,7 @@ func (s *simChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
 		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
 
-		durations[j] = int32(rand.Uint32() & s.durationMask)
+		durations[j] = int32(s.rnd.Uint32() & s.durationMask)
 
 		// with "+1", the duration is 1 to 256, so the forest never gets
 		// big or tall.  Without the +1, the duration is sometimes 0,

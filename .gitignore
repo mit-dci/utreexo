@@ -9,3 +9,9 @@ cmd/simcmd/simcmd
 cmd/utreexoclient/utreexoclient
 cmd/utreexoserver/utreexoserver
 cmd/utreexoclient/pollardFile 
+/accumulator/corpus/
+/accumulator/crashers/
+/accumulator/suppressions/
+/accumulator/accumulator-fuzz.zip
+/accumulator/coverprofile
+/accumulator/sonarprofile

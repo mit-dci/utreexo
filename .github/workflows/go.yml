@@ -120,3 +120,69 @@ jobs:
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
         ./test/check_proofs_backwards.sh utreexoserver "${{ github.workspace }}"
+
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    needs: Build
+    timeout-minutes: 5
+    steps:
+
+    - name: setup directory
+      shell: bash
+      run: |
+        mkdir -p "${{ github.workspace }}/fuzz-coverage"
+
+    # set GOPATH
+    - name: setup env
+      shell: bash
+      run: |
+        echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
+        echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
+
+    - name: Install Go
+      if: success()
+      uses: actions/setup-go@v1
+      with:
+        # go install doesn't work with 1.13
+        go-version: 1.17
+      id: go
+
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/${{ github.repository }}
+
+    - name: Get dependencies
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        go get -v -d ./...
+
+    - name: Install fuzzer
+      shell: bash
+      run: |
+        go install github.com/dvyukov/go-fuzz/go-fuzz@latest github.com/dvyukov/go-fuzz/go-fuzz-build@latest
+        go get github.com/dvyukov/go-fuzz/go-fuzz-dep
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/accumulator
+        go-fuzz-build
+
+    - name: Fuzz
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/accumulator
+        timeout --preserve-status --signal INT 120s go-fuzz -dumpcover |& tee fuzz.log
+        grep "crashers: 0," fuzz.log > /dev/null
+        sed -i '/0.0,1.1/d' coverprofile
+        cp coverprofile "${{ github.workspace }}/fuzz-coverage/"
+        go tool cover -html=coverprofile -o "${{ github.workspace }}/fuzz-coverage/cover.html"
+
+    - name: Fuzz coverage
+      uses: actions/upload-artifact@v2
+      with:
+        name: fuzz-coverage
+        path: "${{ github.workspace }}/fuzz-coverage"
