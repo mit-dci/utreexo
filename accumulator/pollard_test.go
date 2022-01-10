@@ -121,7 +121,7 @@ func pollardRandomRemember(blocks int32) error {
 			return fmt.Errorf("pollard and forest leaves differ")
 		}
 
-		fullTops := f.getRoots()
+		fullTops := f.GetRoots()
 		polTops := p.rootHashesForward()
 
 		// check that tops match
@@ -269,7 +269,7 @@ func TestPollardIngestMultiBlockProof(t *testing.T) {
 				t.Fatal(fmt.Errorf("Pollard and forest leaves differ"))
 			}
 
-			forestRoots := f.getRoots()
+			forestRoots := f.GetRoots()
 			pollardRoots := p.rootHashesForward()
 
 			// Check that roots match.

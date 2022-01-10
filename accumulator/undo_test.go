@@ -159,7 +159,7 @@ func undoOnceRandom(blocks int32) error {
 		if err != nil {
 			return err
 		}
-		beforeRoot := f.getRoots()
+		beforeRoot := f.GetRoots()
 		ub, err := f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
@@ -193,7 +193,7 @@ func undoOnceRandom(blocks int32) error {
 				}
 			}
 			sc.BackOne(adds, durations, delHashes)
-			afterRoot := f.getRoots()
+			afterRoot := f.GetRoots()
 			if !reflect.DeepEqual(beforeRoot, afterRoot) {
 				return fmt.Errorf("undo mismatch")
 			}
@@ -219,7 +219,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		return err
 	}
 	fmt.Printf(f.ToString())
-	beforeTops := f.getRoots()
+	beforeTops := f.GetRoots()
 	for i, h := range beforeTops {
 		fmt.Printf("beforeTops %d %x\n", i, h)
 	}
@@ -247,7 +247,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 	}
 	fmt.Print(f.ToString())
 	fmt.Print(ub.ToString())
-	afterTops := f.getRoots()
+	afterTops := f.GetRoots()
 	for i, h := range afterTops {
 		fmt.Printf("afterTops %d %x\n", i, h)
 	}
@@ -257,7 +257,7 @@ func undoAddDelOnce(numStart, numAdds, numDels uint32) error {
 		return err
 	}
 
-	undoneTops := f.getRoots()
+	undoneTops := f.GetRoots()
 	for i, h := range undoneTops {
 		fmt.Printf("undoneTops %d %x\n", i, h)
 	}

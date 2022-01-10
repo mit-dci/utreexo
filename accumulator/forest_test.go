@@ -271,7 +271,7 @@ func addDelFullBatchProof(nAdds, nDels int) error {
 		return err
 	}
 	// check block proof.  Note this doesn't delete anything, just proves inclusion
-	_, _, err = verifyBatchProof(leavesToProve, bp, f.getRoots(), f.numLeaves, nil)
+	_, _, err = verifyBatchProof(leavesToProve, bp, f.GetRoots(), f.numLeaves, nil)
 	if err != nil {
 		return fmt.Errorf("VerifyBatchProof failed. Error: %s", err.Error())
 	}
