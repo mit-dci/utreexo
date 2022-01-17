@@ -677,8 +677,8 @@ func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 	return nil
 }
 
-// getRoots returns all the roots of the trees
-func (f *Forest) getRoots() []Hash {
+// GetRoots returns all the roots of all the trees in the accumulator.
+func (f *Forest) GetRoots() []Hash {
 	positionList := NewPositionList()
 	defer positionList.Free()
 
@@ -712,7 +712,7 @@ func (f *Forest) ToString() string {
 	// tree rows should be 6 or less
 	if fh > 6 {
 		s := fmt.Sprintf("can't print %d leaves. roots:\n", f.numLeaves)
-		roots := f.getRoots()
+		roots := f.GetRoots()
 		for i, r := range roots {
 			s += fmt.Sprintf("\t%d %x\n", i, r.Mini())
 		}
