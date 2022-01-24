@@ -56,6 +56,36 @@ func TestPollardSimpleIngest(t *testing.T) {
 	}
 }
 
+func TestPollardNilSwap(t *testing.T) {
+	var p Pollard
+	adds := make([]Leaf, 8)
+	for i := 0; i < len(adds); i++ {
+		adds[i].Hash[0] = uint8(i)
+		adds[i].Hash[20] = 0xff
+		adds[i].Remember = true
+	}
+
+	adds[6].Remember = false
+	adds[7].Remember = false
+
+	p.Modify(adds, nil)
+	fmt.Println(p.ToString())
+
+	adds[6].Remember = true
+	adds[7].Remember = true
+
+	p.Modify(adds, nil)
+	fmt.Println(p.ToString())
+
+	dels := []uint64{8, 9, 10, 11, 12, 13, 14, 15}
+	p.Modify(nil, dels)
+	fmt.Println(p.ToString())
+
+	dels = []uint64{1, 3, 4, 5}
+	p.Modify(nil, dels)
+	fmt.Println(p.ToString())
+}
+
 func pollardRandomRemember(blocks int32) error {
 	f := NewForest(RamForest, nil, "", 0)
 

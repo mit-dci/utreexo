@@ -394,6 +394,8 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	if bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
 		bhn = nil // we can't perform this hash as we don't know the children
 	}
+
+	fmt.Printf("swap %d %d OK\n", s.from, s.to)
 	return bhn, nil
 }
 
