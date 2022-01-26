@@ -351,6 +351,8 @@ func (p *Pollard) hnFromPos(pos uint64) (*hashableNode, error) {
 // swapNodes swaps the nodes at positions a and b.
 // returns a hashable node with b, bsib, and bpar
 func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
+	// fmt.Printf("swap %d %d ... ", s.from, s.to)
+
 	// First operate on the position map for the fullPollard types
 	if p.positionMap != nil {
 		a := childMany(s.from, row, p.rows())
@@ -395,7 +397,7 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 		bhn = nil // we can't perform this hash as we don't know the children
 	}
 
-	fmt.Printf("swap %d %d OK\n", s.from, s.to)
+	// fmt.Printf("swap %d %d OK\n", s.from, s.to)
 	return bhn, nil
 }
 
