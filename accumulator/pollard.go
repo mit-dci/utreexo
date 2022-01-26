@@ -380,20 +380,21 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	if asib == nil || bsib == nil {
-		return nil, fmt.Errorf("swapNodes %d %d sibling not found", s.from, s.to)
-	}
-	if a == nil || b == nil {
-		return nil, fmt.Errorf("swapNodes %d %d node not found", s.from, s.to)
-	}
+
+	// if asib == nil || bsib == nil {
+	// return nil, fmt.Errorf("swapNodes %d %d sibling nil", s.from, s.to)
+	// }
+	// if a == nil || b == nil {
+	// return nil, fmt.Errorf("swapNodes %d %d nodes nil", s.from, s.to)
+	// }
 
 	bhn.position = parent(s.to, p.rows())
 	// do the actual swap here
-	err = polSwap(a, asib, b, bsib)
-	if err != nil {
-		return nil, err
-	}
-	if bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
+	polSwap(a, asib, b, bsib)
+
+	if bhn == nil || bhn.sib == nil ||
+		bhn.sib.niece[0] == nil || bhn.sib.niece[1] == nil ||
+		bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
 		bhn = nil // we can't perform this hash as we don't know the children
 	}
 

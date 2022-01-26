@@ -56,6 +56,31 @@ func TestPollardSimpleIngest(t *testing.T) {
 	}
 }
 
+func TestPollardNilDestSwap(t *testing.T) {
+	var p Pollard
+	adds := make([]Leaf, 8)
+	for i := 0; i < len(adds); i++ {
+		adds[i].Hash[0] = uint8(i)
+		adds[i].Hash[20] = 0xff
+		adds[i].Remember = true
+	}
+	adds[2].Remember = false
+	adds[3].Remember = false
+
+	err := p.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(p.ToString())
+
+	dels := []uint64{0, 1, 4, 5}
+	err = p.Modify(nil, dels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(p.ToString())
+}
+
 func TestPollardNilSiblingSwap(t *testing.T) {
 	var p Pollard
 	adds := make([]Leaf, 8)

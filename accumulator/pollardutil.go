@@ -82,14 +82,44 @@ func getCount(n *polNode) int64 {
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
 // need their siblings so that the siblings' nieces can swap.
 // for a root, just say the root's sibling is itself and it should work.
-func polSwap(a, asib, b, bsib *polNode) error {
-	if a == nil || asib == nil || b == nil || bsib == nil {
-		return fmt.Errorf("polSwap given nil node")
+// More permissive: if either a or b is nil, that nillness swaps as well
+// if asib or bsib isn't there, nil neices are assigned to the other
+func polSwap(a, asib, b, bsib *polNode) {
+
+	// data.
+	// Swap if both exist
+	if a != nil && b != nil {
+		a.data, b.data = b.data, a.data
+		a.remember, b.remember = b.remember, a.remember
 	}
-	a.data, b.data = b.data, a.data
-	asib.niece, bsib.niece = bsib.niece, asib.niece
-	a.remember, b.remember = b.remember, a.remember
-	return nil
+	// if A is nil, A assumes the data but not nieces of B, and B is deleteds
+	if a == nil && b != nil {
+		a = new(polNode)
+		a.data = b.data
+		a.remember = b.remember
+		b = nil
+	}
+	// same idea with A, B switched
+	if a != nil && b == nil {
+		b = new(polNode)
+		b.data = a.data
+		b.remember = a.remember
+		a = nil
+	}
+	// if both a and b are nil it doesn't do anything.  Maybe should error?
+
+	// sibling nieces.
+	// Swap if both exist
+	if asib != nil && bsib != nil {
+		asib.niece, bsib.niece = bsib.niece, asib.niece
+	} else { // here though, we can't move nieces to a new node with no data.
+		if asib != nil {
+			asib = nil
+		}
+		if bsib != nil {
+			bsib = nil
+		}
+	}
 }
 func (p *Pollard) rows() uint8 { return treeRows(p.numLeaves) }
 
