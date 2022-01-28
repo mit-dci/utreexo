@@ -41,6 +41,11 @@ type arrow struct {
 	collapse bool
 }
 
+type rise struct {
+	from uint64
+	up   uint8
+}
+
 // node is an element in the utreexo tree and is represented by a position
 // and a hash
 type node struct {

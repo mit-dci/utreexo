@@ -164,10 +164,9 @@ func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 // 10 and 11 merge to 21, and 20 and 21 merge to 26, causing 27 to move up 1.
 // Another example: [8, 9, 10] returns [11:2].  8 and 9 pair to 20; 10 causes
 // 11 to move up to 21, but 20 deletion causes 21 to move up again to 26
-func delToRaise(dels []uint64, forestRows uint8) ([]uint64, []uint8) {
+func delToRise(dels []uint64, forestRows uint8) (r []rise) {
 
-	var rise []uint8
-	var output, nextRow []uint64
+	var nextRow []uint64
 	var h uint8
 
 	rows := make([][]uint64, forestRows)
@@ -181,6 +180,8 @@ func delToRaise(dels []uint64, forestRows uint8) ([]uint64, []uint8) {
 	}
 	fmt.Printf("raise input %v -> %v\n", dels, rows)
 
+	// detwinning: find all twin deletions and concert them into a
+	// single deletion at the row above
 	// go through each row.  Look for twins and stash then in nextRow, then
 	// merge nextRow in one row above when done with the row
 	for h, _ := range rows { // breaks when h == forestRows
@@ -192,20 +193,27 @@ func delToRaise(dels []uint64, forestRows uint8) ([]uint64, []uint8) {
 				// add parent to next row, remove twins from this row
 				nextRow = append(nextRow, parent(curRow[i], forestRows))
 				i++
-			} else {
+			} else { // replace element into current row if not a twin
 				rows[h] = append(rows[h], curRow[i])
 			}
 		}
 	}
 
-	fmt.Printf("done rows: %v\n", rows)
-	for _, row := range rows {
-		for _, d := range row {
-			output = append(output, d)
-		}
-	}
+	fmt.Printf("done detwinning; deletions are %v\n", rows)
 
-	return output, rise
+	// Move bottom to top.  Pick the leftmost element on the row, and see if
+	// it's twins with the an element on the row above.  Keep going,
+	// incrementing 'up' and deleting elements until you don't have a twin,
+	// then add that to the r result
+
+	// for _, row := range rows {
+	// for i:=0; i<len(row); i++ range row {
+
+	// r = append(r, rise{from: d, up: 1})
+	// }
+	// }
+
+	return
 }
 
 // move through.  if you find twins, remove them, and add parent to another slice

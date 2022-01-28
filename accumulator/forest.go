@@ -120,7 +120,8 @@ const (
 // NewForest initializes a Forest and returns it. The given arguments determine
 // what type of forest it will be.
 func NewForest(
-	forestType ForestType, forestFile *os.File, cowPath string, cowMaxCache int) *Forest {
+	forestType ForestType, forestFile *os.File,
+	cowPath string, cowMaxCache int) *Forest {
 
 	f := new(Forest)
 	f.numLeaves = 0
@@ -158,7 +159,7 @@ func (f *Forest) ReconstructStats() (uint64, uint8) {
 
 // removev5 swapless
 func (f *Forest) removev5(dels []uint64) error {
-
+	fmt.Printf("remove %v\n", dels)
 	// calculate what numLeaves will be after this removal
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 
@@ -173,12 +174,12 @@ func (f *Forest) removev5(dels []uint64) error {
 	}
 
 	// consolodate deletions; only delete what we need to
-	grabs, rise := delToRaise(dels, f.rows)
-	fmt.Printf("raised to:\n%v\n%v\n", grabs, rise)
+	rises := delToRise(dels, f.rows)
+	fmt.Printf("raise:\t%v", rises)
 	dirt := []uint64{}
-	for _, del := range grabs {
+	for _, r := range rises {
 		// f.data.write(del, empty)
-		dirt = append(dirt, f.promote(del^1))
+		dirt = append(dirt, f.promote(r.from^1))
 	}
 	fmt.Printf("dirt: %v\n", dirt)
 
@@ -196,7 +197,6 @@ func (f *Forest) removev4(dels []uint64) error {
 		}
 	}
 	var hashDirt []uint64
-
 	swapRows := remTrans2(dels, f.numLeaves, f.rows)
 	// loop taken from pollard rem2.
 	// TODO Maybe pollard and forest can both satisfy the same interface..?
@@ -210,7 +210,6 @@ func (f *Forest) removev4(dels []uint64) error {
 		}
 	}
 	f.numLeaves = nextNumLeaves
-
 	return nil
 }
 
@@ -430,7 +429,6 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 		}
 	}
 
-	// v3 should do the exact same thing as v2 now
 	err := f.removev5(dels)
 	if err != nil {
 		return nil, err

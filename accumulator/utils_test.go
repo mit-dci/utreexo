@@ -66,12 +66,13 @@ func TestDelToRaise(t *testing.T) {
 
 	fmt.Printf("max on row %d %d\n", 1, maxPosOnRow(1, 3))
 	// in := []uint64{2, 3, 5, 10, 11, 20}
-	in := []uint64{0, 1, 2, 3, 6, 7, 22, 23} // should be 19, 24, 27
+	// in := []uint64{0, 1, 2, 3, 6, 7, 22, 23} // should be 19, 24, 27
 	// in := []uint64{0, 1}
+	in := []uint64{8, 9, 10} // should be 11:2
 	// in := []uint64{2, 3, 8, 9, 10, 11}
 
-	out, rise := delToRaise(in, 4)
+	r := delToRise(in, 4)
 
-	fmt.Printf(" out %v rise %v\n", out, rise)
+	fmt.Printf(" out %v\n", r)
 
 }

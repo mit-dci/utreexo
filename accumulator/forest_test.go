@@ -26,7 +26,7 @@ func TestDeleteReverseOrder(t *testing.T) {
 }
 
 func TestSwaplessPromote(t *testing.T) {
-	f := NewForest(nil, false, "", 0)
+	f := NewForest(RamForest, nil, "", 0)
 
 	startingLeaves := make([]Leaf, 16)
 	for i, _ := range startingLeaves {
@@ -43,13 +43,14 @@ func TestSwaplessPromote(t *testing.T) {
 }
 
 func TestForestAddDel(t *testing.T) {
-	numAdds := uint32(10)
+	rand.Seed(4)
+	numAdds := uint32(4)
 
 	f := NewForest(RamForest, nil, "", 0)
 
 	sc := newSimChain(0x07)
 
-	for b := 0; b < 1000; b++ {
+	for b := 0; b < 10; b++ {
 
 		adds, _, delHashes := sc.NextBlock(numAdds)
 
