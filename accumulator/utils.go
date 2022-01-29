@@ -173,12 +173,14 @@ func delToRise(dels []uint64, forestRows uint8) (r []rise) {
 
 	// take dels slice and organize it into rows
 	for _, d := range dels {
+		// go up a row if deletion position is too big.
 		for d > maxPosOnRow(h, forestRows) { // assumes no del is too big
 			h++
 		}
 		rows[h] = append(rows[h], d)
 	}
-	fmt.Printf("raise input %v -> %v\n", dels, rows)
+
+	fmt.Printf("delToRise %v -> %v\n", dels, rows)
 
 	// detwinning: find all twin deletions and concert them into a
 	// single deletion at the row above

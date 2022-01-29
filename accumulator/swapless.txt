@@ -139,6 +139,58 @@ When we add 15, 23 and 27 are computed.  When we get to 29, we can't compute 29 
 |---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
 00  01  02  03  04  05  06  07  --  --  --  --  12  13  14  15
 
+
+= = = = = = = = = = = = = = = = = = = = = = 
+
+Deletion starts with a list of locations to delete.  The delToRise() function can take that and turn it into a list of location:rows tuples, where you need to raise every location by the corresponding number of rows.
+
+30
+|-------------------------------\
+28                              29
+|---------------\               |---------------\
+24*             25*             26              27
+|-------\       |-------\       |-------\       |-------\
+16      17      18      19      20      21      22      23
+|---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  08* 09* 10* 11  12  13  14  15
+
+Say we get a deletion list of 8, 9, 10, 24, 25.
+
+As a first step we de-twin, and get
+10, 20, 28.
+
+Should the output then be 11:2, 29:1?
+
+You could raise 11 up 2 rows to 26.  But then you move it again to 28 when 29 moves up 1 row to 30.
+
+But I think we actually want to say 11:2, 29:1.  You're going to have to move things twice.
+
+If instead we just give a source:dest tuple... we'd have more ambiguity.  11:29, 29:30?  But to do you need to move 11 up to 26, then recompute what 29 is, and then move it to 30.  Or set up "dirty" flags somehow.
+
+But really, 11:2, 29:1 doesn't mean just move those two locations.  When you say 29:1, you have to move 29 and everything below it up 1.  with 11:2 that doesn't apply because nothing is under 11.  But 29:1 really means:
+
+8,9,10,11,12,13,14,15,20,23,22,23,26,27 all go up.  And in weird ways; 8 goes to 16, 9 to 17, 15 to 23, 20 to 24, and so on.
+
+Probably should go top down;  First move 29 to 30.  Then 26 to 28, 27 to 29, then 20..23 to 24..27.  For forest construction you can do ranges which is pretty fast.  For pollard it does seem like you only need to move on thing and it carries everything underneath with it.
+
+You should do single raise operations top down, but you need to go through the raise operations in bottom up order; if you do 29:1 before 11:2, you'll move 11 to 26 and mess things up.  You could also *apply* the 29:1 to the 11:2 and transform it into 19:2, but I would prefer to avoid that.  But is something like that the most efficient?  Maybe... you really don't want to be moving things more than you need to.  11 direct to 28 and then you don't touch anything below 28. 
+
+In that case it's 
+
+11->28
+29->30, 27*->29 
+the * means take everything below with you.  Then flag 30 as dirty and recompute 30 from the new 28, 29; I think that's the only hash needed.
+
+
+But this also seems good enough:
+move 11 to 26.  Compute a new 29 from the new 26 and 27.
+Then move 29 up to 30.  (no hash operation as it's a root)
+move 26, 27 -> 28, 29
+20..23 -> 24..27 but 20,21 are empty, so 22,23->26,27
+12..15->20..23.
+
+
+
 = = = = = = = = = = = = = = = = = = = = = = 
 
 Addressing.  When we insert leaves into the accumulator, we also commit to their leaf number, which stays stuck in the leaf data until it is deleted.  Before any deletions, there's a nice onitial property where the leaf number tells you how to get to the leaf.  For example, in the tree with 16 leaves:

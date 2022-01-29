@@ -68,7 +68,7 @@ func TestDelToRaise(t *testing.T) {
 	// in := []uint64{2, 3, 5, 10, 11, 20}
 	// in := []uint64{0, 1, 2, 3, 6, 7, 22, 23} // should be 19, 24, 27
 	// in := []uint64{0, 1}
-	in := []uint64{8, 9, 10} // should be 11:2
+	in := []uint64{8, 9, 10, 24, 25} // should be 11:2, 29:1
 	// in := []uint64{2, 3, 8, 9, 10, 11}
 
 	r := delToRise(in, 4)
