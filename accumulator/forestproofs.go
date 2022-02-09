@@ -142,7 +142,9 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	if len(hs) == 0 {
 		return bp, nil
 	}
-	if f.data.size() < 2 {
+	// When there is only 1 leaf in the entire forest, the leaf is the proof.
+	// When there are no leaves, there's nothing to prove.
+	if f.numLeaves <= 1 {
 		return bp, nil
 	}
 
