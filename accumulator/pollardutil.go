@@ -3,6 +3,7 @@ package accumulator
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 )
@@ -57,6 +58,18 @@ func (n *polNode) printout() {
 	} else {
 		fmt.Printf("r %x\n", n.niece[1].data[:4])
 	}
+}
+
+// PruneAll prunes the accumulator down to the roots.
+func (p *Pollard) PruneAll() {
+	for _, root := range p.roots {
+		root.chop()
+	}
+}
+
+// NumLeaves returns the number of leaves that the accumulator has.
+func (p *Pollard) NumLeaves() uint64 {
+	return p.numLeaves
 }
 
 // prune prunes deadend children.
@@ -196,4 +209,28 @@ func (p *Pollard) Deserialize(serialized []byte) error {
 	}
 
 	return nil
+}
+
+// PrintRemembers prints all the nodes and their remember status.  Useful for debugging.
+func (p *Pollard) PrintRemembers() (string, error) {
+	str := ""
+
+	rows := p.rows()
+	// very naive loop looping outside the edge of the tree
+	for i := uint64(0); i < (2<<rows)-1; i++ {
+		// check if the leaf is within the tree
+		if !inForest(i, p.numLeaves, rows) {
+			continue
+		}
+		n, _, _, err := p.readPos(i)
+		if err != nil {
+			return "", err
+		}
+		if n != nil {
+			str += fmt.Sprintf("pos %d, data %s, remember %v\n",
+				i, hex.EncodeToString(n.data[:]), n.remember)
+		}
+	}
+
+	return str, nil
 }

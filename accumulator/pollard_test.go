@@ -264,7 +264,7 @@ func TestPollardIngestMultiBlockProof(t *testing.T) {
 			t.Fatal(fmt.Errorf("Couldn't prove the multi-block deletions. Error: %s",
 				err.Error()))
 		}
-		p.Prune()
+		p.PruneAll()
 
 		// IngestBatchProof with rememberAll as true as all the proof here will be
 		// needed with later blocks.
