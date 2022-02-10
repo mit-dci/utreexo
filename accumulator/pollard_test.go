@@ -7,6 +7,50 @@ import (
 	"testing"
 )
 
+func TestPollardNoSiblingFound(t *testing.T) {
+	var p Pollard
+
+	// Create the starting off pollard.
+	adds := make([]Leaf, 7)
+	for i := 0; i < len(adds); i++ {
+		adds[i].Hash[0] = uint8(i)
+		adds[i].Hash[20] = 0xff
+		adds[i].Remember = true
+	}
+	adds[6].Remember = false
+
+	err := p.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create the next adds and dels that gets us to the stage right
+	// before the swapNodes error.
+	newAdds := make([]Leaf, 4)
+	for i := 0; i < len(newAdds); i++ {
+		newAdds[i].Hash[0] = uint8(i)
+		newAdds[i].Hash[1] = uint8(2)
+		newAdds[i].Hash[2] = uint8(7)
+		newAdds[i].Hash[20] = 0xff
+	}
+
+	newAdds[0].Remember = true
+	newAdds[1].Remember = true
+
+	dels := []uint64{2, 3, 4}
+	err = p.Modify(newAdds, dels)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Then cause the error by deleting 1,3,4,5
+	newDels := []uint64{1, 3, 4, 5}
+	err = p.Modify(nil, newDels)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPollardRand(t *testing.T) {
 	for z := 0; z < 30; z++ {
 		rand.Seed(int64(z))
@@ -220,6 +264,7 @@ func TestPollardIngestMultiBlockProof(t *testing.T) {
 			t.Fatal(fmt.Errorf("Couldn't prove the multi-block deletions. Error: %s",
 				err.Error()))
 		}
+		p.Prune()
 
 		// IngestBatchProof with rememberAll as true as all the proof here will be
 		// needed with later blocks.
@@ -478,6 +523,20 @@ func TestCache(t *testing.T) {
 						pos, l.Remember, sibling.Remember, n.remember, nsib.remember)
 					t.Fatal(err)
 				}
+			}
+
+			parent, _, _, err := p.readPos(pos)
+			if err != nil {
+				t.Fatal(fmt.Errorf("Couldn't read parent position of %d. err: %v", pos, err))
+			}
+
+			if l.Remember && parent == nil {
+				fmt.Println(p.ToString())
+				err := fmt.Errorf("leaf at position %d exists but it was added with "+
+					"remember=%v and its parent does not exist. "+
+					"polnode remember=%v",
+					pos, l.Remember, n.remember)
+				t.Fatal(err)
 			}
 		}
 		fmt.Println(p.ToString())
