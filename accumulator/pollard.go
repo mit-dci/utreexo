@@ -179,6 +179,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
 		nHash := parentHash(leftRoot.data, n.data)                 // hash
 		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
+		n.remember = remember
 		p.hashesEver++
 
 		n.prune()
@@ -228,6 +229,12 @@ func (p *Pollard) rem2(dels []uint64) error {
 		if err != nil {
 			return err
 		}
+
+		if n == nil {
+			return fmt.Errorf("Cannot delete position %d err: %v",
+				del, ErrorStrings[ErrorNoPollardNode])
+		}
+
 		if n.remember == true {
 			p.currentRemember--
 			n.remember = false
