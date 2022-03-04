@@ -174,10 +174,18 @@ jobs:
       run: |
         echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
         echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
-
-    - uses: actions/download-artifact@v2
+        
+    - name: Upload testdata
+      uses: actions/upload-artifact@v2
       with:
         name: testdatapath
+        path: "${{ github.workspace }}/testdatapath"
+
+    - name: Get TestDataPath
+      uses: actions/download-artifact@v2
+      with:
+        name: testdatapath
+        path: "${{ github.workspace }}/testdatapath"
 
     - name: Install Go
       if: success()
