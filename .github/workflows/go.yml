@@ -49,14 +49,9 @@ jobs:
         cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoclient
         go build -v
 
-    - name: Upload testdata
-      uses: actions/upload-artifact@v2
-      with:
-        name: testdatapath
-        path: "${{ github.workspace }}/testdatapath"
         
   run-unit-tests:
-    name: Run Unit Tests
+    name: Unit Tests
     runs-on: ubuntu-latest
     needs: Build
     timeout-minutes: 5
@@ -108,8 +103,14 @@ jobs:
         cd $GOPATH/src/github.com/${{ github.repository }}
         go test -v ./accumulator
 
+    - name: Upload testdata
+      uses: actions/upload-artifact@v2
+      with:
+        name: testdatapath
+        path: "${{ github.workspace }}/testdatapath"
+
   run-integration-tests:
-    name: Run Integration Tests
+    name: Integration Tests
     runs-on: ubuntu-latest
     needs: Build
     timeout-minutes: 5
@@ -161,11 +162,17 @@ jobs:
         cd $GOPATH/src/github.com/${{ github.repository }}
         ./test/install_bitcoind.sh
         ./test/csn_bridge.sh "./cmd/utreexoserver/utreexoserver" "./cmd/utreexoclient/utreexoclient" "${{ github.workspace }}/testdatapath"
+    
+    - name: Upload testdata
+      uses: actions/upload-artifact@v2
+      with:
+        name: testdatapath
+        path: "${{ github.workspace }}/testdatapath"
   
   check-proof-backwards:
     name: Check proof backwards compatibility
     runs-on: ubuntu-latest
-    needs: Build
+    needs: Build, Unit Tests
     timeout-minutes: 5
     steps:
     # set GOPATH
@@ -175,11 +182,6 @@ jobs:
         echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
         echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
         
-    - name: Upload testdata
-      uses: actions/upload-artifact@v2
-      with:
-        name: testdatapath
-        path: "${{ github.workspace }}/testdatapath"
 
     - name: Get TestDataPath
       uses: actions/download-artifact@v2
