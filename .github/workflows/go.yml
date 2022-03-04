@@ -172,7 +172,7 @@ jobs:
   check-proof-backwards:
     name: Check proof backwards compatibility
     runs-on: ubuntu-latest
-    needs: Build, Unit Tests
+    needs: Unit Tests
     timeout-minutes: 5
     steps:
     # set GOPATH
