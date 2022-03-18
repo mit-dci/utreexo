@@ -1,5 +1,93 @@
 package accumulator
 
+import (
+	"sort"
+)
+
+// Transform outlines how the accumulator state should be modified. This function itself does
+// not modify the accumulator state.
+func Transform(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
+	//// Calculate the number of leaves after deletion
+	//nextNumLeaves := numLeaves - uint64(len(dels))
+
+	// Save the dels here so that we can un-modify it after we're done.
+	copyDels := make([]uint64, len(dels))
+	copy(copyDels, dels)
+
+	deTwin(&dels, forestRows)
+
+	// Moves indicate where a leaf should move to next.
+	moves := make([][]arrow, forestRows+1)
+
+	currentRow := uint8(0)
+	for _, del := range dels {
+		// If the next del is not in this row, move to the next row until
+		// we're at the correct row.
+		for detectRow(del, forestRows) != currentRow {
+			currentRow++
+		}
+
+		moves[currentRow] = append(moves[currentRow],
+			arrow{from: sibling(del), to: parent(del, forestRows)})
+	}
+
+	dels = copyDels
+
+	return moves
+}
+
+func isNextElemSibling(dels []uint64, idx int) bool {
+	return dels[idx]|1 == dels[idx+1]
+}
+
+// subtreeShiftUp gives new positions for all the subtrees under. The actual leaves
+// may not exist.
+func subtreeShiftUp(pos uint64, forestRows uint8) {
+}
+
+// deTwin goes through the list of sorted deletions and finds the parent deletions.
+// The caller MUST sort the dels before passing it into the function.
+//
+// Ex: If we're deleting 00 and 01 in this tree:
+//
+// 02
+// |--\
+// 00 01
+//
+// Then we're really deleting 02. The dels of [00, 01] would be [02].
+func deTwin(dels *[]uint64, forestRows uint8) {
+	for i := 0; i < len(*dels); i++ {
+		// 1: Check that there's at least 2 elements in the slice left.
+		// 2: Check if the right sibling of the current element matches
+		//    up with the next element in the slice.
+		if i+1 < len(*dels) && rightSib((*dels)[i]) == (*dels)[i+1] {
+			// Grab the position of the del.
+			pos := (*dels)[i]
+
+			// Delete both of the child nodes from the slice.
+			*dels = append((*dels)[:i], (*dels)[i+2:]...)
+
+			// Calculate and Insert the parent in order.
+			insertSort(dels, parent(pos, forestRows))
+
+			// Decrement one since the next element we should
+			// look at is at the same index because the slice decreased
+			// in length by one.
+			i--
+		}
+	}
+}
+
+func insertSort(dels *[]uint64, el uint64) {
+	index := sort.Search(len(*dels), func(i int) bool { return (*dels)[i] > el })
+	*dels = append(*dels, 0)
+	copy((*dels)[index+1:], (*dels)[index:])
+	(*dels)[index] = el
+}
+
+func decompressMoves(moves [][]arrow, dels []uint64) {
+}
+
 // remTrans returns a slice arrow in bottom row to top row.
 // also returns all "dirty" positions which need to be hashed after the swaps
 func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {

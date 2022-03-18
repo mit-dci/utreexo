@@ -275,6 +275,23 @@ func parentMany(position uint64, rise, forestRows uint8) uint64 {
 	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
 }
 
+// rightSib returns the right sibling for this node. If the node is
+// the right sibling, itself is returned.
+func rightSib(pos uint64) uint64 {
+	return pos | 1
+}
+
+// leftSib returns the left sibling for this node. If the node is
+// the left sibling, itself is returned.
+func leftSib(pos uint64) uint64 {
+	return pos &^ 1
+}
+
+// sibling returns the sibling of this node.
+func sibling(pos uint64) uint64 {
+	return pos ^ 1
+}
+
 // cousin returns a cousin: the child of the parent's sibling.
 // you just xor with 2.  Actually there's no point in calling this function but
 // it's here to document it.  If you're the left sibling it returns the left
