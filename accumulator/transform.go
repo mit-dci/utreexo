@@ -27,8 +27,29 @@ func Transform(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 			currentRow++
 		}
 
+		sib := sibling(del)
+
 		moves[currentRow] = append(moves[currentRow],
-			arrow{from: sibling(del), to: parent(del, forestRows)})
+			arrow{from: sib, to: parent(del, forestRows)})
+
+		// If 00 -> 16 and 16 -> 24, then what you're really doing is 00 -> 24.
+		// The loop below tries to find any arrows that can be shortened with
+		// the newly created arrow by looking at the row below.
+		if currentRow != 0 {
+			for i, arw := range moves[currentRow-1] {
+				if arw.to == sib {
+					// Change the arrow.from to the arrow.from value from
+					// the row below.
+					moves[currentRow][len(moves[currentRow])-1].from = arw.from
+
+					// Delete the previous arrow from the row below.
+					moves[currentRow-1] = append(
+						moves[currentRow-1][:i],
+						moves[currentRow-1][i+1:]...)
+					break
+				}
+			}
+		}
 	}
 
 	dels = copyDels
