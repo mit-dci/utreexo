@@ -32,9 +32,28 @@ func TestGetTop(t *testing.T) {
 func TestTransform(t *testing.T) {
 	var tests = []struct {
 		forestRows uint8
+		numLeaves  uint64
 		dels       []uint64
 		expected   [][]arrow
 	}{
+		// 14
+		// |---------------\
+		// 12              13
+		// |-------\       |-------\
+		// 08      09      10      11
+		// |---\   |---\   |---\   |---\
+		// 00* 01* 02* 03* 04* 05* 06* 07*
+		{
+			3,
+			8,
+			[]uint64{0, 1, 2, 3, 4, 5, 6, 7},
+			[][]arrow{
+				{},
+				{},
+				{},
+				{{from: 14, to: 14}},
+			},
+		},
 
 		// 14
 		// |---------------\
@@ -45,12 +64,13 @@ func TestTransform(t *testing.T) {
 		// 00* 01* 02  03  04* 05  06  07
 		{
 			3,
+			8,
 			[]uint64{0, 1, 4},
 			[][]arrow{
-				[]arrow{{from: 5, to: 10}},
-				[]arrow{{from: 9, to: 12}},
-				[]arrow{},
-				[]arrow{},
+				{{from: 5, to: 10}},
+				{{from: 9, to: 12}},
+				{},
+				{},
 			},
 		},
 
@@ -63,12 +83,51 @@ func TestTransform(t *testing.T) {
 		// 00* 01* 02  03  04* 05  06  07
 		{
 			3,
+			8,
 			[]uint64{0, 1, 4, 9, 11},
 			[][]arrow{
-				[]arrow{},
-				[]arrow{},
-				[]arrow{{from: 5, to: 14}},
-				[]arrow{},
+				{},
+				{},
+				{{from: 5, to: 14}},
+				{},
+			},
+		},
+
+		// 14
+		// |---------------\
+		// 12*             13
+		// |-------\       |-------\
+		// 08      09      10      11
+		// |---\   |---\   |---\   |---\
+		// 00  01  02  03  04  05  06  07
+		{
+			3,
+			8,
+			[]uint64{12},
+			[][]arrow{
+				{},
+				{},
+				{{from: 13, to: 14}},
+				{},
+			},
+		},
+
+		// 14
+		// |---------------\
+		// 12              13
+		// |-------\       |-------\
+		// 08      09      10      11*
+		// |---\   |---\   |---\   |---\
+		// 00* 01* 02* 03* 04* 05  06  07
+		{
+			3,
+			8,
+			[]uint64{0, 1, 2, 3, 4, 11},
+			[][]arrow{
+				{},
+				{},
+				{{from: 5, to: 14}},
+				{},
 			},
 		},
 
@@ -83,13 +142,14 @@ func TestTransform(t *testing.T) {
 		// 00  01  02  03  04  05  06  07  08* 09* 10* 11  12  13  14  15
 		{
 			4,
+			16,
 			[]uint64{8, 9, 10, 24, 25},
 			[][]arrow{
-				[]arrow{},
-				[]arrow{{from: 11, to: 26}},
-				[]arrow{},
-				[]arrow{{from: 29, to: 30}},
-				[]arrow{},
+				{},
+				{{from: 11, to: 26}},
+				{},
+				{{from: 29, to: 30}},
+				{},
 			},
 			//[][]arrow{
 			//	[]arrow{{from: 11, to: 21}},
@@ -111,19 +171,20 @@ func TestTransform(t *testing.T) {
 		// 00* 01  02* 03  04  05  06  07  08  09  10  11  12  13  14  15
 		{
 			4,
+			16,
 			[]uint64{0, 2, 18, 19, 21, 27},
 			[][]arrow{
-				[]arrow{{from: 01, to: 16}, {from: 3, to: 17}},
-				[]arrow{},
-				[]arrow{{from: 24, to: 28}, {from: 20, to: 29}},
-				[]arrow{},
-				[]arrow{},
+				{{from: 01, to: 16}, {from: 3, to: 17}},
+				{},
+				{{from: 24, to: 28}, {from: 20, to: 29}},
+				{},
+				{},
 			},
 		},
 	}
 
 	for _, test := range tests {
-		moves := Transform(test.dels, 1<<test.forestRows, test.forestRows)
+		moves := Transform(test.dels, test.numLeaves, test.forestRows)
 		fmt.Println(moves)
 
 		for i := range moves {
@@ -142,6 +203,57 @@ func TestTransform(t *testing.T) {
 	}
 }
 
+func TestCalcDirtyNodes(t *testing.T) {
+	var tests = []struct {
+		forestRows uint8
+		numLeaves  uint64
+		moves      [][]arrow
+		expected   [][]uint64
+	}{
+
+		// 14
+		// |---------------\
+		// 12              13
+		// |-------\       |-------\
+		// 08      09      10      11
+		// |---\   |---\   |---\   |---\
+		// 00* 01* 02  03  04* 05  06* 07*
+		{
+			3,
+			8,
+			[][]arrow{
+				{{from: 5, to: 10}},
+				{{from: 9, to: 12}},
+				{},
+				{},
+			},
+			[][]uint64{
+				{},
+				{},
+				{13},
+				{14},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		dirtyNodes := calcDirtyNodes(test.moves, test.numLeaves, test.forestRows)
+
+		fmt.Println(dirtyNodes)
+
+		for row, dirtyRow := range dirtyNodes {
+			for i, dirty := range dirtyRow {
+				expectedDirty := test.expected[row][i]
+
+				if dirty != expectedDirty {
+					t.Errorf("TestCalcDirtyNodes fail: expected %d but got %d",
+						expectedDirty, dirty)
+				}
+			}
+		}
+	}
+}
+
 func TestDeTwin(t *testing.T) {
 	var tests = []struct {
 		forestRows uint8
@@ -150,6 +262,7 @@ func TestDeTwin(t *testing.T) {
 	}{
 		{3, []uint64{0, 1, 9}, []uint64{12}},
 		{3, []uint64{0, 1, 4, 9, 11}, []uint64{4, 11, 12}},
+		{3, []uint64{0, 1, 2, 3, 4, 11}, []uint64{4, 11, 12}},
 		{4, []uint64{00, 01, 04, 06, 10, 11, 17, 20}, []uint64{04, 06, 24, 26}},
 		{4, []uint64{8, 9, 10, 24, 25}, []uint64{10, 20, 28}},
 		{4, []uint64{00, 02, 18, 19, 21, 27}, []uint64{00, 02, 21, 25, 27}},

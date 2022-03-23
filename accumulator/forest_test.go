@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
@@ -9,6 +10,265 @@ import (
 	"testing"
 	"testing/quick"
 )
+
+func TestForestSwaplessSimple(t *testing.T) {
+	var tests = []struct {
+		startLeaves []Leaf
+		dels        []uint64
+		expected    map[uint64]Hash
+	}{
+		{
+			[]Leaf{
+				{Hash: Hash{1}},
+				{Hash: Hash{2}},
+				{Hash: Hash{3}},
+				{Hash: Hash{4}},
+				{Hash: Hash{5}},
+				{Hash: Hash{6}},
+				{Hash: Hash{7}},
+				{Hash: Hash{8}},
+			},
+			[]uint64{0, 1, 2, 3, 4, 6, 7},
+			map[uint64]Hash{
+				0:  empty,
+				1:  empty,
+				2:  empty,
+				3:  empty,
+				4:  empty,
+				5:  empty,
+				6:  empty,
+				7:  empty,
+				8:  empty,
+				9:  empty,
+				10: empty,
+				11: empty,
+				12: empty,
+				13: empty,
+				14: Hash{6},
+			},
+		},
+
+		// 14
+		// |---------------\
+		// 12              13
+		// |-------\       |-------\
+		// 08      09      10      11
+		// |---\   |---\   |---\   |---\
+		// 00* 01* 02* 03* 04  05  06  07
+		{
+			[]Leaf{
+				{Hash: Hash{1}},
+				{Hash: Hash{2}},
+				{Hash: Hash{3}},
+				{Hash: Hash{4}},
+				{Hash: Hash{5}},
+				{Hash: Hash{6}},
+				{Hash: Hash{7}},
+				{Hash: Hash{8}},
+			},
+			[]uint64{0, 1, 2, 3},
+			map[uint64]Hash{
+				0:  empty,
+				1:  empty,
+				2:  empty,
+				3:  empty,
+				4:  empty,
+				5:  empty,
+				6:  empty,
+				7:  empty,
+				8:  Hash{5},
+				9:  Hash{6},
+				10: Hash{7},
+				11: Hash{8},
+				12: parentHash(Hash{5}, Hash{6}),
+				13: parentHash(Hash{7}, Hash{8}),
+				14: parentHash(
+					parentHash(Hash{5}, Hash{6}),
+					parentHash(Hash{7}, Hash{8})),
+			},
+		},
+
+		// 14
+		// |---------------\
+		// 12              13
+		// |-------\       |-------\
+		// 08      09      10      11
+		// |---\   |---\   |---\   |---\
+		// 00* 01* 02  03* 04  05  06  07
+		{
+			[]Leaf{
+				{Hash: Hash{1}},
+				{Hash: Hash{2}},
+				{Hash: Hash{3}},
+				{Hash: Hash{4}},
+				{Hash: Hash{5}},
+				{Hash: Hash{6}},
+				{Hash: Hash{7}},
+				{Hash: Hash{8}},
+			},
+			[]uint64{0, 1, 3},
+			map[uint64]Hash{
+				0:  empty,
+				1:  empty,
+				2:  empty,
+				3:  empty,
+				4:  Hash{5},
+				5:  Hash{6},
+				6:  Hash{7},
+				7:  Hash{8},
+				8:  empty,
+				9:  empty,
+				10: parentHash(Hash{5}, Hash{6}),
+				11: parentHash(Hash{7}, Hash{8}),
+				12: Hash{3},
+				13: parentHash(
+					parentHash(Hash{5}, Hash{6}),
+					parentHash(Hash{7}, Hash{8})),
+				14: parentHash(
+					Hash{3},
+					parentHash(parentHash(Hash{5}, Hash{6}),
+						parentHash(Hash{7}, Hash{8})),
+				),
+			},
+		},
+
+		{
+			[]Leaf{
+				{Hash: Hash{1}},
+				{Hash: Hash{2}},
+				{Hash: Hash{3}},
+				{Hash: Hash{4}},
+				{Hash: Hash{5}},
+				{Hash: Hash{6}},
+				{Hash: Hash{7}},
+				{Hash: Hash{8}},
+				{Hash: Hash{9}},
+			},
+			[]uint64{0, 1, 2},
+			map[uint64]Hash{
+				0:  empty,
+				1:  empty,
+				2:  empty,
+				3:  empty,
+				4:  Hash{5},
+				5:  Hash{6},
+				6:  Hash{7},
+				7:  Hash{8},
+				8:  Hash{9},
+				16: empty,
+				17: empty,
+				18: parentHash(Hash{5}, Hash{6}),
+				19: parentHash(Hash{7}, Hash{8}),
+				25: parentHash(
+					parentHash(Hash{5}, Hash{6}),
+					parentHash(Hash{7}, Hash{8})),
+				28: parentHash(
+					Hash{4},
+					parentHash(
+						parentHash(Hash{5}, Hash{6}),
+						parentHash(Hash{7}, Hash{8})),
+				),
+			},
+		},
+	}
+
+	for i, test := range tests {
+		//if i != 1 {
+		//	continue
+		//}
+
+		f := NewForest(RamForest, nil, "", 0)
+
+		_, err := f.Modify(test.startLeaves, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Println(f.ToString())
+
+		err = f.removeSwapless(test.dels)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Println(f.ToString())
+
+		for pos, expectedHash := range test.expected {
+			hash := f.data.read(pos)
+
+			if hash != expectedHash {
+				t.Errorf("TestForestSwaplessSimple Fail: test %d failed "+
+					"for position %d, expected %s got %s",
+					i, pos, hex.EncodeToString(expectedHash[:]),
+					hex.EncodeToString(hash[:]))
+			}
+		}
+	}
+}
+
+func TestSwapLessAdd(t *testing.T) {
+	f := NewForest(RamForest, nil, "", 0)
+	leaves := []Leaf{
+		{Hash: Hash{1}},
+		{Hash: Hash{2}},
+		{Hash: Hash{3}},
+		{Hash: Hash{4}},
+		{Hash: Hash{5}},
+		{Hash: Hash{6}},
+		{Hash: Hash{7}},
+		{Hash: Hash{8}},
+		{Hash: Hash{9}},
+	}
+
+	// remap to expand the forest if needed
+	numdels, numadds := 0, len(leaves)
+	delta := int64(numadds - numdels) // watch 32/64 bit
+	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
+		// 1<<f.rows, f.numLeaves+delta)
+		err := f.reMap(f.rows + 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.addSwapless(leaves)
+
+	fmt.Println(f.ToString())
+
+	dels := []uint64{0, 1, 2}
+	f.removeSwapless(dels)
+
+	fmt.Println(f.ToString())
+
+	f.addSwapless([]Leaf{{Hash: Hash{10}}})
+
+	fmt.Println(f.ToString())
+
+	f.removeSwapless([]uint64{8, 9})
+	fmt.Println(f.ToString())
+
+	adds := []Leaf{
+		{Hash: Hash{11}},
+	}
+
+	f.addSwapless(adds)
+	fmt.Println(f.ToString())
+
+	adds = []Leaf{
+		{Hash: Hash{12}},
+	}
+
+	f.addSwapless(adds)
+	fmt.Println(f.ToString())
+
+	adds = []Leaf{
+		{Hash: Hash{13}},
+		{Hash: Hash{14}},
+		{Hash: Hash{15}},
+		{Hash: Hash{16}},
+	}
+	f.addSwapless(adds)
+	fmt.Println(f.ToString())
+}
 
 func TestDeleteReverseOrder(t *testing.T) {
 	f := NewForest(RamForest, nil, "", 0)

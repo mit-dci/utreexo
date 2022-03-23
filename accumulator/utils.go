@@ -300,6 +300,11 @@ func cousin(position uint64) uint64 {
 	return position ^ 2
 }
 
+func maxPosition(forestRows uint8) uint64 {
+	maxLeaves := uint64(1 << forestRows)
+	return (maxLeaves << 1) - 1
+}
+
 // TODO  inForest can probably be done better a different way.
 // do we really need this at all?  only used for error detection in descendToPos
 

@@ -1,20 +1,19 @@
 package accumulator
 
 import (
+	"fmt"
 	"sort"
 )
 
 // Transform outlines how the accumulator state should be modified. This function itself does
 // not modify the accumulator state.
-func Transform(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
-	//// Calculate the number of leaves after deletion
-	//nextNumLeaves := numLeaves - uint64(len(dels))
-
-	// Save the dels here so that we can un-modify it after we're done.
-	copyDels := make([]uint64, len(dels))
-	copy(copyDels, dels)
+func Transform(origDels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
+	dels := make([]uint64, len(origDels))
+	copy(dels, origDels)
 
 	deTwin(&dels, forestRows)
+
+	fmt.Println(dels)
 
 	// Moves indicate where a leaf should move to next.
 	moves := make([][]arrow, forestRows+1)
@@ -26,6 +25,19 @@ func Transform(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 		for detectRow(del, forestRows) != currentRow {
 			currentRow++
 		}
+
+		// If a root is being deleted, then we mark it and all the leaves below
+		// it to be deleted.
+		rootPresent := numLeaves&(1<<currentRow) != 0
+		rootPos := rootPosition(numLeaves, currentRow, forestRows)
+		if rootPresent && del == rootPos {
+			moves[currentRow] = append(moves[currentRow],
+				arrow{from: del, to: del})
+			continue
+		}
+
+		fmt.Printf("currentRow: %d, rootPresent: %v, rootPos: %d\n",
+			currentRow, rootPresent, rootPos)
 
 		sib := sibling(del)
 
@@ -51,8 +63,6 @@ func Transform(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
 			}
 		}
 	}
-
-	dels = copyDels
 
 	return moves
 }
@@ -107,6 +117,37 @@ func insertSort(dels *[]uint64, el uint64) {
 }
 
 func decompressMoves(moves [][]arrow, dels []uint64) {
+}
+
+func calcDirtyNodes(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uint64 {
+	dirtyNodes := make([][]uint64, len(moves))
+
+	for currentRow, moveRow := range moves {
+		for _, move := range moveRow {
+			// If to and from are the same, it means that the whole
+			// subtree is gonna be deleted, resulting in no dirty ndoes.
+			//
+			// So only calculate dirty position if they aren't the same.
+			if move.to != move.from {
+				toRow := detectRow(move.to, forestRows)
+
+				rootPresent := numLeaves&(1<<toRow) != 0
+				rootPos := rootPosition(numLeaves, uint8(currentRow), forestRows)
+
+				if rootPresent && move.to == rootPos {
+					continue
+				}
+
+				dirtyPos := parent(move.to, forestRows)
+				row := detectRow(dirtyPos, forestRows)
+
+				dirtyNodes[row] = append(
+					dirtyNodes[row], dirtyPos)
+			}
+		}
+	}
+
+	return dirtyNodes
 }
 
 // remTrans returns a slice arrow in bottom row to top row.
