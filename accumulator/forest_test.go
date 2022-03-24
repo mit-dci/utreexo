@@ -233,18 +233,22 @@ func TestSwapLessAdd(t *testing.T) {
 	f.addSwapless(leaves)
 
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
 
 	dels := []uint64{0, 1, 2}
 	f.removeSwapless(dels)
 
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
 
 	f.addSwapless([]Leaf{{Hash: Hash{10}}})
 
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
 
 	f.removeSwapless([]uint64{8, 9})
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
 
 	adds := []Leaf{
 		{Hash: Hash{11}},
@@ -252,6 +256,7 @@ func TestSwapLessAdd(t *testing.T) {
 
 	f.addSwapless(adds)
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
 
 	adds = []Leaf{
 		{Hash: Hash{12}},
@@ -259,6 +264,7 @@ func TestSwapLessAdd(t *testing.T) {
 
 	f.addSwapless(adds)
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
 
 	adds = []Leaf{
 		{Hash: Hash{13}},
@@ -268,6 +274,22 @@ func TestSwapLessAdd(t *testing.T) {
 	}
 	f.addSwapless(adds)
 	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
+
+	f.removeSwapless([]uint64{12})
+	fmt.Println(f.ToString())
+	fmt.Println(f.positionMap)
+
+	proofPositions := NewPositionList()
+	defer proofPositions.Free()
+
+	targetss := []uint64{4, 20, 24}
+	fmt.Printf("targets %v, proofpos %v\n", targetss, proofPositions.list)
+	//ProofPositionsSwapless(targetss, f.numLeaves, f.rows, &proofPositions.list)
+	ProofPositions(targetss, f.numLeaves, f.rows, &proofPositions.list)
+
+	fmt.Printf("targets %v, proofpos %v\n", targetss, proofPositions.list)
+	fmt.Printf("numLeaves: %d, f.rows: %d\n", f.numLeaves, f.rows)
 }
 
 func TestDeleteReverseOrder(t *testing.T) {
@@ -283,6 +305,19 @@ func TestDeleteReverseOrder(t *testing.T) {
 		t.Log(err)
 		t.Fatal("could not delete leaves 1 and 0")
 	}
+}
+
+func TestExtractRow(t *testing.T) {
+	targets := []uint64{4, 20, 24}
+	forestRow := uint8(4)
+
+	//fmt.Println(extractRow(targets, forestRow))
+
+	fmt.Println("targets", targets)
+	fmt.Println(extractRow(targets, forestRow, 2))
+	fmt.Println("targets", targets)
+	//fmt.Println(extractRow(targets, forestRow, 1))
+	//fmt.Println(extractRow(targets, forestRow, 2))
 }
 
 func TestForestAddDel(t *testing.T) {

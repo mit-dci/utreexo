@@ -5,6 +5,20 @@ import (
 	"testing"
 )
 
+func TestProofPositionsSwapless(t *testing.T) {
+	proofPositions := NewPositionList()
+	defer proofPositions.Free()
+
+	targets := []uint64{16, 18, 20}
+	numLeaves := uint64(16)
+	forestRows := uint8(4)
+
+	//ProofPositionsSwapless(targets, numLeaves, forestRows, &proofPositions.list)
+	ProofPositions(targets, numLeaves, forestRows, &proofPositions.list)
+
+	fmt.Println(proofPositions.list)
+}
+
 func TestTreeRows(t *testing.T) {
 	// Test all the powers of 2
 	for i := uint8(1); i <= 63; i++ {
