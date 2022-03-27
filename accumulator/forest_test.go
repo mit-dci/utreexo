@@ -17,6 +17,13 @@ func TestForestSwaplessSimple(t *testing.T) {
 		dels        []uint64
 		expected    map[uint64]Hash
 	}{
+		// 14
+		// |---------------\
+		// 12              13
+		// |-------\       |-------\
+		// 08      09      10      11
+		// |---\   |---\   |---\   |---\
+		// 00* 01* 02* 03* 04* 05  06* 07*
 		{
 			[]Leaf{
 				{Hash: Hash{1}},
@@ -201,6 +208,393 @@ func TestForestSwaplessSimple(t *testing.T) {
 					"for position %d, expected %s got %s",
 					i, pos, hex.EncodeToString(expectedHash[:]),
 					hex.EncodeToString(hash[:]))
+			}
+		}
+	}
+}
+
+type modification struct {
+	add []Leaf
+	del []uint64
+
+	expected      map[MiniHash]uint64
+	expectedEmpty []uint64
+	expectedRoots []Hash
+}
+
+func stringToHash(str string) Hash {
+	hash, err := hex.DecodeString(str)
+	if err != nil {
+		// Ok to panic since this function is only used for testing.
+		// If it panics, it means that the hardcoded string is wrong.
+		panic(err)
+	}
+
+	return *(*Hash)(hash)
+}
+
+func TestSwaplessModify(t *testing.T) {
+	var tests = []struct {
+		name     string
+		modifies []modification
+	}{
+		{
+			"Only adds",
+			[]modification{
+				// Only adds block 1
+				{
+					add: []Leaf{
+						{Hash: Hash{1}},
+						{Hash: Hash{2}},
+						{Hash: Hash{3}},
+						{Hash: Hash{4}},
+						{Hash: Hash{5}},
+						{Hash: Hash{6}},
+						{Hash: Hash{7}},
+						{Hash: Hash{8}},
+						{Hash: Hash{9}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini(): 0,
+						Hash{2}.Mini(): 1,
+						Hash{3}.Mini(): 2,
+						Hash{4}.Mini(): 3,
+						Hash{5}.Mini(): 4,
+						Hash{6}.Mini(): 5,
+						Hash{7}.Mini(): 6,
+						Hash{8}.Mini(): 7,
+						Hash{9}.Mini(): 8,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("ee4c7313527e3ee54ee97793cd35e8df" +
+							"4f7fcf3b0012bec7e7cfdb9ace0cd3fd"),
+						stringToHash("09000000000000000000000000000000" +
+							"00000000000000000000000000000000"),
+					},
+				},
+
+				// Only adds block 2
+				{
+					add: []Leaf{
+						{Hash: Hash{10}},
+						{Hash: Hash{11}},
+						{Hash: Hash{12}},
+						{Hash: Hash{13}},
+						{Hash: Hash{14}},
+						{Hash: Hash{15}},
+						{Hash: Hash{16}},
+						{Hash: Hash{17}},
+						{Hash: Hash{18}},
+						{Hash: Hash{19}},
+						{Hash: Hash{20}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini():  0,
+						Hash{2}.Mini():  1,
+						Hash{3}.Mini():  2,
+						Hash{4}.Mini():  3,
+						Hash{5}.Mini():  4,
+						Hash{6}.Mini():  5,
+						Hash{7}.Mini():  6,
+						Hash{8}.Mini():  7,
+						Hash{9}.Mini():  8,
+						Hash{10}.Mini(): 9,
+						Hash{11}.Mini(): 10,
+						Hash{12}.Mini(): 11,
+						Hash{13}.Mini(): 12,
+						Hash{14}.Mini(): 13,
+						Hash{15}.Mini(): 14,
+						Hash{16}.Mini(): 15,
+						Hash{17}.Mini(): 16,
+						Hash{18}.Mini(): 17,
+						Hash{19}.Mini(): 18,
+						Hash{20}.Mini(): 19,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("2c1ecb81b164c6dff4a6d89c19fcddf1" +
+							"5356f37e5a1f5e82f505c5b9ef856e25"),
+						stringToHash("8b34c7baf39f2216fd352a86616adaa5" +
+							"1f394103b0524d9dc2430045de50d116"),
+					},
+				},
+			},
+		},
+
+		{
+			"Delete once",
+			[]modification{
+				// Delete once block 1
+				{
+					add: []Leaf{
+						{Hash: Hash{1}},
+						{Hash: Hash{2}},
+						{Hash: Hash{3}},
+						{Hash: Hash{4}},
+						{Hash: Hash{5}},
+						{Hash: Hash{6}},
+						{Hash: Hash{7}},
+						{Hash: Hash{8}},
+						{Hash: Hash{9}},
+						{Hash: Hash{10}},
+						{Hash: Hash{11}},
+						{Hash: Hash{12}},
+						{Hash: Hash{13}},
+						{Hash: Hash{14}},
+						{Hash: Hash{15}},
+						{Hash: Hash{16}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini():  0,
+						Hash{2}.Mini():  1,
+						Hash{3}.Mini():  2,
+						Hash{4}.Mini():  3,
+						Hash{5}.Mini():  4,
+						Hash{6}.Mini():  5,
+						Hash{7}.Mini():  6,
+						Hash{8}.Mini():  7,
+						Hash{9}.Mini():  8,
+						Hash{10}.Mini(): 9,
+						Hash{11}.Mini(): 10,
+						Hash{12}.Mini(): 11,
+						Hash{13}.Mini(): 12,
+						Hash{14}.Mini(): 13,
+						Hash{15}.Mini(): 14,
+						Hash{16}.Mini(): 15,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("2c1ecb81b164c6dff4a6d89c19fcddf1" +
+							"5356f37e5a1f5e82f505c5b9ef856e25"),
+					},
+				},
+
+				// Delete once block 2
+				{
+					add: nil,
+					del: []uint64{0, 2, 3, 4, 5, 6, 7},
+					expected: map[MiniHash]uint64{
+						Hash{2}.Mini():  28,
+						Hash{9}.Mini():  8,
+						Hash{10}.Mini(): 9,
+						Hash{11}.Mini(): 10,
+						Hash{12}.Mini(): 11,
+						Hash{13}.Mini(): 12,
+						Hash{14}.Mini(): 13,
+						Hash{15}.Mini(): 14,
+						Hash{16}.Mini(): 15,
+					},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7, 16, 17,
+						18, 19, 24, 25},
+					expectedRoots: []Hash{
+						stringToHash("e018100dadcc58df80b4e955fffcc3fd" +
+							"a1b3c9831b86bb6b7a80f824c046c360"),
+					},
+				},
+			},
+		},
+
+		{
+			"4 blocks. Adds and dels",
+			[]modification{
+				// 1st block.
+				{
+					add: []Leaf{
+						{Hash: Hash{1}},
+						{Hash: Hash{2}},
+						{Hash: Hash{3}},
+						{Hash: Hash{4}},
+						{Hash: Hash{5}},
+						{Hash: Hash{6}},
+						{Hash: Hash{7}},
+						{Hash: Hash{8}},
+						{Hash: Hash{9}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini(): 0,
+						Hash{2}.Mini(): 1,
+						Hash{3}.Mini(): 2,
+						Hash{4}.Mini(): 3,
+						Hash{5}.Mini(): 4,
+						Hash{6}.Mini(): 5,
+						Hash{7}.Mini(): 6,
+						Hash{8}.Mini(): 7,
+						Hash{9}.Mini(): 8,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("ee4c7313527e3ee54ee97793cd35e8df" +
+							"4f7fcf3b0012bec7e7cfdb9ace0cd3fd"),
+						stringToHash("09000000000000000000000000000000" +
+							"00000000000000000000000000000000"),
+					},
+				},
+
+				// 2nd block.
+				{
+					add: []Leaf{
+						{Hash: Hash{10}},
+						{Hash: Hash{11}},
+						{Hash: Hash{12}},
+					},
+					expected: map[MiniHash]uint64{
+						Hash{3}.Mini():  16,
+						Hash{4}.Mini():  17,
+						Hash{6}.Mini():  18,
+						Hash{7}.Mini():  6,
+						Hash{8}.Mini():  7,
+						Hash{9}.Mini():  8,
+						Hash{10}.Mini(): 9,
+						Hash{11}.Mini(): 10,
+						Hash{12}.Mini(): 11,
+					},
+					del:           []uint64{0, 1, 4},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5},
+					expectedRoots: []Hash{
+						stringToHash("536cd74e712f63e10ecec98f084024ed" +
+							"6ab16db91f24847206e08c9c2af7f339"),
+						stringToHash("f7a8b895af8b0261718021e0cfcabd9e" +
+							"0cf17bfd6c8e2755ee6461c3c85b986e"),
+					},
+				},
+
+				// 3rd block.
+				{
+					add: []Leaf{
+						{Hash: Hash{13}},
+						{Hash: Hash{14}},
+						{Hash: Hash{15}},
+						{Hash: Hash{16}},
+						{Hash: Hash{17}},
+					},
+					expected: map[MiniHash]uint64{
+						Hash{4}.Mini():  56,
+						Hash{9}.Mini():  8,
+						Hash{10}.Mini(): 9,
+						Hash{11}.Mini(): 10,
+						Hash{12}.Mini(): 11,
+						Hash{13}.Mini(): 12,
+						Hash{14}.Mini(): 13,
+						Hash{15}.Mini(): 14,
+						Hash{16}.Mini(): 15,
+						Hash{17}.Mini(): 16,
+					},
+					del: []uint64{6, 7, 16, 18},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7,
+						32, 33, 34, 35, 48, 49},
+					expectedRoots: []Hash{
+						stringToHash("ab567775cdbd9373c465cb68e79ac367" +
+							"b0cbf385c19aacd2ae0787bad39b0957"),
+						stringToHash("11000000000000000000000000000000" +
+							"00000000000000000000000000000000"),
+					},
+				},
+
+				// 4th block.
+				{
+					add: []Leaf{
+						{Hash: Hash{18}},
+						{Hash: Hash{19}},
+					},
+					expected: map[MiniHash]uint64{
+						Hash{4}.Mini():  56,
+						Hash{9}.Mini():  36,
+						Hash{10}.Mini(): 37,
+						Hash{11}.Mini(): 38,
+						Hash{12}.Mini(): 39,
+						Hash{17}.Mini(): 16,
+						Hash{18}.Mini(): 17,
+						Hash{19}.Mini(): 18,
+					},
+					del: []uint64{12, 13, 14, 15},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7,
+						12, 13, 14, 15, 32, 33, 34, 35, 48, 49},
+					expectedRoots: []Hash{
+						stringToHash("c0fce95da61de813a7f043e23ac13dd0" +
+							"7c47f52b2565315d5a43d89d9bef0904"),
+						stringToHash("a3cdd313912ce74d5335dbddee5b8682" +
+							"567ad6ac6ca4d33ac8dc20ea864989a3"),
+						stringToHash("13000000000000000000000000000000" +
+							"00000000000000000000000000000000"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		//if i != 2 {
+		//	continue
+		//}
+
+		forest := NewForest(RamForest, nil, "", 0)
+
+		for blockHeight, modify := range test.modifies {
+			// Perform the modify.
+			_, err := forest.ModifySwapless(modify.add, modify.del)
+			if err != nil {
+				t.Fatalf("TestSwaplessModify test \"%s\" fail at block %d. Modify err:%v",
+					test.name, blockHeight, err)
+			}
+
+			fmt.Println(forest.ToString())
+			for _, root := range forest.GetRoots() {
+				fmt.Println(hex.EncodeToString(root[:]))
+			}
+			fmt.Println(forest.positionMap)
+
+			// Check that all the leaves in the map are there and that the
+			// values are the same.
+			for miniHash, position := range modify.expected {
+				gotPosition, found := forest.positionMap[miniHash]
+				if !found {
+					t.Fatalf("TestSwaplessModify test \"%s\" fail at block %d. "+
+						"Couldn't find expected minihash of %s",
+						test.name, blockHeight, hex.EncodeToString(miniHash[:]))
+				}
+
+				if gotPosition != position {
+					t.Fatalf("TestSwaplessModify test \"%s\" fail at block %d. "+
+						"For minihash %s, expected %d but got %d",
+						test.name, blockHeight, hex.EncodeToString(miniHash[:]),
+						position, gotPosition)
+				}
+			}
+
+			// Check that the length of the roots match up.
+			roots := forest.GetRoots()
+			if len(roots) != len(modify.expectedRoots) {
+				t.Fatalf("TestSwaplessModify test \"%s\" fail at block %d. "+
+					"Expected %d roots but got %d", test.name, blockHeight,
+					len(modify.expectedRoots), len(roots))
+			}
+
+			// Check that the roots match up.
+			for i, expectedRoot := range modify.expectedRoots {
+				if expectedRoot != roots[i] {
+					t.Fatalf("TestSwaplessModify test \"%s\" fail at block %d. "+
+						"Root %d mismatch. Expected %s, got %s", test.name,
+						blockHeight, i,
+						hex.EncodeToString(expectedRoot[:]),
+						hex.EncodeToString(roots[i][:]))
+				}
+			}
+
+			// Check that the empty positions are indeed empty.
+			for _, expectedEmpty := range modify.expectedEmpty {
+				readHash := forest.data.read(expectedEmpty)
+
+				if readHash != empty {
+					t.Fatalf("TestSwaplessModify test \"%s\" fail at block %d. "+
+						"Position %d was expected to be empty but read %s",
+						test.name, blockHeight, expectedEmpty,
+						hex.EncodeToString(readHash[:]))
+				}
 			}
 		}
 	}

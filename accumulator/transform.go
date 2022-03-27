@@ -13,7 +13,7 @@ func Transform(origDels []uint64, numLeaves uint64, forestRows uint8) [][]arrow 
 
 	deTwin(&dels, forestRows)
 
-	fmt.Println(dels)
+	fmt.Println("detwined del", dels)
 
 	// Moves indicate where a leaf should move to next.
 	moves := make([][]arrow, forestRows+1)
@@ -43,6 +43,8 @@ func Transform(origDels []uint64, numLeaves uint64, forestRows uint8) [][]arrow 
 
 		moves[currentRow] = append(moves[currentRow],
 			arrow{from: sib, to: parent(del, forestRows)})
+
+		fmt.Printf("from %d, to %d\n", sib, parent(del, forestRows))
 
 		// If 00 -> 16 and 16 -> 24, then what you're really doing is 00 -> 24.
 		// The loop below tries to find any arrows that can be shortened with
@@ -122,7 +124,7 @@ func decompressMoves(moves [][]arrow, dels []uint64) {
 func calcDirtyNodes(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uint64 {
 	dirtyNodes := make([][]uint64, len(moves))
 
-	for currentRow, moveRow := range moves {
+	for _, moveRow := range moves {
 		for _, move := range moveRow {
 			// If to and from are the same, it means that the whole
 			// subtree is gonna be deleted, resulting in no dirty ndoes.
@@ -132,7 +134,7 @@ func calcDirtyNodes(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uin
 				toRow := detectRow(move.to, forestRows)
 
 				rootPresent := numLeaves&(1<<toRow) != 0
-				rootPos := rootPosition(numLeaves, uint8(currentRow), forestRows)
+				rootPos := rootPosition(numLeaves, uint8(toRow), forestRows)
 
 				if rootPresent && move.to == rootPos {
 					continue

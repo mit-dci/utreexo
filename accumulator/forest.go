@@ -242,7 +242,7 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 
 // deleteSubTree deletes the position and the entire subtree below it.
 func (f *Forest) deleteSubTree(position uint64) {
-	fmt.Println("deleteSubTree", position)
+	//fmt.Println("deleteSubTree", position)
 	fromRow := int(detectRow(position, f.rows))
 
 	positions := []uint64{position}
@@ -300,6 +300,8 @@ func (f *Forest) movePositionUp(from, to uint64) {
 			leftChild := child(fromPosition, f.rows)
 			rightChild := rightSib(leftChild)
 
+			// If one child isn't empty, that means that this node isn't a
+			// leaf and there's more nodes below.
 			if currentRow != 0 && f.data.read(leftChild) != empty {
 				// Left child.
 				nextFromPositions = append(nextFromPositions, leftChild)
@@ -311,24 +313,32 @@ func (f *Forest) movePositionUp(from, to uint64) {
 				nextToPositions = append(nextToPositions,
 					rightSib(child(toPosition, f.rows)))
 			} else {
-				fmt.Printf("remapping fromHash %s to pos %d\n",
-					hex.EncodeToString(fromHash.Prefix()), toPosition)
-				// Update the positionMap entry.
+				// The node that we're on is a leaf. Update the
+				// positionMap entry.
 				f.positionMap[fromHash.Mini()] = toPosition
 			}
-
-			//if currentRow != 0 && f.data.read(rightChild) != empty {
-			//}
-
 		}
 
 		// Zero out all the positions that won't have another hash replacing it.
 		for i, fromPosition := range fromPositions {
 			if currentRow != 0 {
-				if !slices.Contains(nextToPositions, fromPosition) {
-					f.data.write(fromPosition, empty)
+				// Check if I'm a leaf. If I am, then empty all of the children
+				// from my to-position.
+				if f.data.read(child(fromPosition, f.rows)) == empty {
+					leftChild := child(toPositions[i], f.rows)
+					rightChild := leftChild | 1
+
+					f.deleteSubTree(leftChild)
+					f.deleteSubTree(rightChild)
+				} else {
+					// Write empty if nothing is replacing where this node was.
+					if !slices.Contains(nextToPositions, fromPosition) {
+						f.data.write(fromPosition, empty)
+					}
 				}
 			} else {
+				// If we're moving from row 0, there's only leaves here. Empty
+				// all the children of the to-position.
 				if detectRow(fromPosition, f.rows) == 0 {
 					leftChild := child(toPositions[i], f.rows)
 					rightChild := leftChild | 1
@@ -597,7 +607,7 @@ func (f *Forest) addSwapless(adds []Leaf) {
 		// Current position.
 		position := f.numLeaves
 
-		fmt.Println("all root pos: ", positionList.list)
+		//fmt.Println("all root pos: ", positionList.list)
 
 		node := add.Hash
 		f.data.write(position, node)
@@ -616,8 +626,6 @@ func (f *Forest) addSwapless(adds []Leaf) {
 		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
 			rootIdx := len(positionList.list) - int(h+1)
 			root := f.data.read(positionList.list[rootIdx])
-
-			fmt.Println("at pos: ", positionList.list[rootIdx])
 
 			// If the root that we're gonna hash with is empty, move the current
 			// node up to the position of the parent.
@@ -662,7 +670,7 @@ func (f *Forest) addSwapless(adds []Leaf) {
 			// Write the hash at the calculated position.
 			f.data.write(position, node)
 
-			fmt.Printf("wriiting %s at pos %d\n",
+			fmt.Printf("add: wriiting %s at pos %d\n",
 				hex.EncodeToString(node[:]), position)
 		}
 
@@ -729,20 +737,59 @@ func (f *Forest) ModifySwapless(adds []Leaf, dels []uint64) (*UndoBlock, error) 
 		}
 	}
 
-	numdels, numadds := len(dels), len(adds)
-	delta := int64(numadds - numdels)
+	// Remove first since the remap can alter positions of leaves.
+	f.removeSwapless(dels)
+
 	// Remap to expand the forest if needed.
-	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
+	for int64(f.numLeaves)+int64(len(adds)) > int64(1<<f.rows) {
 		err := f.reMap(f.rows + 1)
+		if err != nil {
+			return nil, err
+		}
+
+		err = f.reMapPositionMap(f.rows)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	f.removeSwapless(dels)
 	f.addSwapless(adds)
 
 	return nil, nil
+}
+
+func (f *Forest) reMapPositionMap(destRows uint8) error {
+	fmt.Println("reMapPositionMap")
+	//if destRows == f.rows {
+	//	return fmt.Errorf("can't remap %d to %d... it's the same",
+	//		destRows, destRows)
+	//}
+
+	//if destRows > f.rows+1 || (f.rows > 0 && destRows < f.rows-1) {
+	//	return fmt.Errorf("changing by more than 1 not programmed yet")
+	//}
+
+	//if verbose {
+	//	fmt.Printf("remap forest %d rows -> %d rows\n", f.rows, destRows)
+	//}
+
+	//// for row reduction
+	//if destRows < f.rows {
+	//	return fmt.Errorf("row reduction not implemented")
+	//}
+
+	for hash, position := range f.positionMap {
+		row := detectRow(position, destRows-1)
+		if row != 0 {
+			beforeOffset := getRowOffset(row, destRows-1)
+			afterOffset := getRowOffset(row, destRows)
+
+			delta := position - beforeOffset
+			f.positionMap[hash] = afterOffset + delta
+		}
+	}
+
+	return nil
 }
 
 // reMap changes the rows in the forest
