@@ -42,6 +42,24 @@ func TestSwaplessPromote(t *testing.T) {
 	fmt.Printf(f.ToString())
 }
 
+func TestSwaplessDelete(t *testing.T) {
+	f := NewForest(RamForest, nil, "", 0)
+
+	sc := newSimChain(0x07)
+	adds, _, _ := sc.NextBlock(8) // create leaves
+	_, err := f.Modify(adds, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Print(f.ToString())              // show initial forest
+	delPositions := []uint64{1, 2, 4, 6} // set positions to delete
+	_, err = f.Modify(nil, delPositions) // delete
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Print(f.ToString()) // show post-deletion forest
+}
+
 func TestForestAddDel(t *testing.T) {
 	rand.Seed(4)
 	numAdds := uint32(4)

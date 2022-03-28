@@ -62,16 +62,16 @@ func benchmarkTreeRowsOrig(i uint64, b *testing.B) {
 // for example, in a tree of 15 elements the input
 // [2, 3, 5, 10, 11, 20] returns [5, 17, 26]
 // 5 stays in place, 2 and 3 pair to 17, 10 and 11 to 21, and 20 and 21 to 26.
-func TestDelToRaise(t *testing.T) {
+func TestCondenseDeletions(t *testing.T) {
 
 	fmt.Printf("max on row %d %d\n", 1, maxPosOnRow(1, 3))
-	// in := []uint64{2, 3, 5, 10, 11, 20}
+	in := []uint64{1, 2}
 	// in := []uint64{0, 1, 2, 3, 6, 7, 22, 23} // should be 19, 24, 27
 	// in := []uint64{0, 1}
-	in := []uint64{8, 9, 10, 24, 25} // should be 11:2, 29:1
+	// in := []uint64{8, 9, 10, 24, 25}
 	// in := []uint64{2, 3, 8, 9, 10, 11}
 
-	r := delToRise(in, 4)
+	r := condenseDeletions(in, 4)
 
 	fmt.Printf(" out %v\n", r)
 

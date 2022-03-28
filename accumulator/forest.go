@@ -157,59 +157,40 @@ func (f *Forest) ReconstructStats() (uint64, uint8) {
 	return f.numLeaves, f.rows
 }
 
+/*
+	Deletion algo:
+	Delete leaf, write sibling to parent.
+	While either aunt* or sibling are empty, keep doing this:
+	Rise. Write non-empty sibling to parent, otherwise write self to parent.
+	*(An aunt outside of the forest counts as non-empty.)
+*/
+
+// TODO: read self and sibling in 1 function call
 // removev5 swapless
 func (f *Forest) removev5(dels []uint64) error {
-	fmt.Printf("remove %v\n", dels)
-	// calculate what numLeaves will be after this removal
-	nextNumLeaves := f.numLeaves - uint64(len(dels))
-
-	// remove all the entries in the positionMap.
-	// no rush; can do this later / some other time / not at all
-	// this is really just to save some space in the map so might be better
-	// if it happens at some other time.
+	// should do this later / non-blocking as it's just to free up space.
 	for _, d := range dels {
 		delete(f.positionMap, f.data.read(d).Mini())
-		// clear out the hash (also can probably be skipped)
-		f.data.write(d, empty)
 	}
-
-	// consolodate deletions; only delete what we need to
-	rises := delToRise(dels, f.rows)
-	fmt.Printf("raise:\t%v", rises)
 	dirt := []uint64{}
-	for _, r := range rises {
-		// f.data.write(del, empty)
-		dirt = append(dirt, f.promote(r.from^1))
+	// consolodate deletions; only delete what we need to
+	condensedDels := condenseDeletions(dels, f.rows)
+	// main iteration of all deletion
+	for _, p := range condensedDels {
+		f.data.write(p, empty) // delete leaf
+		f.promote(p ^ 1)       // write sibling to parent
+		for f.lonely(p) {      // continue while lonely
+			p = parent(p, f.rows)          // rise
+			if f.data.read(p^1) != empty { // check if sibling is empty
+				f.promote(p ^ 1) // promote sibling if it exists
+			} else {
+				f.promote(p) // promote self (possibly empty) if no sibling
+			}
+		}
+		dirt = append(dirt, parent(p, f.rows))
 	}
 	fmt.Printf("dirt: %v\n", dirt)
-
-	f.numLeaves = nextNumLeaves
-	return nil
-}
-
-func (f *Forest) removev4(dels []uint64) error {
-	nextNumLeaves := f.numLeaves - uint64(len(dels))
-	// check that all dels are there
-	for _, dpos := range dels {
-		if dpos > f.numLeaves {
-			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
-		}
-	}
-	var hashDirt []uint64
-	swapRows := remTrans2(dels, f.numLeaves, f.rows)
-	// loop taken from pollard rem2.
-	// TODO Maybe pollard and forest can both satisfy the same interface..?
-	for r := uint8(0); r < f.rows; r++ {
-		hashDirt = updateDirt(hashDirt, swapRows[r], f.numLeaves, f.rows)
-
-		// do all the hashes at once at the end
-		err := f.hashRow(hashDirt)
-		if err != nil {
-			return err
-		}
-	}
-	f.numLeaves = nextNumLeaves
+	f.numLeaves -= uint64(len(dels))
 	return nil
 }
 
@@ -264,7 +245,18 @@ func (f *Forest) promote(p uint64) uint64 {
 	parentPos := parent(p, f.rows)
 	f.data.write(parentPos, f.data.read(p))
 	return parentPos
+}
 
+// A position is "lonely" if either its sibling or aunt is missing.
+// Aunts that are outside of the forest range count as existing
+// for the purpose of loneliness (who needs friends at the top, eh?)
+func (f *Forest) lonely(p uint64) bool {
+	// if aunt is outside of the forest, we're done
+	auntPos := parent(p, f.rows) ^ 1
+	if !inForest(auntPos, f.numLeaves, f.rows) {
+		return false
+	}
+	return f.data.read(auntPos) == empty || f.data.read(p^1) == empty
 }
 
 // reHash hashes new data in the forest based on dirty positions.

@@ -212,3 +212,58 @@ If we want to go to 00, it's left left left left, or 0000.  To get to 15 it's ri
 But in the middle a lot of things can happen.  5 can go all over the place.  With 1 deletion, 05 can get to 18 (delete 04), 19 (delete 19), 17 (24) or 21 (29).  From there it can get to all of row 2 (24...27).  So maybe the leaf position doesn't tell much at all.  Next step: quantify exactly how many possible places things can move to. 
 
 It seems that 15 is only restricted to the 23->27->29 edge because that's the edge of the tree.  If it were a tree with 32 leaves, 15 could move up to 39 (parent) or 47 (15 right on row 1 which starts at 32).  With a large leftmost tree, things may be able to move around a lot.  They probably saturate at higher rows, but what's the branching factor at lower rows?
+
+= = = = = = = = = = = = = = = = = = = = = = 
+
+Better forest deletion: overwrite parent
+
+
+30
+|-------------------------------\
+28                              29
+|---------------\               |---------------\
+24              25              26              27
+|-------\       |-------\       |-------\       |-------\
+16      17      18      19      20      21      22      23
+|---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15
+
+To delete 9, zero out 9, read 8 and write 8 to 20 (leave 8 at 8)
+
+Then to delete 8, zero out 8, read 9, see that it's empty, go up and zero out 20, and read 21 instead, write it to 26.  Now 26 has 21, 20 has 8.
+But don't have to move any subtrees; previously we'd have to move 21 up to 26 and 10 up to 20.  We can leave 10 and 11.
+
+30
+|-------------------------------\
+28                              29
+|---------------\               |---------------\
+24              25              21 (pos 26)     27
+|-------\       |-------\       |-------\       |-------\
+16      17      18      19      xx      21      22      23
+|---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07  xx  xx  10  11  12  13  14  15
+
+This is what it looks like after deleting 8 and 9.  Everything works OK with this physical data layout.  The only change is when making proofs, if you see an empty node, just skip it.  
+So if we want to prove 10:
+11 - ok.  20 - empty, skip.  27 - ok.  28 - ok.  So the proof for 10 is (11, 27, 28).  This is the same as if we had moved the 21 subtree up.
+When something changes underneath 27 (say deleting 14) and 29 needs to be recomputed, 29's children are all set, just grab and hash.  That would not be the case if you tried to recompute position 26.  But that won't happen.  The only thing that would cause recomputation of 26 would be deletiong of 10 or 11.  Say we try to delete 11 -- zero out 11, read 10, 
+
+
+multi deletion: condense (00, 01, 02, 03, 04 -> 24, 04)
+
+
+
+then for each deletion:
+	zero out deletion position
+	check sibling.  If filled:
+		copy to x
+		move up to parent
+		check sibling.  if filled:
+			
+
+
+(it could be fancier / faster if you zero out everything first.  For example, deleting (9, 21)
+deletion of  9 checks 8, exists.  up to 21, exists, moves 8 to 20.
+deletion of 21 checks 20, exists.  up to 27, exists, moves 20 to 26.
+
+The value at 9 ends up getting written, read back, and written again.  It would be faster if 9 moved all the way up to 26 in one step.  That's a //TODO improvement however as the code will be more complex.
