@@ -330,6 +330,25 @@ func parentMany(position uint64, rise, forestRows uint8) uint64 {
 	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
 }
 
+//func isDescendent( uint64, forestRows uint8) bool {
+//	for row:=0; row<int(forestRows); row++{
+//	}
+//}
+
+func isAncestor(higherPos, lowerPos uint64, forestRows uint8) bool {
+	lowerRow := detectRow(lowerPos, forestRows)
+	higherRow := detectRow(higherPos, forestRows)
+
+	for ; lowerRow < higherRow; lowerRow++ {
+		ancestor := parentMany(lowerPos, higherRow-lowerRow, forestRows)
+		if ancestor == higherPos {
+			return true
+		}
+	}
+
+	return false
+}
+
 // rightSib returns the right sibling for this node. If the node is
 // the right sibling, itself is returned.
 func rightSib(pos uint64) uint64 {

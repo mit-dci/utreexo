@@ -399,6 +399,189 @@ func TestSwaplessModify(t *testing.T) {
 		},
 
 		{
+			"edge case",
+			[]modification{
+				// 1st block.
+				{
+					add: []Leaf{
+						{Hash: Hash{1}},
+						{Hash: Hash{2}},
+						{Hash: Hash{3}},
+						{Hash: Hash{4}},
+						{Hash: Hash{5}},
+						{Hash: Hash{6}},
+						{Hash: Hash{7}},
+						{Hash: Hash{8}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini(): 0,
+						Hash{2}.Mini(): 1,
+						Hash{3}.Mini(): 2,
+						Hash{4}.Mini(): 3,
+						Hash{5}.Mini(): 4,
+						Hash{6}.Mini(): 5,
+						Hash{7}.Mini(): 6,
+						Hash{8}.Mini(): 7,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("ee4c7313527e3ee54ee97793cd35e8df" +
+							"4f7fcf3b0012bec7e7cfdb9ace0cd3fd"),
+					},
+				},
+
+				{
+					add:           nil,
+					del:           []uint64{0, 1, 2, 4},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 8, 9},
+					expectedRoots: []Hash{
+						stringToHash("d10790b861666df44c6dfb52aa700ae3" +
+							"c469ebf4e06de7e2c55da7dae6fd93f0"),
+					},
+				},
+
+				{
+					add:           nil,
+					del:           []uint64{6, 12},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+					expectedRoots: []Hash{
+						stringToHash("17778a33dcae949b32cec24c8d06971f" +
+							"b4802f0bf463ec279e6efa323a09fbd9"),
+					},
+				},
+			},
+		},
+
+		{
+			"edge case 2",
+			[]modification{
+				// 1st block.
+				{
+					add: []Leaf{
+						{Hash: Hash{1}},
+						{Hash: Hash{2}},
+						{Hash: Hash{3}},
+						{Hash: Hash{4}},
+						{Hash: Hash{5}},
+						{Hash: Hash{6}},
+						{Hash: Hash{7}},
+						{Hash: Hash{8}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini(): 0,
+						Hash{2}.Mini(): 1,
+						Hash{3}.Mini(): 2,
+						Hash{4}.Mini(): 3,
+						Hash{5}.Mini(): 4,
+						Hash{6}.Mini(): 5,
+						Hash{7}.Mini(): 6,
+						Hash{8}.Mini(): 7,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("ee4c7313527e3ee54ee97793cd35e8df" +
+							"4f7fcf3b0012bec7e7cfdb9ace0cd3fd"),
+					},
+				},
+
+				{
+					add:           nil,
+					del:           []uint64{0, 1, 2, 4},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 8, 9},
+					expectedRoots: []Hash{
+						stringToHash("d10790b861666df44c6dfb52aa700ae3" +
+							"c469ebf4e06de7e2c55da7dae6fd93f0"),
+					},
+				},
+
+				{
+					add:           nil,
+					del:           []uint64{6, 12},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+					expectedRoots: []Hash{
+						stringToHash("17778a33dcae949b32cec24c8d06971f" +
+							"b4802f0bf463ec279e6efa323a09fbd9"),
+					},
+				},
+			},
+		},
+
+		{
+			"test empty deletions",
+			[]modification{
+				// 1st block.
+				{
+					add: []Leaf{
+						{Hash: Hash{1}},
+						{Hash: Hash{2}},
+						{Hash: Hash{3}},
+						{Hash: Hash{4}},
+						{Hash: Hash{5}},
+						{Hash: Hash{6}},
+						{Hash: Hash{7}},
+						{Hash: Hash{8}},
+						{Hash: Hash{9}},
+						{Hash: Hash{10}},
+						{Hash: Hash{11}},
+						{Hash: Hash{12}},
+						{Hash: Hash{13}},
+						{Hash: Hash{14}},
+						{Hash: Hash{15}},
+						{Hash: Hash{16}},
+					},
+					del: nil,
+					expected: map[MiniHash]uint64{
+						Hash{1}.Mini():  0,
+						Hash{2}.Mini():  1,
+						Hash{3}.Mini():  2,
+						Hash{4}.Mini():  3,
+						Hash{5}.Mini():  4,
+						Hash{6}.Mini():  5,
+						Hash{7}.Mini():  6,
+						Hash{8}.Mini():  7,
+						Hash{9}.Mini():  8,
+						Hash{10}.Mini(): 9,
+						Hash{11}.Mini(): 10,
+						Hash{12}.Mini(): 11,
+						Hash{13}.Mini(): 12,
+						Hash{14}.Mini(): 13,
+						Hash{15}.Mini(): 14,
+						Hash{16}.Mini(): 15,
+					},
+					expectedEmpty: nil,
+					expectedRoots: []Hash{
+						stringToHash("2c1ecb81b164c6dff4a6d89c19fcddf1" +
+							"5356f37e5a1f5e82f505c5b9ef856e25"),
+					},
+				},
+
+				{
+					add: nil,
+					del: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 14},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15,
+						16, 17, 18, 19, 24, 25},
+					expectedRoots: []Hash{
+						stringToHash("7ccdb5eb659438b7cd85f8c46788ecf0" +
+							"ed07239f8c8bcdc63733917fd7b64c89"),
+					},
+				},
+
+				{
+					add: nil,
+					del: []uint64{11, 12, 13, 28},
+					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+						13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 27},
+					expectedRoots: []Hash{
+						stringToHash("4b963007f029831e0759ed5bf0646b4d" +
+							"77acc60e50aaec212b6add8e20bb0776"),
+					},
+				},
+			},
+		},
+
+		{
 			"4 blocks. Adds and dels",
 			[]modification{
 				// 1st block.
@@ -529,6 +712,9 @@ func TestSwaplessModify(t *testing.T) {
 
 	for _, test := range tests {
 		//if i != 2 {
+		//	continue
+		//}
+		//if test.name != "test empty deletions" {
 		//	continue
 		//}
 
@@ -721,6 +907,8 @@ func TestForestAddDel(t *testing.T) {
 
 	sc := newSimChain(0x07)
 
+	allProof := 0
+
 	for b := 0; b < 1000; b++ {
 
 		adds, _, delHashes := sc.NextBlock(numAdds)
@@ -734,7 +922,270 @@ func TestForestAddDel(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+		allProof += len(bp.Proof)
+
+		//fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+	}
+
+	fmt.Println("allproof", allProof)
+}
+
+func TestForestSwaplessAddDel(t *testing.T) {
+	numAdds := uint32(3)
+
+	allLeaves := make(map[Hash]interface{})
+
+	f := NewForest(RamForest, nil, "", 0)
+
+	sc := newSimChain(0x07)
+
+	allProof := 0
+
+	for b := 0; b < 1000; b++ {
+		fmt.Println("start block ", b)
+		for h := uint8(0); h < f.rows; h++ {
+			if (f.numLeaves>>h)&1 == 1 {
+				pos := rootPosition(f.numLeaves, h, f.rows)
+				fmt.Println()
+				fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+					pos, f.numLeaves, f.rows, h)
+				fmt.Println(f.SubTreeToString(pos))
+				fmt.Println()
+			}
+		}
+		adds, _, delHashes := sc.NextBlock(numAdds)
+
+		bp, err := f.ProveBatch(delHashes)
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		for _, del := range bp.Targets {
+			//_, found := allDelPos[del]
+			//if found {
+			//	t.Fatalf("TestSwapLessAddDel fail. Re-deleting position %d", del)
+			//}
+			//allDelPos[del] = nil
+
+			readHash := f.data.read(del)
+			if readHash == empty {
+				for h := uint8(0); h < f.rows; h++ {
+					if (f.numLeaves>>h)&1 == 1 {
+						pos := rootPosition(f.numLeaves, h, f.rows)
+						fmt.Println()
+						fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+							pos, f.numLeaves, f.rows, h)
+						fmt.Println(f.SubTreeToString(pos))
+						fmt.Println()
+					}
+				}
+				t.Fatalf("Trying to delete empty at pos %d, block %d", del, b)
+			}
+		}
+
+		_, err = f.ModifySwapless(adds, bp.Targets)
+		if err != nil {
+			fmt.Println(f.SubTreeToString(138))
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		err = f.PosMapSanitySwapless()
+		if err != nil {
+			for h := uint8(0); h < f.rows; h++ {
+				if (f.numLeaves>>h)&1 == 1 {
+					pos := rootPosition(f.numLeaves, h, f.rows)
+					fmt.Println()
+					fmt.Println("bp targets", bp.Targets)
+					fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+						pos, f.numLeaves, f.rows, h)
+					fmt.Println(f.SubTreeToString(pos))
+					fmt.Println()
+				}
+			}
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		roots := f.GetRoots()
+		for i, root := range roots {
+			if root == empty {
+				fmt.Println(f.ToString())
+				for h := uint8(0); h < f.rows; h++ {
+					if (f.numLeaves>>h)&1 == 1 {
+						pos := rootPosition(f.numLeaves, h, f.rows)
+						fmt.Println()
+						fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+							pos, f.numLeaves, f.rows, h)
+						fmt.Println(f.SubTreeToString(pos))
+						fmt.Println()
+					}
+				}
+				fmt.Printf("root %d is empty\n", i)
+				//t.Fatalf("TestSwapLessAddDel fail: root %d is empty", i)
+			}
+		}
+
+		//fmt.Println("ROOTS")
+		//for i, root := range roots {
+		//	fmt.Printf("root %d: %s\n", i, hex.EncodeToString(root[:]))
+		//}
+		//fmt.Println("ROOTS END")
+
+		for h := uint8(0); h < f.rows; h++ {
+			if (f.numLeaves>>h)&1 == 1 {
+				pos := rootPosition(f.numLeaves, h, f.rows)
+				fmt.Println()
+				fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+					pos, f.numLeaves, f.rows, h)
+				fmt.Println(f.SubTreeToString(pos))
+				fmt.Println()
+			}
+		}
+
+		//fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+
+		for _, add := range adds {
+			allLeaves[add.Hash] = nil
+		}
+
+		for _, del := range delHashes {
+			delete(allLeaves, del)
+		}
+
+		for hash := range allLeaves {
+			pos, found := f.positionMap[hash.Mini()]
+			if !found {
+				err := fmt.Errorf("Hash %s not present in the position map",
+					hex.EncodeToString(hash[:]))
+				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+			}
+
+			gotHash := f.data.read(pos)
+			if gotHash != hash {
+				err := fmt.Errorf("At position %d, expected %s, got %s",
+					pos, hex.EncodeToString(hash[:]), hex.EncodeToString(gotHash[:]))
+				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+			}
+		}
+
+		allProof += len(bp.Proof)
+
+		for hash, pos := range f.positionMap {
+			readHash := f.data.read(pos)
+			if hash != readHash.Mini() {
+				err := fmt.Errorf("At position %d, position map had %s, read %s",
+					pos, hex.EncodeToString(hash[:]), hex.EncodeToString(readHash[:]))
+				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+			}
+
+			err := f.checkPosBelowAreEmpty(pos)
+			if err != nil {
+				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+			}
+		}
+	}
+
+	fmt.Println("swapless allproof", allProof)
+}
+
+func (f *Forest) checkPosBelowAreEmpty(origPosition uint64) error {
+	fromRow := int(detectRow(origPosition, f.rows))
+
+	positions := []uint64{origPosition}
+
+	for currentRow := fromRow; currentRow >= 0; currentRow-- {
+		nextPositions := []uint64{}
+
+		for _, position := range positions {
+			// Check children and add to the list of dels.
+			leftChild := child(position, f.rows)
+			rightChild := rightSib(leftChild)
+
+			nextPositions = append(nextPositions, leftChild, rightChild)
+
+			leftChildHash := f.data.read(leftChild)
+			if currentRow != 0 && leftChildHash != empty {
+				err := fmt.Errorf("Descendent %d of %d position not empty, read %s",
+					origPosition, leftChild, hex.EncodeToString(leftChildHash[:]))
+				return err
+			}
+
+			rightChildHash := f.data.read(rightChild)
+			if currentRow != 0 && rightChildHash != empty {
+				err := fmt.Errorf("Descendent %d of %d position not empty, read %s",
+					origPosition, rightChild, hex.EncodeToString(rightChildHash[:]))
+				return err
+			}
+		}
+
+		positions = nextPositions
+	}
+
+	return nil
+}
+
+func TestGetRootPos(t *testing.T) {
+	fmt.Println(getRootPosition(0, 15, 4))
+	fmt.Println(getRootPosition(0, 31, 5))
+}
+
+func TestSubTreeToString(t *testing.T) {
+	f := NewForest(RamForest, nil, "", 0)
+
+	leaves := []Leaf{
+		{Hash: Hash{1}},
+		{Hash: Hash{2}},
+		{Hash: Hash{3}},
+		{Hash: Hash{4}},
+		{Hash: Hash{5}},
+		{Hash: Hash{6}},
+		{Hash: Hash{7}},
+		{Hash: Hash{8}},
+		{Hash: Hash{9}},
+		{Hash: Hash{9}},
+		{Hash: Hash{10}},
+		{Hash: Hash{11}},
+		{Hash: Hash{12}},
+		{Hash: Hash{13}},
+		{Hash: Hash{14}},
+		{Hash: Hash{15}},
+		{Hash: Hash{16}},
+		{Hash: Hash{17}},
+		{Hash: Hash{18}},
+		{Hash: Hash{19}},
+		{Hash: Hash{20}},
+		{Hash: Hash{21}},
+	}
+
+	_, err := f.ModifySwapless(leaves, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(f.ToString())
+
+	for h := uint8(0); h < f.rows; h++ {
+		if (f.numLeaves>>h)&1 == 1 {
+			pos := rootPosition(f.numLeaves, h, f.rows)
+			fmt.Println()
+			fmt.Println("pos ", pos)
+			fmt.Println(f.SubTreeToString(pos))
+			fmt.Println()
+		}
+	}
+
+	_, err = f.ModifySwapless(nil, []uint64{2, 3, 4, 5, 6, 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for h := uint8(0); h < f.rows; h++ {
+		if (f.numLeaves>>h)&1 == 1 {
+			pos := rootPosition(f.numLeaves, h, f.rows)
+			fmt.Println()
+			fmt.Println("pos ", pos)
+			fmt.Println(f.SubTreeToString(pos))
+			fmt.Println()
+		}
 	}
 }
 

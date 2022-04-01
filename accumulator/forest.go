@@ -197,18 +197,35 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 		}
 	}
 
+	sortUint64s(dels)
+
 	fmt.Println("dels", dels)
 	for _, del := range dels {
 		delete(f.positionMap, f.data.read(del).Mini())
 		//f.data.write(del, empty)
+
+		//fmt.Println("DEL", del)
+		//fmt.Println(f.SubTreeToString(del))
+	}
+
+	deTwinedDels := make([]uint64, len(dels))
+	copy(deTwinedDels, dels)
+	deTwin(&deTwinedDels, f.rows)
+
+	for _, deTwined := range deTwinedDels {
+		if f.isLeaf(deTwined, detectRow(deTwined, f.rows)) {
+			f.data.write(deTwined, empty)
+		} else {
+			f.deleteSubTree(deTwined)
+		}
 	}
 
 	// Calculate which leaves should go where when the deletion happens.
 	moveRows := Transform(dels, f.numLeaves, f.rows)
 	fmt.Println("moves", moveRows)
 
-	// Go through all the moves from top row to the bottom row.
-	for i := len(moveRows) - 1; i >= 0; i-- {
+	// Go through all the moves from bottom to top.
+	for i := 0; i < len(moveRows); i++ {
 		moveRow := moveRows[i]
 
 		for _, move := range moveRow {
@@ -217,13 +234,13 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 			if move.from == move.to {
 				f.deleteSubTree(move.from)
 			} else {
-				f.movePositionUp(move.from, move.to)
+				f.movePositionUp2(move.from, move.to)
 			}
 		}
 	}
 
 	// Calculate which nodes need to be hashed again.
-	dirtyRows := calcDirtyNodes(moveRows, f.numLeaves, f.rows)
+	dirtyRows := calcDirtyNodes2(moveRows, f.numLeaves, f.rows)
 
 	fmt.Println("dirtyRows", dirtyRows)
 
@@ -231,6 +248,24 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 		for _, dirtyPos := range dirtyRow {
 			leftChild := child(dirtyPos, f.rows)
 			rightChild := rightSib(leftChild)
+
+			if f.data.read(leftChild) == empty {
+				fmt.Println(f.SubTreeToString(leftChild))
+				fmt.Println("f.rows", f.rows)
+				fmt.Println("numleaves", f.numLeaves)
+				fmt.Println(f.ToString())
+				return fmt.Errorf("removeSwapless error: couldn't hash dirty "+
+					"position at %d as the leftChild of %d was empty",
+					dirtyPos, leftChild)
+			}
+
+			if f.data.read(rightChild) == empty {
+				//fmt.Println(f.SubTreeToString(rightChild))
+				fmt.Println(f.ToString())
+				return fmt.Errorf("removeSwapless error: couldn't hash dirty "+
+					"position at %d as the rightChild of %d was empty",
+					dirtyPos, rightChild)
+			}
 
 			hash := parentHash(f.data.read(leftChild), f.data.read(rightChild))
 			f.data.write(dirtyPos, hash)
@@ -242,7 +277,7 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 
 // deleteSubTree deletes the position and the entire subtree below it.
 func (f *Forest) deleteSubTree(position uint64) {
-	//fmt.Println("deleteSubTree", position)
+	fmt.Println("deleteSubTree", position)
 	fromRow := int(detectRow(position, f.rows))
 
 	positions := []uint64{position}
@@ -257,9 +292,12 @@ func (f *Forest) deleteSubTree(position uint64) {
 
 			if currentRow != 0 && f.data.read(leftChild) != empty {
 				nextPositions = append(nextPositions, leftChild)
-				nextPositions = append(nextPositions, rightChild)
 			} else {
 				//delete(f.positionMap, f.data.read(position).Mini())
+			}
+
+			if currentRow != 0 && f.data.read(rightChild) != empty {
+				nextPositions = append(nextPositions, rightChild)
 			}
 
 			f.data.write(position, empty)
@@ -272,22 +310,49 @@ func (f *Forest) deleteSubTree(position uint64) {
 	}
 }
 
-// movePositionUp moves the position and all of its children up to the desired position.
+func (f *Forest) deleteRows(position uint64, endRow uint8) {
+	leftChild := child(position, f.rows)
+	rightChild := rightSib(leftChild)
+	positions := []uint64{leftChild, rightChild}
+
+	currentRow := int(detectRow(position, f.rows)) - 1
+	for ; currentRow >= int(endRow); currentRow-- {
+		nextPositions := []uint64{}
+
+		for _, position := range positions {
+			// Check children and add to the list of dels.
+			leftChild := child(position, f.rows)
+			rightChild := rightSib(leftChild)
+
+			if currentRow != 0 && f.data.read(leftChild) != empty {
+				nextPositions = append(nextPositions, leftChild)
+			}
+
+			if currentRow != 0 && f.data.read(rightChild) != empty {
+				nextPositions = append(nextPositions, rightChild)
+			}
+
+			f.data.write(position, empty)
+		}
+
+		positions = nextPositions
+	}
+}
+
+// movePositionUp2 moves the position and all of its children up to the desired position.
 // It writes empty hashes to the positions that are deleted/won't have other hashes replacing
 // it.
-func (f *Forest) movePositionUp(from, to uint64) {
-	fromRow := int(detectRow(from, f.rows))
-
+func (f *Forest) movePositionUp2(from, to uint64) {
 	fromPositions := []uint64{from}
 	toPositions := []uint64{to}
 
+	// Go top down, starting from the row where the from position is at.
+	fromRow := int(detectRow(from, f.rows))
 	for currentRow := fromRow; currentRow >= 0; currentRow-- {
-		fmt.Println("from: ", fromPositions, currentRow)
-		fmt.Println("to: ", toPositions)
-
 		nextFromPositions := []uint64{}
 		nextToPositions := []uint64{}
 
+		// Process all the froms for this row.
 		for i, fromPosition := range fromPositions {
 			toPosition := toPositions[i]
 
@@ -295,57 +360,55 @@ func (f *Forest) movePositionUp(from, to uint64) {
 			fromHash := f.data.read(fromPosition)
 			f.data.write(toPosition, fromHash)
 
-			// Check children and add to the list of to-s and from-s if
-			// they are not empty.
-			leftChild := child(fromPosition, f.rows)
-			rightChild := rightSib(leftChild)
-
-			// If one child isn't empty, that means that this node isn't a
-			// leaf and there's more nodes below.
-			if currentRow != 0 && f.data.read(leftChild) != empty {
-				// Left child.
-				nextFromPositions = append(nextFromPositions, leftChild)
-				nextToPositions = append(nextToPositions,
-					child(toPosition, f.rows))
-
-				// Right child.
-				nextFromPositions = append(nextFromPositions, rightChild)
-				nextToPositions = append(nextToPositions,
-					rightSib(child(toPosition, f.rows)))
-			} else {
+			// If the node we're on is a leaf, then remap the position map as well.
+			// Otherwise, append the children to be processed next.
+			if f.isLeaf(fromPosition, uint8(currentRow)) {
 				// The node that we're on is a leaf. Update the
 				// positionMap entry.
+				origPos, found := f.positionMap[fromHash.Mini()]
+				if !found {
+					fmt.Println(f.SubTreeToString(fromPosition))
+					fmt.Printf("currentRow %d, fromPos %d\n", currentRow, fromPosition)
+					panic("couldn't find pos")
+				}
+
+				fmt.Printf("Remapping hash %s. From %d, to %d\n",
+					hex.EncodeToString(fromHash[:]), origPos, toPosition)
 				f.positionMap[fromHash.Mini()] = toPosition
+			} else {
+				// Left child.
+				nextFromPositions = append(nextFromPositions, child(fromPosition, f.rows))
+				nextToPositions = append(nextToPositions, child(toPosition, f.rows))
+
+				// Right child.
+				nextFromPositions = append(nextFromPositions, rightSib(child(fromPosition, f.rows)))
+				nextToPositions = append(nextToPositions, rightSib(child(toPosition, f.rows)))
 			}
 		}
 
+		fmt.Println(f.ToString())
+
 		// Zero out all the positions that won't have another hash replacing it.
 		for i, fromPosition := range fromPositions {
-			if currentRow != 0 {
-				// Check if I'm a leaf. If I am, then empty all of the children
-				// from my to-position.
-				if f.data.read(child(fromPosition, f.rows)) == empty {
-					leftChild := child(toPositions[i], f.rows)
-					rightChild := leftChild | 1
+			if f.isLeaf(fromPosition, uint8(currentRow)) {
+				// Empty left child.
+				f.data.write(child(toPositions[i], f.rows), empty)
 
-					f.deleteSubTree(leftChild)
-					f.deleteSubTree(rightChild)
-				} else {
-					// Write empty if nothing is replacing where this node was.
-					if !slices.Contains(nextToPositions, fromPosition) {
-						f.data.write(fromPosition, empty)
-					}
-				}
+				// Empty right child.
+				f.data.write(rightSib(child(toPositions[i], f.rows)), empty)
+
+				// Empty myself.
+				f.data.write(fromPosition, empty)
+
+				// Delete all descendents of the from-leaf. Start from the row where to-position
+				// is all the way down to the row where from-position is.
+				f.deleteRows(toPositions[i], uint8(detectRow(fromPosition, f.rows)))
+
+				f.deleteRows(fromPosition, 0)
 			} else {
-				// If we're moving from row 0, there's only leaves here. Empty
-				// all the children of the to-position.
-				if detectRow(fromPosition, f.rows) == 0 {
-					leftChild := child(toPositions[i], f.rows)
-					rightChild := leftChild | 1
-
-					f.deleteSubTree(leftChild)
-					f.deleteSubTree(rightChild)
-				} else {
+				// Write empty if nothing is replacing where this node was.
+				if !slices.Contains(nextToPositions, fromPosition) {
+					fmt.Println("Writing empty to ", fromPosition)
 					f.data.write(fromPosition, empty)
 				}
 			}
@@ -355,6 +418,168 @@ func (f *Forest) movePositionUp(from, to uint64) {
 		toPositions = nextToPositions
 	}
 }
+
+// isLeaf returns if the position is a leaf or a node.
+func (f *Forest) isLeaf(position uint64, currentRow uint8) bool {
+	if currentRow == 0 {
+		return true
+	}
+	return f.data.read(child(position, f.rows)) == empty
+}
+
+//// movePositionUp moves the position and all of its children up to the desired position.
+//// It writes empty hashes to the positions that are deleted/won't have other hashes replacing
+//// it.
+//func (f *Forest) movePositionUp(from, to uint64) {
+//	fromRow := int(detectRow(from, f.rows))
+//
+//	fromPositions := []uint64{from}
+//	toPositions := []uint64{to}
+//
+//	for currentRow := fromRow; currentRow >= 0; currentRow-- {
+//		fmt.Println("from: ", fromPositions, currentRow)
+//		fmt.Println("to: ", toPositions)
+//
+//		nextFromPositions := []uint64{}
+//		nextToPositions := []uint64{}
+//
+//		for i, fromPosition := range fromPositions {
+//			toPosition := toPositions[i]
+//
+//			// Grab and write the from-hash to the poition to move to.
+//			fromHash := f.data.read(fromPosition)
+//			f.data.write(toPosition, fromHash)
+//
+//			//if int(detectRow(toPosition, f.rows))+1 < int(f.rows) {
+//			//	var leftKid, rightKid uint64
+//			//	if toPosition&1 != 1 {
+//			//		leftKid = toPosition
+//			//		rightKid = rightSib(leftKid)
+//			//	} else {
+//			//		rightKid = toPosition
+//			//		leftKid = leftSib(leftKid)
+//			//	}
+//
+//			//	fmt.Printf("toPos %d leftkid %d, rightKid %d\n", toPosition, leftKid, rightKid)
+//
+//			//	newParentHash := parentHash(f.data.read(leftKid), f.data.read(rightKid))
+//			//	f.data.write(parent(toPosition, f.rows), newParentHash)
+//			//}
+//
+//			fmt.Printf("FromPos %d, read %s and wrote to %d\n",
+//				fromPosition, hex.EncodeToString(fromHash[:]), toPosition)
+//
+//			// Check children and add to the list of to-s and from-s if
+//			// they are not empty.
+//			leftChild := child(fromPosition, f.rows)
+//			rightChild := rightSib(leftChild)
+//
+//			// If one child isn't empty, that means that this node isn't a
+//			// leaf and there's more nodes below.
+//			if currentRow != 0 && f.data.read(leftChild) != empty && f.data.read(rightChild) != empty {
+//				// Left child.
+//				nextFromPositions = append(nextFromPositions, leftChild)
+//				nextToPositions = append(nextToPositions,
+//					child(toPosition, f.rows))
+//
+//				// Right child.
+//				nextFromPositions = append(nextFromPositions, rightChild)
+//				nextToPositions = append(nextToPositions,
+//					rightSib(child(toPosition, f.rows)))
+//			} else {
+//				origPos, found := f.positionMap[fromHash.Mini()]
+//				if !found {
+//					fmt.Println(f.SubTreeToString(fromPosition))
+//					fmt.Printf("currentRow %d, fromPos %d\n", currentRow, fromPosition)
+//					panic("couldn't find pos")
+//				}
+//				// The node that we're on is a leaf. Update the
+//				// positionMap entry.
+//				f.positionMap[fromHash.Mini()] = toPosition
+//
+//				fmt.Printf("Remapping hash %s. From %d, to %d\n",
+//					hex.EncodeToString(fromHash[:]), origPos, toPosition)
+//			}
+//		}
+//
+//		// Zero out all the positions that won't have another hash replacing it.
+//		for i, fromPosition := range fromPositions {
+//			//isLeaf := currentRow == 0
+//
+//			//if f.data.read(child(fromPosition, f.rows)) == empty {
+//			//	isLeaf = true
+//			//}
+//
+//			//if isLeaf {
+//			//	leftChild := child(toPositions[i], f.rows)
+//			//	rightChild := leftChild | 1
+//
+//			//	f.deleteSubTree(leftChild)
+//			//	f.deleteSubTree(rightChild)
+//
+//			//	f.data.write(fromPosition, empty)
+//			//	continue
+//			//} else {
+//			//	//f.data.write(fromPosition, empty)
+//			//	// Write empty if nothing is replacing where this node was.
+//			//	if !slices.Contains(nextToPositions, fromPosition) {
+//			//		fmt.Println("Writing empty to ", fromPosition)
+//			//		f.data.write(fromPosition, empty)
+//			//	}
+//			//}
+//
+//			//// Write empty if nothing is replacing where this node was.
+//			//if !slices.Contains(nextToPositions, fromPosition) {
+//			//	fmt.Println("Writing empty to ", fromPosition)
+//			//	f.data.write(fromPosition, empty)
+//			//}
+//
+//			if currentRow != 0 {
+//				// Check if I'm a leaf. If I am, then empty all of the children
+//				// from my to-position.
+//				if f.data.read(child(fromPosition, f.rows)) == empty {
+//					leftChild := child(toPositions[i], f.rows)
+//					rightChild := leftChild | 1
+//
+//					fmt.Printf("At row 0, frompos %d, deleting all children of %d and %d\n",
+//						fromPosition, leftChild, rightChild)
+//
+//					f.deleteRows(toPositions[i],
+//						uint8(detectRow(fromPosition, f.rows)))
+//
+//					f.data.write(leftChild, empty)
+//					f.data.write(rightChild, empty)
+//				} else {
+//					// Write empty if nothing is replacing where this node was.
+//					if !slices.Contains(nextToPositions, fromPosition) {
+//						fmt.Println("Writing empty to ", fromPosition)
+//						f.data.write(fromPosition, empty)
+//					}
+//				}
+//			} else {
+//				// If we're moving from row 0, there's only leaves here. Empty
+//				// all the children of the to-position.
+//				if detectRow(fromPosition, f.rows) == 0 {
+//					leftChild := child(toPositions[i], f.rows)
+//					rightChild := leftChild | 1
+//
+//					fmt.Printf("At row 0, frompos %d, deleting all children of %d and %d\n",
+//						fromPosition, leftChild, rightChild)
+//					fmt.Println(f.ToString())
+//
+//					f.deleteRows(toPositions[i],
+//						uint8(detectRow(fromPosition, f.rows)))
+//					f.data.write(fromPosition, empty)
+//				} else {
+//					f.data.write(fromPosition, empty)
+//				}
+//			}
+//		}
+//
+//		fromPositions = nextFromPositions
+//		toPositions = nextToPositions
+//	}
+//}
 
 func (f *Forest) childrenExists(from uint64) (bool, bool) {
 	leftChild := child(from, f.rows)
@@ -655,7 +880,7 @@ func (f *Forest) addSwapless(adds []Leaf) {
 					to:   parent(uint64(positionList.list[rootIdx]), f.rows),
 				}
 
-				f.movePositionUp(arw.from, arw.to)
+				f.movePositionUp2(arw.from, arw.to)
 
 				position = arw.to
 				continue
@@ -729,6 +954,16 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 	return ub, err
 }
 
+// 243:70c
+// |
+// 230:f76
+// |-------------------------------\
+// 204:300                         205:2eb
+// |---------------\               |---------------\
+//                                 154:5b5         155:370
+// |-------\       |-------\       |-------\       |-------\
+//                                 52:3400 53:3500
+
 func (f *Forest) ModifySwapless(adds []Leaf, dels []uint64) (*UndoBlock, error) {
 	// Check for empty leaves.
 	for _, a := range adds {
@@ -738,10 +973,30 @@ func (f *Forest) ModifySwapless(adds []Leaf, dels []uint64) (*UndoBlock, error) 
 	}
 
 	// Remove first since the remap can alter positions of leaves.
-	f.removeSwapless(dels)
+	err := f.removeSwapless(dels)
+	if err != nil {
+		return nil, err
+	}
 
 	// Remap to expand the forest if needed.
 	for int64(f.numLeaves)+int64(len(adds)) > int64(1<<f.rows) {
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
+		fmt.Println("REMAP TO ", f.rows+1)
 		err := f.reMap(f.rows + 1)
 		if err != nil {
 			return nil, err
@@ -880,6 +1135,17 @@ func (f *Forest) PosMapSanity() error {
 		if f.positionMap[f.data.read(i).Mini()] != i {
 			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
 				f.data.read(i).Prefix(), f.positionMap[f.data.read(i).Mini()], i)
+		}
+	}
+	return nil
+}
+
+func (f *Forest) PosMapSanitySwapless() error {
+	for hash, pos := range f.positionMap {
+		gotHash := f.data.read(pos).Mini()
+		if gotHash != hash {
+			return fmt.Errorf("For position %d, positionMap has %s but forest has %s",
+				pos, hex.EncodeToString(hash[:]), hex.EncodeToString(gotHash[:]))
 		}
 	}
 	return nil
@@ -1071,6 +1337,13 @@ func (f *Forest) ToString() string {
 				val := f.data.read(uint64(pos))
 				if val != empty {
 					valstring = fmt.Sprintf("%x", val[:2])
+
+					if pos >= 100 {
+						valstring = fmt.Sprintf("%x", val[:2])
+						valstring = valstring[:len(valstring)-1]
+					} else {
+						valstring = fmt.Sprintf("%x", val[:2])
+					}
 				}
 			}
 			if valstring != "" {
@@ -1103,6 +1376,156 @@ func (f *Forest) ToString() string {
 	}
 	return s
 
+}
+
+func getRootPosition(position uint64, numLeaves uint64, forestRows uint8) uint64 {
+	returnPos := position
+
+	// Since we'll be comparing against the parent of the given position,
+	// start one row above.
+	h := detectRow(position, forestRows)
+
+	for ; h < forestRows; h++ {
+		//// Check if there's a root here.
+		//rootPresent := numLeaves&(1<<h) != 0
+		//if rootPresent {
+		rootPos := rootPosition(numLeaves, uint8(h), forestRows)
+		fmt.Printf("Row %d rootpos %d, returnpos %d\n", h, rootPos, returnPos)
+		//fmt.Println("rootPos", rootPos)
+		if rootPos == returnPos {
+			return returnPos
+		}
+		//}
+
+		// Grab the parent.
+		returnPos = parent(returnPos, forestRows)
+	}
+
+	if position != 0 && forestRows != 0 {
+		panic("should never happen")
+	}
+	return 0
+}
+
+func (f *Forest) SubTreeToString(position uint64) string {
+	rootPosition := getRootPosition(position, f.numLeaves, f.rows)
+
+	subTreeRow := detectRow(rootPosition, f.rows)
+	//fmt.Printf("subtree %d f.rows %d\n", subTreeRow, f.rows)
+
+	if subTreeRow > 6 {
+		s := fmt.Sprintf("can't print subtree with rows %d. roots:\n", subTreeRow)
+		roots := f.GetRoots()
+		for i, r := range roots {
+			s += fmt.Sprintf("\t%d %x\n", i, r.Mini())
+		}
+		return s
+	}
+
+	//rootPresent := f.numLeaves&(1<<subTreeRow) != 0
+	//rootPos := rootPosition(f.numLeaves, subTreeRow, f.rows)
+
+	//if !rootPresent {
+	//	//panic("idk")
+	//	fmt.Printf("subtree %d f.rows %d rootpos %d\n", subTreeRow, f.rows, rootPos)
+	//	fmt.Println("is root present?", rootPresent)
+	//	return ""
+	//}
+
+	positionsToRead := []uint64{rootPosition}
+
+	baseLen := 8
+	baseSpaceLen := 7
+
+	output := make([]string, (subTreeRow*2)+1)
+	for h := int(subTreeRow); h >= 0; h-- {
+		fmt.Println("h", h)
+		nextPositions := []uint64{}
+
+		for _, position := range positionsToRead {
+			var readHashString string
+			readHash := f.data.read(position)
+
+			if readHash != empty {
+				if position >= 1000 {
+					readHashString = fmt.Sprintf("%x", readHash[:2])
+					readHashString = readHashString[:len(readHashString)-2]
+				} else if position >= 100 {
+					readHashString = fmt.Sprintf("%x", readHash[:2])
+					readHashString = readHashString[:len(readHashString)-1]
+				} else {
+					readHashString = fmt.Sprintf("%x", readHash[:2])
+				}
+			}
+
+			leftChild := child(position, f.rows)
+			rightChild := rightSib(leftChild)
+			//if f.data.read(leftChild) != empty {
+			//fmt.Printf("f.rows %d, child of %d is %d\n",
+			//	f.rows, position, leftChild)
+			nextPositions = append(nextPositions, leftChild)
+			nextPositions = append(nextPositions, rightChild)
+
+			if readHashString != "" {
+				output[h*2] += fmt.Sprintf("%02d:%s ", position, readHashString)
+
+				// Add spaces.
+				totalSpaceLen := baseLen
+				for x := 0; x < h; x++ {
+					totalSpaceLen *= 2
+				}
+				totalSpaceLen -= baseSpaceLen
+				for j := 1; j < totalSpaceLen; j++ {
+					output[h*2] += " "
+				}
+
+				//fmt.Println("total space len at h", totalSpaceLen, h)
+			} else {
+				output[h*2] += "        "
+
+				// Add spaces.
+				totalSpaceLen := baseLen
+				for x := 0; x < h; x++ {
+					totalSpaceLen *= 2
+				}
+				totalSpaceLen -= baseSpaceLen
+				for j := 1; j < totalSpaceLen; j++ {
+					output[h*2] += " "
+				}
+			}
+
+			// Add connections.
+			if h > 0 {
+				totalLen := baseLen
+				for x := 0; x < h-1; x++ {
+					totalLen *= 2
+				}
+
+				//fmt.Println("totallen at h", totalLen, h)
+
+				for j := 1; j < totalLen; j++ {
+					if j == 1 {
+						output[(h*2)-1] += "|"
+					}
+					output[(h*2)-1] += "-"
+				}
+				output[(h*2)-1] += "\\"
+
+				for j := 0; j < totalLen-1; j++ {
+					output[(h*2)-1] += " "
+				}
+			}
+		}
+
+		positionsToRead = nextPositions
+	}
+
+	var s string
+	for z := len(output) - 1; z >= 0; z-- {
+		s += output[z] + "\n"
+	}
+
+	return s
 }
 
 // FindLeaf finds a leave from the positionMap and returns a bool

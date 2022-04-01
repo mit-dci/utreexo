@@ -160,15 +160,15 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 			return bp, fmt.Errorf("hash %x not found", wanted)
 		}
 
-		// should never happen
-		if pos > f.numLeaves {
-			for m, p := range f.positionMap {
-				fmt.Printf("%x @%d\t", m[:4], p)
-			}
-			return bp, fmt.Errorf(
-				"ProveBatch: got leaf position %d but only %d leaves exist",
-				pos, f.numLeaves)
-		}
+		//// should never happen
+		//if pos > f.numLeaves {
+		//	for m, p := range f.positionMap {
+		//		fmt.Printf("%x @%d\t", m[:4], p)
+		//	}
+		//	return bp, fmt.Errorf(
+		//		"ProveBatch: got leaf position %d but only %d leaves exist",
+		//		pos, f.numLeaves)
+		//}
 		bp.Targets[i] = pos
 	}
 	// targets need to be sorted because the proof hashes are sorted
@@ -188,6 +188,11 @@ func (f *Forest) ProveBatch(hs []Hash) (BatchProof, error) {
 	bp.Proof = make([]Hash, len(proofPositions.list))
 	for i, proofPos := range proofPositions.list {
 		bp.Proof[i] = f.data.read(proofPos)
+
+		if bp.Proof[i] == empty {
+			return bp, fmt.Errorf("Read empty for position %d",
+				proofPos)
+		}
 	}
 
 	if verbose {

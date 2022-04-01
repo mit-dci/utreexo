@@ -121,35 +121,187 @@ func insertSort(dels *[]uint64, el uint64) {
 func decompressMoves(moves [][]arrow, dels []uint64) {
 }
 
-func calcDirtyNodes(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uint64 {
+//func calcEmptyNodes(moves [][]arrow, numLeaves uint64, forestRows uint8) []uint64 {
+//	emptyNodes := []uint64{}
+//
+//	for _, moveRow := range moves {
+//		for _, move := range moveRow {
+//		}
+//	}
+//	return nil
+//}
+
+func checkIfDescendents() {
+}
+
+func calcDirtyNodes2(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uint64 {
 	dirtyNodes := make([][]uint64, len(moves))
 
-	for _, moveRow := range moves {
+	for currentRow := int(forestRows); currentRow >= 0; currentRow-- {
+		moveRow := moves[currentRow]
+
 		for _, move := range moveRow {
 			// If to and from are the same, it means that the whole
-			// subtree is gonna be deleted, resulting in no dirty ndoes.
-			//
-			// So only calculate dirty position if they aren't the same.
-			if move.to != move.from {
-				toRow := detectRow(move.to, forestRows)
-
-				rootPresent := numLeaves&(1<<toRow) != 0
-				rootPos := rootPosition(numLeaves, uint8(toRow), forestRows)
-
-				if rootPresent && move.to == rootPos {
-					continue
-				}
-
-				dirtyPos := parent(move.to, forestRows)
-				row := detectRow(dirtyPos, forestRows)
-
-				dirtyNodes[row] = append(
-					dirtyNodes[row], dirtyPos)
+			// subtree is gonna be deleted, resulting in no dirty nodes.
+			if move.to == move.from {
+				continue
 			}
+
+			// Calculate the dirty position.
+			dirtyPos := parent(move.to, forestRows)
+
+			// No dirty positions if the node is moving to a root position.
+			isRoot := isRootPosition(move.to, numLeaves, forestRows)
+			if isRoot {
+				continue
+			}
+
+			for i := currentRow; i < len(moves); i++ {
+				compMoveRow := moves[i]
+
+				for _, compMove := range compMoveRow {
+					if isAncestor(compMove.from, dirtyPos, forestRows) {
+						rise := detectRow(compMove.to, forestRows) - detectRow(compMove.from, forestRows)
+						fmt.Printf("forestRows %d, rise %d, compMove.to %d compMove.from %d\n",
+							forestRows, rise, compMove.to, compMove.from)
+						fmt.Println("dirtyPos before", dirtyPos)
+
+						isLeft := dirtyPos&1 == 1
+						dirtyPos = parentMany(dirtyPos, uint8(rise), forestRows)
+
+						if isLeft {
+							if dirtyPos&1 != 1 {
+								dirtyPos = sibling(dirtyPos)
+							}
+						} else {
+							if dirtyPos&1 == 1 {
+								dirtyPos = sibling(dirtyPos)
+							}
+						}
+						fmt.Println("dirtyPos after", dirtyPos)
+					} else {
+						if dirtyPos == compMove.from {
+							fmt.Printf("dirtyPos %d same as compMove.from. change to compMove.to %d\n",
+								dirtyPos, compMove.to)
+							dirtyPos = compMove.to
+						}
+					}
+				}
+			}
+
+			// Grab the row of where the dirty position should be and
+			// append to that row.
+			row := detectRow(dirtyPos, forestRows)
+			dirtyNodes[row] = append(dirtyNodes[row], dirtyPos)
+			dirtyNodes[row] = removeDuplicateInt(dirtyNodes[row])
 		}
 	}
 
 	return dirtyNodes
+}
+
+//func checkMoveUp() {
+//	// Check if we're moving something that's already marked as dirty.
+//	idx := slices.Index(dirtyNodes[fromRow], move.from)
+//	if idx != -1 {
+//		// Delete the entry on the from row.
+//		dirtyNodes[fromRow] = append(dirtyNodes[fromRow][:idx],
+//			dirtyNodes[fromRow][idx+1:]...)
+//
+//		// Add the new dirty position.
+//		dirtyNodes[toRow] = append(dirtyNodes[toRow], move.to)
+//	}
+//}
+
+//func didAncestorMoveUp(moves [][]arrow, position uint64, currentRow, forestRows uint8) bool {
+//	for _, moveRow := range moves {
+//	}
+//	return false
+//}
+
+func insertDirtyPos() {
+}
+
+func isRootPosition(position, numLeaves uint64, forestRows uint8) bool {
+	row := detectRow(position, forestRows)
+
+	rootPresent := numLeaves&(1<<row) != 0
+	rootPos := rootPosition(numLeaves, row, forestRows)
+
+	return rootPresent && rootPos == position
+}
+
+//func calcDirtyNodes(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uint64 {
+//	dirtyNodes := make([][]uint64, len(moves))
+//
+//	for _, moveRow := range moves {
+//		//for _, move := range moveRow {
+//		for i := 0; i < len(moveRow); i++ {
+//			move := moveRow[i]
+//
+//			// If to and from are the same, it means that the whole
+//			// subtree is gonna be deleted, resulting in no dirty ndoes.
+//			//
+//			// So only calculate dirty position if they aren't the same.
+//			if move.to == move.from {
+//				break
+//			}
+//
+//			fromRow := detectRow(move.from, forestRows)
+//			toRow := detectRow(move.to, forestRows)
+//
+//			rootPresent := numLeaves&(1<<toRow) != 0
+//			rootPos := rootPosition(numLeaves, uint8(toRow), forestRows)
+//
+//			// Check if we're moving something that's already marked as dirty.
+//			idx := slices.Index(dirtyNodes[fromRow], move.from)
+//			if idx != -1 {
+//				// Delete the entry on the from row.
+//				dirtyNodes[fromRow] = append(dirtyNodes[fromRow][:idx],
+//					dirtyNodes[fromRow][idx+1:]...)
+//
+//				// Add the new dirty position.
+//				dirtyNodes[toRow] = append(dirtyNodes[toRow], move.to)
+//			}
+//
+//			// If we're becoming a root, there's no dirty position.
+//			if rootPresent && move.to == rootPos {
+//				fmt.Printf("Moving %d to root pos of %d\n",
+//					move.from, move.to)
+//				continue
+//			}
+//
+//			dirtyPos := parent(move.to, forestRows)
+//
+//			// Grab the row of where the dirty position should be and
+//			// append to that row.
+//			row := detectRow(dirtyPos, forestRows)
+//			dirtyNodes[row] = append(
+//				dirtyNodes[row], dirtyPos)
+//
+//			dirtyNodes[row] = removeDuplicateInt(dirtyNodes[row])
+//
+//			//// If the next move.to shares the same parent, skip the
+//			//// next one.
+//			//if i+1 < len(moveRow) && moveRow[i+1].to^1 == move.to {
+//			//	i++
+//			//}
+//		}
+//	}
+//
+//	return dirtyNodes
+//}
+
+func removeDuplicateInt(uint64Slice []uint64) []uint64 {
+	allKeys := make(map[uint64]bool)
+	list := []uint64{}
+	for _, item := range uint64Slice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
 }
 
 // remTrans returns a slice arrow in bottom row to top row.
