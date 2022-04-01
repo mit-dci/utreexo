@@ -536,6 +536,40 @@ func TestCalcDirtyNodes(t *testing.T) {
 		// 40, 41, | 42, 43 <-right
 		// 42, | 43 <-left
 		// For rise 1, 42 goes to 50
+		//
+		// Ok I think it matters more if how much older your descendent that's moving is. Your parent moving is easy. Your grandparent moving
+		// is harder.
+		//
+		// 42 bitfields:
+		// 42, | 43 <-left
+		// 40, 41, | 42, 43 <-right
+		// 40, 41, 42, 43, | 44, 45, 46, 47 <-left
+		// 32, 33, 34, 35, 36, 37, 38, 39, | 40, 41, 42, 43, 44, 45, 46, 47 <-right
+		//
+		// For 42:
+		// 43 del:
+		// 42, | 43 <-left (trash)
+		// 40, 41, | 42, 43 <-right
+		// 40, 41, 42, 43, | 44, 45, 46, 47 <-left
+		// 32, 33, 34, 35, 36, 37, 38, 39, | 40, 41, 42, 43, 44, 45, 46, 47 <-right
+		//
+		// 52 del:
+		// 42, | 43 <-left
+		// 40, 41, | 42, 43 <-right (trash)
+		// 40, 41, 42, 43, | 44, 45, 46, 47 <-left
+		// 32, 33, 34, 35, 36, 37, 38, 39, | 40, 41, 42, 43, 44, 45, 46, 47 <-right
+		//
+		// 59 del:
+		// 42, | 43 <-left
+		// 40, 41, | 42, 43 <-right
+		// 40, 41, 42, 43, | 44, 45, 46, 47 <-left (trash)
+		// 32, 33, 34, 35, 36, 37, 38, 39, | 40, 41, 42, 43, 44, 45, 46, 47 <-right
+		//
+		// 60 del:
+		// 42, | 43 <-left
+		// 40, 41, | 42, 43 <-right
+		// 40, 41, 42, 43, | 44, 45, 46, 47 <-left
+		// 32, 33, 34, 35, 36, 37, 38, 39, | 40, 41, 42, 43, 44, 45, 46, 47 <-right (trash)
 		{
 			5,
 			32,
