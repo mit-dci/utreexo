@@ -528,9 +528,9 @@ func TestCalcDirtyNodes(t *testing.T) {
 		// 48, 49, 50, 51, | 52, 53, 54, 55 <- right (but trash this because we're going up one)
 		// 52, 53, | 54, 55 <- left
 		// 52, | 53 <- right
-		// Those are the paths to take to get to the new position from the root.
+		// Those are the paths to take to get to the new position from the root. Just remove from the front by as many rows we're going up.
 		//
-		// For 42:
+		// For 42 rise 1:
 		// 32, 33, 34, 35, 36, 37, 38, 39, | 40, 41, 42, 43, 44, 45, 46, 47 <-right (but trash this because we're going up one)
 		// 40, 41, 42, 43, | 44, 45, 46, 47 <-left
 		// 40, 41, | 42, 43 <-right
