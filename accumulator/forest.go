@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"sort"
 	"time"
 )
 
@@ -173,70 +172,37 @@ func (f *Forest) removev5(dels []uint64) error {
 		delete(f.positionMap, f.data.read(d).Mini())
 	}
 	dirt := []uint64{}
-	// consolodate deletions; only delete what we need to
+	// consolodate deletions; only delete tops of subtrees
 	condensedDels := condenseDeletions(dels, f.rows)
 	// main iteration of all deletion
 	for _, p := range condensedDels {
 		f.data.write(p, empty) // delete leaf
 		f.promote(p ^ 1)       // write sibling to parent
-		for f.lonely(p) {      // continue while lonely
+		if !f.lonely(p) {
+			fmt.Printf("%d not lonely to start\n", p)
+			p = parent(p, f.rows) // rise once for higher dirt
+		}
+		for f.lonely(p) { // continue while lonely
+			fmt.Printf("%d lonely ", p)
 			p = parent(p, f.rows)          // rise
 			if f.data.read(p^1) != empty { // check if sibling is empty
+				fmt.Printf("%d promoted\n", p^1)
 				f.promote(p ^ 1) // promote sibling if it exists
 			} else {
+				fmt.Printf("%d promoted\n", p)
 				f.promote(p) // promote self (possibly empty) if no sibling
 			}
 		}
-		dirt = append(dirt, parent(p, f.rows))
+		dirtpos := parent(p, f.rows)
+		if len(dirt) == 0 || dirt[len(dirt)-1] != dirtpos {
+			dirt = append(dirt, dirtpos)
+			fmt.Printf("dirt: %v\n", dirt)
+		}
+
 	}
 	fmt.Printf("dirt: %v\n", dirt)
 	f.numLeaves -= uint64(len(dels))
 	return nil
-}
-
-func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8) (nextHashDirt []uint64) {
-	var prevHash uint64
-	hashDirt = dedupeSwapDirt(hashDirt, swapRow)
-	for len(swapRow) != 0 || len(hashDirt) != 0 {
-		// check if doing dirt. if not dirt, swap.
-		// (maybe a little clever here...)
-		popSwap, hashDest := makeDestInRow(swapRow, hashDirt, rows)
-		if popSwap {
-			swapRow = swapRow[1:]
-		} else {
-			hashDirt = hashDirt[1:]
-		}
-		if !inForest(hashDest, numLeaves, rows) ||
-			hashDest == 0 || // TODO would be great to use nextNumLeaves... but tricky
-			hashDest == prevHash { // TODO this doesn't cover everything
-			continue
-		}
-		prevHash = hashDest
-		i := sort.Search(len(nextHashDirt), func(i int) bool {
-			return nextHashDirt[i] >= hashDest
-		})
-		if i >= len(nextHashDirt) || nextHashDirt[i] != hashDest {
-			// hashDest was not in the list, and i is where
-			// it should be inserted
-			nextHashDirt = append(nextHashDirt, 0)
-			copy(nextHashDirt[i+1:], nextHashDirt[i:])
-			nextHashDirt[i] = hashDest
-		}
-	}
-	return nextHashDirt
-}
-
-func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uint64) {
-	if len(maybeArrow) == 0 {
-		// re-descending here which isn't great
-		hashDest := parent(hashDirt[0], rows)
-		return false, hashDest
-	}
-
-	// swapping
-	hashDest := parent(maybeArrow[0].to, rows)
-	return true, hashDest
-
 }
 
 // promote moves a node up to it's parent
@@ -244,6 +210,8 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 func (f *Forest) promote(p uint64) uint64 {
 	parentPos := parent(p, f.rows)
 	f.data.write(parentPos, f.data.read(p))
+	// TODO could also delete for cleaner tree, but complicates lonely()
+	// f.data.write(p, empty)
 	return parentPos
 }
 
@@ -253,10 +221,12 @@ func (f *Forest) promote(p uint64) uint64 {
 func (f *Forest) lonely(p uint64) bool {
 	// if aunt is outside of the forest, we're done
 	auntPos := parent(p, f.rows) ^ 1
-	if !inForest(auntPos, f.numLeaves, f.rows) {
-		return false
+	fmt.Printf("pos %d auntpos %d\n", p, auntPos)
+	if inForest(auntPos, f.numLeaves, f.rows) &&
+		inForest(p^1, f.numLeaves, f.rows) {
+		return f.data.read(auntPos) == empty || f.data.read(p^1) == empty
 	}
-	return f.data.read(auntPos) == empty || f.data.read(p^1) == empty
+	return false
 }
 
 // reHash hashes new data in the forest based on dirty positions.
