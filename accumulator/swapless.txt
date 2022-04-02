@@ -215,7 +215,9 @@ It seems that 15 is only restricted to the 23->27->29 edge because that's the ed
 
 = = = = = = = = = = = = = = = = = = = = = = 
 
-Better forest deletion: overwrite parent
+Better forest deletion: overwrite parent (revised)
+
+The weird part here is you never actually delete anything.  But it works better.
 
 
 30
@@ -228,9 +230,9 @@ Better forest deletion: overwrite parent
 |---\   |---\   |---\   |---\   |---\   |---\   |---\   |---\
 00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15
 
-To delete 9, zero out 9, read 8 and write 8 to 20 (leave 8 at 8)
+To delete 9, read 8 and write 8 to 20.
 
-Then to delete 8, zero out 8, read 9, see that it's empty, go up and zero out 20, and read 21 instead, write it to 26.  Now 26 has 21, 20 has 8.
+Then to delete 8, read 9, see that it's empty, go up and zero out 20, and read 21 instead, write it to 26.  Now 26 has 21, 20 has 8.
 But don't have to move any subtrees; previously we'd have to move 21 up to 26 and 10 up to 20.  We can leave 10 and 11.
 
 30
@@ -252,18 +254,56 @@ When something changes underneath 27 (say deleting 14) and 29 needs to be recomp
 multi deletion: condense (00, 01, 02, 03, 04 -> 24, 04)
 
 
-
 then for each deletion:
-	zero out deletion position
-	check sibling.  If filled:
-		copy to x
-		move up to parent
-		check sibling.  if filled:
-			
+	write sibling to parent.
+	While either aunt* or sibling are empty, keep doing this:
+	Rise. Write non-empty sibling to parent, otherwise write self to parent.
+	*(An aunt outside of the forest counts as non-empty.)
 
 
 (it could be fancier / faster if you zero out everything first.  For example, deleting (9, 21)
-deletion of  9 checks 8, exists.  up to 21, exists, moves 8 to 20.
-deletion of 21 checks 20, exists.  up to 27, exists, moves 20 to 26.
+deletion of  9 checks 8, exists.  up to 21, exists, writes 8 to 20.
+deletion of 21 checks 20, exists.  up to 27, exists, writes 20 to 26.
 
 The value at 9 ends up getting written, read back, and written again.  It would be faster if 9 moved all the way up to 26 in one step.  That's a //TODO improvement however as the code will be more complex.
+
+= = = = = = = = = = = = = = = = = = = = = = 
+revision:
+
+What we actually need to do is don't delete anything ever.  So there will be no empty locations in the tree at all.  Instead, to see if something is logically empty we can look at its parent.  If a parent is the same as a sibling, you know that position is logically not there, even if there's data there.  Similarly, "do I have a sibling" is now "am I the same as my parent".  Or really, you always, logically, have a sibling.
+
+This is a little less obvious when looking at the on-disk data, but not much.  And it's not any more i/o.  But it makes undo super easy.  All the "undo data" that you need now is just the leaf positions that were deleted.  If you never clear out your position map, then you don't even need that, and can figure out the positions from the rev00.dat files.  To apply undo, you don't actually move any data, you just mark parents of locations as dirty.  For example:
+
+Start with this tree:
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Delete 4, 5, 6 (condensed to 6, 10):
+
+14
+|---------------\
+12              07
+|-------\       |-------\
+08      09      10      07
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+The root 14 is now the hash of (12, 07) which is what we want.  But 4, 5, 6 are still there at the bottom.  The undo data that we save is just (4, 5, 6).  Heck you can probably save (6, 10) and write an uncondense function.  Or really, if you care about size, gzip it because it'll be a bunch of uint64s that are all clustered together and probably gzips down 90% or so.
+
+Now to undo, just mark 10, 11 as dirty, and rehash.
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Back to how it was.

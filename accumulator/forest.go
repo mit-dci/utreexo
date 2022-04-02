@@ -176,20 +176,16 @@ func (f *Forest) removev5(dels []uint64) error {
 	condensedDels := condenseDeletions(dels, f.rows)
 	// main iteration of all deletion
 	for _, p := range condensedDels {
-		f.data.write(p, empty) // delete leaf
-		f.promote(p ^ 1)       // write sibling to parent
+		// f.data.write(p, empty) // delete leaf // don't need to
+		f.promote(p ^ 1) // write sibling to parent
 		if !f.lonely(p) {
-			fmt.Printf("%d not lonely to start\n", p)
 			p = parent(p, f.rows) // rise once for higher dirt
 		}
 		for f.lonely(p) { // continue while lonely
-			fmt.Printf("%d lonely ", p)
 			p = parent(p, f.rows)          // rise
 			if f.data.read(p^1) != empty { // check if sibling is empty
-				fmt.Printf("%d promoted\n", p^1)
 				f.promote(p ^ 1) // promote sibling if it exists
 			} else {
-				fmt.Printf("%d promoted\n", p)
 				f.promote(p) // promote self (possibly empty) if no sibling
 			}
 		}
