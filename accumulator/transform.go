@@ -36,15 +36,15 @@ func Transform(origDels []uint64, numLeaves uint64, forestRows uint8) [][]arrow 
 			continue
 		}
 
-		fmt.Printf("currentRow: %d, rootPresent: %v, rootPos: %d\n",
-			currentRow, rootPresent, rootPos)
+		//fmt.Printf("currentRow: %d, rootPresent: %v, rootPos: %d\n",
+		//	currentRow, rootPresent, rootPos)
 
 		sib := sibling(del)
 
 		moves[currentRow] = append(moves[currentRow],
 			arrow{from: sib, to: parent(del, forestRows)})
 
-		fmt.Printf("from %d, to %d\n", sib, parent(del, forestRows))
+		//fmt.Printf("from %d, to %d\n", sib, parent(del, forestRows))
 
 		// If 00 -> 16 and 16 -> 24, then what you're really doing is 00 -> 24.
 		// The loop below tries to find any arrows that can be shortened with
@@ -150,9 +150,10 @@ func calcDirtyNodes2(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]ui
 			// Calculate the dirty position.
 			dirtyPos := parent(move.to, forestRows)
 
+			fmt.Println("dirtyPos", dirtyPos)
+
 			// No dirty positions if the node is moving to a root position.
-			isRoot := isRootPosition(move.to, numLeaves, forestRows)
-			if isRoot {
+			if isRootPosition(move.to, numLeaves, forestRows) {
 				continue
 			}
 
@@ -161,24 +162,26 @@ func calcDirtyNodes2(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]ui
 
 				for _, compMove := range compMoveRow {
 					if isAncestor(compMove.from, dirtyPos, forestRows) {
-						rise := detectRow(compMove.to, forestRows) - detectRow(compMove.from, forestRows)
-						fmt.Printf("forestRows %d, rise %d, compMove.to %d compMove.from %d\n",
-							forestRows, rise, compMove.to, compMove.from)
-						fmt.Println("dirtyPos before", dirtyPos)
 
-						isLeft := dirtyPos&1 == 1
-						dirtyPos = parentMany(dirtyPos, uint8(rise), forestRows)
+						fromRow := detectRow(compMove.from, forestRows)
+						toRow := detectRow(compMove.to, forestRows)
 
-						if isLeft {
-							if dirtyPos&1 != 1 {
-								dirtyPos = sibling(dirtyPos)
-							}
-						} else {
-							if dirtyPos&1 == 1 {
-								dirtyPos = sibling(dirtyPos)
-							}
+						for currentRow := fromRow; currentRow < toRow; currentRow++ {
+							fmt.Printf("compMove.from %d, compmove row %d, dirtyPos %d\n", compMove.from, currentRow, dirtyPos)
+
+							fmt.Println("dirtypos before", dirtyPos)
+							dirtyPos = calcNextPosition(dirtyPos, numLeaves, currentRow, forestRows)
+
+							fmt.Println("dirtypos after", dirtyPos)
 						}
-						fmt.Println("dirtyPos after", dirtyPos)
+
+						//delRow := detectRow(compMove.from, forestRows)
+						//fmt.Printf("compMove.from %d, compmove row %d, dirtyPos %d\n", compMove.from, delRow, dirtyPos)
+
+						//fmt.Println("dirtypos before", dirtyPos)
+						//dirtyPos = calcNextPosition(dirtyPos, numLeaves, delRow, forestRows)
+
+						//fmt.Println("dirtypos after", dirtyPos)
 					} else {
 						if dirtyPos == compMove.from {
 							fmt.Printf("dirtyPos %d same as compMove.from. change to compMove.to %d\n",
@@ -198,6 +201,54 @@ func calcDirtyNodes2(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]ui
 	}
 
 	return dirtyNodes
+}
+
+func calcNextPosition(position, numLeaves uint64, delRow, forestRows uint8) uint64 {
+	fmt.Println("calcNextPosition", position)
+	returnPos := getRootPosition(position, numLeaves, forestRows)
+
+	//subTreeRows := detectSubTreeRows(position, numLeaves, forestRows)
+	subTreeRows := detectRow(getRootPosition(position, numLeaves, forestRows), forestRows)
+	fmt.Printf("subTreeRows %d, forestRows %d, numLeaves %d\n", subTreeRows, forestRows, numLeaves)
+
+	positionRow := detectRow(position, forestRows)
+	startRow := int(subTreeRows) - int(positionRow)
+
+	origDelRow := delRow
+	delRow = delRow - positionRow
+	fmt.Printf("delrow before %d, after %d, positionRow %d\n", origDelRow, delRow, positionRow)
+
+	if positionRow > 0 {
+		beforePos := position
+		mask := (1 << uint64(subTreeRows-positionRow)) - uint64(1)
+		position = position & mask
+
+		fmt.Println(position)
+
+		fmt.Printf("pos from %d to %d with mask %d, subTreeRow %d, positionRow %d\n",
+			beforePos, position, mask, subTreeRows, positionRow)
+	}
+
+	for i := int(startRow) - 1; i >= 0; i-- {
+		// Skip the bit field operation for this row.
+		if i == int(delRow) {
+			fmt.Println("skipping row", i)
+			continue
+		}
+		mask := uint64(1 << i)
+		fmt.Println("mask", mask)
+
+		// 1 means right
+		if (position & mask) == mask {
+			fmt.Println("right")
+			returnPos = rightChild(returnPos, forestRows)
+		} else {
+			fmt.Println("left")
+			returnPos = child(returnPos, forestRows)
+		}
+	}
+
+	return returnPos
 }
 
 //func checkMoveUp() {
@@ -227,6 +278,9 @@ func isRootPosition(position, numLeaves uint64, forestRows uint8) bool {
 
 	rootPresent := numLeaves&(1<<row) != 0
 	rootPos := rootPosition(numLeaves, row, forestRows)
+
+	fmt.Printf("pos %d, row %d, rootPresent %v, rootPos %d\n",
+		position, numLeaves, rootPresent, rootPos)
 
 	return rootPresent && rootPos == position
 }

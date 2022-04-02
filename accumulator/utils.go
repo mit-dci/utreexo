@@ -301,6 +301,11 @@ func child(position uint64, forestRows uint8) uint64 {
 	return (position << 1) & mask
 }
 
+func rightChild(position uint64, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
+	return ((position << 1) & mask) | 1
+}
+
 // go down drop times (always left; LSBs will be 0) and return position
 func childMany(position uint64, drop, forestRows uint8) uint64 {
 	if drop == 0 {

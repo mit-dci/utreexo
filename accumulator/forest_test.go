@@ -931,7 +931,7 @@ func TestForestAddDel(t *testing.T) {
 }
 
 func TestForestSwaplessAddDel(t *testing.T) {
-	numAdds := uint32(3)
+	numAdds := uint32(100)
 
 	allLeaves := make(map[Hash]interface{})
 
@@ -985,7 +985,7 @@ func TestForestSwaplessAddDel(t *testing.T) {
 
 		_, err = f.ModifySwapless(adds, bp.Targets)
 		if err != nil {
-			fmt.Println(f.SubTreeToString(138))
+			fmt.Println(f.SubTreeToString(396))
 			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
 		}
 
