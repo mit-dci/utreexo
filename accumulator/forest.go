@@ -199,7 +199,7 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 
 	sortUint64s(dels)
 
-	fmt.Println("dels", dels)
+	//fmt.Println("dels", dels)
 	for _, del := range dels {
 		delete(f.positionMap, f.data.read(del).Mini())
 		//f.data.write(del, empty)
@@ -222,7 +222,7 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 
 	// Calculate which leaves should go where when the deletion happens.
 	moveRows := Transform(dels, f.numLeaves, f.rows)
-	fmt.Println("moves", moveRows)
+	//fmt.Println("moves", moveRows)
 
 	// Go through all the moves from bottom to top.
 	for i := 0; i < len(moveRows); i++ {
@@ -242,14 +242,16 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 	// Calculate which nodes need to be hashed again.
 	dirtyRows := calcDirtyNodes2(moveRows, f.numLeaves, f.rows)
 
-	fmt.Println("dirtyRows", dirtyRows)
+	//fmt.Println("dirtyRows", dirtyRows)
 
-	for _, dirtyRow := range dirtyRows {
+	for currentRow, dirtyRow := range dirtyRows {
 		for _, dirtyPos := range dirtyRow {
 			leftChild := child(dirtyPos, f.rows)
 			rightChild := rightSib(leftChild)
 
 			if f.data.read(leftChild) == empty {
+				fmt.Println("currentRow", currentRow)
+
 				fmt.Println("f.rows", f.rows)
 				fmt.Println("numleaves", f.numLeaves)
 				fmt.Println(f.SubTreeToString(leftChild))
@@ -260,7 +262,8 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 			}
 
 			if f.data.read(rightChild) == empty {
-				//fmt.Println(f.SubTreeToString(rightChild))
+				fmt.Println("HERE")
+				fmt.Println(f.SubTreeToString(rightChild))
 				//fmt.Println(f.ToString())
 				return fmt.Errorf("removeSwapless error: couldn't hash dirty "+
 					"position at %d as the rightChild of %d was empty",
@@ -269,6 +272,20 @@ func (f *Forest) removeSwapless(dels []uint64) error {
 
 			hash := parentHash(f.data.read(leftChild), f.data.read(rightChild))
 			f.data.write(dirtyPos, hash)
+
+			// If the dirty position has a parent, then that is also dirty.
+			if currentRow < int(logicalTreeRows(f.numLeaves)) &&
+				!isRootPosition(dirtyPos, f.numLeaves, f.rows) {
+
+				parentPos := parent(dirtyPos, f.rows)
+				parentRow := detectRow(parentPos, f.rows)
+
+				// Insert in order.
+				insertSort(&dirtyRows[parentRow], parentPos)
+
+				// If it's already there, remove it.
+				dirtyRows[parentRow] = removeDuplicateInt(dirtyRows[parentRow])
+			}
 		}
 	}
 

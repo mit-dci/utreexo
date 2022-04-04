@@ -9,6 +9,15 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+func TestInsertSort(t *testing.T) {
+	dels := []uint64{1, 2, 2, 3}
+	insertSort(&dels, 1)
+
+	fmt.Println(dels)
+	dels = removeDuplicateInt(dels)
+	fmt.Println(dels)
+}
+
 func TestExTwin(t *testing.T) {
 
 	fmt.Printf("%d\n", rootPosition(15, 0, 4))

@@ -210,6 +210,11 @@ func TestForestSwaplessSimple(t *testing.T) {
 					hex.EncodeToString(hash[:]))
 			}
 		}
+
+		err = f.checkForestHashes()
+		if err != nil {
+			t.Fatalf("TestForestSwaplessSimple Fail: test %d failed. err: %v", i, err)
+		}
 	}
 }
 
@@ -563,8 +568,8 @@ func TestSwaplessModify(t *testing.T) {
 					expectedEmpty: []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15,
 						16, 17, 18, 19, 24, 25},
 					expectedRoots: []Hash{
-						stringToHash("7ccdb5eb659438b7cd85f8c46788ecf0" +
-							"ed07239f8c8bcdc63733917fd7b64c89"),
+						stringToHash("4010aedd4e90764f805667487be4b48c" +
+							"9ad3f81a11a827455cf61ddc55f12f05"),
 					},
 				},
 
@@ -781,6 +786,10 @@ func TestSwaplessModify(t *testing.T) {
 						test.name, blockHeight, expectedEmpty,
 						hex.EncodeToString(readHash[:]))
 				}
+			}
+			err = forest.checkForestHashes()
+			if err != nil {
+				t.Fatalf("TestSwaplessModify Fail: test %s failed. err: %v", test.name, err)
 			}
 		}
 	}
@@ -1081,6 +1090,11 @@ func TestForestSwaplessAddDel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
 			}
+		}
+
+		err = f.checkForestHashes()
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel Fail: err: %v", err)
 		}
 	}
 
@@ -1526,4 +1540,79 @@ func TestSmallRandomForests(t *testing.T) {
 			}
 		}
 	}
+}
+
+func (f *Forest) checkForestHashes() error {
+	roots := NewPositionList()
+	defer roots.Free()
+
+	getRootsForwards(f.numLeaves, f.rows, &roots.list)
+
+	for _, root := range roots.list {
+		nodesToCheck := []uint64{root}
+		topRow := detectRow(root, f.rows)
+
+		for row := int(topRow); row >= 0; row-- {
+			nextNodes := []uint64{}
+
+			for _, node := range nodesToCheck {
+				leftChild := child(node, f.rows)
+				rightChild := rightSib(leftChild)
+
+				leftHash := f.data.read(leftChild)
+				rightHash := f.data.read(rightChild)
+
+				if isRootPosition(node, f.numLeaves, f.rows) {
+					if row == 0 || leftHash == empty && rightHash == empty {
+						continue
+					}
+				}
+
+				//if leftHash == empty || rightHash == empty {
+				//return fmt.Errorf("One of the children of %d is empty, left %s, right %s",
+				//	node, hex.EncodeToString(leftHash[:]), hex.EncodeToString(rightHash[:]))
+				//}
+
+				calculated := parentHash(leftHash, rightHash)
+				read := f.data.read(node)
+
+				if calculated != read {
+					return fmt.Errorf("Position %d, calculated %s but read %s", node,
+						hex.EncodeToString(calculated[:]), hex.EncodeToString(read[:]))
+				}
+
+				if row != 0 {
+					// Children of the leftChild.
+					//if f.data.read(child(leftChild, f.rows)) != empty {
+					//if !f.isLeaf(child(leftChild, f.rows), uint8(row)) {
+					if !f.isLeaf(leftChild, uint8(row-1)) {
+						nextNodes = append(nextNodes, leftChild)
+						//nextNodes = append(nextNodes, child(leftChild, f.rows))
+						//nextNodes = append(nextNodes, rightSib(child(leftChild, f.rows)))
+					}
+					//if !f.isLeaf(rightSib(child(leftChild, f.rows)), uint8(row)) {
+					//	nextNodes = append(nextNodes, rightSib(child(leftChild, f.rows)))
+					//}
+
+					// Children of the rightChild.
+					//if f.data.read(child(rightChild, f.rows)) != empty {
+					//if !f.isLeaf(child(rightChild, f.rows), f.rows) {
+					if !f.isLeaf(rightChild, uint8(row-1)) {
+						nextNodes = append(nextNodes, rightChild)
+						//nextNodes = append(nextNodes, child(rightChild, f.rows))
+						//nextNodes = append(nextNodes, rightSib(child(rightChild, f.rows)))
+					}
+					//if f.data.read(rightSib(child(rightChild, f.rows))) != empty {
+					//if !f.isLeaf(rightSib(child(rightChild, f.rows)), f.rows) {
+					//	nextNodes = append(nextNodes, rightSib(child(rightChild, f.rows)))
+					//}
+				}
+			}
+
+			//fmt.Println("llop", nextNodes, nodesToCheck)
+			nodesToCheck = nextNodes
+		}
+	}
+
+	return nil
 }
