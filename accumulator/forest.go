@@ -157,14 +157,9 @@ func (f *Forest) ReconstructStats() (uint64, uint8) {
 }
 
 /*
-	Deletion algo:
-	Delete leaf, write sibling to parent.
-	While either aunt* or sibling are empty, keep doing this:
-	Rise. Write non-empty sibling to parent, otherwise write self to parent.
-	*(An aunt outside of the forest counts as non-empty.)
+Deletion algo
 */
 
-// TODO: read self and sibling in 1 function call
 // removev5 swapless
 func (f *Forest) removev5(dels []uint64) error {
 	// should do this later / non-blocking as it's just to free up space.
@@ -176,24 +171,28 @@ func (f *Forest) removev5(dels []uint64) error {
 	condensedDels := condenseDeletions(dels, f.rows)
 	// main iteration of all deletion
 	for _, p := range condensedDels {
-		// f.data.write(p, empty) // delete leaf // don't need to
-		f.promote(p ^ 1) // write sibling to parent
-		if !f.lonely(p) {
-			p = parent(p, f.rows) // rise once for higher dirt
+
+		// first, rise until you aren't your parent
+		for f.sameAsParent(p) {
 		}
-		for f.lonely(p) { // continue while lonely
-			p = parent(p, f.rows)          // rise
-			if f.data.read(p^1) != empty { // check if sibling is empty
-				f.promote(p ^ 1) // promote sibling if it exists
-			} else {
-				f.promote(p) // promote self (possibly empty) if no sibling
-			}
+
+		// read in sibling.  Sibling is always valid (unless you're a root)
+		sib := f.data.read(p ^ 1)
+		p = parent(p, f.rows) // rise
+
+		// Write sibling to parent, and keep rising and writing that
+		// until you're not the same as your parent
+		for f.sameAsParent(p) {
+			f.data.write(p, sib)  // write to self
+			p = parent(p, f.rows) // rise
 		}
-		dirtpos := parent(p, f.rows)
-		if len(dirt) == 0 || dirt[len(dirt)-1] != dirtpos {
-			dirt = append(dirt, dirtpos)
-			fmt.Printf("dirt: %v\n", dirt)
-		}
+		f.data.write(p, sib) // write to self, redundant if we did prev loop
+
+		// dirtpos := parent(p, f.rows)
+		// if len(dirt) == 0 || dirt[len(dirt)-1] != dirtpos {
+		// dirt = append(dirt, dirtpos)
+		// fmt.Printf("dirt: %v\n", dirt)
+		// }
 
 	}
 	fmt.Printf("dirt: %v\n", dirt)
@@ -203,26 +202,21 @@ func (f *Forest) removev5(dels []uint64) error {
 
 // promote moves a node up to it's parent
 // returns the parent position
-func (f *Forest) promote(p uint64) uint64 {
+func (f *Forest) promote(p uint64) {
 	parentPos := parent(p, f.rows)
 	f.data.write(parentPos, f.data.read(p))
-	// TODO could also delete for cleaner tree, but complicates lonely()
-	// f.data.write(p, empty)
-	return parentPos
 }
 
-// A position is "lonely" if either its sibling or aunt is missing.
-// Aunts that are outside of the forest range count as existing
-// for the purpose of loneliness (who needs friends at the top, eh?)
-func (f *Forest) lonely(p uint64) bool {
-	// if aunt is outside of the forest, we're done
-	auntPos := parent(p, f.rows) ^ 1
-	fmt.Printf("pos %d auntpos %d\n", p, auntPos)
-	if inForest(auntPos, f.numLeaves, f.rows) &&
-		inForest(p^1, f.numLeaves, f.rows) {
-		return f.data.read(auntPos) == empty || f.data.read(p^1) == empty
+// Check if a position is the same as its parent.  Returns false if the
+// parent is outside the forest.
+func (f *Forest) sameAsParent(p uint64) bool {
+	parPos := parent(p, f.rows)
+	if !inForest(parPos, f.numLeaves, f.rows) {
+		return false
 	}
-	return false
+	selfHash := f.data.read(p)
+	parHash := f.data.read(parPos)
+	return selfHash == parHash
 }
 
 // reHash hashes new data in the forest based on dirty positions.
