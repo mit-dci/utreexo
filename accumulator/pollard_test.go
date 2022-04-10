@@ -7,6 +7,143 @@ import (
 	"testing"
 )
 
+func TestPollardAddDel(t *testing.T) {
+	// simulate blocks with simchain
+	numAdds := uint32(300)
+	sc := newSimChain(0x07)
+
+	var p Pollard
+	p.MakeFull()
+
+	for b := 0; b < 2000; b++ {
+		fmt.Println("on block", b)
+		adds, _, delHashes := sc.NextBlock(numAdds)
+
+		bp, err := p.ProveBatchSwapless(delHashes)
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		//fmt.Println(bp.ToString())
+
+		for _, target := range bp.Targets {
+			n, _, _, err := p.readPos(target)
+			if err != nil {
+				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+			}
+			if n == nil {
+				fmt.Println(bp.ToString())
+				t.Fatalf("TestSwapLessAddDel fail to read %d at block %d.", target, b)
+			}
+			//fmt.Printf("read %s at pos %d\n", hex.EncodeToString(n.data[:]), target)
+		}
+
+		err = p.ModifySwapless(adds, bp.Targets)
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		//fmt.Println(p.ToString())
+	}
+}
+
+func TestPollardAddSwapless(t *testing.T) {
+	var p Pollard
+	p.NodeMap = make(map[MiniHash]*polNode)
+
+	// Create the starting off pollard.
+	adds := make([]Leaf, 6)
+	for i := 0; i < len(adds); i++ {
+		adds[i].Hash[0] = uint8(i)
+		adds[i].Hash[20] = 0xff
+		adds[i].Remember = true
+	}
+
+	p.addSwapless(adds)
+
+	fmt.Println(p.ToString())
+
+	//err := p.removeSwapless([]uint64{4, 5, 6, 8, 9, 10, 11, 12, 13, 14})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+
+	//fmt.Println(p.ToString())
+
+	//bp, err := p.ProveBatch([]Hash{{1}, {2}})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+
+	//fmt.Println(bp.ToString())
+
+	n, _, _, err := p.readPos(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//fmt.Printf("n %s\n", hex.EncodeToString(n.data[:]))
+	//fmt.Printf("aunt %s\n", hex.EncodeToString(n.aunt.data[:]))
+
+	//fmt.Printf("niece[0] %s\n", hex.EncodeToString(n.aunt.niece[0].data[:]))
+	//fmt.Printf("niece[1] %s\n", hex.EncodeToString(n.aunt.niece[1].data[:]))
+
+	//fmt.Printf("n.aunt.aunt %s\n", hex.EncodeToString(n.aunt.aunt.data[:]))
+	//fmt.Printf("n.aunt.aunt.aunt %s\n", hex.EncodeToString(n.aunt.aunt.aunt.data[:]))
+	//fmt.Printf("n.aunt.aunt.aunt.aunt %s\n", hex.EncodeToString(n.aunt.aunt.aunt.aunt.data[:]))
+
+	pos := n.calculatePosition(p.numLeaves, p.roots)
+	fmt.Println("got pos", pos)
+
+	//p.addSwapless([]Leaf{{Hash{7}, false}})
+
+	//fmt.Println(p.ToString())
+
+	fmt.Println("node map len", len(p.NodeMap))
+
+	err = p.removeSwapless([]uint64{5})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(p.ToString())
+
+	for key, value := range p.NodeMap {
+		fmt.Println("hi")
+		fmt.Printf("hash %s, node pos %d\n", hex.EncodeToString(key[:]),
+			value.calculatePosition(p.numLeaves, p.roots))
+	}
+
+	node, ok := p.NodeMap[Hash{4}.Mini()]
+	if !ok {
+		hash := Hash{4}
+		t.Fatalf("couldn't find %s", hex.EncodeToString(hash[:]))
+	}
+
+	fmt.Println(node.data)
+
+	//p.addSwapless([]Leaf{{Hash{8}, true}, {Hash{9}, true}})
+
+	//fmt.Println(p.ToString())
+
+	//err = p.removeSwapless([]uint64{9})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+
+	p.addSwapless([]Leaf{
+		{Hash{6}, true},
+		{Hash{7}, true},
+		//{Hash{6}, true},
+		//{Hash{7}, true},
+	})
+
+	fmt.Println(p.ToString())
+
+	p.removeSwapless([]uint64{0})
+	fmt.Println(p.ToString())
+}
+
 func TestPollardNoSiblingFound(t *testing.T) {
 	var p Pollard
 

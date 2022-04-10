@@ -3,6 +3,7 @@ package accumulator
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -198,6 +199,13 @@ func TestTransform(t *testing.T) {
 				{{from: 29, to: 30}},
 				{},
 			},
+			//[][]arrow{
+			//	{{from: 11, to: 21}},
+			//	{{from: 21, to: 26}},
+			//	{},
+			//	{{from: 29, to: 30}},
+			//	{},
+			//},
 		},
 
 		// 30
@@ -807,7 +815,19 @@ func TestCalcNextPosition(t *testing.T) {
 			t.Errorf("TestCalcNextPosition %d fail: expected %d, got %d\n",
 				i, test.expected, gotPos)
 		}
+
+		if i == 1 {
+			calcNextPosition2(test.position, test.numLeaves, test.deletionRow, test.forestRow)
+		}
 	}
+}
+
+func TestCalcPos2(t *testing.T) {
+	forestRows := uint8(3)
+	calcNextPosition2(3, 8, 1, forestRows)
+
+	mask := uint64(2<<forestRows) - 1
+	fmt.Println(strconv.FormatUint(mask, 2))
 }
 
 func TestDeTwin(t *testing.T) {
@@ -839,6 +859,10 @@ func TestDeTwin(t *testing.T) {
 			}
 		}
 	}
+}
+
+func isNextElemSibling(dels []uint64, idx int) bool {
+	return dels[idx]|1 == dels[idx+1]
 }
 
 func TestDeTwinRand(t *testing.T) {

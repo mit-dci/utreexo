@@ -309,8 +309,6 @@ func (f *Forest) deleteSubTree(position uint64) {
 
 			if currentRow != 0 && f.data.read(leftChild) != empty {
 				nextPositions = append(nextPositions, leftChild)
-			} else {
-				//delete(f.positionMap, f.data.read(position).Mini())
 			}
 
 			if currentRow != 0 && f.data.read(rightChild) != empty {
@@ -318,9 +316,6 @@ func (f *Forest) deleteSubTree(position uint64) {
 			}
 
 			f.data.write(position, empty)
-
-			//if currentRow != 0 && f.data.read(rightChild) != empty {
-			//}
 		}
 
 		positions = nextPositions

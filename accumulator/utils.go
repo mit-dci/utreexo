@@ -335,6 +335,10 @@ func parentMany(position uint64, rise, forestRows uint8) uint64 {
 	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
 }
 
+func isLeftChild(position uint64) bool {
+	return position&1 == 0
+}
+
 //func isDescendent( uint64, forestRows uint8) bool {
 //	for row:=0; row<int(forestRows); row++{
 //	}

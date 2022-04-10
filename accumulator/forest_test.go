@@ -51,7 +51,7 @@ func TestForestSwaplessSimple(t *testing.T) {
 				11: empty,
 				12: empty,
 				13: empty,
-				14: Hash{6},
+				14: {6},
 			},
 		},
 
@@ -83,10 +83,10 @@ func TestForestSwaplessSimple(t *testing.T) {
 				5:  empty,
 				6:  empty,
 				7:  empty,
-				8:  Hash{5},
-				9:  Hash{6},
-				10: Hash{7},
-				11: Hash{8},
+				8:  {5},
+				9:  {6},
+				10: {7},
+				11: {8},
 				12: parentHash(Hash{5}, Hash{6}),
 				13: parentHash(Hash{7}, Hash{8}),
 				14: parentHash(
@@ -119,15 +119,15 @@ func TestForestSwaplessSimple(t *testing.T) {
 				1:  empty,
 				2:  empty,
 				3:  empty,
-				4:  Hash{5},
-				5:  Hash{6},
-				6:  Hash{7},
-				7:  Hash{8},
+				4:  {5},
+				5:  {6},
+				6:  {7},
+				7:  {8},
 				8:  empty,
 				9:  empty,
 				10: parentHash(Hash{5}, Hash{6}),
 				11: parentHash(Hash{7}, Hash{8}),
-				12: Hash{3},
+				12: {3},
 				13: parentHash(
 					parentHash(Hash{5}, Hash{6}),
 					parentHash(Hash{7}, Hash{8})),
@@ -157,11 +157,11 @@ func TestForestSwaplessSimple(t *testing.T) {
 				1:  empty,
 				2:  empty,
 				3:  empty,
-				4:  Hash{5},
-				5:  Hash{6},
-				6:  Hash{7},
-				7:  Hash{8},
-				8:  Hash{9},
+				4:  {5},
+				5:  {6},
+				6:  {7},
+				7:  {8},
+				8:  {9},
 				16: empty,
 				17: empty,
 				18: parentHash(Hash{5}, Hash{6}),
@@ -191,14 +191,14 @@ func TestForestSwaplessSimple(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fmt.Println(f.ToString())
+		//fmt.Println(f.ToString())
 
 		err = f.removeSwapless(test.dels)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		fmt.Println(f.ToString())
+		//fmt.Println(f.ToString())
 
 		for pos, expectedHash := range test.expected {
 			hash := f.data.read(pos)
@@ -733,11 +733,11 @@ func TestSwaplessModify(t *testing.T) {
 					test.name, blockHeight, err)
 			}
 
-			fmt.Println(forest.ToString())
-			for _, root := range forest.GetRoots() {
-				fmt.Println(hex.EncodeToString(root[:]))
-			}
-			fmt.Println(forest.positionMap)
+			//fmt.Println(forest.ToString())
+			//for _, root := range forest.GetRoots() {
+			//	fmt.Println(hex.EncodeToString(root[:]))
+			//}
+			//fmt.Println(forest.positionMap)
 
 			// Check that all the leaves in the map are there and that the
 			// values are the same.
@@ -939,8 +939,56 @@ func TestForestAddDel(t *testing.T) {
 	fmt.Println("allproof", allProof)
 }
 
+func TestSwaplessProofs(t *testing.T) {
+	f := NewForest(RamForest, nil, "", 0)
+
+	leaves := []Leaf{
+		{Hash: Hash{1}},
+		{Hash: Hash{2}},
+		{Hash: Hash{3}},
+		{Hash: Hash{4}},
+		{Hash: Hash{5}},
+		{Hash: Hash{6}},
+		{Hash: Hash{7}},
+		{Hash: Hash{8}},
+		{Hash: Hash{9}},
+	}
+
+	_, err := f.ModifySwapless(leaves, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bp, err := f.ProveBatch([]Hash{{2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(bp.ToString())
+	fmt.Println(f.ToString())
+
+	_, err = f.ModifySwapless(nil, []uint64{0})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bp, err = f.ProveBatch([]Hash{{2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(bp.ToString())
+	fmt.Println(f.ToString())
+
+	bp, err = f.ProveBatch([]Hash{{3}, {4}, {6}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(bp.ToString())
+}
+
 func TestForestSwaplessAddDel(t *testing.T) {
-	numAdds := uint32(100)
+	numAdds := uint32(200)
 
 	allLeaves := make(map[Hash]interface{})
 
@@ -952,16 +1000,16 @@ func TestForestSwaplessAddDel(t *testing.T) {
 
 	for b := 0; b < 1000; b++ {
 		fmt.Println("start block ", b)
-		for h := uint8(0); h < f.rows; h++ {
-			if (f.numLeaves>>h)&1 == 1 {
-				pos := rootPosition(f.numLeaves, h, f.rows)
-				fmt.Println()
-				fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
-					pos, f.numLeaves, f.rows, h)
-				fmt.Println(f.SubTreeToString(pos))
-				fmt.Println()
-			}
-		}
+		//for h := uint8(0); h < f.rows; h++ {
+		//	if (f.numLeaves>>h)&1 == 1 {
+		//		pos := rootPosition(f.numLeaves, h, f.rows)
+		//		fmt.Println()
+		//		fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+		//			pos, f.numLeaves, f.rows, h)
+		//		fmt.Println(f.SubTreeToString(pos))
+		//		fmt.Println()
+		//	}
+		//}
 		adds, _, delHashes := sc.NextBlock(numAdds)
 
 		bp, err := f.ProveBatch(delHashes)
@@ -994,7 +1042,6 @@ func TestForestSwaplessAddDel(t *testing.T) {
 
 		_, err = f.ModifySwapless(adds, bp.Targets)
 		if err != nil {
-			fmt.Println(f.SubTreeToString(396))
 			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
 		}
 
@@ -1033,24 +1080,24 @@ func TestForestSwaplessAddDel(t *testing.T) {
 			}
 		}
 
-		//fmt.Println("ROOTS")
-		//for i, root := range roots {
-		//	fmt.Printf("root %d: %s\n", i, hex.EncodeToString(root[:]))
+		////fmt.Println("ROOTS")
+		////for i, root := range roots {
+		////	fmt.Printf("root %d: %s\n", i, hex.EncodeToString(root[:]))
+		////}
+		////fmt.Println("ROOTS END")
+
+		//for h := uint8(0); h < f.rows; h++ {
+		//	if (f.numLeaves>>h)&1 == 1 {
+		//		pos := rootPosition(f.numLeaves, h, f.rows)
+		//		fmt.Println()
+		//		fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
+		//			pos, f.numLeaves, f.rows, h)
+		//		fmt.Println(f.SubTreeToString(pos))
+		//		fmt.Println()
+		//	}
 		//}
-		//fmt.Println("ROOTS END")
 
-		for h := uint8(0); h < f.rows; h++ {
-			if (f.numLeaves>>h)&1 == 1 {
-				pos := rootPosition(f.numLeaves, h, f.rows)
-				fmt.Println()
-				fmt.Printf("pos %d, numLeaves %d, f.rows %d, root at row %d\n",
-					pos, f.numLeaves, f.rows, h)
-				fmt.Println(f.SubTreeToString(pos))
-				fmt.Println()
-			}
-		}
-
-		//fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+		////fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
 
 		for _, add := range adds {
 			allLeaves[add.Hash] = nil
@@ -1098,7 +1145,7 @@ func TestForestSwaplessAddDel(t *testing.T) {
 		}
 	}
 
-	fmt.Println("swapless allproof", allProof)
+	//fmt.Println("swapless allproof", allProof)
 }
 
 func (f *Forest) checkPosBelowAreEmpty(origPosition uint64) error {

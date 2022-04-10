@@ -45,6 +45,12 @@ type Pollard struct {
 	// It is only used for fullPollard.
 	positionMap map[MiniHash]uint64
 
+	// nodeMap maps a hash to a polNode. Useful for during proving.
+	NodeMap map[MiniHash]*polNode
+
+	// full indicates that the pollard will store every leaf.
+	full bool
+
 	// Below are for keeping statistics.
 	// hashesEver is all the hashes that have ever been performed.
 	// rememberEver is all the nodes that have ever been cached.
@@ -169,8 +175,7 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 		n.remember = true
 	}
 
-	// if add is forgetable, forget all the new nodes made
-	// loop until we find a zero; destroy roots until you make one
+	// if add is forgetable, forget all the new nodes made loop until we find a zero; destroy roots until you make one
 	var h uint8
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
@@ -191,6 +196,190 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 	p.roots = append(p.roots, n)
 	p.numLeaves++
+	return nil
+}
+
+func (p *Pollard) move(from, to uint64) error {
+	fromNode, fromNodeSib, _, err := p.readPos(from)
+	if err != nil {
+		return err
+	}
+
+	toNode, toSib, _, err := p.readPos(to)
+	if err != nil {
+		return err
+	}
+
+	toNode.data = fromNode.data
+	toSib.niece = fromNodeSib.niece
+
+	updateAunt(toSib)
+
+	if p.NodeMap != nil {
+		p.NodeMap[fromNode.data.Mini()] = toNode
+	}
+
+	if isRootPosition(to, p.numLeaves, treeRows(p.numLeaves)) {
+		toNode.aunt = nil
+	} else {
+		_, parentSib, _, err := p.readPos(parent(to, treeRows(p.numLeaves)))
+		if err != nil {
+			return err
+		}
+
+		toNode.aunt = parentSib
+	}
+
+	return nil
+}
+
+//func (p *Pollard) moveAndHash(from, to uint64) error {
+//	//fmt.Printf("Moving from %d, to %d\n", from, to)
+//	fromNode, fromNodeSib, _, err := p.readPos(from)
+//	if err != nil {
+//		return err
+//	}
+//
+//	toNode, toSib, _, err := p.readPos(to)
+//	if err != nil {
+//		return err
+//	}
+//
+//	toNode.data = fromNode.data
+//	toSib.niece = fromNodeSib.niece
+//
+//	updateAunt(toSib)
+//
+//	if p.NodeMap != nil {
+//		//fmt.Println("toNode data", hex.EncodeToString(toNode.data[:]))
+//		//mini := fromNode.data.Mini()
+//		//fmt.Println("fromNode.data.mINi", hex.EncodeToString(mini[:]))
+//		//fmt.Println("tonode.aunt.data", hex.EncodeToString(toNode.aunt.data[:]))
+//		//fmt.Println("tonode.aunt.niece[0]", hex.EncodeToString(toNode.aunt.niece[0].data[:]))
+//		//fmt.Println("tonode.aunt.niece[1]", hex.EncodeToString(toNode.aunt.niece[1].data[:]))
+//		p.NodeMap[fromNode.data.Mini()] = toNode
+//	}
+//
+//	//fmt.Printf("move.to %d, nieces %v, aunt %v\n", to, toNode.niece, toNode.aunt)
+//
+//	// If to position is a root, there's no parent hash to be calculated.
+//	if isRootPosition(to, p.numLeaves, treeRows(p.numLeaves)) {
+//		toNode.aunt = nil
+//		return nil
+//	}
+//
+//	// TODO have the readPos also return the parent polnode. We can avoid this
+//	// extra read here.
+//	parentNode, parentSib, _, err := p.readPos(parent(to, treeRows(p.numLeaves)))
+//	if err != nil {
+//		return err
+//	}
+//
+//	toNode.aunt = parentSib
+//
+//	//fmt.Printf("node %d, parentdata %s, parentsibdata %s\n",
+//	//	to, hex.EncodeToString(parent.data[:]), hex.EncodeToString(parentSib.data[:]))
+//
+//	var pHash Hash
+//	if isLeftChild(to) {
+//		pHash = parentHash(toNode.data, toSib.data)
+//	} else {
+//		pHash = parentHash(toSib.data, toNode.data)
+//	}
+//	parentNode.data = pHash
+//
+//	return nil
+//}
+
+func (p *Pollard) removeSwaplessParallel(dels []uint64) error {
+	sortUint64s(dels)
+
+	if p.NodeMap != nil {
+		for _, del := range dels {
+			delete(p.NodeMap, p.read(del).Mini())
+		}
+	}
+
+	totalRows := treeRows(p.numLeaves)
+	moveRows := Transform(dels, p.numLeaves, totalRows)
+
+	// Go through all the moves from bottom to top.
+	for i := 0; i < len(moveRows); i++ {
+		moveRow := moveRows[i]
+
+		for _, move := range moveRow {
+			// If from and to are the same, it means that the entire subtree
+			// is being deleted.
+			if move.from == move.to {
+				node, _, _, err := p.grabPos(move.from)
+				if err != nil {
+					return err
+				}
+
+				idx := -1
+				for i, root := range p.roots {
+					if root.data == node.data {
+						idx = i
+					}
+				}
+				if idx == -1 {
+					panic("wrong")
+				}
+				p.roots[idx].chop()
+				p.roots[idx].data = empty
+			} else {
+				err := p.move(move.from, move.to)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Calculate which nodes need to be hashed again.
+	dirtyRows := calcDirtyNodes2(moveRows, p.numLeaves, totalRows)
+
+	for currentRow, dirtyRow := range dirtyRows {
+		for _, dirtyPos := range dirtyRow {
+			leftChild := child(dirtyPos, totalRows)
+			rightChild := rightSib(leftChild)
+
+			node, sibling, par, err := p.grabPos(leftChild)
+			if err != nil {
+				return err
+			}
+
+			if node == nil {
+				return fmt.Errorf("removeSwapless error: couldn't hash dirty "+
+					"position at %d as the leftChild of %d was empty",
+					dirtyPos, leftChild)
+			}
+
+			if sibling == nil {
+				return fmt.Errorf("removeSwapless error: couldn't hash dirty "+
+					"position at %d as the rightChild of %d was empty",
+					dirtyPos, rightChild)
+			}
+
+			hash := parentHash(node.data, sibling.data)
+			par.dest.data = hash
+
+			// If the dirty position has a parent, then that is also dirty.
+			if currentRow < int(logicalTreeRows(p.numLeaves)) &&
+				!isRootPosition(dirtyPos, p.numLeaves, totalRows) {
+
+				parentPos := parent(dirtyPos, totalRows)
+				parentRow := detectRow(parentPos, totalRows)
+
+				// Insert in order.
+				insertSort(&dirtyRows[parentRow], parentPos)
+
+				// If it's already there, remove it.
+				dirtyRows[parentRow] = removeDuplicateInt(dirtyRows[parentRow])
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -406,8 +595,7 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 
 // readPos returns a pointer to the node at the requested position. readPos does not
 // mutate the Pollard in any way.
-func (p *Pollard) readPos(pos uint64) (
-	n, nsib *polNode, hn *hashableNode, err error) {
+func (p *Pollard) readPos(pos uint64) (n, nsib *polNode, hn *hashableNode, err error) {
 	// Grab the tree that the position is at
 	tree, branchLen, bits := detectOffset(pos, p.numLeaves)
 	if tree >= uint8(len(p.roots)) {

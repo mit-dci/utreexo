@@ -10,9 +10,13 @@ import (
 
 // PolNode is a node in the pollard forest
 type polNode struct {
-	data     Hash
-	niece    [2]*polNode
-	remember bool
+	data  Hash
+	niece [2]*polNode
+
+	leftNiece  *polNode
+	rightNiece *polNode
+	aunt       *polNode
+	remember   bool
 }
 
 // auntOp returns the hash of a nodes nieces. crashes if you call on nil nieces.
