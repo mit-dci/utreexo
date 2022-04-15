@@ -25,7 +25,7 @@ func (f *Forest) Prove(wanted Hash) (Proof, error) {
 	}
 
 	// should never happen
-	if pos > f.numLeaves {
+	if pos >= f.numLeaves {
 		return pr, fmt.Errorf("prove: got leaf position %d but only %d leaves exist",
 			pos, f.numLeaves)
 	}
