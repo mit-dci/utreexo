@@ -4,7 +4,6 @@
 cmd/txottl/txottl
 cmd/blockparser/blockparser
 cmd/ibdsim/ibdsim
-cmd/clair/clair
 cmd/simcmd/simcmd
 cmd/utreexoclient/utreexoclient
 cmd/utreexoserver/utreexoserver
