@@ -40,8 +40,3 @@ https://github.com/mit-dci/utreexo/blob/master/utreexo.pdf
 ## util
 
 Various reused functions, constants, and paths used in all the packages.
-
-## clair
-
-An attempt at implementing Bélády's clairvoyent algorithm. Currently, it does not build.
-This code is kept to be used in the future.
