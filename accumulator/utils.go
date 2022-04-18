@@ -394,40 +394,6 @@ func getRootsForwards(leaves uint64, forestRows uint8, roots *[]uint64) []uint8 
 	return rows
 }
 
-// subTreePositions takes in a node position and forestRows and returns the
-// positions of all children that need to move AND THE NODE ITSELF.  (it works
-// nicer that way)
-// Also it returns where they should move to, given the destination of the
-// sub-tree root.
-// can also be used with the "to" return discarded to just enumerate a subtree
-// swap tells whether to activate the sibling swap to try to preserve order
-func subTreePositions(
-	subroot uint64, moveTo uint64, forestRows uint8) (as []arrow) {
-
-	subRow := detectRow(subroot, forestRows)
-	//	fmt.Printf("node %d row %d\n", subroot, subRow)
-	rootDelta := int64(moveTo) - int64(subroot)
-	// do this with nested loops instead of recursion ... because that's
-	// more fun.
-	// r is out row in the forest
-	// start at the bottom and ascend
-	for r := uint8(0); r <= subRow; r++ {
-		// find leftmost child on this row; also calculate the
-		// delta (movement) for this row
-		depth := subRow - r
-		leftmost := childMany(subroot, depth, forestRows)
-		rowDelta := rootDelta << depth // usually negative
-		for i := uint64(0); i < 1<<depth; i++ {
-			// loop left to right
-			f := leftmost + i
-			t := uint64(int64(f) + rowDelta)
-			as = append(as, arrow{from: f, to: t})
-		}
-	}
-
-	return
-}
-
 // TODO: unused? useless?
 // subTreeLeafRange gives the range of leaves under a node
 func subTreeLeafRange(
