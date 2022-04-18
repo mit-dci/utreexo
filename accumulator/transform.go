@@ -1,5 +1,301 @@
 package accumulator
 
+import (
+	"fmt"
+	"sort"
+	"strconv"
+)
+
+// Transform outlines how the accumulator state should be modified. This function itself does
+// not modify the accumulator state.
+func Transform2(origDels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
+	dels := make([]uint64, len(origDels))
+	copy(dels, origDels)
+
+	deTwin(&dels, forestRows)
+
+	//fmt.Println("detwined del", dels)
+
+	// Moves indicate where a leaf should move to next.
+	moves := make([][]arrow, forestRows+1)
+
+	currentRow := uint8(0)
+	for _, del := range dels {
+		// If the next del is not in this row, move to the next row until
+		// we're at the correct row.
+		for detectRow(del, forestRows) != currentRow {
+			currentRow++
+		}
+
+		// If a root is being deleted, then we mark it and all the leaves below
+		// it to be deleted.
+		if isRootPosition(del, numLeaves, forestRows) {
+			move := arrow{from: del, to: del}
+			moves[currentRow] = append(moves[currentRow], move)
+			continue
+		}
+
+		//fmt.Printf("currentRow: %d, rootPresent: %v, rootPos: %d\n",
+		//	currentRow, rootPresent, rootPos)
+
+		sib := sibling(del)
+
+		move := arrow{from: sib, to: parent(del, forestRows)}
+		moves[currentRow] = append(moves[currentRow], move)
+	}
+
+	return moves
+}
+
+// Transform outlines how the accumulator state should be modified. This function itself does
+// not modify the accumulator state.
+func Transform(origDels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {
+	dels := make([]uint64, len(origDels))
+	copy(dels, origDels)
+
+	deTwin(&dels, forestRows)
+
+	//fmt.Println("detwined del", dels)
+
+	// Moves indicate where a leaf should move to next.
+	moves := make([][]arrow, forestRows+1)
+
+	currentRow := uint8(0)
+	for _, del := range dels {
+		// If the next del is not in this row, move to the next row until
+		// we're at the correct row.
+		for detectRow(del, forestRows) != currentRow {
+			currentRow++
+		}
+
+		// If a root is being deleted, then we mark it and all the leaves below
+		// it to be deleted.
+		if isRootPosition(del, numLeaves, forestRows) {
+			move := arrow{from: del, to: del}
+			moves[currentRow] = append(moves[currentRow], move)
+			continue
+		}
+
+		//fmt.Printf("currentRow: %d, rootPresent: %v, rootPos: %d\n",
+		//	currentRow, rootPresent, rootPos)
+
+		sib := sibling(del)
+
+		move := arrow{from: sib, to: parent(del, forestRows)}
+		moves[currentRow] = append(moves[currentRow], move)
+
+		//fmt.Printf("from %d, to %d\n", sib, parent(del, forestRows))
+
+		// If 00 -> 16 and 16 -> 24, then what you're really doing is 00 -> 24.
+		// The loop below tries to find any arrows that can be shortened with
+		// the newly created arrow by looking at the row below.
+		if currentRow != 0 {
+			for i, arw := range moves[currentRow-1] {
+				if arw.to == sib {
+					// Change the arrow.from to the arrow.from value from
+					// the row below.
+					moves[currentRow][len(moves[currentRow])-1].from = arw.from
+
+					// Delete the previous arrow from the row below.
+					moves[currentRow-1] = append(
+						moves[currentRow-1][:i],
+						moves[currentRow-1][i+1:]...)
+					break
+				}
+			}
+		}
+	}
+
+	return moves
+}
+
+// deTwin goes through the list of sorted deletions and finds the parent deletions.
+// The caller MUST sort the dels before passing it into the function.
+//
+// Ex: If we're deleting 00 and 01 in this tree:
+//
+// 02
+// |--\
+// 00 01
+//
+// Then we're really deleting 02. The dels of [00, 01] would be [02].
+func deTwin(dels *[]uint64, forestRows uint8) {
+	for i := 0; i < len(*dels); i++ {
+		// 1: Check that there's at least 2 elements in the slice left.
+		// 2: Check if the right sibling of the current element matches
+		//    up with the next element in the slice.
+		if i+1 < len(*dels) && rightSib((*dels)[i]) == (*dels)[i+1] {
+			// Grab the position of the del.
+			pos := (*dels)[i]
+
+			// Delete both of the child nodes from the slice.
+			*dels = append((*dels)[:i], (*dels)[i+2:]...)
+
+			// Calculate and Insert the parent in order.
+			insertSort(dels, parent(pos, forestRows))
+
+			// Decrement one since the next element we should
+			// look at is at the same index because the slice decreased
+			// in length by one.
+			i--
+		}
+	}
+}
+
+func insertSort(dels *[]uint64, el uint64) {
+	index := sort.Search(len(*dels), func(i int) bool { return (*dels)[i] > el })
+	*dels = append(*dels, 0)
+	copy((*dels)[index+1:], (*dels)[index:])
+	(*dels)[index] = el
+}
+
+func calcDirtyNodes2(moves [][]arrow, numLeaves uint64, forestRows uint8) [][]uint64 {
+	dirtyNodes := make([][]uint64, len(moves))
+
+	for currentRow := int(forestRows); currentRow >= 0; currentRow-- {
+		moveRow := moves[currentRow]
+
+		for _, move := range moveRow {
+			// If to and from are the same, it means that the whole
+			// subtree is gonna be deleted, resulting in no dirty nodes.
+			if move.to == move.from {
+				continue
+			}
+
+			// Calculate the dirty position.
+			dirtyPos := parent(move.to, forestRows)
+
+			// No dirty positions if the node is moving to a root position.
+			if isRootPosition(move.to, numLeaves, forestRows) {
+				continue
+			}
+
+			for i := currentRow; i < len(moves); i++ {
+				compMoveRow := moves[i]
+
+				for _, compMove := range compMoveRow {
+					if isAncestor(compMove.from, dirtyPos, forestRows) {
+
+						fromRow := detectRow(compMove.from, forestRows)
+						toRow := detectRow(compMove.to, forestRows)
+
+						for currentRow := fromRow; currentRow < toRow; currentRow++ {
+							dirtyPos = calcNextPosition(dirtyPos, numLeaves, currentRow, forestRows)
+
+						}
+					} else {
+						if dirtyPos == compMove.from {
+							dirtyPos = compMove.to
+						}
+					}
+				}
+			}
+
+			// Grab the row of where the dirty position should be and
+			// append to that row.
+			row := detectRow(dirtyPos, forestRows)
+			dirtyNodes[row] = append(dirtyNodes[row], dirtyPos)
+			dirtyNodes[row] = removeDuplicateInt(dirtyNodes[row])
+		}
+	}
+
+	return dirtyNodes
+}
+
+func positionsToMove(position, numLeaves uint64, forestRow uint8) {
+}
+
+func calcNextPosition2(position, numLeaves uint64, delRow, forestRows uint8) {
+	positionRow := detectRow(position, forestRows)
+	subTreeRows := detectRow(getRootPosition(position, numLeaves, forestRows), forestRows)
+
+	mask := (1 << uint64(subTreeRows-positionRow)) - uint64(1)
+	lsb := position & mask
+	fmt.Println(strconv.FormatUint(lsb, 2))
+
+	rise := delRow - positionRow
+	fmt.Println(rise)
+
+	hi := uint64(0)
+	startRow := int(subTreeRows) - int(positionRow)
+	for i := int(startRow) - 1; i >= 0; i-- {
+		//for i := 0; i < startRow; i++ {
+		if i == int(delRow) {
+			continue
+		}
+
+		mask := uint64(1 << i)
+		if (lsb & mask) == mask {
+			hi = hi & 1
+			hi <<= 1
+		} else {
+			hi <<= 1
+		}
+	}
+
+	fmt.Printf("lsb %s, after %s\n", strconv.FormatUint(lsb, 2), strconv.FormatUint(hi, 2))
+
+	returnPos := parentMany(position, rise, forestRows)
+	fmt.Println(returnPos)
+}
+
+func calcNextPosition(position, numLeaves uint64, delRow, forestRows uint8) uint64 {
+	returnPos := getRootPosition(position, numLeaves, forestRows)
+
+	subTreeRows := detectRow(getRootPosition(position, numLeaves, forestRows), forestRows)
+	positionRow := detectRow(position, forestRows)
+	startRow := int(subTreeRows) - int(positionRow)
+
+	delRow = delRow - positionRow
+
+	if positionRow > 0 {
+		mask := (1 << uint64(subTreeRows-positionRow)) - uint64(1)
+		position = position & mask
+	}
+
+	for i := int(startRow) - 1; i >= 0; i-- {
+		// Skip the bit field operation for this row.
+		if i == int(delRow) {
+			//fmt.Println("skipping row", i)
+			continue
+		}
+		mask := uint64(1 << i)
+		//fmt.Println("mask", mask)
+
+		// 1 means right
+		if (position & mask) == mask {
+			//fmt.Println("right")
+			returnPos = rightChild(returnPos, forestRows)
+		} else {
+			//fmt.Println("left")
+			returnPos = child(returnPos, forestRows)
+		}
+	}
+
+	return returnPos
+}
+
+func isRootPosition(position, numLeaves uint64, forestRows uint8) bool {
+	row := detectRow(position, forestRows)
+
+	rootPresent := numLeaves&(1<<row) != 0
+	rootPos := rootPosition(numLeaves, row, forestRows)
+
+	return rootPresent && rootPos == position
+}
+
+func removeDuplicateInt(uint64Slice []uint64) []uint64 {
+	allKeys := make(map[uint64]bool)
+	list := []uint64{}
+	for _, item := range uint64Slice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
 // remTrans returns a slice arrow in bottom row to top row.
 // also returns all "dirty" positions which need to be hashed after the swaps
 func remTrans2(dels []uint64, numLeaves uint64, forestRows uint8) [][]arrow {

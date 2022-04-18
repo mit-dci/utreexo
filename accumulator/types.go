@@ -64,7 +64,7 @@ type simLeaf struct {
 func parentHash(l, r Hash) Hash {
 	// TODO So far no committing to height.
 	if l == empty || r == empty {
-		panic("got an empty leaf here. ")
+		panic("parentHash error: got an empty leaf. ")
 	}
 	h := sha512.New512_256()
 	h.Write(l[:])

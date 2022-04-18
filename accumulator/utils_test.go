@@ -5,6 +5,44 @@ import (
 	"testing"
 )
 
+func TestIsAncestor(t *testing.T) {
+	fmt.Println(isAncestor(62, 8, 5))
+	fmt.Println(isAncestor(62, 0, 5))
+	fmt.Println(isAncestor(32, 0, 5))
+	fmt.Println(isAncestor(57, 36, 5))
+
+	fmt.Println()
+
+	fmt.Println(isAncestor(61, 0, 5))
+	fmt.Println(isAncestor(57, 0, 5))
+	fmt.Println(isAncestor(50, 0, 5))
+}
+
+func TestSubTreeRows(t *testing.T) {
+	subTree := detectSubTreeRows(8, 15, 4)
+	fmt.Println(subTree)
+
+	rootPresent := 15&(1<<subTree) != 0
+	rootPos := rootPosition(15, subTree, 4)
+
+	if rootPresent {
+		fmt.Println("root pos is ", rootPos)
+	}
+}
+
+func TestProofPositionsSwapless(t *testing.T) {
+	proofPositions := NewPositionList()
+	defer proofPositions.Free()
+
+	targets := []uint64{8, 9, 16, 56}
+	numLeaves := uint64(32)
+	forestRows := uint8(5)
+
+	ProofPositions(targets, numLeaves, forestRows, &proofPositions.list)
+
+	fmt.Println(proofPositions.list)
+}
+
 func TestTreeRows(t *testing.T) {
 	// Test all the powers of 2
 	for i := uint8(1); i <= 63; i++ {

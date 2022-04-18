@@ -39,77 +39,80 @@ func NewPositionList() *PositionList {
 	return p
 }
 
-// ProofPositions returns the positions that are needed to prove that the targets exist.
 func ProofPositions(
 	targets []uint64, numLeaves uint64, forestRows uint8, proofPositions *[]uint64) int64 {
-	// the proofPositions needed without caching.
-	// the positions that are computed/not included in the proof.
-	// (also includes the targets)
 
 	nextTargets := NewPositionList()
 	defer nextTargets.Free()
 
 	var computedPositions int64
+
 	for row := uint8(0); row < forestRows; row++ {
-		computedPositions += int64(len(targets))
-		if numLeaves&(1<<row) > 0 && len(targets) > 0 &&
-			targets[len(targets)-1] == rootPosition(numLeaves, row, forestRows) {
-			// remove roots from targets
-			targets = targets[:len(targets)-1]
+		rowTargs := extractRow(targets, forestRows, row)
+
+		rowTargs = append(rowTargs, nextTargets.list...)
+		sortUint64s(rowTargs)
+
+		// Reset nextTargets
+		nextTargets.list = nextTargets.list[:0]
+
+		computedPositions += int64(len(rowTargs))
+		if numLeaves&(1<<row) > 0 && len(rowTargs) > 0 &&
+			rowTargs[len(rowTargs)-1] == rootPosition(numLeaves, row, forestRows) {
+			// remove roots from rowTargs
+			rowTargs = rowTargs[:len(rowTargs)-1]
 		}
 
-		// reset nextTargets
-		nextTargets.list = nextTargets.list[:0]
-		for len(targets) > 0 {
+		for len(rowTargs) > 0 {
 			switch {
 			// look at the first 4 targets
-			case len(targets) > 3:
-				if (targets[0]|1)^2 == targets[3]|1 {
+			case len(rowTargs) > 3:
+				if (rowTargs[0]|1)^2 == rowTargs[3]|1 {
 					// the first and fourth target are cousins
-					// => target 2 and 3 are also targets, both parents are
-					// targets of next row
+					// => target 2 and 3 are also rowTargs, both parents are
+					// rowTargs of next row
 					nextTargets.list = append(nextTargets.list,
-						parent(targets[0], forestRows), parent(targets[3], forestRows))
-					targets = targets[4:]
+						parent(rowTargs[0], forestRows), parent(rowTargs[3], forestRows))
+					rowTargs = rowTargs[4:]
 					break
 				}
-				// handle first three targets
+				// handle first three rowTargs
 				fallthrough
 
-			// look at the first 3 targets
-			case len(targets) > 2:
-				if (targets[0]|1)^2 == targets[2]|1 {
+			// look at the first 3 rowTargs
+			case len(rowTargs) > 2:
+				if (rowTargs[0]|1)^2 == rowTargs[2]|1 {
 					// the first and third target are cousins
 					// => the second target is either the sibling of the first
 					// OR the sibiling of the third
 					// => only the sibling that is not a target is appended
 					// to the proof positions
-					if targets[1]|1 == targets[0]|1 {
-						*proofPositions = append(*proofPositions, targets[2]^1)
+					if rowTargs[1]|1 == rowTargs[0]|1 {
+						*proofPositions = append(*proofPositions, rowTargs[2]^1)
 					} else {
-						*proofPositions = append(*proofPositions, targets[0]^1)
+						*proofPositions = append(*proofPositions, rowTargs[0]^1)
 					}
-					// both parents are targets of next row
+					// both parents are rowTargs of next row
 					nextTargets.list = append(nextTargets.list,
-						parent(targets[0], forestRows), parent(targets[2], forestRows))
-					targets = targets[3:]
+						parent(rowTargs[0], forestRows), parent(rowTargs[2], forestRows))
+					rowTargs = rowTargs[3:]
 					break
 				}
-				// handle first two targets
+				// handle first two rowTargs
 				fallthrough
 
-			// look at the first 2 targets
-			case len(targets) > 1:
-				if targets[0]|1 == targets[1] {
-					nextTargets.list = append(nextTargets.list, parent(targets[0], forestRows))
-					targets = targets[2:]
+			// look at the first 2 rowTargs
+			case len(rowTargs) > 1:
+				if rowTargs[0]|1 == rowTargs[1] {
+					nextTargets.list = append(nextTargets.list, parent(rowTargs[0], forestRows))
+					rowTargs = rowTargs[2:]
 					break
 				}
-				if (targets[0]|1)^2 == targets[1]|1 {
-					*proofPositions = append(*proofPositions, targets[0]^1, targets[1]^1)
+				if (rowTargs[0]|1)^2 == rowTargs[1]|1 {
+					*proofPositions = append(*proofPositions, rowTargs[0]^1, rowTargs[1]^1)
 					nextTargets.list = append(nextTargets.list,
-						parent(targets[0], forestRows), parent(targets[1], forestRows))
-					targets = targets[2:]
+						parent(rowTargs[0], forestRows), parent(rowTargs[1], forestRows))
+					rowTargs = rowTargs[2:]
 					break
 				}
 				// not related, handle first target
@@ -117,16 +120,77 @@ func ProofPositions(
 
 			// look at the first target
 			default:
-				*proofPositions = append(*proofPositions, targets[0]^1)
-				nextTargets.list = append(nextTargets.list, parent(targets[0], forestRows))
-				targets = targets[1:]
+				*proofPositions = append(*proofPositions, rowTargs[0]^1)
+				nextTargets.list = append(nextTargets.list, parent(rowTargs[0], forestRows))
+				rowTargs = rowTargs[1:]
 			}
 		}
-
-		targets = nextTargets.list
 	}
 
 	return computedPositions
+}
+
+func popSlice(a *[]*polNode) {
+	length := len(*(a))
+	i := length - 1
+
+	copy((*a)[i:], (*a)[i+1:])
+	(*a)[length-1] = nil
+	(*a) = (*a)[:length-1]
+}
+
+//func extractRow(targets []uint64, forestRows uint8) []uint64 {
+//	if len(targets) < 0 {
+//		return nil
+//	}
+//
+//	currentRow := detectRow(targets[0], forestRows)
+//	end := 0
+//	for i := 1; i < len(targets); i++ {
+//		if detectRow(targets[i], forestRows) != currentRow {
+//			end = i
+//			break
+//		}
+//	}
+//
+//	return targets[:end]
+//}
+
+func extractRow(targets []uint64, forestRows, rowToExtract uint8) []uint64 {
+	if len(targets) < 0 {
+		return []uint64{}
+	}
+
+	start := -1
+	end := 0
+
+	for i := 0; i < len(targets); i++ {
+		if detectRow(targets[i], forestRows) == rowToExtract {
+			if start == -1 {
+				start = i
+			}
+
+			end = i
+		} else {
+			// If we're not at the desired row and start has already been set
+			// once, that means we've extracted everything we can. This is
+			// possible because the assumption is that the targets are sorted.
+			if start != -1 {
+				break
+			}
+		}
+	}
+
+	if start == -1 {
+		return []uint64{}
+	}
+
+	count := (end + 1) - start
+	row := make([]uint64, count)
+
+	copy(row, targets[start:end+1])
+
+	return row
 }
 
 // takes a slice of dels, removes the twins (in place) and returns a slice
@@ -196,9 +260,9 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// similarities to detectSubTreeRows() with more features
 	// maybe replace detectSubTreeRows with this
 
-	// th = tree rows
+	// tr = tree rows
 	tr := treeRows(numLeaves)
-	// nh = target node row
+	// nr = target node row
 	nr := detectRow(position, tr) // there's probably a fancier way with bits...
 
 	var biggerTrees uint8
@@ -246,6 +310,11 @@ func child(position uint64, forestRows uint8) uint64 {
 	return (position << 1) & mask
 }
 
+func rightChild(position uint64, forestRows uint8) uint64 {
+	mask := uint64(2<<forestRows) - 1
+	return ((position << 1) & mask) | 1
+}
+
 // go down drop times (always left; LSBs will be 0) and return position
 func childMany(position uint64, drop, forestRows uint8) uint64 {
 	if drop == 0 {
@@ -275,12 +344,57 @@ func parentMany(position uint64, rise, forestRows uint8) uint64 {
 	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
 }
 
+func isLeftChild(position uint64) bool {
+	return position&1 == 0
+}
+
+//func isDescendent( uint64, forestRows uint8) bool {
+//	for row:=0; row<int(forestRows); row++{
+//	}
+//}
+
+func isAncestor(higherPos, lowerPos uint64, forestRows uint8) bool {
+	lowerRow := detectRow(lowerPos, forestRows)
+	higherRow := detectRow(higherPos, forestRows)
+
+	for ; lowerRow < higherRow; lowerRow++ {
+		ancestor := parentMany(lowerPos, higherRow-lowerRow, forestRows)
+		if ancestor == higherPos {
+			return true
+		}
+	}
+
+	return false
+}
+
+// rightSib returns the right sibling for this node. If the node is
+// the right sibling, itself is returned.
+func rightSib(pos uint64) uint64 {
+	return pos | 1
+}
+
+// leftSib returns the left sibling for this node. If the node is
+// the left sibling, itself is returned.
+func leftSib(pos uint64) uint64 {
+	return pos &^ 1
+}
+
+// sibling returns the sibling of this node.
+func sibling(pos uint64) uint64 {
+	return pos ^ 1
+}
+
 // cousin returns a cousin: the child of the parent's sibling.
 // you just xor with 2.  Actually there's no point in calling this function but
 // it's here to document it.  If you're the left sibling it returns the left
 // cousin.
 func cousin(position uint64) uint64 {
 	return position ^ 2
+}
+
+func maxPosition(forestRows uint8) uint64 {
+	maxLeaves := uint64(1 << forestRows)
+	return (maxLeaves << 1) - 1
 }
 
 // TODO  inForest can probably be done better a different way.

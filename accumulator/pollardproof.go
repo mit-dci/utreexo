@@ -268,21 +268,21 @@ func nextNodes(curBranch, rows uint8, curNodes []*polNodeAndPos, trees []miniTre
 				nextNodesIdx++
 				// Should never happen but keep the check in there
 				// for now
-				if curNode.node.niece[0] == nil {
-					curNode.node.niece[0] = &polNode{}
+				if curNode.node.leftNiece == nil {
+					curNode.node.leftNiece = &polNode{}
 				}
 				nextCurNodes = append(nextCurNodes,
-					&polNodeAndPos{curNode.node.niece[0], lNiecePos})
+					&polNodeAndPos{curNode.node.leftNiece, lNiecePos})
 			}
 			if rExists {
 				nextNodesIdx++
 				// Should never happen but keep the check in there
 				// for now.
-				if curNode.node.niece[1] == nil {
-					curNode.node.niece[1] = &polNode{}
+				if curNode.node.rightNiece == nil {
+					curNode.node.rightNiece = &polNode{}
 				}
 				nextCurNodes = append(nextCurNodes,
-					&polNodeAndPos{curNode.node.niece[1], rNiecePos})
+					&polNodeAndPos{curNode.node.rightNiece, rNiecePos})
 			}
 		}
 
@@ -304,21 +304,21 @@ func nextNodes(curBranch, rows uint8, curNodes []*polNodeAndPos, trees []miniTre
 func populateOne(tree miniTree, node *polNode, rememberAll bool) int {
 	nodesAllocated := 0
 
-	if node.niece[0] == nil {
-		node.niece[0] = &polNode{}
+	if node.leftNiece == nil {
+		node.leftNiece = &polNode{}
 		nodesAllocated++
 	}
-	node.niece[0].data = tree.leftChild.Val
+	node.leftNiece.data = tree.leftChild.Val
 
-	if node.niece[1] == nil {
-		node.niece[1] = &polNode{}
+	if node.rightNiece == nil {
+		node.rightNiece = &polNode{}
 		nodesAllocated++
 	}
-	node.niece[1].data = tree.rightChild.Val
+	node.rightNiece.data = tree.rightChild.Val
 
 	if rememberAll {
-		node.niece[0].remember = rememberAll
-		node.niece[1].remember = rememberAll
+		node.leftNiece.remember = rememberAll
+		node.rightNiece.remember = rememberAll
 		node.remember = rememberAll
 	}
 
@@ -351,8 +351,8 @@ func populate(rows uint8, pos uint64, root *polNode, trees *[]miniTree, remember
 
 	// Append the root's children to curNodes. We start populating from the root's children
 	curNodes := make([]*polNodeAndPos, 0, 2)
-	curNodes = append(curNodes, &polNodeAndPos{root.niece[0], child(pos, rows)})
-	curNodes = append(curNodes, &polNodeAndPos{root.niece[1], child(pos, rows) | 1})
+	curNodes = append(curNodes, &polNodeAndPos{root.leftNiece, child(pos, rows)})
+	curNodes = append(curNodes, &polNodeAndPos{root.rightNiece, child(pos, rows) | 1})
 
 	// populate all the trees passed in.
 	for len(*trees) > 0 {

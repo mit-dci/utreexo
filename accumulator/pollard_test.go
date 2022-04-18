@@ -7,6 +7,327 @@ import (
 	"testing"
 )
 
+// checkHashes moves down the tree and calculates the parent hash from the children.
+// It errors if the calculated hash doesn't match the hash found in the pollard.
+func checkHashes(node, sibling *polNode, p *Pollard) error {
+	// If node has a niece, then we can calculate the hash of the sibling because
+	// every tree is a perfect binary tree.
+	if node.leftNiece != nil {
+		calculated := parentHash(node.leftNiece.data, node.rightNiece.data)
+		if sibling.data != calculated {
+			return fmt.Errorf("For position %d, calculated %s from left %s, right %s but read %s",
+				sibling.calculatePosition(p.numLeaves, p.roots),
+				hex.EncodeToString(calculated[:]),
+				hex.EncodeToString(node.leftNiece.data[:]), hex.EncodeToString(node.rightNiece.data[:]),
+				hex.EncodeToString(sibling.data[:]))
+		}
+
+		err := checkHashes(node.leftNiece, node.rightNiece, p)
+		if err != nil {
+			return err
+		}
+	}
+
+	if sibling.leftNiece != nil {
+		calculated := parentHash(sibling.leftNiece.data, sibling.rightNiece.data)
+		if node.data != calculated {
+			return fmt.Errorf("For position %d, calculated %s from left %s, right %s but read %s",
+				node.calculatePosition(p.numLeaves, p.roots),
+				hex.EncodeToString(calculated[:]),
+				hex.EncodeToString(sibling.leftNiece.data[:]), hex.EncodeToString(sibling.rightNiece.data[:]),
+				hex.EncodeToString(node.data[:]))
+		}
+
+		err := checkHashes(sibling.leftNiece, sibling.rightNiece, p)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func TestPollardAdd(t *testing.T) {
+	// simulate blocks with simchain
+	numAdds := uint32(300)
+	sc := newSimChain(0x07)
+
+	var p Pollard
+	p.MakeFull()
+
+	for b := 0; b < 2000; b++ {
+		fmt.Println("on block", b)
+		adds, _, _ := sc.NextBlock(numAdds)
+
+		err := p.ModifySwapless(adds, nil)
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		if b%100 == 0 {
+			for _, root := range p.roots {
+				if root.leftNiece != nil && root.rightNiece != nil {
+					err = checkHashes(root.leftNiece, root.rightNiece, &p)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestPollardAddDel(t *testing.T) {
+	// simulate blocks with simchain
+	numAdds := uint32(150)
+	sc := newSimChain(0x07)
+
+	var p Pollard
+	p.MakeFull()
+
+	for b := 0; b < 2000; b++ {
+		fmt.Println("on block", b)
+		adds, _, delHashes := sc.NextBlock(numAdds)
+
+		bp, err := p.ProveBatchSwapless(delHashes)
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		err = p.Verify(delHashes, bp)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		//err = p.VerifyCached(delHashes, bp)
+		//if err != nil {
+		//	t.Fatal(err)
+		//}
+
+		//fmt.Println(bp.ToString())
+
+		for _, target := range bp.Targets {
+			n, _, _, err := p.readPos(target)
+			if err != nil {
+				t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+			}
+			if n == nil {
+				fmt.Println(bp.ToString())
+				t.Fatalf("TestSwapLessAddDel fail to read %d at block %d.", target, b)
+			}
+			//fmt.Printf("read %s at pos %d\n", hex.EncodeToString(n.data[:]), target)
+		}
+
+		err = p.ModifySwapless(adds, bp.Targets)
+		if err != nil {
+			t.Fatalf("TestSwapLessAddDel fail at block %d. Error: %v", b, err)
+		}
+
+		for _, root := range p.roots {
+			if root.leftNiece != nil && root.rightNiece != nil {
+				err = checkHashes(root.leftNiece, root.rightNiece, &p)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		//fmt.Println(p.ToString())
+	}
+}
+
+func TestPollardProveSwapless(t *testing.T) {
+	var tests = []struct {
+		leaves   []Leaf
+		dels     []Hash
+		expected BatchProof
+	}{
+		{
+			[]Leaf{
+				{Hash{1}, false},
+				{Hash{2}, false},
+				{Hash{3}, false},
+				{Hash{4}, false},
+				{Hash{5}, true},
+				{Hash{6}, false},
+				{Hash{7}, false},
+				{Hash{8}, false},
+				{Hash{9}, false},
+				{Hash{10}, false},
+				{Hash{11}, false},
+				{Hash{12}, false},
+				{Hash{13}, false},
+				{Hash{14}, false},
+				{Hash{15}, false},
+				{Hash{16}, false},
+				{Hash{17}, false},
+			},
+			[]Hash{{5}, {6}, {7}, {9}},
+			BatchProof{},
+		},
+	}
+
+	for _, test := range tests {
+		var p, fullP Pollard
+		fullP.MakeFull()
+		p.NodeMap = make(map[MiniHash]*polNode)
+
+		err := p.ModifySwapless(test.leaves, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = fullP.ModifySwapless(test.leaves, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Println("pol", p.ToString())
+
+		fmt.Println("fullpol", fullP.ToString())
+
+		bp, err := fullP.ProveBatchSwapless(test.dels)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = p.VerifyCached(test.dels, bp)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Println("bp", bp.ToString())
+		bp.Proof[2] = Hash{1}
+		fmt.Println("modified bp", bp.ToString())
+
+		err = p.VerifyCached(test.dels, bp)
+		if err == nil {
+			err := fmt.Errorf("Modified Proof passed the Verify check")
+			t.Fatal(err)
+		}
+
+		bp, err = fullP.ProveBatchSwapless([]Hash{{17}})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Println(bp.ToString())
+
+		err = p.Verify([]Hash{{17}}, bp)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+}
+
+func TestPollardAddSwapless(t *testing.T) {
+	var p Pollard
+	p.NodeMap = make(map[MiniHash]*polNode)
+	//p.MakeFull()
+
+	// Create the starting off pollard.
+	adds := make([]Leaf, 6)
+	for i := 0; i < len(adds); i++ {
+		adds[i].Hash[0] = uint8(i)
+		adds[i].Hash[20] = 0xff
+		adds[i].Remember = true
+	}
+
+	p.addSwapless(adds)
+
+	fmt.Println(p.ToString())
+
+	//err := p.removeSwapless([]uint64{4, 5, 6, 8, 9, 10, 11, 12, 13, 14})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+
+	//fmt.Println(p.ToString())
+
+	//bp, err := p.ProveBatch([]Hash{{1}, {2}})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+
+	//fmt.Println(bp.ToString())
+
+	n, _, _, err := p.readPos(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//fmt.Printf("n %s\n", hex.EncodeToString(n.data[:]))
+	//fmt.Printf("aunt %s\n", hex.EncodeToString(n.aunt.data[:]))
+
+	//fmt.Printf("niece[0] %s\n", hex.EncodeToString(n.aunt.niece[0].data[:]))
+	//fmt.Printf("niece[1] %s\n", hex.EncodeToString(n.aunt.niece[1].data[:]))
+
+	//fmt.Printf("n.aunt.aunt %s\n", hex.EncodeToString(n.aunt.aunt.data[:]))
+	//fmt.Printf("n.aunt.aunt.aunt %s\n", hex.EncodeToString(n.aunt.aunt.aunt.data[:]))
+	//fmt.Printf("n.aunt.aunt.aunt.aunt %s\n", hex.EncodeToString(n.aunt.aunt.aunt.aunt.data[:]))
+
+	pos := n.calculatePosition(p.numLeaves, p.roots)
+	fmt.Println("got pos", pos)
+
+	//p.addSwapless([]Leaf{{Hash{7}, false}})
+
+	//fmt.Println(p.ToString())
+
+	fmt.Println("node map len", len(p.NodeMap))
+
+	err = p.removeSwapless([]uint64{5})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(p.ToString())
+
+	for key, value := range p.NodeMap {
+		fmt.Println("hi")
+		fmt.Printf("hash %s, node pos %d\n", hex.EncodeToString(key[:]),
+			value.calculatePosition(p.numLeaves, p.roots))
+	}
+
+	node, ok := p.NodeMap[Hash{4}.Mini()]
+	if !ok {
+		hash := Hash{4}
+		t.Fatalf("couldn't find %s", hex.EncodeToString(hash[:]))
+	}
+
+	fmt.Println(node.data)
+
+	//p.addSwapless([]Leaf{{Hash{8}, true}, {Hash{9}, true}})
+
+	//fmt.Println(p.ToString())
+
+	//err = p.removeSwapless([]uint64{9})
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+
+	p.addSwapless([]Leaf{
+		{Hash{6}, true},
+		{Hash{7}, true},
+		//{Hash{6}, true},
+		//{Hash{7}, true},
+	})
+
+	fmt.Println(p.ToString())
+
+	p.removeSwapless([]uint64{0})
+	fmt.Println(p.ToString())
+
+	for _, root := range p.roots {
+		if root.leftNiece != nil && root.rightNiece != nil {
+			err = checkHashes(root.leftNiece, root.rightNiece, &p)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 func TestPollardNoSiblingFound(t *testing.T) {
 	var p Pollard
 
