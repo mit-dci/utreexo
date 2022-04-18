@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"encoding/hex"
 	"fmt"
 )
 
@@ -19,6 +20,8 @@ var ErrorStrings = map[uint32]error{
 type Pollard struct {
 	// number of leaves in the pollard forest
 	numLeaves uint64
+
+	numDels uint64
 
 	// roots are the slice of the tree roots ordered in big to small
 	// (right to left of the forest).
@@ -179,11 +182,13 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	var h uint8
 	for ; (p.numLeaves>>h)&1 == 1; h++ {
 		// grab, pop, swap, hash, new
-		leftRoot := p.roots[len(p.roots)-1]                        // grab
-		p.roots = p.roots[:len(p.roots)-1]                         // pop
-		leftRoot.niece, n.niece = n.niece, leftRoot.niece          // swap
-		nHash := parentHash(leftRoot.data, n.data)                 // hash
-		n = &polNode{data: nHash, niece: [2]*polNode{leftRoot, n}} // new
+		leftRoot := p.roots[len(p.roots)-1] // grab
+		p.roots = p.roots[:len(p.roots)-1]  // pop
+		leftRoot.leftNiece, leftRoot.rightNiece, n.leftNiece, n.rightNiece =
+			n.leftNiece, n.rightNiece, leftRoot.leftNiece, leftRoot.rightNiece // swap
+
+		nHash := parentHash(leftRoot.data, n.data)                    // hash
+		n = &polNode{data: nHash, leftNiece: leftRoot, rightNiece: n} // new
 		n.remember = remember
 		p.hashesEver++
 
@@ -199,38 +204,44 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 	return nil
 }
 
-func (p *Pollard) move(from, to uint64) error {
+func (p *Pollard) move(del uint64) (*polNode, error) {
+	from, to := sibling(del), parent(del, treeRows(p.numLeaves))
 	fromNode, fromNodeSib, _, err := p.readPos(from)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	toNode, toSib, _, err := p.readPos(to)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	toNode.data = fromNode.data
-	toSib.niece = fromNodeSib.niece
+	toSib.leftNiece, toSib.rightNiece = fromNodeSib.leftNiece, fromNodeSib.rightNiece
 
 	updateAunt(toSib)
+	delNode(fromNode)
 
+	delHash := fromNodeSib.data
 	if p.NodeMap != nil {
 		p.NodeMap[fromNode.data.Mini()] = toNode
+		delete(p.NodeMap, delHash.Mini())
 	}
 
+	var dirty *polNode
 	if isRootPosition(to, p.numLeaves, treeRows(p.numLeaves)) {
 		toNode.aunt = nil
 	} else {
-		_, parentSib, _, err := p.readPos(parent(to, treeRows(p.numLeaves)))
+		parent, parentSib, _, err := p.readPos(parent(to, treeRows(p.numLeaves)))
 		if err != nil {
-			return err
+			return nil, err
 		}
+		dirty = parent
 
 		toNode.aunt = parentSib
 	}
 
-	return nil
+	return dirty, nil
 }
 
 //func (p *Pollard) moveAndHash(from, to uint64) error {
@@ -291,50 +302,181 @@ func (p *Pollard) move(from, to uint64) error {
 //	return nil
 //}
 
+func removeDuplicatePolNode(polNodes []*polNode) []*polNode {
+	allKeys := make(map[*polNode]bool)
+	list := []*polNode{}
+	for _, item := range polNodes {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
+func (n *polNode) getSibling() (*polNode, error) {
+	aunt := n.aunt
+
+	// I'm a root so I have no sibling.
+	if aunt == nil {
+		return nil, nil
+	}
+
+	// Get my sibling which is pointing to my children.
+	var sibling *polNode
+	if n == aunt.leftNiece {
+		sibling = aunt.rightNiece
+	} else if n == aunt.rightNiece {
+		sibling = aunt.leftNiece
+	} else {
+		return nil, fmt.Errorf("Node with hash %s has an incorrect aunt pointer "+
+			"or the aunt with hash %s has incorrect pointer to its nieces",
+			hex.EncodeToString(n.data[:]), hex.EncodeToString(aunt.data[:]))
+	}
+
+	return sibling, nil
+}
+
+func (n *polNode) getParent() (*polNode, error) {
+	aunt := n.aunt
+
+	// I'm a root so there's no parent.
+	if aunt == nil {
+		return nil, nil
+	}
+
+	// My aunt is a root so my aunt is my parent. This is because roots point to their children.
+	if aunt.aunt == nil {
+		return aunt, nil
+	}
+
+	var parent *polNode
+	if aunt.aunt.leftNiece == aunt {
+		parent = aunt.aunt.rightNiece
+	} else if aunt.aunt.rightNiece == aunt {
+		parent = aunt.aunt.leftNiece
+	} else {
+		return nil, fmt.Errorf("Node with hash %s has an incorrect aunt pointer "+
+			"or the aunt with hash %s has incorrect pointer to its nieces",
+			hex.EncodeToString(aunt.data[:]), hex.EncodeToString(aunt.aunt.data[:]))
+	}
+
+	return parent, nil
+}
+
+func (n *polNode) getChildren() (*polNode, *polNode, error) {
+	aunt := n.aunt
+
+	// No aunt means that this node is a root. Roots point to their children.
+	if aunt == nil {
+		return n.leftNiece, n.rightNiece, nil
+	}
+
+	// Get my sibling which is pointing to my children.
+	sibling, err := n.getSibling()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if sibling == nil {
+		return nil, nil, fmt.Errorf("Node with hash %s isn't a root but doens't have a sibling",
+			hex.EncodeToString(n.data[:]))
+	}
+
+	return sibling.leftNiece, sibling.rightNiece, nil
+}
+
 func (p *Pollard) removeSwaplessParallel(dels []uint64) error {
 	sortUint64s(dels)
-
-	if p.NodeMap != nil {
-		for _, del := range dels {
-			delete(p.NodeMap, p.read(del).Mini())
-		}
-	}
-
 	totalRows := treeRows(p.numLeaves)
+
 	moveRows := Transform(dels, p.numLeaves, totalRows)
+	deTwin(&dels, totalRows)
 
-	// Go through all the moves from bottom to top.
-	for i := 0; i < len(moveRows); i++ {
-		moveRow := moveRows[i]
+	p.numDels += uint64(len(dels))
 
-		for _, move := range moveRow {
-			// If from and to are the same, it means that the entire subtree
-			// is being deleted.
-			if move.from == move.to {
-				node, _, _, err := p.grabPos(move.from)
-				if err != nil {
-					return err
-				}
+	//dirtyNodes := make([]*polNode, 0, len(dels))
+	for _, del := range dels {
+		// If a root is being deleted, then we mark it and all the leaves below
+		// it to be deleted.
+		if isRootPosition(del, p.numLeaves, totalRows) {
+			node, _, _, err := p.grabPos(del)
+			if err != nil {
+				return err
+			}
 
-				idx := -1
-				for i, root := range p.roots {
-					if root.data == node.data {
-						idx = i
-					}
-				}
-				if idx == -1 {
-					panic("wrong")
-				}
-				p.roots[idx].chop()
-				p.roots[idx].data = empty
-			} else {
-				err := p.move(move.from, move.to)
-				if err != nil {
-					return err
+			if p.NodeMap != nil {
+				delete(p.NodeMap, node.data.Mini())
+			}
+
+			idx := -1
+			for i, root := range p.roots {
+				if root.data == node.data {
+					idx = i
 				}
 			}
+
+			if p.roots[idx].leftNiece != nil {
+				p.roots[idx].leftNiece.aunt = nil
+			}
+			if p.roots[idx].rightNiece != nil {
+				p.roots[idx].rightNiece.aunt = nil
+			}
+			p.roots[idx].chop()
+			p.roots[idx].aunt = nil
+			p.roots[idx].data = empty
+		} else {
+			_, err := p.move(del)
+			if err != nil {
+				return err
+			}
+
+			//if dirty != nil {
+			//	dirtyNodes = append(dirtyNodes, dirty)
+			//}
 		}
 	}
+
+	//for len(dirtyNodes) > 0 {
+	//	// Pop front.
+	//	var dirtyNode *polNode
+	//	dirtyNode, dirtyNodes = dirtyNodes[0], dirtyNodes[1:]
+
+	//	leftChild, rightChild, err := dirtyNode.getChildren()
+	//	if err != nil {
+	//		return err
+	//	}
+
+	//	if leftChild == nil || rightChild == nil {
+	//		pos := dirtyNode.calculatePosition(p.numLeaves, p.roots)
+	//		fmt.Printf("pos %d child empty\n", pos)
+	//		fmt.Println(p.SubTreeString(pos))
+	//		continue
+	//	}
+
+	//	fmt.Printf("for node %s, got leftchild %s, rightchild %s\n",
+	//		hex.EncodeToString(dirtyNode.data[:]),
+	//		hex.EncodeToString(leftChild.data[:]),
+	//		hex.EncodeToString(rightChild.data[:]))
+
+	//	fmt.Printf("dirtyPos %d, leftChild %d, rightChild %d\n",
+	//		dirtyNode.calculatePosition(p.numLeaves, p.roots),
+	//		leftChild.calculatePosition(p.numLeaves, p.roots),
+	//		rightChild.calculatePosition(p.numLeaves, p.roots),
+	//	)
+
+	//	dirtyNode.data = parentHash(leftChild.data, rightChild.data)
+
+	//	//if !isRootPosition(dirtyNode.calculatePosition(p.numLeaves, p.roots), p.numLeaves, totalRows) {
+	//	parent, err := dirtyNode.getParent()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if parent != nil {
+	//		dirtyNodes = append(dirtyNodes, parent)
+	//		dirtyNodes = removeDuplicatePolNode(dirtyNodes)
+	//	}
+	//}
 
 	// Calculate which nodes need to be hashed again.
 	dirtyRows := calcDirtyNodes2(moveRows, p.numLeaves, totalRows)
@@ -431,7 +573,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// This likely does nothing since the leaf nieces are never set.
 		// Just putting it here since the cost of putting this in is
 		// basically nothing.
-		n.niece[0], n.niece[1] = nil, nil
+		//n.niece[0], n.niece[1] = nil, nil
+		n.leftNiece, n.rightNiece = nil, nil
 	}
 
 	// get all the swaps, then apply them all
@@ -490,8 +633,10 @@ func (p *Pollard) rem2(dels []uint64) error {
 		// do all the hashes at once at the end
 		for _, hn := range hnslice {
 			// skip hashes we can't compute
-			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
-				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
+			//if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
+			//	hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
+			if hn.sib.leftNiece == nil || hn.sib.rightNiece == nil ||
+				hn.sib.leftNiece.data == empty || hn.sib.rightNiece.data == empty {
 				// TODO when is hn nil?  is this OK?
 				// it'd be better to avoid this and not create hns that aren't
 				// supposed to exist.
@@ -522,7 +667,8 @@ func (p *Pollard) rem2(dels []uint64) error {
 			// so should become it's sibling's nieces.
 			nt.chop()
 		} else {
-			nt.niece = ntsib.niece
+			nt.leftNiece, nt.rightNiece = ntsib.leftNiece, ntsib.rightNiece
+			//nt.niece = ntsib.niece
 		}
 		nextRoots[i] = nt
 	}
@@ -587,7 +733,7 @@ func (p *Pollard) swapNodes(s arrow, row uint8) (*hashableNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	if bhn.sib.niece[0].data == empty || bhn.sib.niece[1].data == empty {
+	if bhn.sib.leftNiece.data == empty || bhn.sib.rightNiece.data == empty {
 		bhn = nil // we can't perform this hash as we don't know the children
 	}
 	return bhn, nil
@@ -610,21 +756,36 @@ func (p *Pollard) readPos(pos uint64) (n, nsib *polNode, hn *hashableNode, err e
 	}
 
 	for h := branchLen - 1; h != 0; h-- { // go through branch
-		lr := uint8(bits>>h) & 1
-		// grab the sibling of lr
-		lrSib := lr ^ 1
+		niece := uint8(bits>>h) & 1
 
-		n, nsib = n.niece[lr], n.niece[lrSib]
+		if isLeftChild(uint64(niece)) {
+			n, nsib = n.leftNiece, n.rightNiece
+		} else {
+			n, nsib = n.rightNiece, n.leftNiece
+		}
+
 		if n == nil {
 			return nil, nil, nil, err
 		}
+
+		////// grab the sibling of lr
+		////lrSib := lr ^ 1
+
+		//n, nsib = n.niece[lr], n.niece[lrSib]
 	}
 
-	lr := uint8(bits) & 1
-	// grab the sibling of lr
-	lrSib := lr ^ 1
+	//lr := uint8(bits) & 1
+	niece := uint8(bits) & 1
+	//// grab the sibling of lr
+	//lrSib := lr ^ 1
 
-	n, nsib = n.niece[lrSib], n.niece[lr]
+	// Switch siblings here.
+	if isLeftChild(uint64(niece)) {
+		n, nsib = n.rightNiece, n.leftNiece
+	} else {
+		n, nsib = n.leftNiece, n.rightNiece
+	}
+
 	return // only happens when returning a root
 }
 
@@ -652,15 +813,29 @@ func (p *Pollard) grabPos(
 	}
 
 	for h := branchLen - 1; h != 0; h-- { // go through branch
-		lr := uint8(bits>>h) & 1
-		// grab the sibling of lr
-		lrSib := lr ^ 1
+		//lr := uint8(bits>>h) & 1
+		//// grab the sibling of lr
+		//lrSib := lr ^ 1
 
-		// if a sib doesn't exist, need to create it and hook it in
-		if n.niece[lrSib] == nil {
-			n.niece[lrSib] = &polNode{}
+		//// if a sib doesn't exist, need to create it and hook it in
+		//if n.niece[lrSib] == nil {
+		//	n.niece[lrSib] = &polNode{}
+		//}
+		//n, nsib = n.niece[lr], n.niece[lrSib]
+
+		niece := uint8(bits>>h) & 1
+
+		if isLeftChild(uint64(niece)) {
+			if n.rightNiece == nil {
+				n.rightNiece = new(polNode)
+			}
+			n, nsib = n.leftNiece, n.rightNiece
+		} else {
+			if n.leftNiece == nil {
+				n.leftNiece = new(polNode)
+			}
+			n, nsib = n.rightNiece, n.leftNiece
 		}
-		n, nsib = n.niece[lr], n.niece[lrSib]
 		if n == nil {
 			// if a node doesn't exist, crash
 			// no niece in this case
@@ -670,13 +845,24 @@ func (p *Pollard) grabPos(
 		}
 	}
 
-	lr := uint8(bits) & 1
-	// grab the sibling of lr
-	lrSib := lr ^ 1
+	//lr := uint8(bits) & 1
+	//// grab the sibling of lr
+	//lrSib := lr ^ 1
 
-	hn.dest = nsib // this is kind of confusing eh?
-	hn.sib = n     // but yeah, switch siblingness
-	n, nsib = n.niece[lrSib], n.niece[lr]
+	//hn.dest = nsib // this is kind of confusing eh?
+	//hn.sib = n     // but yeah, switch siblingness
+	//n, nsib = n.niece[lrSib], n.niece[lr]
+
+	hn.dest = nsib
+	hn.sib = n
+
+	niece := uint8(bits) & 1
+	if isLeftChild(uint64(niece)) {
+		n, nsib = n.rightNiece, n.leftNiece
+	} else {
+		n, nsib = n.leftNiece, n.rightNiece
+	}
+
 	return // only happens when returning a root
 }
 
@@ -730,6 +916,14 @@ func (p *Pollard) ToString() string {
 		return err.Error()
 	}
 	return f.ToString()
+}
+
+func (p *Pollard) SubTreeString(position uint64) string {
+	f, err := p.toFull()
+	if err != nil {
+		return err.Error()
+	}
+	return f.SubTreeToString(position)
 }
 
 // equalToForest checks if the pollard has the same leaves as the forest.

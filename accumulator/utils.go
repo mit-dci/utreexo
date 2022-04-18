@@ -130,6 +130,15 @@ func ProofPositions(
 	return computedPositions
 }
 
+func popSlice(a *[]*polNode) {
+	length := len(*(a))
+	i := length - 1
+
+	copy((*a)[i:], (*a)[i+1:])
+	(*a)[length-1] = nil
+	(*a) = (*a)[:length-1]
+}
+
 //func extractRow(targets []uint64, forestRows uint8) []uint64 {
 //	if len(targets) < 0 {
 //		return nil
@@ -251,9 +260,9 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 	// similarities to detectSubTreeRows() with more features
 	// maybe replace detectSubTreeRows with this
 
-	// th = tree rows
+	// tr = tree rows
 	tr := treeRows(numLeaves)
-	// nh = target node row
+	// nr = target node row
 	nr := detectRow(position, tr) // there's probably a fancier way with bits...
 
 	var biggerTrees uint8

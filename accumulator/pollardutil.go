@@ -10,23 +10,22 @@ import (
 
 // PolNode is a node in the pollard forest
 type polNode struct {
-	data  Hash
-	niece [2]*polNode
-
+	data       Hash
 	leftNiece  *polNode
 	rightNiece *polNode
-	aunt       *polNode
-	remember   bool
+
+	aunt     *polNode
+	remember bool
 }
 
 // auntOp returns the hash of a nodes nieces. crashes if you call on nil nieces.
 func (n *polNode) auntOp() Hash {
-	return parentHash(n.niece[0].data, n.niece[1].data)
+	return parentHash(n.leftNiece.data, n.rightNiece.data)
 }
 
 // auntable tells you if you can call auntOp on a node
 func (n *polNode) auntable() bool {
-	return n.niece[0] != nil && n.niece[1] != nil
+	return n.leftNiece != nil && n.rightNiece != nil
 }
 
 // deadEnd returns true if both nieces are nil
@@ -36,13 +35,13 @@ func (n *polNode) deadEnd() bool {
 	// 	fmt.Printf("nil deadend\n")
 	// 	return true
 	// }
-	return n.niece[0] == nil && n.niece[1] == nil
+	return n.leftNiece == nil && n.rightNiece == nil
 }
 
 // chop turns a node into a deadEnd by setting both nieces to nil.
 func (n *polNode) chop() {
-	n.niece[0] = nil
-	n.niece[1] = nil
+	n.leftNiece = nil
+	n.rightNiece = nil
 }
 
 //  printout printfs the node
@@ -52,15 +51,15 @@ func (n *polNode) printout() {
 		return
 	}
 	fmt.Printf("Node %x ", n.data[:4])
-	if n.niece[0] == nil {
+	if n.leftNiece == nil {
 		fmt.Printf("l nil ")
 	} else {
-		fmt.Printf("l %x ", n.niece[0].data[:4])
+		fmt.Printf("l %x ", n.leftNiece.data[:4])
 	}
-	if n.niece[1] == nil {
+	if n.rightNiece == nil {
 		fmt.Printf("r nil\n")
 	} else {
-		fmt.Printf("r %x\n", n.niece[1].data[:4])
+		fmt.Printf("r %x\n", n.rightNiece.data[:4])
 	}
 }
 
@@ -76,15 +75,19 @@ func (p *Pollard) NumLeaves() uint64 {
 	return p.numLeaves
 }
 
+func (p *Pollard) NumDels() uint64 {
+	return p.numDels
+}
+
 // prune prunes deadend children.
 // don't prune at the bottom; use leaf prune instead at row 1
 func (n *polNode) prune() {
-	remember := n.niece[0].remember || n.niece[1].remember
-	if n.niece[0].deadEnd() && !remember {
-		n.niece[0] = nil
+	remember := n.leftNiece.remember || n.rightNiece.remember
+	if n.leftNiece.deadEnd() && !remember {
+		n.leftNiece = nil
 	}
-	if n.niece[1].deadEnd() && !remember {
-		n.niece[1] = nil
+	if n.rightNiece.deadEnd() && !remember {
+		n.rightNiece = nil
 	}
 }
 
@@ -93,7 +96,7 @@ func getCount(n *polNode) int64 {
 	if n == nil {
 		return 0
 	}
-	return (getCount(n.niece[0]) + 1 + getCount(n.niece[1]))
+	return (getCount(n.leftNiece) + 1 + getCount(n.rightNiece))
 }
 
 // polSwap swaps the contents of two polNodes & leaves pointers to them intact
@@ -104,7 +107,9 @@ func polSwap(a, asib, b, bsib *polNode) error {
 		return fmt.Errorf("polSwap given nil node")
 	}
 	a.data, b.data = b.data, a.data
-	asib.niece, bsib.niece = bsib.niece, asib.niece
+	//asib.niece, bsib.niece = bsib.niece, asib.niece
+	asib.leftNiece, bsib.leftNiece = bsib.leftNiece, asib.leftNiece
+	asib.rightNiece, bsib.rightNiece = bsib.rightNiece, asib.rightNiece
 	a.remember, b.remember = b.remember, a.remember
 	return nil
 }

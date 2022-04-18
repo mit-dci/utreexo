@@ -34,9 +34,9 @@ func TestProofPositionsSwapless(t *testing.T) {
 	proofPositions := NewPositionList()
 	defer proofPositions.Free()
 
-	targets := []uint64{20, 21}
-	numLeaves := uint64(16)
-	forestRows := uint8(4)
+	targets := []uint64{8, 9, 16, 56}
+	numLeaves := uint64(32)
+	forestRows := uint8(5)
 
 	ProofPositions(targets, numLeaves, forestRows, &proofPositions.list)
 

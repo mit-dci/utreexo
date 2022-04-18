@@ -24,7 +24,8 @@ func (p *polNode) calculatePosition(numLeaves uint64, roots []*polNode) uint64 {
 	for polNode.aunt != nil {
 		//fmt.Printf("aunt %s\n", hex.EncodeToString(polNode.aunt.data[:]))
 		//fmt.Printf("aunt.niece[0] %s\n", hex.EncodeToString(polNode.aunt.niece[0].data[:]))
-		if polNode.aunt.niece[0] == polNode {
+		//if polNode.aunt.niece[0] == polNode {
+		if polNode.aunt.leftNiece == polNode {
 			leftRightIndicator <<= 1
 			//fmt.Println("left ", strconv.FormatUint(leftRightIndicator, 2))
 		} else {
@@ -36,8 +37,8 @@ func (p *polNode) calculatePosition(numLeaves uint64, roots []*polNode) uint64 {
 
 		polNode = polNode.aunt
 
-		// Ugly but need to do this as the roots don't point to nieces, they point
-		// to children.
+		// Ugly but need to flip the bit that we set in this loop as the roots
+		// don't point their children instead of their nieces.
 		if rowsToTop == 0 {
 			leftRightIndicator ^= 1
 		}
@@ -220,7 +221,7 @@ func (p *Pollard) ProveBatchSwapless(hashes []Hash) (BatchProof, error) {
 		node, ok := p.NodeMap[wanted.Mini()]
 		if !ok {
 			fmt.Print(p.ToString())
-			return bp, fmt.Errorf("hash %x not found", wanted)
+			return bp, fmt.Errorf("ProveBatchSwapless hash %x not found", wanted)
 		}
 
 		pos := node.calculatePosition(p.numLeaves, p.roots)
