@@ -12,10 +12,14 @@ import (
 func undoOnceFuzzy(data *bytes.Buffer) error {
 	f := NewForest(RamForest, nil, "", 0)
 
-	seed0, err := data.ReadByte();
-	if err != nil { return nil }
-	seed1, err := data.ReadByte();
-	if err != nil { return nil }
+	seed0, err := data.ReadByte()
+	if err != nil {
+		return nil
+	}
+	seed1, err := data.ReadByte()
+	if err != nil {
+		return nil
+	}
 	seed := (int64(seed1) << 8) | int64(seed0)
 	sc := newSimChainWithSeed(0x07, seed)
 	if sc == nil {
@@ -35,7 +39,7 @@ func undoOnceFuzzy(data *bytes.Buffer) error {
 		if err != nil {
 			return err
 		}
-		beforeRoot := f.getRoots()
+		beforeRoot := f.GetRoots()
 		ub, err := f.Modify(adds, bp.Targets)
 		if err != nil {
 			return err
@@ -52,7 +56,7 @@ func undoOnceFuzzy(data *bytes.Buffer) error {
 				return err
 			}
 			sc.BackOne(adds, durations, delHashes)
-			afterRoot := f.getRoots()
+			afterRoot := f.GetRoots()
 			if !reflect.DeepEqual(beforeRoot, afterRoot) {
 				return fmt.Errorf("undo mismatch")
 			}

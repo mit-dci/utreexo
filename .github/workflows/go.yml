@@ -49,18 +49,59 @@ jobs:
         cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoclient
         go build -v
 
-    - name: Run unit tests
+        
+  run-unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: Build
+    timeout-minutes: 5
+    steps:
+    - name: setup directory
+      shell: bash
+      run: |
+        mkdir -p "${{ github.workspace }}/testdatapath"
+
+    # set GOPATH
+    - name: setup env
+      shell: bash
+      run: |
+        echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
+        echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
+
+    - name: Install Go
+      if: success()
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+      id: go
+
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/${{ github.repository }}
+
+    - name: Get dependencies
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        go get -v -d ./...
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoserver
+        go build -v
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoclient
+        go build -v
+    - name: tests
       shell: bash
       run: |
         cd $GOPATH/src/github.com/${{ github.repository }}
         go test -v ./accumulator
-
-    - name: Run integration tests
-      shell: bash
-      run: |
-        cd $GOPATH/src/github.com/${{ github.repository }}
-        ./test/install_bitcoind.sh
-        ./test/csn_bridge.sh "./cmd/utreexoserver/utreexoserver" "./cmd/utreexoclient/utreexoclient" "${{ github.workspace }}/testdatapath"
 
     - name: Upload testdata
       uses: actions/upload-artifact@v2
@@ -68,10 +109,70 @@ jobs:
         name: testdatapath
         path: "${{ github.workspace }}/testdatapath"
 
+  run-integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: Build
+    timeout-minutes: 5
+    steps:
+    - name: setup directory
+      shell: bash
+      run: |
+        mkdir -p "${{ github.workspace }}/testdatapath"
+
+    # set GOPATH
+    - name: setup env
+      shell: bash
+      run: |
+        echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
+        echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
+
+    - name: Install Go
+      if: success()
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+      id: go
+
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/${{ github.repository }}
+
+    - name: Get dependencies
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        go get -v -d ./...
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoserver
+        go build -v
+
+    - name: Build
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}/cmd/utreexoclient
+        go build -v
+    - name: integration tests
+      shell: bash
+      run: |
+        cd $GOPATH/src/github.com/${{ github.repository }}
+        ./test/install_bitcoind.sh
+        ./test/csn_bridge.sh "./cmd/utreexoserver/utreexoserver" "./cmd/utreexoclient/utreexoclient" "${{ github.workspace }}/testdatapath"
+    
+    - name: Upload testdata
+      uses: actions/upload-artifact@v2
+      with:
+        name: testdatapath
+        path: "${{ github.workspace }}/testdatapath"
+  
   check-proof-backwards:
     name: Check proof backwards compatibility
     runs-on: ubuntu-latest
-    needs: Build
+    needs: run-unit-tests
     timeout-minutes: 5
     steps:
     # set GOPATH
@@ -80,10 +181,13 @@ jobs:
       run: |
         echo "${{ github.workspace }}/go/bin:" >> $GITHUB_PATH
         echo "GOPATH=${{ github.workspace }}/go" >> $GITHUB_ENV
+        
 
-    - uses: actions/download-artifact@v2
+    - name: Get TestDataPath
+      uses: actions/download-artifact@v2
       with:
         name: testdatapath
+        path: "${{ github.workspace }}/testdatapath"
 
     - name: Install Go
       if: success()
