@@ -5,67 +5,6 @@ import (
 	"time"
 )
 
-// Proof :
-type Proof struct {
-	Position uint64 // where at the bottom of the tree it sits
-	Payload  Hash   // hash of the thing itself (what's getting proved)
-	Siblings []Hash // slice of siblings up to a root
-}
-
-// Verify checks an inclusion proof.
-// returns false on any errors
-func (f *Forest) Verify(p Proof) bool {
-
-	n := p.Payload
-	//	fmt.Printf("check position %d %04x inclusion\n", p.Position, n[:4])
-
-	subTreeRows := detectSubTreeRows(p.Position, f.numLeaves, f.rows)
-	// there should be as many siblings as the rows of the sub-tree
-	// (0 rows means there are no siblings; there is no proof)
-	if uint8(len(p.Siblings)) != subTreeRows {
-		fmt.Printf("proof wrong size, expect %d got %d\n",
-			subTreeRows, len(p.Siblings))
-		return false
-	}
-	//	fmt.Printf("verify %04x\n", n[:4])
-	for h, sib := range p.Siblings {
-		// fmt.Printf("%04x ", sib[:4])
-		// detect current row parity
-		if 1<<uint(h)&p.Position == 0 {
-			//			fmt.Printf("compute %04x %04x -> ", n[:4], sib[:4])
-			n = parentHash(n, sib)
-			//			fmt.Printf("%04x\n", n[:4])
-		} else {
-			//			fmt.Printf("compute %04x %04x -> ", sib[:4], n[:4])
-			n = parentHash(sib, n)
-			//			fmt.Printf("%04x\n", n[:4])
-		}
-	}
-
-	subTreeRootPos := parentMany(p.Position, subTreeRows, f.rows)
-
-	if subTreeRootPos >= f.data.size() {
-		fmt.Printf("ERROR don't have root at %d\n", subTreeRootPos)
-		return false
-	}
-	subRoot := f.data.read(subTreeRootPos)
-
-	if n != subRoot {
-		fmt.Printf("got %04x subroot %04x\n", n[:4], subRoot[:4])
-	}
-	return n == subRoot
-}
-
-// VerifyMany is like verify but more.
-func (f *Forest) VerifyMany(ps []Proof) bool {
-	for _, p := range ps {
-		if !f.Verify(p) {
-			return false
-		}
-	}
-	return true
-}
-
 // ProveBatch gets proofs (in the form of a node slice) for a bunch of leaves
 // The ordering of Targets is the same as the ordering of hashes given as
 // argument.
