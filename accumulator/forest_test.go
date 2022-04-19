@@ -195,7 +195,7 @@ func Test2Fwd1Back(t *testing.T) {
 		fmt.Printf(s)
 
 		// get proof for the first
-		_, err = f.Prove(adds[0].Hash)
+		_, err = f.ProveBatch([]Hash{adds[0].Hash})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -210,16 +210,22 @@ func Test2Fwd1Back(t *testing.T) {
 		//		fmt.Printf(s)
 
 		// get proof for the 2nd
-		keep, err := f.Prove(adds[1].Hash)
+		keep, err := f.ProveBatch([]Hash{adds[1].Hash})
 		if err != nil {
 			t.Fatal(err)
 		}
-		// check proof
+		// convert batch proof to single proof
+		// (TODO: remove this as soon as soon as Verify is removed and replaced by VerifyBatchProof)
+		var proof Proof;
+		proof.Position = keep.Targets[0]
+		proof.Payload = adds[1].Hash
+		proof.Siblings = keep.Proof
 
-		worked := f.Verify(keep)
+		// check proof
+		worked := f.Verify(proof)
 		if !worked {
 			t.Fatalf("proof at position %d, length %d failed to verify\n",
-				keep.Position, len(keep.Siblings))
+				proof.Position, len(proof.Siblings))
 		}
 	}
 }

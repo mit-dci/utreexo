@@ -12,69 +12,6 @@ type Proof struct {
 	Siblings []Hash // slice of siblings up to a root
 }
 
-// Prove :
-func (f *Forest) Prove(wanted Hash) (Proof, error) {
-	starttime := time.Now()
-
-	var pr Proof
-	var empty [32]byte
-	// first look up where the hash is
-	pos, ok := f.positionMap[wanted.Mini()]
-	if !ok {
-		return pr, fmt.Errorf("hash %x not found", wanted)
-	}
-
-	// should never happen
-	if pos >= f.numLeaves {
-		return pr, fmt.Errorf("prove: got leaf position %d but only %d leaves exist",
-			pos, f.numLeaves)
-	}
-
-	// build empty proof branch slice of siblings
-	// not full rows -- need to figure out which subtree it's in!
-	pr.Siblings = make([]Hash, detectSubTreeRows(pos, f.numLeaves, f.rows))
-	pr.Payload = f.data.read(pos)
-	if pr.Payload != wanted {
-		return pr, fmt.Errorf(
-			"prove: forest and position map conflict. want %x got %x at pos %d",
-			wanted[:4], pr.Payload[:4], pos)
-	}
-	pr.Position = pos
-	//	fmt.Printf("nl %d proof for %d len %d\n", f.numLeaves, pos, len(pr.Siblings))
-	//	fmt.Printf("\tprove pos %d %x:\n", pos, pr.Payload[:4])
-	// go up and populate the siblings
-	for h, _ := range pr.Siblings {
-
-		pr.Siblings[h] = f.data.read(pos ^ 1)
-		if pr.Siblings[h] == empty {
-			fmt.Print(f.ToString())
-			return pr, fmt.Errorf(
-				"prove: got empty hash proving leaf %d row %d pos %d nl %d",
-				pr.Position, h, pos^1, f.numLeaves)
-		}
-		//		fmt.Printf("sibling %d: pos %d %x\n", h, pos^1, pr.Siblings[h][:4])
-		pos = parent(pos, f.rows)
-
-	}
-
-	donetime := time.Now()
-	f.timeInProve += donetime.Sub(starttime)
-	return pr, nil
-}
-
-// ProveMany :
-func (f *Forest) ProveMany(hs []Hash) ([]Proof, error) {
-	var err error
-	proofs := make([]Proof, len(hs))
-	for i, h := range hs {
-		proofs[i], err = f.Prove(h)
-		if err != nil {
-			return proofs, err
-		}
-	}
-	return proofs, err
-}
-
 // Verify checks an inclusion proof.
 // returns false on any errors
 func (f *Forest) Verify(p Proof) bool {
