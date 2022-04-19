@@ -165,7 +165,7 @@ func (p *Pollard) RestorePollard(r io.Reader) error {
 // Serialize serializes the numLeaves field and only the roots into a byte slice.
 // Cached leaves are not included in the byte slice
 func (p *Pollard) Serialize() ([]byte, error) {
-	size := 8 + len(p.roots) // 8 for uint64 numLeaves
+	size := 8 + (len(p.roots) * 32) // 8 for uint64 numLeaves, 32 for each hash
 	serialized := make([]byte, 0, size)
 
 	buf := bytes.NewBuffer(serialized)
