@@ -4,50 +4,19 @@ import (
 	"fmt"
 	"math/bits"
 	"sort"
-	"sync"
 )
 
 // verbose is a global const to get lots of printfs for debugging
 var verbose = false
 
-// PositionList is a wrapper around slice of ints.
-type PositionList struct {
-	list []uint64
-}
-
-// Free returns the slice of uint64 back to the pool
-func (pl *PositionList) Free() {
-	pl.list = pl.list[:0]
-	positionListFree.Put(pl)
-}
-
-// Make a pool of uint64s
-var positionListFree = sync.Pool{
-	New: func() interface{} { return new(PositionList) },
-}
-
-// NewPositionList returns a slice of uint64 from the pool
-func NewPositionList() *PositionList {
-	p := positionListFree.Get().(*PositionList)
-
-	if p.list == nil {
-		// allocate a little bit since 0 len is gonna be costly
-		// when a new PositionList is created
-		p.list = make([]uint64, 0, 30)
-	}
-
-	return p
-}
-
 // ProofPositions returns the positions that are needed to prove that the targets exist.
 func ProofPositions(
-	targets []uint64, numLeaves uint64, forestRows uint8, proofPositions *[]uint64) int64 {
+	targets []uint64, numLeaves uint64, forestRows uint8) ([]uint64, int64) {
 	// the proofPositions needed without caching.
 	// the positions that are computed/not included in the proof.
 	// (also includes the targets)
 
-	nextTargets := NewPositionList()
-	defer nextTargets.Free()
+	var proofPositions []uint64
 
 	var computedPositions int64
 	for row := uint8(0); row < forestRows; row++ {
@@ -58,8 +27,7 @@ func ProofPositions(
 			targets = targets[:len(targets)-1]
 		}
 
-		// reset nextTargets
-		nextTargets.list = nextTargets.list[:0]
+		var nextTargets []uint64
 		for len(targets) > 0 {
 			switch {
 			// look at the first 4 targets
@@ -68,7 +36,7 @@ func ProofPositions(
 					// the first and fourth target are cousins
 					// => target 2 and 3 are also targets, both parents are
 					// targets of next row
-					nextTargets.list = append(nextTargets.list,
+					nextTargets = append(nextTargets,
 						parent(targets[0], forestRows), parent(targets[3], forestRows))
 					targets = targets[4:]
 					break
@@ -85,12 +53,12 @@ func ProofPositions(
 					// => only the sibling that is not a target is appended
 					// to the proof positions
 					if targets[1]|1 == targets[0]|1 {
-						*proofPositions = append(*proofPositions, targets[2]^1)
+						proofPositions = append(proofPositions, targets[2]^1)
 					} else {
-						*proofPositions = append(*proofPositions, targets[0]^1)
+						proofPositions = append(proofPositions, targets[0]^1)
 					}
 					// both parents are targets of next row
-					nextTargets.list = append(nextTargets.list,
+					nextTargets = append(nextTargets,
 						parent(targets[0], forestRows), parent(targets[2], forestRows))
 					targets = targets[3:]
 					break
@@ -101,13 +69,13 @@ func ProofPositions(
 			// look at the first 2 targets
 			case len(targets) > 1:
 				if targets[0]|1 == targets[1] {
-					nextTargets.list = append(nextTargets.list, parent(targets[0], forestRows))
+					nextTargets = append(nextTargets, parent(targets[0], forestRows))
 					targets = targets[2:]
 					break
 				}
 				if (targets[0]|1)^2 == targets[1]|1 {
-					*proofPositions = append(*proofPositions, targets[0]^1, targets[1]^1)
-					nextTargets.list = append(nextTargets.list,
+					proofPositions = append(proofPositions, targets[0]^1, targets[1]^1)
+					nextTargets = append(nextTargets,
 						parent(targets[0], forestRows), parent(targets[1], forestRows))
 					targets = targets[2:]
 					break
@@ -117,16 +85,16 @@ func ProofPositions(
 
 			// look at the first target
 			default:
-				*proofPositions = append(*proofPositions, targets[0]^1)
-				nextTargets.list = append(nextTargets.list, parent(targets[0], forestRows))
+				proofPositions = append(proofPositions, targets[0]^1)
+				nextTargets = append(nextTargets, parent(targets[0], forestRows))
 				targets = targets[1:]
 			}
 		}
 
-		targets = nextTargets.list
+		targets = nextTargets
 	}
 
-	return computedPositions
+	return proofPositions, computedPositions
 }
 
 // takes a slice of dels, removes the twins (in place) and returns a slice
@@ -415,8 +383,9 @@ func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 }
 
 // getRootsForwards gives you the positions of the tree roots, given a number of leaves.
-func getRootsForwards(leaves uint64, forestRows uint8, roots *[]uint64) []uint8 {
+func getRootsForwards(leaves uint64, forestRows uint8) ([]uint64, []uint8) {
 	position := uint64(0)
+	var roots []uint64
 
 	rows := make([]uint8, 0, forestRows)
 	for row := forestRows; position < leaves; row-- {
@@ -424,13 +393,13 @@ func getRootsForwards(leaves uint64, forestRows uint8, roots *[]uint64) []uint8 
 			// build a tree here
 			root := parentMany(position, row, forestRows)
 
-			*roots = append(*roots, root)
+			roots = append(roots, root)
 			rows = append(rows, row)
 			position += 1 << row
 		}
 	}
 
-	return rows
+	return roots, rows
 }
 
 // subTreePositions takes in a node position and forestRows and returns the

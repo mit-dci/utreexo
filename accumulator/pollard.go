@@ -59,12 +59,13 @@ func (p *Pollard) Modify(adds []Leaf, delsUn []uint64) error {
 	copy(dels, delsUn)
 	sortUint64s(dels)
 
-	err := p.rem2(dels)
-	if err != nil {
-		return err
-	}
-
-	err = p.add(adds)
+	/*
+		err := p.rem2(dels)
+		if err != nil {
+			return err
+		}
+	*/
+	err := p.add(adds)
 	if err != nil {
 		return err
 	}
@@ -190,149 +191,6 @@ func (p *Pollard) addOne(add Hash, remember bool) error {
 
 	p.roots = append(p.roots, n)
 	p.numLeaves++
-	return nil
-}
-
-// rem2 deletes the passed in dels from the pollard
-func (p *Pollard) rem2(dels []uint64) error {
-	// Hash and swap.  "grabPos" in rowdirt / hashdirt is inefficient because you
-	// descend to the place you already just decended to perform swapNodes.
-
-	// rem2 outline:
-	// perform swaps & hash, then select new roots.
-
-	// swap & hash is row based.  Swaps on row 0 cause hashing on row 1.
-	// So the sequence is: Swap row 0, hash row 1, swap row 1, hash row 2,
-	// swap row 2... etc.
-	// The tricky part is that we have a big for loop with h being the current
-	// row.  When h=0 and we're swapping things on the bottom, we can hash
-	// things at row 1 (h+1).  Before we start swapping row 1, we need to be sure
-	// that all hashing for row 1 has finished.
-	if len(dels) == 0 {
-		return nil // that was quick
-	}
-	ph := p.rows() // rows of pollard
-	nextNumLeaves := p.numLeaves - uint64(len(dels))
-
-	if p.positionMap != nil { // if fulpol, remove hashes from posMap
-		for _, delpos := range dels {
-			delete(p.positionMap, p.read(delpos).Mini())
-		}
-	}
-
-	// All the leaves to be deleted should be set to be not remembered.
-	// TODO there's probably a better way to do this than calling readPos
-	// a whole lot.
-	for _, del := range dels {
-		n, _, _, err := p.readPos(del)
-		if err != nil {
-			return err
-		}
-		if n.remember == true {
-			p.currentRemember--
-			n.remember = false
-		}
-		// This likely does nothing since the leaf nieces are never set.
-		// Just putting it here since the cost of putting this in is
-		// basically nothing.
-		n.niece[0], n.niece[1] = nil, nil
-	}
-
-	// get all the swaps, then apply them all
-	swapRows := remTrans2(dels, p.numLeaves, ph)
-
-	var hashDirt, nextHashDirt []uint64
-	var prevHash uint64
-	var err error
-	// swap & hash all the nodes
-	for h := uint8(0); h < ph; h++ {
-		var hnslice []*hashableNode
-		hashDirt = dedupeSwapDirt(hashDirt, swapRows[h])
-		for len(swapRows[h]) != 0 || len(hashDirt) != 0 {
-			var hn *hashableNode
-			var collapse bool
-			// check if doing dirt. if not dirt, swap.
-			// (maybe a little clever here...)
-			if len(swapRows[h]) == 0 ||
-				len(hashDirt) != 0 && hashDirt[0] > swapRows[h][0].to {
-				// re-descending here which isn't great
-				hn, err = p.hnFromPos(hashDirt[0])
-				if err != nil {
-					return err
-				}
-				hashDirt = hashDirt[1:]
-			} else { // swapping
-				if swapRows[h][0].from == swapRows[h][0].to {
-					// TODO should get rid of these upstream
-					// panic("got non-moving swap")
-					swapRows[h] = swapRows[h][1:]
-					continue
-				}
-				hn, err = p.swapNodes(swapRows[h][0], h)
-				if err != nil {
-					return err
-				}
-				collapse = swapRows[h][0].collapse
-				swapRows[h] = swapRows[h][1:]
-			}
-			if hn == nil ||
-				hn.position == prevHash || collapse {
-				// TODO: there are probably more conditions in which a hn could be skipped.
-				continue
-			}
-
-			hnslice = append(hnslice, hn)
-			prevHash = hn.position
-			if len(nextHashDirt) == 0 ||
-				(nextHashDirt[len(nextHashDirt)-1] != hn.position) {
-				// skip if already on end of slice. redundant?
-				nextHashDirt = append(nextHashDirt, hn.position)
-			}
-		}
-		hashDirt = nextHashDirt
-		nextHashDirt = []uint64{}
-		// do all the hashes at once at the end
-		for _, hn := range hnslice {
-			// skip hashes we can't compute
-			if hn.sib.niece[0] == nil || hn.sib.niece[1] == nil ||
-				hn.sib.niece[0].data == empty || hn.sib.niece[1].data == empty {
-				// TODO when is hn nil?  is this OK?
-				// it'd be better to avoid this and not create hns that aren't
-				// supposed to exist.
-				continue
-			}
-			hn.dest.data = hn.sib.auntOp()
-			hn.sib.prune()
-		}
-	}
-
-	positionList := NewPositionList()
-	defer positionList.Free()
-
-	// set new roots
-	getRootsForwards(nextNumLeaves, ph, &positionList.list)
-	nextRoots := make([]*polNode, len(positionList.list))
-	for i, _ := range nextRoots {
-		rootPos := len(positionList.list) - (i + 1)
-		nt, ntsib, _, err := p.grabPos(positionList.list[rootPos])
-		if err != nil {
-			return err
-		}
-		if nt == nil {
-			return fmt.Errorf("want root %d at %d but nil", i, positionList.list[i])
-		}
-		if ntsib == nil {
-			// when turning a node into a root, it's "nieces" are really children,
-			// so should become it's sibling's nieces.
-			nt.chop()
-		} else {
-			nt.niece = ntsib.niece
-		}
-		nextRoots[i] = nt
-	}
-	p.numLeaves = nextNumLeaves
-	reversePolNodeSlice(nextRoots)
-	p.roots = nextRoots
 	return nil
 }
 

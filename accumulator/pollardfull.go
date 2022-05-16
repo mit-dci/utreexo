@@ -83,14 +83,11 @@ func (p *Pollard) ProveBatch(hs []Hash) (BatchProof, error) {
 	copy(sortedTargets, bp.Targets)
 	sortUint64s(sortedTargets)
 
-	proofPositions := NewPositionList()
-	defer proofPositions.Free()
-
 	// Get the positions of all the hashes that are needed to prove the targets
-	ProofPositions(sortedTargets, p.numLeaves, p.rows(), &proofPositions.list)
+	proofPositions, _ := ProofPositions(sortedTargets, p.numLeaves, p.rows())
 
-	bp.Proof = make([]Hash, len(proofPositions.list))
-	for i, proofPos := range proofPositions.list {
+	bp.Proof = make([]Hash, len(proofPositions))
+	for i, proofPos := range proofPositions {
 		bp.Proof[i] = p.read(proofPos)
 	}
 
