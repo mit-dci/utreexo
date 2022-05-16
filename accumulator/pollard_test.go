@@ -194,10 +194,10 @@ func fixedPollard(leaves int32) error {
 
 	fmt.Printf("pollard post add %s", p.ToString())
 
-	err = p.rem2(dels)
-	if err != nil {
-		return err
-	}
+	// err = p.rem2(dels)
+	// if err != nil {
+	// return err
+	// }
 
 	_, err = f.Modify(nil, dels)
 	if err != nil {

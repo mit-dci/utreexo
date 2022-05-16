@@ -151,53 +151,26 @@ func NewForest(
 	return f
 }
 
+/* ------------ util functions ----------- */
 // TODO remove, only here for testing
 func (f *Forest) ReconstructStats() (uint64, uint8) {
 	return f.numLeaves, f.rows
 }
 
-/*
-Deletion algo
-*/
+// child with forest context
+func (f *Forest) child(p uint64) uint64 {
+	return child(p, f.rows)
+}
 
-// removev5 swapless
-func (f *Forest) removev5(dels []uint64) error {
-	// should do this later / non-blocking as it's just to free up space.
-	for _, d := range dels {
-		delete(f.positionMap, f.data.read(d).Mini())
-	}
-	dirt := []uint64{}
-	// consolodate deletions; only delete tops of subtrees
-	condensedDels := condenseDeletions(dels, f.rows)
-	// main iteration of all deletion
-	for _, p := range condensedDels {
+// parent with forest context
+func (f *Forest) parent(p uint64) uint64 {
+	return parent(p, f.rows)
+}
 
-		// first, rise until you aren't your parent
-		for f.sameAsParent(p) {
-		}
-
-		// read in sibling.  Sibling is always valid (unless you're a root)
-		sib := f.data.read(p ^ 1)
-		p = parent(p, f.rows) // rise
-
-		// Write sibling to parent, and keep rising and writing that
-		// until you're not the same as your parent
-		for f.sameAsParent(p) {
-			f.data.write(p, sib)  // write to self
-			p = parent(p, f.rows) // rise
-		}
-		f.data.write(p, sib) // write to self, redundant if we did prev loop
-
-		// dirtpos := parent(p, f.rows)
-		// if len(dirt) == 0 || dirt[len(dirt)-1] != dirtpos {
-		// dirt = append(dirt, dirtpos)
-		// fmt.Printf("dirt: %v\n", dirt)
-		// }
-
-	}
-	fmt.Printf("dirt: %v\n", dirt)
-	f.numLeaves -= uint64(len(dels))
-	return nil
+// tells you if the position is a root
+func (f *Forest) isRoot(p uint64, row uint8) bool {
+	return f.numLeaves&(1<<row) != 0 &&
+		(p == rootPosition(f.numLeaves, row, f.rows))
 }
 
 // promote moves a node up to it's parent
@@ -219,6 +192,89 @@ func (f *Forest) sameAsParent(p uint64) bool {
 	return selfHash == parHash
 }
 
+/*
+Deletion algo
+*/
+
+// removev5 swapless
+func (f *Forest) removev5(dels []uint64) error {
+	// should do this later / non-blocking as it's just to free up space.
+	for _, d := range dels {
+		delete(f.positionMap, f.data.read(d).Mini())
+	}
+	dirt := make([][]uint64, f.rows)
+	var antidirt []uint64
+	// consolodate deletions; only delete tops of subtrees
+	condensedDels := condenseDeletions(dels, f.rows)
+	// main iteration of all deletion
+	for h, row := range condensedDels {
+		for _, p := range row {
+			atHeight := uint8(h)
+			// first, rise until you aren't your parent
+			for f.sameAsParent(p) {
+				p = f.parent(p)
+				atHeight++
+			}
+
+			// read in sibling.  Sibling is always valid (unless you're a root)
+			sib := f.data.read(p ^ 1)
+			p = f.parent(p) // rise
+			atHeight++
+
+			// Write sibling to position, and keep rising and writing that
+			// until you're not the same as your parent
+			for f.sameAsParent(p) {
+				f.data.write(p, sib) // write to self
+				p = f.parent(p)      // rise
+				atHeight++
+			}
+			f.data.write(p, sib) // write to self, redundant if we did prev loop
+			dirtpos := f.parent(p)
+			antidirt = append(antidirt, p)
+			fmt.Printf("dirtpos %d\n", dirtpos)
+			if len(dirt[atHeight]) == 0 || dirt[atHeight][len(dirt)-1] != dirtpos {
+				dirt[atHeight] = append(dirt[atHeight], dirtpos)
+				// fmt.Printf("dirt: %v\n", dirt)
+			}
+		}
+		antidirt = []uint64{}
+	}
+	fmt.Printf("dirt: %v\n", dirt)
+	f.numLeaves -= uint64(len(dels))
+	return nil
+}
+
+// Given a list of dirty positions (positions where children have changed)
+// hash & write new nodes up to the roots
+func (f *Forest) cleanHash(dirt [][]uint64) error {
+	if f.rows == 0 {
+		return nil // nothing to do
+	}
+	if len(dirt[0]) != 0 {
+		return fmt.Errorf("bottom row of dirt is not empty")
+	}
+
+	var higherDirt []uint64
+	// start at row 1 and get to the top.  Row 0 is never dirty.
+	for row := uint8(1); row < f.rows; row++ {
+		dirt[row] = mergeSortedSlices(dirt[row], higherDirt)
+		higherDirt = []uint64{}
+		for _, pos := range dirt[row] {
+			// TODO or maybe make a hash parent function that is part of f.data
+			leftChild := f.data.read(f.child(pos)) // TODO combine with readrun
+			rightChild := f.data.read(f.child(pos) | 1)
+			par := parentHash(leftChild, rightChild)
+			f.historicHashes++
+			f.data.write(pos, par)
+
+			if !f.isRoot(pos, row) {
+				higherDirt = append(higherDirt, f.parent(pos))
+			}
+		}
+	}
+	return nil
+}
+
 // reHash hashes new data in the forest based on dirty positions.
 // right now it seems "dirty" means the node itself moved, not that the
 // parent has changed children.
@@ -229,7 +285,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 		return nil
 	}
 
-	positionList, rootRows := getRootsForwards(f.numLeaves, f.rows)
+	positionList, rootRows := getRootPositions(f.numLeaves, f.rows)
 
 	dirty2d := make([][]uint64, f.rows)
 	r := uint8(0)
@@ -322,7 +378,7 @@ func (f *Forest) Add(adds []Leaf) {
 func (f *Forest) addv2(adds []Leaf) {
 	for _, add := range adds {
 		f.positionMap[add.Mini()] = f.numLeaves
-		positionList, _ := getRootsForwards(f.numLeaves, f.rows)
+		positionList, _ := getRootPositions(f.numLeaves, f.rows)
 
 		pos := f.numLeaves
 		n := add.Hash
@@ -334,8 +390,9 @@ func (f *Forest) addv2(adds []Leaf) {
 			// grab, pop, swap, hash, new
 			root := f.data.read(positionList[rootPos]) // grab
 			n = parentHash(root, n)                    // hash
-			pos = parent(pos, f.rows)                  // rise
-			f.data.write(pos, n)                       // write
+			f.historicHashes++
+			pos = parent(pos, f.rows) // rise
+			f.data.write(pos, n)      // write
 		}
 		f.numLeaves++
 	}
@@ -452,7 +509,7 @@ func (f *Forest) sanity() error {
 			f.numLeaves, f.rows)
 	}
 
-	positionList, _ := getRootsForwards(f.numLeaves, f.rows)
+	positionList, _ := getRootPositions(f.numLeaves, f.rows)
 	for _, t := range positionList {
 		if f.data.read(t) == empty {
 			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
@@ -613,7 +670,7 @@ func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 
 // getRoots returns all the roots of the trees
 func (f *Forest) getRoots() []Hash {
-	positionList, _ := getRootsForwards(f.numLeaves, f.rows)
+	positionList, _ := getRootPositions(f.numLeaves, f.rows)
 	roots := make([]Hash, len(positionList))
 
 	for i, _ := range roots {

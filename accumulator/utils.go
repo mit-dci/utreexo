@@ -125,7 +125,7 @@ func extractTwins(nodes []uint64, forestRows uint8) (parents, dels []uint64) {
 // the list of deletions which is equivalent and highest.
 // For example in a 16 leaf tree,
 // [2, 3, 5, 10, 11, 20] returns [5, 15, 26]
-func condenseDeletions(dels []uint64, forestRows uint8) (cdels []uint64) {
+func condenseDeletions(dels []uint64, forestRows uint8) [][]uint64 {
 	var nextRow []uint64
 	var h uint8
 	rows := make([][]uint64, forestRows)
@@ -159,12 +159,13 @@ func condenseDeletions(dels []uint64, forestRows uint8) (cdels []uint64) {
 	}
 
 	fmt.Printf("done condensing; deletions are %v\n", rows)
-	for _, r := range rows {
-		for _, p := range r {
-			cdels = append(cdels, p)
-		}
-	}
-	return
+	return rows
+	// for _, r := range rows {
+	// for _, p := range r {
+	// cdels = append(cdels, p)
+	// }
+	// }
+	// return
 }
 
 // move through.  if you find twins, remove them, and add parent to another slice
@@ -383,7 +384,7 @@ func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 }
 
 // getRootsForwards gives you the positions of the tree roots, given a number of leaves.
-func getRootsForwards(leaves uint64, forestRows uint8) ([]uint64, []uint8) {
+func getRootPositions(leaves uint64, forestRows uint8) ([]uint64, []uint8) {
 	position := uint64(0)
 	var roots []uint64
 
