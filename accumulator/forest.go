@@ -203,75 +203,99 @@ func (f *Forest) removev5(dels []uint64) error {
 		delete(f.positionMap, f.data.read(d).Mini())
 	}
 	dirt := make([][]uint64, f.rows)
-	var antidirt []uint64
+	antidirt := make([][]uint64, f.rows)
 	// consolodate deletions; only delete tops of subtrees
 	condensedDels := condenseDeletions(dels, f.rows)
 	// main iteration of all deletion
-	for h, row := range condensedDels {
-		for _, p := range row {
-			atHeight := uint8(h)
+	for r, delRow := range condensedDels { // for each row of deletions
+		for _, p := range delRow { // for each deletion originating at row r
+			atRow := uint8(r)
 			// first, rise until you aren't your parent
 			for f.sameAsParent(p) {
 				p = f.parent(p)
-				atHeight++
+				atRow++
 			}
 
 			// read in sibling.  Sibling is always valid (unless you're a root)
 			sib := f.data.read(p ^ 1)
 			p = f.parent(p) // rise
-			atHeight++
+			atRow++
 
 			// Write sibling to position, and keep rising and writing that
 			// until you're not the same as your parent
 			for f.sameAsParent(p) {
 				f.data.write(p, sib) // write to self
 				p = f.parent(p)      // rise
-				atHeight++
+				atRow++
 			}
 			f.data.write(p, sib) // write to self, redundant if we did prev loop
+
+			// dirt: dirt is the parent of where you wrote to.
+			// antidirt is where you wrote to. only at row 2+
+			// for both dirt and anti-dirt, only write if it's not the same
+			// as whats already at the end of the slice
+
+			// Should we append antidirt?
+			if atRow > 1 &&
+				(len(antidirt[atRow]) == 0 ||
+					antidirt[atRow][len(antidirt[atRow])-1] != p) {
+				antidirt[atRow] = append(antidirt[atRow], p)
+			}
+
 			dirtpos := f.parent(p)
-			antidirt = append(antidirt, p)
-			fmt.Printf("dirtpos %d\n", dirtpos)
-			if len(dirt[atHeight]) == 0 || dirt[atHeight][len(dirt)-1] != dirtpos {
-				dirt[atHeight] = append(dirt[atHeight], dirtpos)
-				// fmt.Printf("dirt: %v\n", dirt)
+			// Should we append dirt?
+			if len(dirt[atRow]) == 0 ||
+				dirt[atRow][len(dirt[atRow])-1] != dirtpos {
+				dirt[atRow] = append(dirt[atRow], dirtpos)
 			}
 		}
-		antidirt = []uint64{}
+
 	}
 	fmt.Printf("dirt: %v\n", dirt)
 	f.numLeaves -= uint64(len(dels))
 	return nil
 }
 
+// annihilate takes the 2d dirt and any dirt slices, and zeros all the
+// antidirt from dirt, modifying dirt in place.  A 0 value means skip.
+func annihilate(dirt, antidirt [][]uint64) {
+
+}
+
 // Given a list of dirty positions (positions where children have changed)
 // hash & write new nodes up to the roots
 func (f *Forest) cleanHash(dirt [][]uint64) error {
-	if f.rows == 0 {
-		return nil // nothing to do
-	}
-	if len(dirt[0]) != 0 {
-		return fmt.Errorf("bottom row of dirt is not empty")
+
+	for row, dirtrow := range dirt {
+		fmt.Printf("row %d %v\n", row, dirtrow)
 	}
 
-	var higherDirt []uint64
-	// start at row 1 and get to the top.  Row 0 is never dirty.
-	for row := uint8(1); row < f.rows; row++ {
-		dirt[row] = mergeSortedSlices(dirt[row], higherDirt)
-		higherDirt = []uint64{}
-		for _, pos := range dirt[row] {
-			// TODO or maybe make a hash parent function that is part of f.data
-			leftChild := f.data.read(f.child(pos)) // TODO combine with readrun
-			rightChild := f.data.read(f.child(pos) | 1)
-			par := parentHash(leftChild, rightChild)
-			f.historicHashes++
-			f.data.write(pos, par)
+	/*	if f.rows == 0 {
+			return nil // nothing to do
+		}
+		if len(dirt[0]) != 0 {
+			return fmt.Errorf("bottom row of dirt is not empty")
+		}
 
-			if !f.isRoot(pos, row) {
-				higherDirt = append(higherDirt, f.parent(pos))
+		var higherDirt []uint64
+		// start at row 1 and get to the top.  Row 0 is never dirty.
+		for row := uint8(1); row < f.rows; row++ {
+			dirt[row] = mergeSortedSlices(dirt[row], higherDirt)
+			higherDirt = []uint64{}
+			for _, pos := range dirt[row] {
+				// TODO or maybe make a hash parent function that is part of f.data
+				leftChild := f.data.read(f.child(pos)) // TODO combine with readrun
+				rightChild := f.data.read(f.child(pos) | 1)
+				par := parentHash(leftChild, rightChild)
+				f.historicHashes++
+				f.data.write(pos, par)
+
+				if !f.isRoot(pos, row) {
+					higherDirt = append(higherDirt, f.parent(pos))
+				}
 			}
 		}
-	}
+	*/
 	return nil
 }
 
