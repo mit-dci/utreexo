@@ -567,6 +567,35 @@ func mergeSortedSlices(a []uint64, b []uint64) (c []uint64) {
 	return
 }
 
+// zeroMatchingSortedSlices takes 2 sorted slices, a and x.  Every element
+// in a that also is found in x will be set to 0 in a.
+// The function assumes both slices are sorted.
+func zeroMatchingSortedSlices(a, x []uint64) {
+	maxa := len(a)
+	maxx := len(x)
+	// shortcut:
+	if maxa == 0 || maxx == 0 {
+		return
+	}
+
+	idxa := 0
+	for idxx := 0; idxx < maxx; idxx++ {
+		for a[idxa] < x[idxx] {
+			idxa++
+			if idxa == maxa {
+				return
+			}
+		}
+		if a[idxa] == x[idxx] {
+			a[idxa] = 0
+			idxa++
+			if idxa == maxa {
+				return
+			}
+		}
+	}
+}
+
 // dedupeSwapDirt is kind of like mergeSortedSlices.  Takes 2 sorted slices
 // a, b and removes all elements of b from a and returns a.
 // in this case b is arrow.to

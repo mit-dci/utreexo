@@ -237,9 +237,9 @@ func (f *Forest) removev5(dels []uint64) error {
 
 			// Should we append antidirt?
 			if atRow > 1 &&
-				(len(antidirt[atRow]) == 0 ||
-					antidirt[atRow][len(antidirt[atRow])-1] != p) {
-				antidirt[atRow] = append(antidirt[atRow], p)
+				(len(antidirt[atRow-1]) == 0 ||
+					antidirt[atRow-1][len(antidirt[atRow-1])-1] != p) {
+				antidirt[atRow-1] = append(antidirt[atRow-1], p)
 			}
 
 			dirtpos := f.parent(p)
@@ -249,17 +249,24 @@ func (f *Forest) removev5(dels []uint64) error {
 				dirt[atRow] = append(dirt[atRow], dirtpos)
 			}
 		}
-
 	}
+	fmt.Printf("dirt: %v\nantidirt: %v\n", dirt, antidirt)
+	annihilate(dirt, antidirt)
 	fmt.Printf("dirt: %v\n", dirt)
+	err := f.cleanHash(dirt)
+
 	f.numLeaves -= uint64(len(dels))
-	return nil
+	return err
 }
 
-// annihilate takes the 2d dirt and any dirt slices, and zeros all the
-// antidirt from dirt, modifying dirt in place.  A 0 value means skip.
-func annihilate(dirt, antidirt [][]uint64) {
-
+// zero out the antidirt from the dirt
+func annihilate(d, x [][]uint64) {
+	if len(d) != len(x) {
+		return
+	}
+	for r, _ := range d {
+		zeroMatchingSortedSlices(d[r], x[r])
+	}
 }
 
 // Given a list of dirty positions (positions where children have changed)
