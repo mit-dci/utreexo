@@ -335,6 +335,9 @@ func inForest(pos, numLeaves uint64, forestRows uint8) bool {
 func treeRows(n uint64) (r uint8) {
 	for ; n>>r > 0; r++ {
 	}
+	if n != 1<<(r-1) { // we allocate space for a root unifying the forest
+		r++
+	}
 	return
 }
 

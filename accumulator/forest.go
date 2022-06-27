@@ -291,9 +291,10 @@ func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 // Given a list of dirty positions (positions where children have changed)
 // hash & write new nodes up to the roots
 func (f *Forest) cleanHash(dirt [][]uint64) error {
-
-	fmt.Printf("tr(%d) %d\n", 2, treeRows(2))
-
+	n := uint64(15)
+	p := uint64(4)
+	fmt.Printf("nl %d tr %d parent(%d) %d\n",
+		n, treeRows(n), p, parent(p, treeRows(n)))
 	/*	if f.rows == 0 {
 			return nil // nothing to do
 		}

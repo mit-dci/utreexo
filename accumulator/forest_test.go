@@ -46,7 +46,7 @@ func TestSwaplessDelete(t *testing.T) {
 	f := NewForest(RamForest, nil, "", 0)
 
 	sc := newSimChain(0x07)
-	adds, _, _ := sc.NextBlock(8) // create leaves
+	adds, _, _ := sc.NextBlock(15) // create leaves
 	_, err := f.Modify(adds, nil)
 	if err != nil {
 		t.Fatal(err)
