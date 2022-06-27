@@ -383,24 +383,20 @@ func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 	return shifted & mask
 }
 
-// getRootsForwards gives you the positions of the tree roots, given a number of leaves.
-func getRootPositions(leaves uint64, forestRows uint8) ([]uint64, []uint8) {
-	position := uint64(0)
-	var roots []uint64
-
-	rows := make([]uint8, 0, forestRows)
-	for row := forestRows; position < leaves; row-- {
-		if (1<<row)&leaves != 0 {
-			// build a tree here
+// getRootPositions gives you the positions of the tree roots,
+// given a number of leaves.
+func getRootPositions(numLeaves uint64, forestRows uint8) []uint64 {
+	position := numLeaves - 1
+	roots := make([]uint64, forestRows+1)
+	for row := uint8(0); row <= forestRows; row++ {
+		if (1<<row)&numLeaves != 0 {
 			root := parentMany(position, row, forestRows)
-
-			roots = append(roots, root)
-			rows = append(rows, row)
-			position += 1 << row
+			roots[row] = root
+			position -= 1 << row
 		}
 	}
 
-	return roots, rows
+	return roots
 }
 
 // subTreePositions takes in a node position and forestRows and returns the

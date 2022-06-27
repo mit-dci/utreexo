@@ -250,11 +250,11 @@ func (f *Forest) removev5(dels []uint64) error {
 			}
 		}
 	}
-	fmt.Printf("dirt: %v\nantidirt: %v\n", dirt, antidirt)
+	fmt.Printf("fr %d dirt: %v\nantidirt: %v\n", f.rows, dirt, antidirt)
 	annihilate(dirt, antidirt)
+	extend(dirt, getRootPositions(f.numLeaves, f.rows), f.rows)
 	fmt.Printf("dirt: %v\n", dirt)
 	err := f.cleanHash(dirt)
-
 	f.numLeaves -= uint64(len(dels))
 	return err
 }
@@ -266,6 +266,25 @@ func annihilate(d, x [][]uint64) {
 	}
 	for r, _ := range d {
 		zeroMatchingSortedSlices(d[r], x[r])
+	}
+}
+
+// extend dirt up to roots
+func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
+	// we assume: dirt & rootpositions are same len, which is same as f.rows,
+	// and a 0 value never happens in dirt
+
+	for r := uint8(0); r < uint8(len(dirt)-1); r++ {
+		var addDirt []uint64
+		fmt.Printf("rootpos[%d] %d\n", r, rootPositions[r])
+		for x, _ := range dirt[r] {
+			if dirt[r][x] != rootPositions[r] && // not a root and
+				// first, or even, or not 1 more than previous dirt
+				(x == 0 || dirt[r][x]%2 == 0 || dirt[r][x] != dirt[r][x-1]+1) {
+				addDirt = append(addDirt, parent(dirt[r][x], forestRows))
+			}
+		}
+		dirt[r+1] = mergeSortedSlices(dirt[r+1], addDirt)
 	}
 }
 
@@ -316,7 +335,7 @@ func (f *Forest) reHash(dirt []uint64) error {
 		return nil
 	}
 
-	positionList, rootRows := getRootPositions(f.numLeaves, f.rows)
+	positionList := getRootPositions(f.numLeaves, f.rows)
 
 	dirty2d := make([][]uint64, f.rows)
 	r := uint8(0)
@@ -390,10 +409,10 @@ func (f *Forest) reHash(dirt []uint64) error {
 			}
 			nextRow = append(nextRow, parpos)
 		}
-		if rootRows[len(rootRows)-1] == r {
-			positionList = positionList[:len(rootRows)-1]
-			rootRows = rootRows[:len(rootRows)-1]
-		}
+		// if rootRows[len(rootRows)-1] == r {
+		// positionList = positionList[:len(rootRows)-1]
+		// rootRows = rootRows[:len(rootRows)-1]
+		// }
 		currentRow = nextRow
 		nextRow = nextRow[:0]
 	}
@@ -404,19 +423,22 @@ func (f *Forest) reHash(dirt []uint64) error {
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) Add(adds []Leaf) {
 	f.addv2(adds)
+	// TODO we can add faster by not doing it 1 at a time.
+	// Computing getRootPositions each time is slower, and
+	// could write contiguous runs per row instead of jumping around.
 }
 
 func (f *Forest) addv2(adds []Leaf) {
 	for _, add := range adds {
 		f.positionMap[add.Mini()] = f.numLeaves
-		positionList, _ := getRootPositions(f.numLeaves, f.rows)
+		positionList := getRootPositions(f.numLeaves, f.rows)
 
 		pos := f.numLeaves
 		n := add.Hash
 		f.data.write(pos, n)
 		add.Hash = empty
 
-		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
+		for h := uint8(0); (1<<h)&f.numLeaves != 0; h++ {
 			rootPos := len(positionList) - int(h+1)
 			// grab, pop, swap, hash, new
 			root := f.data.read(positionList[rootPos]) // grab
@@ -528,31 +550,6 @@ func (f *Forest) reMap(destRows uint8) error {
 	}
 
 	f.rows = destRows
-	return nil
-}
-
-// sanity checks forest sanity: does numleaves make sense, and are the roots
-// populated?
-func (f *Forest) sanity() error {
-
-	if f.numLeaves > 1<<f.rows {
-		return fmt.Errorf("forest has %d leaves but insufficient rows %d",
-			f.numLeaves, f.rows)
-	}
-
-	positionList, _ := getRootPositions(f.numLeaves, f.rows)
-	for _, t := range positionList {
-		if f.data.read(t) == empty {
-			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
-				f.numLeaves, len(positionList), t)
-		}
-	}
-
-	if uint64(len(f.positionMap)) > f.numLeaves {
-		return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
-			len(f.positionMap), f.numLeaves)
-	}
-
 	return nil
 }
 
@@ -701,7 +698,7 @@ func (f *Forest) WriteForestToDisk(dumpFile *os.File, ram, cow bool) error {
 
 // getRoots returns all the roots of the trees
 func (f *Forest) getRoots() []Hash {
-	positionList, _ := getRootPositions(f.numLeaves, f.rows)
+	positionList := getRootPositions(f.numLeaves, f.rows)
 	roots := make([]Hash, len(positionList))
 
 	for i, _ := range roots {

@@ -6,20 +6,6 @@ import (
 	"testing"
 )
 
-func TestPollardRand(t *testing.T) {
-	for z := 0; z < 30; z++ {
-		// z := 11221
-		// z := 55
-		rand.Seed(int64(z))
-		fmt.Printf("randseed %d\n", z)
-		err := pollardRandomRemember(20)
-		if err != nil {
-			fmt.Printf("randseed %d\n", z)
-			t.Fatal(err)
-		}
-	}
-}
-
 func TestPollardFixed(t *testing.T) {
 	rand.Seed(2)
 	//	err := pollardMiscTest()
@@ -60,95 +46,6 @@ func TestPollardSimpleIngest(t *testing.T) {
 	if err == nil {
 		t.Fatal("BatchProof valid after modification. Accumulator validation failing")
 	}
-}
-
-func pollardRandomRemember(blocks int32) error {
-	f := NewForest(RamForest, nil, "", 0)
-
-	var p Pollard
-
-	sn := newSimChain(0x07)
-	sn.lookahead = 400
-	for b := int32(0); b < blocks; b++ {
-		adds, _, delHashes := sn.NextBlock(rand.Uint32() & 0xff)
-
-		fmt.Printf("\t\t\tstart block %d del %d add %d - %s\n",
-			sn.blockHeight, len(delHashes), len(adds), p.Stats())
-
-		// get proof for these deletions (with respect to prev block)
-		bp, err := f.ProveBatch(delHashes)
-		if err != nil {
-			return err
-		}
-
-		// verify proofs on rad node
-		err = p.IngestBatchProof(delHashes, bp)
-		if err != nil {
-			return err
-		}
-
-		// apply adds and deletes to the bridge node (could do this whenever)
-		_, err = f.Modify(adds, bp.Targets)
-		if err != nil {
-			return err
-		}
-		// TODO fix: there is a leak in forest.Modify where sometimes
-		// the position map doesn't clear out and a hash that doesn't exist
-		// any more will be stuck in the positionMap.  Wastes a bit of memory
-		// and seems to happen when there are moves to and from a location
-		// Should fix but can leave it for now.
-
-		err = f.sanity()
-		if err != nil {
-			fmt.Printf("frs broke %s", f.ToString())
-			for h, p := range f.positionMap {
-				fmt.Printf("%x@%d ", h[:4], p)
-			}
-			return err
-		}
-		err = f.PosMapSanity()
-		if err != nil {
-			fmt.Print(f.ToString())
-			return err
-		}
-
-		// apply adds / dels to pollard
-		err = p.Modify(adds, bp.Targets)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("pol postadd %s", p.ToString())
-
-		fmt.Printf("frs postadd %s", f.ToString())
-
-		// check all leaves match
-		if !p.equalToForestIfThere(f) {
-			return fmt.Errorf("pollard and forest leaves differ")
-		}
-
-		fullTops := f.getRoots()
-		polTops := p.rootHashesForward()
-
-		// check that tops match
-		if len(fullTops) != len(polTops) {
-			return fmt.Errorf("block %d full %d tops, pol %d tops",
-				sn.blockHeight, len(fullTops), len(polTops))
-		}
-		fmt.Printf("top matching: ")
-		for i, pt := range polTops {
-			fmt.Printf("p %04x f %04x ", pt[:4],
-				fullTops[i][:4])
-			if pt != fullTops[i] {
-				return fmt.Errorf("block %d top %d mismatch, full %x pol %x",
-					sn.blockHeight, i, pt[:4],
-					fullTops[i][:4])
-			}
-		}
-		fmt.Printf("\n")
-	}
-
-	return nil
 }
 
 // fixedPollard adds and removes things in a non-random way
