@@ -292,9 +292,7 @@ func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 // hash & write new nodes up to the roots
 func (f *Forest) cleanHash(dirt [][]uint64) error {
 
-	for row, dirtrow := range dirt {
-		fmt.Printf("row %d %v\n", row, dirtrow)
-	}
+	fmt.Printf("tr(%d) %d\n", 2, treeRows(2))
 
 	/*	if f.rows == 0 {
 			return nil // nothing to do
