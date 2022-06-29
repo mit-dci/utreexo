@@ -218,26 +218,3 @@ func swapIfDescendant(a, b arrow, ar, br, forestRows uint8) (subMask uint64) {
 
 	return subMask
 }
-
-// FloorTransform calls remTrans2 and expands it to give all leaf swaps
-// TODO optimization: if children move, parents don't need to move.
-// (But siblings might)
-func floorTransform(
-	dels []uint64, numLeaves uint64, forestRows uint8) []arrow {
-	// fmt.Printf("(undo) call remTr %v nl %d fr %d\n", dels, numLeaves, forestRows)
-	swaprows := remTrans2(dels, numLeaves, forestRows)
-	// fmt.Printf("td output %v\n", swaprows)
-	var floor []arrow
-	for r, row := range swaprows {
-		for _, a := range row {
-			if a.from == a.to {
-				continue
-				// TODO: why do these even exist?  get rid of them from
-				// removeTransform output?
-			}
-			leaves := a.toLeaves(uint8(r), forestRows)
-			floor = append(floor, leaves...)
-		}
-	}
-	return floor
-}

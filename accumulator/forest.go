@@ -292,9 +292,11 @@ func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 // hash & write new nodes up to the roots
 func (f *Forest) cleanHash(dirt [][]uint64) error {
 	n := uint64(15)
-	p := uint64(4)
-	fmt.Printf("nl %d tr %d parent(%d) %d\n",
-		n, treeRows(n), p, parent(p, treeRows(n)))
+	lop := uint64(4)
+	hip := uint64(17)
+	tr := treeRows(n)
+	fmt.Printf("nl %d tr %d parent(%d)=%d child(%d)=%d\n",
+		n, treeRows(n), lop, parent(lop, tr), hip, child(hip, tr))
 	/*	if f.rows == 0 {
 			return nil // nothing to do
 		}
@@ -473,8 +475,9 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 		}
 	}
 	// remap to expand the forest if needed
-	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
-		// 1<<f.rows, f.numLeaves+delta)
+	for f.rows == 0 || int64(f.numLeaves)+delta > int64(1<<(f.rows-1)) {
+		fmt.Printf("nl %d -> %d f.rows %d -> %d\n",
+			f.numLeaves, int64(f.numLeaves)+delta, f.rows, f.rows+1)
 		err := f.reMap(f.rows + 1)
 		if err != nil {
 			return nil, err
@@ -491,8 +494,8 @@ func (f *Forest) Modify(adds []Leaf, delsUn []uint64) (*UndoBlock, error) {
 	// BuildUndoData takes all the stuff swapped to the right by removev3
 	// and saves it in the order it's in, which should make it go back to
 	// the right place when it's swapped in reverse
-	ub := f.BuildUndoData(uint64(numadds), dels)
-
+	// ub := f.BuildUndoData(uint64(numadds), dels)
+	ub := new(UndoBlock)
 	f.addv2(adds)
 
 	return ub, err
@@ -725,7 +728,7 @@ func (f *Forest) ToString() string {
 
 	fh := f.rows
 	// tree rows should be 6 or less
-	if fh > 6 {
+	if fh > 5 {
 		s := fmt.Sprintf("can't print %d leaves. roots:\n", f.numLeaves)
 		roots := f.getRoots()
 		for i, r := range roots {
@@ -736,9 +739,8 @@ func (f *Forest) ToString() string {
 
 	output := make([]string, (fh*2)+1)
 	var pos uint8
-	for h := uint8(0); h <= fh; h++ {
-		rowlen := uint8(1 << (fh - h))
-
+	for h := uint8(0); h < fh; h++ {
+		rowlen := uint8(1 << (fh - (h + 1)))
 		for j := uint8(0); j < rowlen; j++ {
 			var valstring string
 			ok := f.data.size() >= uint64(pos)
@@ -772,6 +774,7 @@ func (f *Forest) ToString() string {
 		}
 
 	}
+	// reverse since we need to print top down
 	var s string
 	for z := len(output) - 1; z >= 0; z-- {
 		s += output[z] + "\n"

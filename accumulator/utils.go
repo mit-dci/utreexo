@@ -267,7 +267,7 @@ func detectOffset(position uint64, numLeaves uint64) (uint8, uint8, uint64) {
 
 // child gives you the left child (LSB will be 0)
 func child(position uint64, forestRows uint8) uint64 {
-	mask := uint64(2<<forestRows) - 1
+	mask := uint64(1<<forestRows) - 1
 	return (position << 1) & mask
 }
 
@@ -276,16 +276,16 @@ func childMany(position uint64, drop, forestRows uint8) uint64 {
 	if drop == 0 {
 		return position
 	}
-	if drop > forestRows {
-		panic("childMany drop > forestRows")
+	if drop >= forestRows {
+		panic("childMany drop >= forestRows")
 	}
-	mask := uint64(2<<forestRows) - 1
+	mask := uint64(1<<forestRows) - 1
 	return (position << drop) & mask
 }
 
 // Return the position of the parent of this position
 func parent(position uint64, forestRows uint8) uint64 {
-	return (position >> 1) | (1 << forestRows)
+	return (position >> 1) | (1 << (forestRows - 1))
 }
 
 // go up rise times and return the position
@@ -293,11 +293,11 @@ func parentMany(position uint64, rise, forestRows uint8) uint64 {
 	if rise == 0 {
 		return position
 	}
-	if rise > forestRows {
-		panic("parentMany rise > forestRows")
+	if rise >= forestRows {
+		panic("parentMany rise >= forestRows")
 	}
-	mask := uint64(2<<forestRows) - 1
-	return (position>>rise | (mask << uint64(forestRows-(rise-1)))) & mask
+	mask := uint64(1<<forestRows) - 1
+	return (position>>rise | (mask << uint64(forestRows-rise))) & mask
 }
 
 // cousin returns a cousin: the child of the parent's sibling.
@@ -317,10 +317,10 @@ func cousin(position uint64) uint64 {
 // TODO fix.  says 14 is inforest with 5 leaves...
 func inForest(pos, numLeaves uint64, forestRows uint8) bool {
 	// quick yes:
-	if pos < numLeaves {
+	if pos < numLeaves || forestRows == 0 {
 		return true
 	}
-	marker := uint64(1 << forestRows)
+	marker := uint64(1 << (forestRows - 1))
 	mask := (marker << 1) - 1
 	if pos >= mask {
 		return false
@@ -350,9 +350,9 @@ func numRoots(n uint64) uint8 {
 // root at that row.  Does not return an error if there's no root at that
 // row so watch out and check first.  Checking is easy: leaves & (1<<h)
 func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
-	mask := uint64(2<<forestRows) - 1
+	mask := uint64(1<<forestRows) - 1
 	before := leaves & (mask << (h + 1))
-	shifted := (before >> h) | (mask << (forestRows + 1 - h))
+	shifted := (before >> h) | (mask << (forestRows - h))
 	return shifted & mask
 }
 
@@ -360,8 +360,8 @@ func rootPosition(leaves uint64, h, forestRows uint8) uint64 {
 // given a number of leaves.
 func getRootPositions(numLeaves uint64, forestRows uint8) []uint64 {
 	position := numLeaves - 1
-	roots := make([]uint64, forestRows+1)
-	for row := uint8(0); row <= forestRows; row++ {
+	roots := make([]uint64, forestRows)
+	for row := uint8(0); row < forestRows; row++ {
 		if (1<<row)&numLeaves != 0 {
 			root := parentMany(position, row, forestRows)
 			roots[row] = root
@@ -379,7 +379,7 @@ func getRootPositions(numLeaves uint64, forestRows uint8) []uint64 {
 // sub-tree root.
 // can also be used with the "to" return discarded to just enumerate a subtree
 // swap tells whether to activate the sibling swap to try to preserve order
-func subTreePositions(
+func xsubTreePositions(
 	subroot uint64, moveTo uint64, forestRows uint8) (as []arrow) {
 
 	subRow := detectRow(subroot, forestRows)
@@ -408,7 +408,7 @@ func subTreePositions(
 
 // TODO: unused? useless?
 // subTreeLeafRange gives the range of leaves under a node
-func subTreeLeafRange(
+func xsubTreeLeafRange(
 	subroot uint64, forestRows uint8) (uint64, uint64) {
 
 	h := detectRow(subroot, forestRows)
@@ -420,7 +420,7 @@ func subTreeLeafRange(
 
 // to leaves takes a arrow and returns a slice of arrows that are all the
 // leaf arrows below it
-func (a *arrow) toLeaves(h, forestRows uint8) []arrow {
+func (a *arrow) xtoLeaves(h, forestRows uint8) []arrow {
 	if h == 0 {
 		return []arrow{*a}
 	}
@@ -563,35 +563,6 @@ func zeroMatchingSortedSlices(a, x []uint64) {
 			}
 		}
 	}
-}
-
-// dedupeSwapDirt is kind of like mergeSortedSlices.  Takes 2 sorted slices
-// a, b and removes all elements of b from a and returns a.
-// in this case b is arrow.to
-func dedupeSwapDirt(a []uint64, b []arrow) []uint64 {
-	maxa := len(a)
-	maxb := len(b)
-	var c []uint64
-	// shortcuts:
-	if maxa == 0 || maxb == 0 {
-		return a
-	}
-	idxb := 0
-	for j := 0; j < maxa; j++ {
-		// skip over swap destinations less than current dirt
-		for idxb < maxb && b[idxb].to < a[j] {
-			idxb++
-		}
-		if idxb == maxb { // done
-			c = append(c, a[j:]...)
-			break
-		}
-		if a[j] != b[idxb].to {
-			c = append(c, a[j])
-		}
-	}
-
-	return c
 }
 
 // binString prints out the whole thing.  Only viable for small forests
