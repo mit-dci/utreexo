@@ -51,14 +51,14 @@ func TestSwaplessDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Print(f.ToString())                // show initial forest
-	delPositions := []uint64{8, 9, 10, 11} // set positions to delete
-	_, err = f.Modify(nil, delPositions)   // delete
+	fmt.Print(f.ToString())              // show initial forest
+	delPositions := []uint64{0, 1, 2}    // set positions to delete
+	_, err = f.Modify(nil, delPositions) // delete
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Print(f.ToString())              // show post-deletion forest
-	delPositions = []uint64{2}           // set positions to delete
+	delPositions = []uint64{3, 4}        // set positions to delete
 	_, err = f.Modify(nil, delPositions) // delete
 	if err != nil {
 		t.Fatal(err)

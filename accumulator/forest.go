@@ -212,8 +212,9 @@ func (f *Forest) removev5(dels []uint64) error {
 		for _, p := range delRow { // for each deletion originating at row r
 			atRow := uint8(r)
 			fmt.Printf("pos %d atrow %d\n", p, atRow)
-			// pre-check: is this a root? if so, write f's
-			if p == rootpos[atRow] {
+			// pre-check: is this a root? if so, write 0s
+			// if the root is zero, only delete if numleaves == 1
+			if p == rootpos[atRow] && (p != 0 || f.numLeaves == 1) {
 				f.data.write(p, empty)
 				continue
 			}
@@ -319,7 +320,6 @@ func (f *Forest) cleanHash(dirt [][]uint64) {
 			if p == 0 {
 				continue
 			}
-
 			// TODO need to be able to read 2 siblings at once
 			l := f.data.read(f.child(p))
 			r := f.data.read(f.child(p) | 1)
@@ -328,7 +328,9 @@ func (f *Forest) cleanHash(dirt [][]uint64) {
 	}
 }
 
+//if l == empty || r == empty {
 //fmt.Printf("p %d l %d %x r %d %x\n", p, f.child(p), l, f.child(p)|1, r)
+//}
 
 // reHash hashes new data in the forest based on dirty positions.
 // right now it seems "dirty" means the node itself moved, not that the
