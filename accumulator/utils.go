@@ -189,8 +189,8 @@ func detectSubTreeRows(
 // maxPosOnRow returns the maximum (rightmost) position on the given row
 // useful for knowing when you've gone past one row and are on the next
 func maxPosOnRow(row, forestRows uint8) uint64 {
-	mask := uint64(2<<forestRows) - 1
-	return ((mask << uint64(forestRows-row)) & mask) - 1
+	mask := uint64(1<<forestRows) - 1
+	return ((mask << uint64(forestRows-(row+1))) & mask) - 1
 }
 
 // TODO optimization if it's worth it --

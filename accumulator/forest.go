@@ -204,12 +204,20 @@ func (f *Forest) removev5(dels []uint64) error {
 	}
 	dirt := make([][]uint64, f.rows)
 	antidirt := make([][]uint64, f.rows)
+	rootpos := getRootPositions(f.numLeaves, f.rows)
 	// consolodate deletions; only delete tops of subtrees
 	condensedDels := condenseDeletions(dels, f.rows)
 	// main iteration of all deletion
 	for r, delRow := range condensedDels { // for each row of deletions
 		for _, p := range delRow { // for each deletion originating at row r
 			atRow := uint8(r)
+			fmt.Printf("pos %d atrow %d\n", p, atRow)
+			// pre-check: is this a root? if so, write f's
+			if p == rootpos[atRow] {
+				f.data.write(p, empty)
+				continue
+			}
+
 			// first, rise until you aren't your parent
 			for f.sameAsParent(p) {
 				p = f.parent(p)
@@ -224,39 +232,52 @@ func (f *Forest) removev5(dels []uint64) error {
 			// Write sibling to position, and keep rising and writing that
 			// until you're not the same as your parent
 			for f.sameAsParent(p) {
+				if atRow == 0 || p == 0 {
+					fmt.Printf("====err write to row 0\n")
+				}
 				f.data.write(p, sib) // write to self
 				p = f.parent(p)      // rise
 				atRow++
 			}
+			if atRow == 0 || p == 0 {
+				fmt.Printf("====err write to row 0\n")
+			}
 			f.data.write(p, sib) // write to self, redundant if we did prev loop
 
-			// dirt: dirt is the parent of where you wrote to.
-			// antidirt is where you wrote to. only at row 2+
+			// dirt: dirt is the parent (atRow+1) of where you wrote to.
+			// antidirt is where you wrote to.
+			// Both only happen at row 2 or above.
 			// for both dirt and anti-dirt, only write if it's not the same
 			// as whats already at the end of the slice
 
-			// Should we append antidirt?
+			fmt.Printf("\tpos %d atrow %d\n", p, atRow)
+			// Should we append antidirt? check not same as end of slice
 			if atRow > 1 &&
-				(len(antidirt[atRow-1]) == 0 ||
-					antidirt[atRow-1][len(antidirt[atRow-1])-1] != p) {
-				antidirt[atRow-1] = append(antidirt[atRow-1], p)
+				(len(antidirt[atRow]) == 0 ||
+					p != antidirt[atRow][len(antidirt[atRow])-1]) {
+				antidirt[atRow] = append(antidirt[atRow], p)
 			}
-
+			// finish if writing to a root; can't have dirt above it
+			if p == rootpos[atRow] {
+				continue
+			}
 			dirtpos := f.parent(p)
-			// Should we append dirt?
+			atRow++
 			if len(dirt[atRow]) == 0 ||
-				dirt[atRow][len(dirt[atRow])-1] != dirtpos {
+				dirtpos != dirt[atRow][len(dirt[atRow])-1] {
 				dirt[atRow] = append(dirt[atRow], dirtpos)
 			}
 		}
 	}
 	fmt.Printf("fr %d dirt: %v\nantidirt: %v\n", f.rows, dirt, antidirt)
 	annihilate(dirt, antidirt)
+	fmt.Printf("dirt: %v\n", dirt)
 	extend(dirt, getRootPositions(f.numLeaves, f.rows), f.rows)
 	fmt.Printf("dirt: %v\n", dirt)
-	err := f.cleanHash(dirt)
-	f.numLeaves -= uint64(len(dels))
-	return err
+	f.cleanHash(dirt)
+
+	// f.numLeaves never goes down
+	return nil
 }
 
 // zero out the antidirt from the dirt
@@ -278,8 +299,9 @@ func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 		var addDirt []uint64
 		fmt.Printf("rootpos[%d] %d\n", r, rootPositions[r])
 		for x, _ := range dirt[r] {
-			if dirt[r][x] != rootPositions[r] && // not a root and
-				// first, or even, or not 1 more than previous dirt
+			// not 0, not a root, and
+			// (first, or even, or not 1 more than previous dirt)
+			if dirt[r][x] != 0 && dirt[r][x] != rootPositions[r] &&
 				(x == 0 || dirt[r][x]%2 == 0 || dirt[r][x] != dirt[r][x-1]+1) {
 				addDirt = append(addDirt, parent(dirt[r][x], forestRows))
 			}
@@ -290,48 +312,30 @@ func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 
 // Given a list of dirty positions (positions where children have changed)
 // hash & write new nodes up to the roots
-func (f *Forest) cleanHash(dirt [][]uint64) error {
-	n := uint64(15)
-	lop := uint64(4)
-	hip := uint64(17)
-	tr := treeRows(n)
-	fmt.Printf("nl %d tr %d parent(%d)=%d child(%d)=%d\n",
-		n, treeRows(n), lop, parent(lop, tr), hip, child(hip, tr))
-	/*	if f.rows == 0 {
-			return nil // nothing to do
-		}
-		if len(dirt[0]) != 0 {
-			return fmt.Errorf("bottom row of dirt is not empty")
-		}
-
-		var higherDirt []uint64
-		// start at row 1 and get to the top.  Row 0 is never dirty.
-		for row := uint8(1); row < f.rows; row++ {
-			dirt[row] = mergeSortedSlices(dirt[row], higherDirt)
-			higherDirt = []uint64{}
-			for _, pos := range dirt[row] {
-				// TODO or maybe make a hash parent function that is part of f.data
-				leftChild := f.data.read(f.child(pos)) // TODO combine with readrun
-				rightChild := f.data.read(f.child(pos) | 1)
-				par := parentHash(leftChild, rightChild)
-				f.historicHashes++
-				f.data.write(pos, par)
-
-				if !f.isRoot(pos, row) {
-					higherDirt = append(higherDirt, f.parent(pos))
-				}
+func (f *Forest) cleanHash(dirt [][]uint64) {
+	for _, row := range dirt {
+		for _, p := range row {
+			// skip if 0; 0 is never dirty
+			if p == 0 {
+				continue
 			}
+
+			// TODO need to be able to read 2 siblings at once
+			l := f.data.read(f.child(p))
+			r := f.data.read(f.child(p) | 1)
+			f.data.write(p, parentHash(l, r))
 		}
-	*/
-	return nil
+	}
 }
+
+//fmt.Printf("p %d l %d %x r %d %x\n", p, f.child(p), l, f.child(p)|1, r)
 
 // reHash hashes new data in the forest based on dirty positions.
 // right now it seems "dirty" means the node itself moved, not that the
 // parent has changed children.
 // TODO: switch the meaning of "dirt" to mean parents with changed children;
 // this will probably make it a lot simpler.
-func (f *Forest) reHash(dirt []uint64) error {
+func (f *Forest) xreHash(dirt []uint64) error {
 	if f.rows == 0 || len(dirt) == 0 { // nothing to hash
 		return nil
 	}
