@@ -274,7 +274,8 @@ func (f *Forest) removev5(dels []uint64) error {
 	annihilate(dirt, antidirt)
 	fmt.Printf("dirt: %v\n", dirt)
 	extend(dirt, getRootPositions(f.numLeaves, f.rows), f.rows)
-	fmt.Printf("dirt: %v\n", dirt)
+	fmt.Printf("extended dirt: %v\npreclean\n", dirt)
+	fmt.Print(f.ToString())
 	f.cleanHash(dirt)
 
 	// f.numLeaves never goes down
@@ -310,6 +311,38 @@ func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 		dirt[r+1] = mergeSortedSlices(dirt[r+1], addDirt)
 	}
 }
+
+/*
+If you have dirt but are the same as your parent, that means the parent/child
+sameness should stay after the dirt is cleared.  So you need to hash the
+lowest dirt, then copy it up overwriting all dupliates.
+To keep the clean function simple, there can be a post-cleaning promote function.
+The sequence would be:
+remove
+annihliate
+extend
+clean
+promote
+
+... but since remove has mixed calculation and promotion, maybe it should be
+more of a transform style, figure out what you're going to do then do it.
+So it could be
+
+calculate  (pre-hash promotion, dirt, antidirt, post-hash promotion)
+promote(pre-hash promotion)
+annihilate(dirt, antidirt)
+extend(dirt)
+clean(dirt)
+promote(post-hash promotion)
+
+That seems like a good way to organize it.  Calculate would need to read the
+forest in order to check sameAsParent.  promote would need to read and write,
+as would clean.  It *is* inefficient to read during calculate and then
+re-read during promote, huh.  Is it worth it to keep it simple and easy to read?
+Will try that first.  Redundant reads are probably pretty quick as they're
+cached, so maybe not that big of a slowdown.
+
+*/
 
 // Given a list of dirty positions (positions where children have changed)
 // hash & write new nodes up to the roots
