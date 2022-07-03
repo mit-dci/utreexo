@@ -204,8 +204,9 @@ func (f *Forest) removev5(dels []uint64) error {
 	}
 	dirt := make([][]uint64, f.rows)
 	antidirt := make([][]uint64, f.rows)
+	promotions := make([][]uint64, f.rows)
 	rootpos := getRootPositions(f.numLeaves, f.rows)
-	// consolodate deletions; only delete tops of subtrees
+	// condense deletions; only delete tops of subtrees
 	condensedDels := condenseDeletions(dels, f.rows)
 	// main iteration of all deletion
 	for r, delRow := range condensedDels { // for each row of deletions
@@ -262,22 +263,33 @@ func (f *Forest) removev5(dels []uint64) error {
 			if p == rootpos[atRow] {
 				continue
 			}
-			dirtpos := f.parent(p)
+
+			p = f.parent(p)
 			atRow++
 			if len(dirt[atRow]) == 0 ||
-				dirtpos != dirt[atRow][len(dirt[atRow])-1] {
-				dirt[atRow] = append(dirt[atRow], dirtpos)
+				p != dirt[atRow][len(dirt[atRow])-1] {
+				dirt[atRow] = append(dirt[atRow], p)
 			}
+
+			// if there are branches of equal nodes above the dirt, those are
+			// marked for post-hashing promotion
+			for f.sameAsParent(p) {
+				promotions[atRow] = append(promotions[atRow], p)
+				p = f.parent(p)
+				atRow++
+			}
+
 		}
 	}
-	fmt.Printf("fr %d dirt: %v\nantidirt: %v\n", f.rows, dirt, antidirt)
+	fmt.Printf("fr %d dirt: %v\nantidirt: %v\npromotion: %v\n",
+		f.rows, dirt, antidirt, promotions)
 	annihilate(dirt, antidirt)
 	fmt.Printf("dirt: %v\n", dirt)
-	extend(dirt, getRootPositions(f.numLeaves, f.rows), f.rows)
-	fmt.Printf("extended dirt: %v\npreclean\n", dirt)
-	fmt.Print(f.ToString())
-	f.cleanHash(dirt)
-
+	extend(dirt, promotions, getRootPositions(f.numLeaves, f.rows), f.rows)
+	fmt.Printf("extended dirt: %v\n", dirt)
+	fmt.Printf("dirty vvv%s", f.ToString())
+	f.cleanHash(dirt, promotions)
+	fmt.Printf("cleaned vvv%s", f.ToString())
 	// f.numLeaves never goes down
 	return nil
 }
@@ -292,16 +304,22 @@ func annihilate(d, x [][]uint64) {
 	}
 }
 
+/* extend needs to not extend dirt above a promoted position.
+... but does need to extent *past* the promotion.
+eg a 16 leaf tree where 25 is dirty and promoted, 28 is not promoted.
+30 needs to be marked dirty.
+*/
+
 // extend dirt up to roots
-func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
+func extend(dirt, promotions [][]uint64, rootPositions []uint64, forestRows uint8) {
 	// we assume: dirt & rootpositions are same len, which is same as f.rows,
 	// and a 0 value never happens in dirt
 
-	for r := uint8(0); r < uint8(len(dirt)-1); r++ {
+	for r, _ := range dirt {
 		var addDirt []uint64
 		fmt.Printf("rootpos[%d] %d\n", r, rootPositions[r])
 		for x, _ := range dirt[r] {
-			// not 0, not a root, and
+			// not 0, not a root, not promoted, and
 			// (first, or even, or not 1 more than previous dirt)
 			if dirt[r][x] != 0 && dirt[r][x] != rootPositions[r] &&
 				(x == 0 || dirt[r][x]%2 == 0 || dirt[r][x] != dirt[r][x-1]+1) {
@@ -329,11 +347,13 @@ more of a transform style, figure out what you're going to do then do it.
 So it could be
 
 calculate  (pre-hash promotion, dirt, antidirt, post-hash promotion)
-promote(pre-hash promotion)
+promote(pre-hash promotion) (this is deletion)
 annihilate(dirt, antidirt)
 extend(dirt)
-clean(dirt)
-promote(post-hash promotion)
+clean/promote(dirt, promotion)
+
+Clean and promote need to be in the same function and mixed together.
+Take a tree with 16 leaves.  First delete 24.  That leaves 28 = 25.
 
 That seems like a good way to organize it.  Calculate would need to read the
 forest in order to check sameAsParent.  promote would need to read and write,
@@ -346,9 +366,13 @@ cached, so maybe not that big of a slowdown.
 
 // Given a list of dirty positions (positions where children have changed)
 // hash & write new nodes up to the roots
-func (f *Forest) cleanHash(dirt [][]uint64) {
-	for _, row := range dirt {
-		for _, p := range row {
+// promotions and dirt should have the same length.
+func (f *Forest) cleanHash(dirt, promotions [][]uint64) {
+	if len(dirt) != len(promotions) {
+		return
+	}
+	for r, _ := range dirt {
+		for _, p := range dirt[r] {
 			// skip if 0; 0 is never dirty
 			if p == 0 {
 				continue
@@ -357,6 +381,9 @@ func (f *Forest) cleanHash(dirt [][]uint64) {
 			l := f.data.read(f.child(p))
 			r := f.data.read(f.child(p) | 1)
 			f.data.write(p, parentHash(l, r))
+		}
+		for _, p := range promotions[r] {
+			f.promote(p)
 		}
 	}
 }
