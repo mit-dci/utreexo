@@ -307,3 +307,43 @@ Now to undo, just mark 10, 11 as dirty, and rehash.
 00  01  02  03  04  05  06  07
 
 Back to how it was.
+
+
+
+= = = = = = = = = = = = = = = = = = = = = = 
+Further along
+
+Need a word for a child which is the same as its parent.  Clone I guess.  If we're going with this whole geneology metaphor.
+
+
+Here's a problem:
+
+14
+|---------------\
+12              13
+|-------\       |-------\
+08      09      10      11
+|---\   |---\   |---\   |---\
+00  01  02  03  04  05  06  07
+
+Delete 0, 1, 2, 3, 4.
+0,1,2,3 condenses into 12.  So you have 4, 12.  
+4 means move 5 to 10.  Then mark 13 as dirty.
+12 means move 13 to 14, and mark anything above as dirty (none in this small tree).
+
+You don't want to hash 13 though, that dirt is incorrect.  So we really can't do branch at a time, we have to do row at a time.
+You *could* hash 12, 13 and write it to 14, and then right after overwrite 14 with 13, but that's inefficient.
+
+For each individual deletion, (not thinking about batches yet) there are 3 phases:
+
+1 bottom to logical leaf
+2 promotion
+3 promotion to root
+
+Phase 1 is doing nothing, rising until the position is non-clone.
+Phase 2 is sibling promotion.
+Phase 3 is promotion and hashing up to the root.  When a node *was* a clone, that node is promoted.  When a node is non-clone, the parent is hashed.
+
+One tricky part is that there are 2 data sources: deletions and which parent/child pairs are identical.  While the old transform wasn't data dependent, this one is.  Without any clones, phase 1 is skipped, and phase 3 is just hashing up to the root.  Easy!
+With clones though, we need move deletions up in phase 1, and while you follow the same branch locations in phase 3 regardless of what data is in them, the action taken at each node depends on its clone-ness.
+

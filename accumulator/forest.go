@@ -182,7 +182,7 @@ func (f *Forest) promote(p uint64) {
 
 // Check if a position is the same as its parent.  Returns false if the
 // parent is outside the forest.
-func (f *Forest) sameAsParent(p uint64) bool {
+func (f *Forest) isClone(p uint64) bool {
 	parPos := parent(p, f.rows)
 	if !inForest(parPos, f.numLeaves, f.rows) {
 		return false
@@ -208,11 +208,14 @@ func (f *Forest) removev5(dels []uint64) error {
 	rootpos := getRootPositions(f.numLeaves, f.rows)
 	// condense deletions; only delete tops of subtrees
 	condensedDels := condenseDeletions(dels, f.rows)
+	risen := f.risenSiblings(condensedDels)
+	fmt.Printf("risen: %v\n", risen)
 	// main iteration of all deletion
-	for r, delRow := range condensedDels { // for each row of deletions
-		for _, p := range delRow { // for each deletion originating at row r
+	for r, _ := range risen { // for each row of promotions
+		for _, p := range risen[r] { // for each promotion originating at row r
 			atRow := uint8(r)
 			fmt.Printf("pos %d atrow %d\n", p, atRow)
+
 			// pre-check: is this a root? if so, write 0s
 			// if the root is zero, only delete if numleaves == 1
 			if p == rootpos[atRow] && (p != 0 || f.numLeaves == 1) {
@@ -220,20 +223,26 @@ func (f *Forest) removev5(dels []uint64) error {
 				continue
 			}
 
-			// first, rise until you aren't your parent
-			for f.sameAsParent(p) {
-				p = f.parent(p)
-				atRow++
-			}
+			// read & write
+			// should do this, then stop
+			// f.promote(p)
 
-			// read in sibling.  Sibling is always valid (unless you're a root)
-			sib := f.data.read(p ^ 1)
+			// everything after this is correct but too specific.  This
+			// only goes up until one transition from same to different parents,
+			// but there could be several on the way up.
+			// Another function or loop should deal with everything above the
+			// first promotion.
+			// vvvvvvvvvvvv
+
+			sib := f.data.read(p)
 			p = f.parent(p) // rise
 			atRow++
 
 			// Write sibling to position, and keep rising and writing that
 			// until you're not the same as your parent
-			for f.sameAsParent(p) {
+			for f.isClone(p) {
+				fmt.Printf("ded pos %d\n", p)
+				panic("maybe never happens? but did")
 				if atRow == 0 || p == 0 {
 					fmt.Printf("====err write to row 0\n")
 				}
@@ -273,7 +282,7 @@ func (f *Forest) removev5(dels []uint64) error {
 
 			// if there are branches of equal nodes above the dirt, those are
 			// marked for post-hashing promotion
-			for f.sameAsParent(p) {
+			for f.isClone(p) {
 				promotions[atRow] = append(promotions[atRow], p)
 				p = f.parent(p)
 				atRow++
@@ -285,13 +294,33 @@ func (f *Forest) removev5(dels []uint64) error {
 		f.rows, dirt, antidirt, promotions)
 	annihilate(dirt, antidirt)
 	fmt.Printf("dirt: %v\n", dirt)
-	extend(dirt, promotions, getRootPositions(f.numLeaves, f.rows), f.rows)
+	extend(dirt, getRootPositions(f.numLeaves, f.rows), f.rows)
 	fmt.Printf("extended dirt: %v\n", dirt)
 	fmt.Printf("dirty vvv%s", f.ToString())
 	f.cleanHash(dirt, promotions)
 	fmt.Printf("cleaned vvv%s", f.ToString())
 	// f.numLeaves never goes down
 	return nil
+}
+
+// take condensed deletions and raise each until they are different from their
+// parents.  Then take their siblings.  Return that 2d slice.
+func (f *Forest) risenSiblings(condensedDels [][]uint64) [][]uint64 {
+	risen := make([][]uint64, len(condensedDels))
+
+	for r, _ := range condensedDels {
+		for _, p := range condensedDels[r] {
+			atRow := r
+			// rise until you aren't your parent
+			for f.isClone(p) {
+				p = f.parent(p)
+				atRow++
+			}
+			// append sibling to risen slice
+			risen[atRow] = append(risen[atRow], p^1)
+		}
+	}
+	return risen
 }
 
 // zero out the antidirt from the dirt
@@ -311,11 +340,11 @@ eg a 16 leaf tree where 25 is dirty and promoted, 28 is not promoted.
 */
 
 // extend dirt up to roots
-func extend(dirt, promotions [][]uint64, rootPositions []uint64, forestRows uint8) {
+func extend(dirt [][]uint64, rootPositions []uint64, forestRows uint8) {
 	// we assume: dirt & rootpositions are same len, which is same as f.rows,
 	// and a 0 value never happens in dirt
 
-	for r, _ := range dirt {
+	for r := 0; r < len(dirt)-1; r++ {
 		var addDirt []uint64
 		fmt.Printf("rootpos[%d] %d\n", r, rootPositions[r])
 		for x, _ := range dirt[r] {
