@@ -241,8 +241,8 @@ func (f *Forest) removev5(dels []uint64) error {
 			// Write sibling to position, and keep rising and writing that
 			// until you're not the same as your parent
 			for f.isClone(p) {
-				fmt.Printf("ded pos %d\n", p)
-				panic("maybe never happens? but did")
+				// fmt.Printf("ded pos %d\n", p)
+				// panic("maybe never happens? but did")
 				if atRow == 0 || p == 0 {
 					fmt.Printf("====err write to row 0\n")
 				}
